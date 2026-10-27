@@ -43,11 +43,11 @@ if ($has_roles) {
 
     $roles_matrix = saQueryRows(
         $conn,
-        "SELECT r.id, r.name, r.description, r.level, r.is_active,
+        "SELECT r.id, r.name, r.description, r.is_active,
                 {$assigned_count_sql} AS assigned_users,
                 {$permission_count_sql} AS permission_count
          FROM roles r
-         ORDER BY r.level DESC, r.name ASC"
+         ORDER BY r.name ASC"
     );
 }
 
@@ -219,7 +219,6 @@ saRenderModuleHeader('Security & Access Control', 'Security & Access Control', $
                     <tr>
                         <th>Role</th>
                         <th>Description</th>
-                        <th>Level</th>
                         <th>Assigned Users</th>
                         <th>Permissions</th>
                         <th>Status</th>
@@ -230,7 +229,6 @@ saRenderModuleHeader('Security & Access Control', 'Security & Access Control', $
                         <tr>
                             <td><strong><?php echo htmlspecialchars((string)$role['name']); ?></strong></td>
                             <td><?php echo htmlspecialchars((string)($role['description'] ?? '')); ?></td>
-                            <td><?php echo (int)($role['level'] ?? 0); ?></td>
                             <td><?php echo number_format((int)($role['assigned_users'] ?? 0)); ?></td>
                             <td><?php echo number_format((int)($role['permission_count'] ?? 0)); ?></td>
                             <td>

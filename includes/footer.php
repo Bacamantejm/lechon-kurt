@@ -17,7 +17,7 @@
             <div class="footer-grid">
                 <div class="footer-col footer-brand-col">
                     <a href="<?php echo $footer_path_prefix; ?>index.php" class="footer-logo">
-                        <span class="footer-logo-icon" style="overflow: hidden;"><img src="<?php echo $footer_path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
+                        <span class="footer-logo-icon" style="overflow: hidden; background: transparent;"><img src="<?php echo $footer_path_prefix; ?>assets/images/logo.png?v=lechon2" alt="Lechon Delight Logo" style="width: 100%; height: 100%; object-fit: contain; display: block;"></span>
                         <span class="footer-logo-text"><span class="footer-logo-title">Lechon Delights</span><span class="footer-logo-sub">MARKETPLACE</span></span>
                     </a>
                     <p class="footer-brand-desc">Discover Cavite lechon shops, compare local roast branches in one place, and get authentic roasted delicacies delivered fast.</p>
@@ -72,16 +72,183 @@
             </div>
         </div>
     </footer>
+
+    <!-- Modern Mobile Glassmorphic Bottom Navigation Bar (Reference Screen 2) -->
+    <nav class="mobile-bottom-nav" aria-label="Mobile Navigation">
+        <a href="<?php echo $footer_path_prefix; ?>index.php" class="mob-nav-item <?php echo in_array($current_page ?? '', ['home', 'index', ''], true) ? 'active' : ''; ?>">
+            <div class="mob-nav-icon"><i class="fas fa-house"></i></div>
+            <span class="mob-nav-label">Home</span>
+        </a>
+        <a href="<?php echo $footer_path_prefix; ?>shops.php" class="mob-nav-item <?php echo ($current_page ?? '') === 'shops' ? 'active' : ''; ?>">
+            <div class="mob-nav-icon"><i class="fas fa-store"></i></div>
+            <span class="mob-nav-label">Stores</span>
+        </a>
+        <a href="<?php echo $footer_path_prefix; ?>menu.php" class="mob-nav-item mob-center-action <?php echo ($current_page ?? '') === 'menu' ? 'active' : ''; ?>" title="Order Now">
+            <div class="mob-nav-icon"><i class="fas fa-utensils"></i></div>
+        </a>
+        <a href="<?php echo $footer_path_prefix; ?><?php echo $is_customer_user_footer ? 'my_orders.php' : 'register.php?mode=login'; ?>" class="mob-nav-item <?php echo in_array($current_page ?? '', ['my_orders', 'orders'], true) ? 'active' : ''; ?>">
+            <div class="mob-nav-icon">
+                <i class="fas fa-receipt"></i>
+                <?php if (isset($ongoing_order_id) && $ongoing_order_id > 0): ?>
+                <span class="mob-nav-dot"></span>
+                <?php endif; ?>
+            </div>
+            <span class="mob-nav-label">Orders</span>
+        </a>
+        <a href="<?php echo $footer_path_prefix; ?><?php echo $is_customer_user_footer ? 'my_account.php' : 'register.php?mode=login'; ?>" class="mob-nav-item <?php echo in_array($current_page ?? '', ['my_account', 'account', 'profile'], true) ? 'active' : ''; ?>">
+            <div class="mob-nav-icon"><i class="fas fa-user"></i></div>
+            <span class="mob-nav-label">Account</span>
+        </a>
+    </nav>
+
+    <style>
+    /* Universal Floating Glassmorphic Mobile Bottom Nav Pill */
+    .mobile-bottom-nav {
+        display: none;
+        position: fixed;
+        bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+        left: 16px;
+        right: 16px;
+        height: 64px;
+        background: rgba(255, 255, 255, 0.85) !important;
+        backdrop-filter: blur(16px) saturate(180%);
+        -webkit-backdrop-filter: blur(16px) saturate(180%);
+        border: 1px solid rgba(234, 236, 240, 0.85);
+        border-radius: 26px;
+        z-index: 1250;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.08);
+        padding: 4px 12px;
+        justify-content: space-around;
+        align-items: center;
+        transform: translate3d(0, 0, 0);
+        will-change: transform;
+        touch-action: manipulation;
+    }
+    .mob-nav-item {
+        flex: 1;
+        min-height: 44px;
+        min-width: 44px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        color: #64748b;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        padding: 4px 0;
+        gap: 2px;
+        transition: color 0.1s ease-out, transform 0.06s ease-out;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+        position: relative;
+    }
+    .mob-nav-item:active,
+    .mob-nav-item.is-touch-active {
+        transform: scale(0.93) translateZ(0);
+        transition-duration: 0.05s;
+        color: #b3261e;
+    }
+    .mob-nav-icon {
+        position: relative;
+        font-size: 1.15rem;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .mob-nav-label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+    }
+    .mob-nav-item.active {
+        color: #b3261e;
+    }
+    .mob-nav-item.active .mob-nav-icon {
+        transform: scale(1.1);
+    }
+    /* Floating Center Highlight Action Button */
+    .mob-nav-item.mob-center-action {
+        width: 50px;
+        height: 50px;
+        flex: 0 0 50px;
+        min-height: 50px;
+        min-width: 50px;
+        background: #b3261e !important;
+        border-radius: 50%;
+        color: #ffffff !important;
+        box-shadow: 0 6px 20px rgba(179, 38, 30, 0.38);
+        transform: translateY(-8px) translate3d(0, 0, 0);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2.5px solid #ffffff;
+        transition: transform 0.08s ease-out, box-shadow 0.08s ease-out;
+        touch-action: manipulation;
+    }
+    .mob-nav-item.mob-center-action:active,
+    .mob-nav-item.mob-center-action.is-touch-active {
+        transform: translateY(-6px) scale(0.92) translateZ(0) !important;
+        transition-duration: 0.05s !important;
+    }
+    .mob-nav-item.mob-center-action .mob-nav-icon {
+        font-size: 1.25rem;
+        color: #ffffff;
+    }
+    .mob-nav-dot {
+        position: absolute;
+        top: -1px;
+        right: -4px;
+        width: 8px;
+        height: 8px;
+        background: #b3261e;
+        border-radius: 50%;
+        border: 1.5px solid #ffffff;
+    }
+    body.dark-mode .mobile-bottom-nav {
+        background: rgba(30, 41, 59, 0.85) !important;
+        border-color: rgba(51, 65, 85, 0.8) !important;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35);
+    }
+    body.dark-mode .mob-nav-item.mob-center-action {
+        border-color: #1e293b !important;
+    }
+    @media (max-width: 768px) {
+        .mobile-bottom-nav {
+            display: flex;
+        }
+        .site-main, main, .main-content {
+            padding-bottom: 96px !important;
+        }
+        .floating-chat-btn {
+            bottom: 88px !important;
+            right: 14px !important;
+            width: 44px !important;
+            height: 44px !important;
+            font-size: 17px !important;
+            z-index: 1200 !important;
+        }
+        .floating-order-btn {
+            display: none !important;
+        }
+        #backToTopBtn {
+            bottom: 198px !important;
+            right: 14px !important;
+            width: 40px !important;
+            height: 40px !important;
+            z-index: 1199 !important;
+        }
+        .footer {
+            padding-bottom: 100px !important;
+        }
+    }
+    </style>
     
     <!-- Back to Top Button -->
     <button id="backToTopBtn" title="Go to top" data-tooltip="Back to Top"><i class="fas fa-arrow-up"></i></button>
 
             <!-- Floating Chat Widget -->
             <?php if ($is_customer_user_footer): ?>
-            <a href="<?php echo $footer_path_prefix; ?>cart.php" class="floating-cart-btn" id="floatingCartBtn" title="View cart" data-tooltip="View Cart">
-                <i class="fas fa-shopping-cart"></i>
-                <span class="badge" id="floatingCartBadge"><?php echo (int)$footer_cart_count; ?></span>
-            </a>
 
             <a href="javascript:void(0);" onclick="toggleOngoingOrdersWidget()" class="floating-order-btn" id="floatingOrderBtn" title="Ongoing orders" data-tooltip="Ongoing Orders" style="display: none;">
                 <i class="fas fa-truck-fast"></i>
@@ -641,7 +808,7 @@
         .footer {
             background: #171922;
             color: #94a3b8;
-            margin-top: 36px;
+            margin-top: 0;
             border-top: 1px solid #2b3144;
             font-size: 0.82rem;
         }
@@ -649,21 +816,21 @@
         .footer-container {
             max-width: 1280px;
             margin: 0 auto;
-            padding: 28px 24px 16px;
+            padding: 18px 24px 12px;
             box-sizing: border-box;
         }
 
         .footer-grid {
             display: grid;
             grid-template-columns: 1.3fr 1fr 1fr 1fr;
-            gap: 24px;
+            gap: 18px;
         }
 
         .footer-col h4 {
             color: #ffffff;
-            font-size: 0.86rem;
+            font-size: 0.82rem;
             font-weight: 800;
-            margin: 0 0 10px;
+            margin: 0 0 8px;
             letter-spacing: 0.02em;
             text-transform: uppercase;
         }
@@ -771,13 +938,13 @@
         }
 
         .footer-bottom {
-            margin-top: 20px;
-            padding-top: 14px;
+            margin-top: 14px;
+            padding-top: 10px;
             border-top: 1px solid #232734;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 14px;
+            gap: 10px;
             flex-wrap: wrap;
         }
 
@@ -996,6 +1163,14 @@
             box-shadow: 0 16px 28px rgba(12, 18, 28, 0.33);
         }
 
+        #backToTopBtn:active,
+        .floating-cart-btn:active,
+        .floating-order-btn:active,
+        .floating-chat-btn:active {
+            transform: scale(0.92) !important;
+            transition-duration: 0.08s !important;
+        }
+
         .floating-chat-btn.with-timestamp {
             width: 60px;
             height: 60px;
@@ -1075,18 +1250,23 @@
                 align-items: flex-start;
             }
 
-            #backToTopBtn,
+            #backToTopBtn {
+                bottom: 92px !important;
+                right: 14px !important;
+                width: 42px !important;
+                height: 42px !important;
+                font-size: 16px !important;
+                z-index: 1190 !important;
+                box-shadow: 0 4px 14px rgba(16, 24, 40, 0.18) !important;
+            }
+
             .floating-cart-btn,
             .floating-order-btn,
             .floating-chat-btn {
                 right: 16px;
-                width: 56px;
-                height: 56px;
-                font-size: 20px;
-            }
-
-            #backToTopBtn {
-                bottom: 14px;
+                width: 52px;
+                height: 52px;
+                font-size: 19px;
             }
 
             .floating-chat-btn {
@@ -1391,8 +1571,11 @@
                         ? `<div class="ongoing-order-driver"><i class="fas fa-box-open"></i> ${itemSummary}</div>`
                         : '<div class="ongoing-order-driver"><i class="fas fa-calendar-check"></i> Pre-order update in progress</div>';
                 } else {
+                    const driverRatingHtml = (order.driver_rating && parseFloat(order.driver_rating) > 0)
+                        ? ` <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;color:#f59e0b;background:#fffbeb;padding:1px 6px;border-radius:4px;border:1px solid #fef3c7;margin-left:4px;"><i class="fas fa-star" style="font-size:10px;"></i> ${parseFloat(order.driver_rating).toFixed(1)}</span>`
+                        : '';
                     driver = order.driver_name
-                        ? `<div class="ongoing-order-driver"><i class="fas fa-user"></i> Driver: ${escapeOrderHtml(order.driver_name)}</div>`
+                        ? `<div class="ongoing-order-driver"><i class="fas fa-user"></i> Driver: ${escapeOrderHtml(order.driver_name)}${driverRatingHtml}</div>`
                         : '<div class="ongoing-order-driver"><i class="fas fa-user-clock"></i> Driver assignment in progress</div>';
                 }
                 const total = formatOrderCurrency(order.total_amount);
@@ -1608,5 +1791,80 @@
     });
     </script>
     <?php endif; ?>
+
+    <!-- Global SweetAlert2 & Flash Notifications -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+    .swal2-container.swal2-top-end,
+    .swal2-container.swal2-top-right,
+    .swal2-container.swal2-bottom-end,
+    .swal2-container.swal2-bottom-right {
+        top: 90px !important;
+        right: 24px !important;
+        left: auto !important;
+        bottom: auto !important;
+        padding: 0 !important;
+        z-index: 99999999 !important;
+        overflow: visible !important;
+        pointer-events: none !important;
+        background: transparent !important;
+        background-color: transparent !important;
+    }
+    .swal2-popup.swal2-toast {
+        pointer-events: auto !important;
+        background: #ffffff !important;
+        color: #101828 !important;
+        border: 1px solid #eaecf0 !important;
+        border-radius: 12px !important;
+        box-shadow: 0 10px 25px -3px rgba(16, 24, 40, 0.1), 0 4px 6px -2px rgba(16, 24, 40, 0.05) !important;
+        padding: 12px 18px !important;
+        min-width: 280px !important;
+        max-width: 420px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+    }
+    .swal2-popup.swal2-toast .swal2-title {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Outfit', sans-serif !important;
+        font-size: 0.92rem !important;
+        font-weight: 600 !important;
+        color: #101828 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        line-height: 1.4 !important;
+    }
+    .swal2-popup.swal2-toast .swal2-icon {
+        margin: 0 !important;
+        font-size: 11px !important;
+        width: 2em !important;
+        height: 2em !important;
+        min-width: 2em !important;
+        flex-shrink: 0 !important;
+        box-sizing: content-box !important;
+    }
+    .swal2-popup.swal2-toast .swal2-icon .swal2-success-ring {
+        width: 2em !important;
+        height: 2em !important;
+    }
+    .swal2-popup.swal2-toast .swal2-timer-progress-bar {
+        background: #b3261e !important;
+        height: 3px !important;
+    }
+    @media (max-width: 768px) {
+        .swal2-container.swal2-top-end,
+        .swal2-container.swal2-top-right {
+            top: 75px !important;
+            right: 14px !important;
+            left: 14px !important;
+            width: auto !important;
+        }
+        .swal2-popup.swal2-toast {
+            min-width: 100% !important;
+            max-width: 100% !important;
+        }
+    }
+    </style>
+    <?php require_once __DIR__ . '/customer_tutorial_modal.php'; ?>
+    <?php require_once __DIR__ . '/popup_alert.php'; ?>
 </body>
 </html>

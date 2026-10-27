@@ -184,8 +184,8 @@ if (!$conn) {
 }
 
 // Get PayMongo API keys from config or environment
-$paymongo_secret = getenv('PAYMONGO_SECRET_KEY') ?: 'sk_test_YOUR_PAYMONGO_SECRET_KEY_HERE';
-$paymongo_public = getenv('PAYMONGO_PUBLIC_KEY') ?: 'pk_test_YOUR_PAYMONGO_PUBLIC_KEY_HERE';
+$paymongo_secret = appConfigValue('PAYMONGO_SECRET_KEY');
+$paymongo_public = appConfigValue('PAYMONGO_PUBLIC_KEY');
 
 // Initialize PayMongo
 try {
@@ -358,25 +358,37 @@ try {
         $item_downpayment = ($payment_type === 'downpayment') ? $item_total_with_vat * 0.30 : $item_total_with_vat;
         $item_remaining = $item_total_with_vat - $item_downpayment;
         
-        // Note: Using special_instructions to store transaction ref if needed, or just rely on paymongo_session_id later
-        $preorder_query = "INSERT INTO pre_orders (user_id, product_id, product_name, quantity, unit_price, total_price, delivery_address, delivery_method, payment_type, downpayment_amount, remaining_amount, preferred_pickup_date, preferred_pickup_time, latitude, longitude, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'delivery', ?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), NOW())";
+        // Store pre-order with delivery_method = pickup
+        $preorder_query = "INSERT INTO pre_orders (
+            user_id, product_id, product_name, quantity, unit_price, total_price, 
+            reservation_date, preferred_pickup_date, preferred_pickup_time, pickup_location, 
+            delivery_address, delivery_method, payment_type, downpayment_amount, remaining_amount, 
+            latitude, longitude, created_at
+        ) VALUES (
+            ?, ?, ?, ?, ?, ?, 
+            ?, ?, ?, ?, 
+            ?, 'pickup', ?, ?, ?, 
+            NULLIF(?, ''), NULLIF(?, ''), NOW()
+        )";
         
         $preorder_stmt = mysqli_prepare($conn, $preorder_query);
-        if (!$preorder_stmt) throw new Exception('DB Prepare Error');
+        if (!$preorder_stmt) throw new Exception('DB Prepare Error: ' . mysqli_error($conn));
         
-        mysqli_stmt_bind_param($preorder_stmt, "iisiddssddssss", 
+        mysqli_stmt_bind_param($preorder_stmt, "iisiddssssssddss", 
             $user_id, 
             $item['id'], 
             $item['name'],
             $item['quantity'], 
             $item['price'], 
             $item_total_with_vat, 
+            $pickup_date,
+            $pickup_date,
+            $pickup_time,
+            $address,
             $address,
             $payment_type, 
             $item_downpayment,
             $item_remaining,
-            $pickup_date,
-            $pickup_time,
             $latitude_value,
             $longitude_value
         );
@@ -418,16 +430,45 @@ if (function_exists('createNotification')) {
 $preorder_id = $first_preorder_id;
 $desc_text = $item_count > 1 ? "Pre-Order: $item_count items" : "Pre-Order: " . $processed_items[0]['name'];
 
+// Always enforce logged-in user identity for PayMongo billing
+$auth_user_id = (int)$_SESSION['user_id'];
+$resolved_customer_name = trim((string)($data['full_name'] ?? ''));
+$resolved_customer_email = trim((string)($data['email'] ?? ''));
+$resolved_customer_phone = trim((string)($data['phone'] ?? ''));
+
+$u_stmt = mysqli_prepare($conn, "SELECT full_name, email, phone FROM users WHERE id = ? LIMIT 1");
+if ($u_stmt) {
+    mysqli_stmt_bind_param($u_stmt, "i", $auth_user_id);
+    mysqli_stmt_execute($u_stmt);
+    $u_res = mysqli_stmt_get_result($u_stmt);
+    if ($u_row = mysqli_fetch_assoc($u_res)) {
+        if (!empty($u_row['full_name'])) {
+            $resolved_customer_name = trim((string)$u_row['full_name']);
+        }
+        if (!empty($u_row['email']) && empty($resolved_customer_email)) {
+            $resolved_customer_email = trim((string)$u_row['email']);
+        }
+        if (!empty($u_row['phone']) && empty($resolved_customer_phone)) {
+            $resolved_customer_phone = trim((string)$u_row['phone']);
+        }
+    }
+    mysqli_stmt_close($u_stmt);
+}
+
+if ($resolved_customer_name === '' && !empty($_SESSION['full_name'])) {
+    $resolved_customer_name = trim((string)$_SESSION['full_name']);
+}
+
 // Prepare PayMongo checkout data
 $checkout_data = [
     'amount' => $amount,
     'description' => $desc_text,
     'order_id' => $preorder_id,
-    'customer_name' => $data['full_name'],
-    'customer_email' => $data['email'],
-    'customer_phone' => $data['phone'],
-    'success_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/payment_success_preorder.php?preorder_id=' . $preorder_id,
-    'cancel_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/payment_cancel_preorder.php?preorder_id=' . $preorder_id,
+    'customer_name' => $resolved_customer_name,
+    'customer_email' => $resolved_customer_email,
+    'customer_phone' => $resolved_customer_phone,
+    'success_url' => appBaseUrl('payment_success_preorder.php?preorder_id=' . $preorder_id),
+    'cancel_url' => appBaseUrl('payment_cancel_preorder.php?preorder_id=' . $preorder_id),
     'payment_method' => 'all' // Allow all payment methods
 ];
 

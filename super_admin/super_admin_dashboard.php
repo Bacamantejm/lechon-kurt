@@ -546,6 +546,79 @@ $recent_applications = ownerTableExists($conn, 'franchise_applications')
     ? ownerRows($conn, "SELECT fa.application_number, COALESCE(NULLIF(fa.business_name, ''), NULLIF(u.business_name, ''), u.full_name, 'Business Partner') AS business_name, COALESCE(u.full_name, 'Unknown Applicant') AS owner_name, fa.status, fa.created_at FROM franchise_applications fa LEFT JOIN users u ON u.id = fa.user_id ORDER BY fa.created_at DESC LIMIT 5")
     : [];
 
+$has_subscriptions = ownerTableExists($conn, 'partner_plan_subscriptions');
+$active_subscribers_count = 0;
+$total_subscription_revenue_collected = 0.0;
+$partner_subscriptions_list = [];
+
+if ($has_subscriptions) {
+    $active_subscribers_count = (int)ownerScalar(
+        $conn,
+        "SELECT COUNT(DISTINCT partner_user_id) 
+         FROM partner_plan_subscriptions 
+         WHERE subscription_status IN ('active', 'trial')",
+        0
+    );
+
+    if (ownerTableExists($conn, 'partner_billing_invoices')) {
+        $total_subscription_revenue_collected = (float)ownerScalar(
+            $conn,
+            "SELECT COALESCE(SUM(total_amount), 0) 
+             FROM partner_billing_invoices 
+             WHERE invoice_status = 'paid' AND invoice_type = 'subscription'",
+            0.0
+        );
+    }
+
+    $partner_subscriptions_list = ownerRows(
+        $conn,
+        "SELECT 
+            s.id AS subscription_id,
+            s.partner_user_id,
+            COALESCE(NULLIF(u.business_name, ''), NULLIF(fa.business_name, ''), u.full_name, 'Partner Shop') AS business_name,
+            u.full_name AS owner_name,
+            u.email,
+            u.phone,
+            p.id AS plan_id,
+            p.plan_name,
+            p.plan_code,
+            s.billing_cycle,
+            s.subscription_status,
+            s.started_at,
+            s.renews_at,
+            s.ended_at,
+            s.cancelled_at,
+            s.cancellation_effective_date,
+            s.previous_plan_id,
+            s.switched_at,
+            prev_p.plan_name AS previous_plan_name,
+            CASE 
+                WHEN s.billing_cycle = 'annual' THEN p.annual_price 
+                ELSE p.monthly_price 
+            END AS plan_price,
+            COALESCE((
+                SELECT SUM(inv.total_amount) 
+                FROM partner_billing_invoices inv 
+                WHERE inv.partner_user_id = s.partner_user_id AND inv.invoice_status = 'paid'
+            ), 0) AS total_paid_to_date,
+            COALESCE((
+                SELECT inv.paid_at 
+                FROM partner_billing_invoices inv 
+                WHERE inv.partner_user_id = s.partner_user_id AND inv.invoice_status = 'paid' 
+                ORDER BY inv.id DESC LIMIT 1
+            ), NULL) AS last_payment_date
+         FROM partner_plan_subscriptions s
+         LEFT JOIN platform_subscription_plans p ON p.id = s.plan_id
+         LEFT JOIN platform_subscription_plans prev_p ON prev_p.id = s.previous_plan_id
+         LEFT JOIN users u ON u.id = s.partner_user_id
+         LEFT JOIN franchise_applications fa ON fa.user_id = s.partner_user_id
+         ORDER BY 
+            CASE WHEN s.subscription_status IN ('active', 'trial') THEN 0 ELSE 1 END,
+            s.id DESC
+         LIMIT 25"
+    );
+}
+
 $business_performance_rows = [];
 if ($has_applications && $has_users) {
     $partner_control_select_sql = ",
@@ -1334,7 +1407,59 @@ if ($dashboard_flash_payload === false) {
     <link rel="stylesheet" href="../css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="../super_admin/modules.css">
     <style>
+        .sa-topbar-action-wrap { position:relative; margin-right:8px; }
+        .sa-topbar-action-btn { position:relative; width:38px; height:38px; border:1px solid #d0d5dd; border-radius:9px; background:#fff; color:#344054; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; transition:all 0.2s ease; }
+        .sa-topbar-action-btn:hover, .sa-topbar-action-btn.is-active { background:#fff1f0; color:#b3261e; border-color:#fda29b; }
+        .sa-alert-btn:hover, .sa-alert-btn.is-active { background:#fff1f0; color:#b3261e; border-color:#fda29b; }
+        .sa-action-badge { position:absolute; top:-5px; right:-5px; min-width:18px; height:18px; padding:0 4px; border-radius:99px; font-size:10px; font-weight:800; display:none; align-items:center; justify-content:center; color:#fff; border:1px solid #fff; }
+        .sa-alert-badge { background:#b3261e; }
+        .sa-notification-badge { background:#175cd3; }
+        .sa-dropdown-panel { position:absolute; top:calc(100% + 10px); right:0; z-index:2000; width:350px; height:460px; max-height:calc(100vh - 90px); display:none; flex-direction:column; overflow:hidden; background:#fff; border:1px solid #e4e7ec; border-radius:12px; box-shadow:0 14px 32px rgba(16,24,40,.14); }
+        .sa-dropdown-panel.show { display:flex; }
+        .sa-dropdown-head { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #eaecf0; font-weight:800; font-size:0.9rem; color:#101828; }
+        .sa-dropdown-head-link { font-size:0.78rem; font-weight:700; color:#b3261e; text-decoration:none; cursor:pointer; background:none; border:none; padding:0; }
+        .sa-dropdown-head-link:hover { color:#981b15; text-decoration:underline; }
+        .sa-filter-bar { flex:0 0 auto; display:flex; gap:6px; padding:8px 12px; background:#f8f9fa; border-bottom:1px solid #eaecf0; overflow-x:auto; }
+        .sa-filter-pill { border:1px solid #d0d5dd; background:#fff; color:#475467; font-size:0.74rem; font-weight:700; padding:3px 10px; border-radius:20px; cursor:pointer; white-space:nowrap; transition:all 0.15s ease; }
+        .sa-filter-pill:hover { background:#f2f4f7; color:#1d2939; }
+        .sa-filter-pill.active { background:#b3261e; color:#fff; border-color:#b3261e; }
+        .sa-dropdown-list { flex:1 1 auto; min-height:0; overflow-y:auto; }
+        .sa-item { display:block; padding:11px 13px; border-bottom:1px solid #eaecf0; color:#344054; text-decoration:none; transition:background 0.15s ease; }
+        .sa-item:hover { background:#f8f9fa; }
+        .sa-item.unread { background:#eff8ff; }
+        .sa-item-header { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:4px; }
+        .sa-tag { font-size:0.68rem; font-weight:800; letter-spacing:0.03em; padding:2px 7px; border-radius:6px; text-transform:uppercase; }
+        .sa-tag.security { background:#f4f3ff; color:#5925dc; border:1px solid #d9d6fe; }
+        .sa-tag.complaint { background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; }
+        .sa-tag.anomaly { background:#fffaeb; color:#b54708; border:1px solid #fedf89; }
+        .sa-tag.warning { background:#fffaeb; color:#b54708; border:1px solid #fedf89; }
+        .sa-tag.incident { background:#fef3f2; color:#b42318; border:1px solid #fee4e2; }
+        .sa-tag.approved { background:#ecfdf3; color:#027a48; border:1px solid #abefc6; }
+        .sa-tag.rejected { background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; }
+        .sa-tag.incomplete { background:#fffaeb; color:#b54708; border:1px solid #fedf89; }
+        .sa-tag.default { background:#f2f4f7; color:#344054; border:1px solid #eaecf0; }
+        .sa-item-title { font-size:0.83rem; font-weight:700; color:#101828; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .sa-item-desc { margin-top:3px; font-size:0.79rem; line-height:1.38; color:#475467; word-break:break-word; }
+        .sa-item-time { display:block; margin-top:5px; color:#98a2b3; font-size:0.71rem; font-weight:600; }
+        .sa-dropdown-pages { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-top:1px solid #eaecf0; background:#f8f9fa; }
+        .sa-dropdown-page-btn { width:28px; height:28px; border:1px solid #d0d5dd; border-radius:7px; background:#fff; cursor:pointer; color:#344054; display:inline-flex; align-items:center; justify-content:center; }
+        .sa-dropdown-page-btn:disabled { opacity:.35; cursor:not-allowed; }
+        .sa-dropdown-page-label { font-size:.72rem; font-weight:800; color:#667085; }
+        body.dark-mode .sa-topbar-action-btn { background:#1e293b; color:#f8fafc; border-color:#475569; }
+        body.dark-mode .sa-dropdown-panel { background:#1e293b; border-color:#475569; }
+        body.dark-mode .sa-dropdown-head, body.dark-mode .sa-item { border-color:#334155; color:#f8fafc; }
+        body.dark-mode .sa-dropdown-head { color:#f8fafc; }
+        body.dark-mode .sa-item-title { color:#f8fafc; }
+        body.dark-mode .sa-item:hover { background:#334155; }
+        body.dark-mode .sa-item.unread { background:#1e3a5f; }
+        body.dark-mode .sa-filter-bar, body.dark-mode .sa-dropdown-pages { background:#101828; border-color:#334155; }
+        body.dark-mode .sa-filter-pill { background:#1e293b; border-color:#475569; color:#cbd5e1; }
+        body.dark-mode .sa-filter-pill.active { background:#b3261e; color:#fff; border-color:#b3261e; }
+        body.dark-mode .sa-item-desc, body.dark-mode .sa-item-time, body.dark-mode .sa-dropdown-page-label { color:#94a3b8; }
+        @media (max-width:560px) { .sa-dropdown-panel { width:min(320px, calc(100vw - 20px)); right:-60px; } }
+
         .admin-topbar .topbar-content {
             display: flex;
             align-items: center;
@@ -1362,59 +1487,300 @@ if ($dashboard_flash_payload === false) {
 
         .super-owner-page {
             display: grid;
-            gap: 18px;
+            gap: 16px;
+            padding-bottom: 140px;
         }
 
+        /* Compact Executive Header */
         .owner-hero {
-            border-radius: 20px;
-            padding: 24px;
-            color: #fff;
-            background: linear-gradient(135deg, #7f1d1d 0%, #9f1239 50%, #c2410c 100%);
-            box-shadow: 0 18px 40px rgba(127, 29, 29, 0.18);
+            background: #ffffff;
+            border: 1px solid #eaecf0;
+            border-radius: 12px;
+            padding: 16px 20px;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .owner-hero-left {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 240px;
         }
 
         .owner-badge {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 7px 12px;
+            gap: 6px;
+            width: fit-content;
+            padding: 3px 9px;
             border-radius: 999px;
-            background: rgba(255, 255, 255, 0.14);
-            border: 1px solid rgba(255, 255, 255, 0.22);
-            font-size: 0.8rem;
+            background: #fff1f0;
+            border: 1px solid #fee4e2;
+            color: #b3261e;
+            font-size: 0.7rem;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.06em;
-            margin-bottom: 12px;
+            letter-spacing: 0.04em;
         }
 
         .owner-hero h2 {
-            margin: 0 0 10px 0;
-            font-size: clamp(1.8rem, 3vw, 2.5rem);
+            margin: 0;
+            font-size: 1.18rem;
             font-weight: 800;
+            color: #101828;
+            letter-spacing: -0.01em;
         }
 
         .owner-hero p {
             margin: 0;
-            max-width: 820px;
-            color: rgba(255, 255, 255, 0.92);
+            color: #64748b;
+            font-size: 0.8rem;
+            line-height: 1.4;
         }
 
         .owner-hero-meta {
             display: flex;
+            align-items: center;
+            gap: 8px;
             flex-wrap: wrap;
-            gap: 12px;
-            margin-top: 18px;
         }
 
         .owner-hero-meta span {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 10px 14px;
-            border-radius: 14px;
-            background: rgba(255, 255, 255, 0.14);
+            gap: 5px;
+            padding: 5px 10px;
+            border-radius: 8px;
+            background: #f8fafc;
+            border: 1px solid #eaecf0;
+            font-size: 0.76rem;
             font-weight: 600;
+            color: #475467;
+        }
+
+        .owner-hero-meta span.owner-meta-highlight {
+            background: #fffaeb;
+            border-color: #fedf89;
+            color: #b54708;
+            font-weight: 700;
+        }
+
+        .owner-hero-action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            background: #b3261e;
+            color: #ffffff !important;
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-decoration: none;
+            transition: background 0.15s ease, transform 0.15s ease;
+        }
+
+        .owner-hero-action-btn:hover {
+            background: #981b15;
+            transform: translateY(-1px);
+        }
+
+        /* 4 Primary Executive KPI Cards */
+        .owner-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        .owner-kpi-card {
+            background: #ffffff;
+            border: 1px solid #eaecf0;
+            border-radius: 12px;
+            padding: 14px 16px;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 8px;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+        }
+
+        .owner-kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(16, 24, 40, 0.06);
+            border-color: #d0d5dd;
+        }
+
+        .owner-kpi-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .owner-kpi-label {
+            font-size: 0.74rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #64748b;
+        }
+
+        .owner-kpi-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 9px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            flex-shrink: 0;
+        }
+
+        .owner-kpi-icon.crimson { background: #fff1f0; color: #b3261e; }
+        .owner-kpi-icon.blue { background: #eff8ff; color: #175cd3; }
+        .owner-kpi-icon.emerald { background: #ecfdf3; color: #027a48; }
+        .owner-kpi-icon.neutral { background: #f8fafc; border: 1px solid #eaecf0; color: #475467; }
+
+        .owner-kpi-value {
+            font-size: 1.45rem;
+            font-weight: 800;
+            color: #101828;
+            line-height: 1.15;
+            letter-spacing: -0.02em;
+        }
+
+        .owner-kpi-sub {
+            font-size: 0.74rem;
+            color: #64748b;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .owner-kpi-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 6px;
+            border-radius: 5px;
+            font-size: 0.68rem;
+            font-weight: 700;
+        }
+
+        .owner-kpi-badge.success { background: #ecfdf3; color: #027a48; border: 1px solid #abefc6; }
+        .owner-kpi-badge.warning { background: #fffaeb; color: #b54708; border: 1px solid #fedf89; }
+        .owner-kpi-badge.info { background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff; }
+        .owner-kpi-badge.neutral { background: #f8fafc; color: #475467; border: 1px solid #eaecf0; }
+        .owner-kpi-badge.healthy { background: #ecfdf3; color: #027a48; }
+
+        /* Secondary Metrics Strip */
+        .owner-submetrics-strip {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+            gap: 10px;
+        }
+
+        .owner-submetric-tile {
+            background: #ffffff;
+            border: 1px solid #eaecf0;
+            border-radius: 10px;
+            padding: 10px 12px;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: border-color 0.15s ease;
+        }
+
+        .owner-submetric-tile:hover {
+            border-color: #d0d5dd;
+        }
+
+        .owner-submetric-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: #f8fafc;
+            border: 1px solid #eaecf0;
+            color: #475467;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+
+        .owner-submetric-body {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .owner-submetric-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .owner-submetric-val {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #101828;
+            line-height: 1.2;
+            letter-spacing: -0.01em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .owner-submetric-hint {
+            font-size: 0.68rem;
+            color: #94a3b8;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        body.dark-mode .owner-hero,
+        body.dark-mode .owner-kpi-card,
+        body.dark-mode .owner-submetric-tile {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
+        }
+        body.dark-mode .owner-hero h2,
+        body.dark-mode .owner-kpi-value,
+        body.dark-mode .owner-submetric-val {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .owner-hero p,
+        body.dark-mode .owner-kpi-sub,
+        body.dark-mode .owner-submetric-hint {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .owner-hero-meta span,
+        body.dark-mode .owner-submetric-icon,
+        body.dark-mode .owner-kpi-icon.neutral {
+            background: #0f172a !important;
+            border-color: #334155 !important;
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .owner-badge {
+            background: #3b1f1d !important;
+            border-color: #7f1d1d !important;
+            color: #fca5a5 !important;
         }
 
         .owner-metric-grid,
@@ -1437,10 +1803,10 @@ if ($dashboard_flash_payload === false) {
         }
 
         .owner-business-card {
-            border: 1px solid #e2e8f0;
+            border: 1px solid #eaecf0;
             border-radius: 16px;
             padding: 16px;
-            background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+            background: #ffffff;
             display: grid;
             gap: 14px;
         }
@@ -1456,7 +1822,7 @@ if ($dashboard_flash_payload === false) {
             margin: 0 0 4px 0;
             font-size: 1rem;
             font-weight: 800;
-            color: #0f172a;
+            color: #101828;
         }
 
         .owner-business-head small {
@@ -1470,7 +1836,7 @@ if ($dashboard_flash_payload === false) {
             padding: 6px 10px;
             border-radius: 999px;
             background: #fff1f2;
-            color: #9f1239;
+            color: #b3261e;
             font-size: 0.8rem;
             font-weight: 800;
             white-space: nowrap;
@@ -1488,7 +1854,7 @@ if ($dashboard_flash_payload === false) {
             padding: 10px 12px;
             border-radius: 12px;
             background: #ffffff;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #eaecf0;
             display: grid;
             gap: 4px;
         }
@@ -1505,14 +1871,14 @@ if ($dashboard_flash_payload === false) {
         .owner-business-stats strong,
         .owner-business-finance strong {
             font-size: 0.96rem;
-            color: #0f172a;
+            color: #101828;
         }
 
         .owner-card,
         .owner-section {
             background: #fff;
-            border: 1px solid #e2e8f0;
-            border-radius: 18px;
+            border: 1px solid #eaecf0;
+            border-radius: 12px;
             box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
         }
 
@@ -1523,9 +1889,9 @@ if ($dashboard_flash_payload === false) {
         }
 
         .owner-card strong {
-            font-size: 1.9rem;
+            font-size: 1.5rem;
             line-height: 1.1;
-            color: #0f172a;
+            color: #101828;
         }
 
         .owner-card span {
@@ -1555,7 +1921,7 @@ if ($dashboard_flash_payload === false) {
             margin: 0;
             font-size: 1.08rem;
             font-weight: 800;
-            color: #0f172a;
+            color: #101828;
         }
 
         .owner-section-head p {
@@ -1566,8 +1932,8 @@ if ($dashboard_flash_payload === false) {
             display: block;
             padding: 16px;
             border-radius: 16px;
-            border: 1px solid #e2e8f0;
-            background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+            border: 1px solid #eaecf0;
+            background: #ffffff;
             text-decoration: none;
             color: inherit;
             transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -1588,7 +1954,7 @@ if ($dashboard_flash_payload === false) {
             border-radius: 12px;
             margin-bottom: 10px;
             background: #fff1f2;
-            color: #9f1239;
+            color: #b3261e;
         }
 
         .owner-action strong {
@@ -1613,7 +1979,7 @@ if ($dashboard_flash_payload === false) {
             padding: 12px 14px;
             border-radius: 14px;
             background: #f8fafc;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #eaecf0;
         }
 
         .owner-rank-badge {
@@ -1625,7 +1991,7 @@ if ($dashboard_flash_payload === false) {
             margin-right: 8px;
             border-radius: 999px;
             background: #fff1f2;
-            color: #9f1239;
+            color: #b3261e;
             font-size: 0.72rem;
             font-weight: 800;
             letter-spacing: 0.04em;
@@ -1641,7 +2007,7 @@ if ($dashboard_flash_payload === false) {
         }
 
         .owner-link {
-            color: #9f1239;
+            color: #b3261e;
             text-decoration: none;
             font-weight: 700;
         }
@@ -1659,7 +2025,7 @@ if ($dashboard_flash_payload === false) {
             justify-content: center;
             border-radius: 999px;
             padding: 6px 12px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #eaecf0;
             background: #f8fafc;
             color: #475569;
             text-decoration: none;
@@ -1670,13 +2036,13 @@ if ($dashboard_flash_payload === false) {
 
         .owner-range-pill:hover {
             border-color: #fca5a5;
-            color: #9f1239;
+            color: #b3261e;
             background: #fff1f2;
         }
 
         .owner-range-pill.active {
-            border-color: #be123c;
-            background: #9f1239;
+            border-color: #b3261e;
+            background: #b3261e;
             color: #fff;
         }
 
@@ -1715,13 +2081,13 @@ if ($dashboard_flash_payload === false) {
         .owner-alert.error {
             background: #fff1f2;
             border-color: #fecdd3;
-            color: #9f1239;
+            color: #b3261e;
         }
 
         .owner-control-form {
             display: grid;
             gap: 10px;
-            border-top: 1px solid #e2e8f0;
+            border-top: 1px solid #eaecf0;
             padding-top: 12px;
         }
 
@@ -1755,7 +2121,7 @@ if ($dashboard_flash_payload === false) {
             border: none;
             border-radius: 10px;
             padding: 10px 14px;
-            background: #9f1239;
+            background: #b3261e;
             color: #fff;
             font-weight: 700;
             cursor: pointer;
@@ -1776,7 +2142,7 @@ if ($dashboard_flash_payload === false) {
         .owner-status-pill.active { background: #dcfce7; color: #166534; }
         .owner-status-pill.restricted { background: #fef3c7; color: #92400e; }
         .owner-status-pill.suspended { background: #fde68a; color: #92400e; }
-        .owner-status-pill.banned { background: #fee2e2; color: #b91c1c; }
+        .owner-status-pill.banned { background: #fee2e2; color: #b3261e; }
         .owner-warning-chip {
             display: inline-flex;
             align-items: center;
@@ -1791,13 +2157,13 @@ if ($dashboard_flash_payload === false) {
         }
 
         .owner-warning-chip.watch { background: #fef3c7; color: #92400e; }
-        .owner-warning-chip.critical { background: #fee2e2; color: #b91c1c; }
+        .owner-warning-chip.critical { background: #fee2e2; color: #b3261e; }
         .owner-warning-chip.healthy { background: #dcfce7; color: #166534; }
 
         .owner-warning-form {
             display: grid;
             gap: 10px;
-            border-top: 1px solid #e2e8f0;
+            border-top: 1px solid #eaecf0;
             padding-top: 12px;
         }
 
@@ -1858,7 +2224,7 @@ if ($dashboard_flash_payload === false) {
             border: none;
             border-radius: 10px;
             padding: 10px 14px;
-            background: #b91c1c;
+            background: #b3261e;
             color: #fff;
             font-weight: 700;
             cursor: pointer;
@@ -1884,7 +2250,7 @@ if ($dashboard_flash_payload === false) {
 
         .owner-priority-card {
             border-radius: 14px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #eaecf0;
             background: #f8fafc;
             padding: 12px;
             display: grid;
@@ -1901,7 +2267,7 @@ if ($dashboard_flash_payload === false) {
 
         .owner-priority-card strong {
             font-size: 1.35rem;
-            color: #0f172a;
+            color: #101828;
             line-height: 1.05;
         }
 
@@ -1915,7 +2281,7 @@ if ($dashboard_flash_payload === false) {
         }
 
         .owner-priority-card.critical strong {
-            color: #9f1239;
+            color: #b3261e;
         }
 
         .owner-priority-card.watch {
@@ -1943,7 +2309,7 @@ if ($dashboard_flash_payload === false) {
 
         .owner-queue-item {
             border-radius: 14px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #eaecf0;
             background: #f8fafc;
             padding: 12px;
             display: flex;
@@ -1953,7 +2319,7 @@ if ($dashboard_flash_payload === false) {
         }
 
         .owner-queue-item b {
-            color: #0f172a;
+            color: #101828;
             display: block;
             margin-bottom: 4px;
         }
@@ -1991,7 +2357,7 @@ if ($dashboard_flash_payload === false) {
             letter-spacing: 0.04em;
         }
 
-        .owner-priority-pill.urgent { background: #fee2e2; color: #b91c1c; }
+        .owner-priority-pill.urgent { background: #fee2e2; color: #b3261e; }
         .owner-priority-pill.critical { background: #fecaca; color: #991b1b; }
         .owner-priority-pill.high { background: #ffedd5; color: #9a3412; }
         .owner-priority-pill.medium { background: #fef3c7; color: #92400e; }
@@ -1999,9 +2365,9 @@ if ($dashboard_flash_payload === false) {
 
         .owner-module-card {
             border-radius: 14px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #eaecf0;
             padding: 14px;
-            background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+            background: #ffffff;
             display: grid;
             gap: 8px;
             text-decoration: none;
@@ -2028,17 +2394,17 @@ if ($dashboard_flash_payload === false) {
             gap: 8px;
             font-size: 0.9rem;
             font-weight: 800;
-            color: #0f172a;
+            color: #101828;
         }
 
         .owner-module-title i {
-            color: #9f1239;
+            color: #b3261e;
         }
 
         .owner-module-metric {
             font-size: 1.22rem;
             font-weight: 800;
-            color: #0f172a;
+            color: #101828;
         }
 
         .owner-module-subtitle {
@@ -2066,11 +2432,11 @@ if ($dashboard_flash_payload === false) {
 
         .owner-module-state.healthy { background: #dcfce7; color: #166534; }
         .owner-module-state.watch { background: #fef3c7; color: #92400e; }
-        .owner-module-state.critical { background: #fee2e2; color: #b91c1c; }
+        .owner-module-state.critical { background: #fee2e2; color: #b3261e; }
 
         body.dark-mode {
-            background: #0f172a !important;
-            color: #e2e8f0 !important;
+            background: #101828 !important;
+            color: #eaecf0 !important;
         }
 
         body.dark-mode .admin-content,
@@ -2079,7 +2445,7 @@ if ($dashboard_flash_payload === false) {
         body.dark-mode .owner-card,
         body.dark-mode .owner-section {
             background: #111827 !important;
-            color: #e2e8f0 !important;
+            color: #eaecf0 !important;
             border-color: #374151 !important;
         }
 
@@ -2127,7 +2493,7 @@ if ($dashboard_flash_payload === false) {
         }
 
         body.dark-mode .owner-rank-badge {
-            background: #7f1d1d !important;
+            background: #b3261e !important;
             color: #fecaca !important;
         }
 
@@ -2138,7 +2504,7 @@ if ($dashboard_flash_payload === false) {
         }
 
         body.dark-mode .owner-range-pill.active {
-            background: #be123c !important;
+            background: #b3261e !important;
             border-color: #f43f5e !important;
             color: #fff !important;
         }
@@ -2155,7 +2521,7 @@ if ($dashboard_flash_payload === false) {
         body.dark-mode .owner-warning-form textarea {
             background: #111827 !important;
             border-color: #374151 !important;
-            color: #e2e8f0 !important;
+            color: #eaecf0 !important;
         }
 
         body.dark-mode .owner-priority-card strong,
@@ -2185,6 +2551,154 @@ if ($dashboard_flash_payload === false) {
                 grid-template-columns: 1fr;
             }
         }
+
+        @media (max-width: 768px) {
+            .admin-container,
+            .admin-content,
+            .admin-main,
+            .super-owner-page,
+            .super-owner-page > *,
+            .owner-section,
+            .owner-card {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+                box-sizing: border-box !important;
+            }
+
+            .admin-content {
+                overflow-x: hidden !important;
+            }
+
+            .admin-main.super-owner-page {
+                padding: 14px 10px 120px !important;
+                gap: 14px !important;
+                overflow-x: hidden !important;
+            }
+
+            .owner-hero {
+                padding: 18px 16px !important;
+                border-radius: 18px !important;
+                overflow: hidden !important;
+            }
+
+            .owner-hero h2 {
+                max-width: 100% !important;
+                font-size: clamp(1.45rem, 7vw, 2rem) !important;
+                line-height: 1.15 !important;
+                overflow-wrap: anywhere !important;
+            }
+
+            .owner-hero p {
+                max-width: 100% !important;
+                font-size: 0.9rem !important;
+                overflow-wrap: anywhere !important;
+            }
+
+            .owner-hero-meta {
+                max-width: 100% !important;
+                flex-wrap: nowrap !important;
+                overflow-x: auto !important;
+                overflow-y: hidden !important;
+                padding-bottom: 4px !important;
+                scrollbar-width: none !important;
+                -webkit-overflow-scrolling: touch !important;
+                touch-action: pan-x !important;
+                overscroll-behavior-x: contain !important;
+            }
+
+            .owner-hero-meta::-webkit-scrollbar {
+                display: none !important;
+            }
+
+            .owner-hero-meta span {
+                flex: 0 0 auto !important;
+                max-width: 84vw !important;
+                padding: 8px 11px !important;
+                font-size: 0.78rem !important;
+                white-space: nowrap !important;
+            }
+
+            .owner-section-head {
+                align-items: flex-start !important;
+                flex-direction: column !important;
+                gap: 8px !important;
+            }
+
+            .owner-section-head > div,
+            .owner-section-head h3,
+            .owner-section-head p {
+                max-width: 100% !important;
+                min-width: 0 !important;
+                overflow-wrap: anywhere !important;
+            }
+
+            .owner-two-col {
+                width: 100% !important;
+                min-width: 0 !important;
+            }
+
+            .admin-content .owner-metric-grid,
+            .admin-content .owner-priority-grid,
+            .admin-content .owner-module-health-grid,
+            .admin-content .owner-action-grid,
+            .admin-content .owner-business-grid {
+                display: flex !important;
+                flex-wrap: nowrap !important;
+                overflow-x: auto !important;
+                overflow-y: hidden !important;
+                -webkit-overflow-scrolling: touch !important;
+                touch-action: pan-x !important;
+                overscroll-behavior-x: contain !important;
+                scroll-snap-type: x proximity !important;
+                gap: 12px !important;
+                padding: 2px 2px 12px !important;
+                scrollbar-width: none !important;
+            }
+
+            .admin-content .owner-metric-grid::-webkit-scrollbar,
+            .admin-content .owner-priority-grid::-webkit-scrollbar,
+            .admin-content .owner-module-health-grid::-webkit-scrollbar,
+            .admin-content .owner-action-grid::-webkit-scrollbar,
+            .admin-content .owner-business-grid::-webkit-scrollbar {
+                display: none !important;
+            }
+
+            .admin-content .owner-metric-grid > *,
+            .admin-content .owner-priority-grid > *,
+            .admin-content .owner-module-health-grid > *,
+            .admin-content .owner-action-grid > *,
+            .admin-content .owner-business-grid > * {
+                flex: 0 0 min(82vw, 300px) !important;
+                min-width: min(82vw, 300px) !important;
+                max-width: min(82vw, 300px) !important;
+                box-sizing: border-box !important;
+                scroll-snap-align: start !important;
+            }
+
+            .admin-content .owner-list,
+            .admin-content .owner-queue-list,
+            .admin-content .owner-business-stats,
+            .admin-content .owner-business-finance {
+                min-width: 0 !important;
+                max-width: 100% !important;
+            }
+
+            .admin-content .owner-list-item,
+            .admin-content .owner-queue-item {
+                min-width: 0 !important;
+                max-width: 100% !important;
+                overflow-wrap: anywhere !important;
+            }
+
+            .admin-content .owner-queue-item {
+                flex-wrap: wrap !important;
+            }
+
+            .admin-content .owner-queue-time {
+                white-space: normal !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -2199,6 +2713,50 @@ if ($dashboard_flash_payload === false) {
                     <button class="theme-toggler" id="themeToggler" title="Toggle Theme"><i class="fas fa-moon"></i></button>
                     <div class="topbar-right">
                         <div class="date-display" id="currentDate"></div>
+                        
+                        <!-- 1. System & Shop Alerts -->
+                        <div class="sa-topbar-action-wrap sa-alert-wrap">
+                            <button type="button" class="sa-topbar-action-btn sa-alert-btn" id="saAlertBtn" aria-label="Open Security and Shop Alerts" title="Security & Shop Alerts">
+                                <i class="fas fa-triangle-exclamation"></i><span class="sa-action-badge sa-alert-badge" id="saAlertBadge">0</span>
+                            </button>
+                            <div class="sa-dropdown-panel sa-alert-dropdown" id="saAlertDropdown">
+                                <div class="sa-dropdown-head">
+                                    <span>Security & Shop Alerts</span>
+                                    <a href="reports_complaints.php" class="sa-dropdown-head-link">View All</a>
+                                </div>
+                                <div class="sa-filter-bar" id="saAlertFilters">
+                                    <button type="button" class="sa-filter-pill active" data-filter="all">All</button>
+                                    <button type="button" class="sa-filter-pill" data-filter="security">Security & Logs</button>
+                                    <button type="button" class="sa-filter-pill" data-filter="complaints">Complaints & Reports</button>
+                                </div>
+                                <div class="sa-dropdown-list" id="saAlertList"><div class="p-3 text-muted">Loading alerts...</div></div>
+                                <div class="sa-dropdown-pages" id="saAlertPages" hidden>
+                                    <button type="button" class="sa-dropdown-page-btn" id="saAlertPrev" aria-label="Previous alerts"><i class="fas fa-chevron-left"></i></button>
+                                    <span class="sa-dropdown-page-label" id="saAlertPageLabel">1 / 1</span>
+                                    <button type="button" class="sa-dropdown-page-btn" id="saAlertNext" aria-label="Next alerts"><i class="fas fa-chevron-right"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. Platform Notifications -->
+                        <div class="sa-topbar-action-wrap sa-notification-wrap">
+                            <button type="button" class="sa-topbar-action-btn sa-notification-btn" id="saNotificationBtn" aria-label="Open Notifications" title="Platform Notifications">
+                                <i class="fas fa-bell"></i><span class="sa-action-badge sa-notification-badge" id="saNotificationBadge">0</span>
+                            </button>
+                            <div class="sa-dropdown-panel sa-notification-dropdown" id="saNotificationDropdown">
+                                <div class="sa-dropdown-head">
+                                    <span>Notifications</span>
+                                    <button type="button" class="sa-dropdown-head-link" id="saMarkAllNotifsRead">Mark all read</button>
+                                </div>
+                                <div class="sa-dropdown-list" id="saNotificationList"><div class="p-3 text-muted">Loading notifications...</div></div>
+                                <div class="sa-dropdown-pages" id="saNotificationPages" hidden>
+                                    <button type="button" class="sa-dropdown-page-btn" id="saNotificationPrev" aria-label="Previous notifications"><i class="fas fa-chevron-left"></i></button>
+                                    <span class="sa-dropdown-page-label" id="saNotificationPageLabel">1 / 1</span>
+                                    <button type="button" class="sa-dropdown-page-btn" id="saNotificationNext" aria-label="Next notifications"><i class="fas fa-chevron-right"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="admin-profile">
                             <span><?php echo htmlspecialchars($admin_info['full_name'] ?? 'System Owner'); ?></span>
                             <i class="fas fa-user-shield"></i>
@@ -2206,44 +2764,151 @@ if ($dashboard_flash_payload === false) {
                     </div>
                 </div>
             </div>
-            <div class="admin-main super-owner-page">
                 <div class="owner-hero">
-                    <span class="owner-badge"><i class="fas fa-crown"></i> System Owner Control Center</span>
-                    <h2>Full oversight for your integrated platform</h2>
-                    <p>This dashboard is exclusive to your super admin account and keeps users, partner onboarding, system governance, and platform operations in one place.</p>
+                    <div class="owner-hero-left">
+                        <div class="owner-badge"><i class="fas fa-crown"></i> System Owner Control Center</div>
+                        <h2>Platform Overview &amp; Governance</h2>
+                        <p>Real-time telemetry, partner operations, subscription revenue, and platform compliance.</p>
+                    </div>
                     <div class="owner-hero-meta">
                         <span><i class="fas fa-store"></i> <?php echo number_format($approved_partners); ?> partners</span>
-                        <span><i class="fas fa-hourglass-half"></i> <?php echo number_format($pending_applications); ?> pending apps</span>
-                        <span><i class="fas fa-hand-holding-dollar"></i> PHP <?php echo number_format($partner_sales_this_month, 2); ?> partner sales in <?php echo htmlspecialchars($current_month_label); ?></span>
-                        <span><i class="fas fa-percent"></i> <?php echo number_format($platform_commission_percent, 2); ?>% commission rate</span>
+                        <?php if ($pending_applications > 0): ?>
+                            <span class="owner-meta-highlight"><i class="fas fa-hourglass-half"></i> <?php echo number_format($pending_applications); ?> pending</span>
+                        <?php else: ?>
+                            <span><i class="fas fa-check-circle"></i> 0 pending</span>
+                        <?php endif; ?>
+                        <span><i class="fas fa-percent"></i> <?php echo number_format($platform_commission_percent, 2); ?>% rate</span>
+                        <a href="../super_admin/platform_monetization.php" class="owner-hero-action-btn">
+                            <i class="fas fa-sack-dollar"></i> Monetization
+                        </a>
                     </div>
                 </div>
 
-                <div class="owner-metric-grid">
-                    <div class="owner-card"><strong><?php echo number_format($pending_applications); ?></strong><span>Pending business applications</span><small>Owner-only approval queue</small></div>
-                    <div class="owner-card"><strong><?php echo number_format($approved_partners); ?></strong><span>Approved partners</span><small>Active tenant businesses</small></div>
-                    <div class="owner-card"><strong><?php echo number_format($total_customers); ?></strong><span>Customer accounts</span><small>Platform-wide registered users</small></div>
-                    <div class="owner-card"><strong><?php echo number_format($total_admins); ?></strong><span>Admin accounts</span><small><?php echo number_format($total_employees); ?> employee records</small></div>
-                    <div class="owner-card"><strong><?php echo number_format($active_partner_warnings_total); ?></strong><span>Active partner warnings</span><small><?php echo number_format($partners_with_active_warnings); ?> partner stores flagged</small></div>
-                    <div class="owner-card"><strong><?php echo $avg_business_rating > 0 ? number_format($avg_business_rating, 2) : '0.00'; ?></strong><span>Average business rating</span><small>From store and delivery feedback</small></div>
-                    <div class="owner-card"><strong>PHP <?php echo number_format($partner_sales_this_month, 2); ?></strong><span>Partner sales this month</span><small>Gross revenue generated by approved businesses</small></div>
-                    <div class="owner-card"><strong>PHP <?php echo number_format($platform_commission_total, 2); ?></strong><span><?php echo $commission_metrics_are_actual ? 'Actual platform commission' : 'Estimated platform commission'; ?></span><small>Based on <?php echo number_format($platform_commission_percent, 2); ?>% commission rate</small></div>
-                    <div class="owner-card"><strong>PHP <?php echo number_format($partner_net_revenue_total, 2); ?></strong><span><?php echo $commission_metrics_are_actual ? 'Actual partner payout total' : 'Estimated partner net revenue'; ?></span><small>Gross sales less platform commission</small></div>
-                    <div class="owner-card"><strong>PHP <?php echo number_format($monthly_revenue, 2); ?></strong><span>Platform revenue this month</span><small>Net income PHP <?php echo number_format($net_income, 2); ?></small></div>
-                    <div class="owner-card"><strong><?php echo number_format($today_orders); ?></strong><span>Orders today</span><small><?php echo number_format($active_deliveries); ?> active deliveries</small></div>
-                </div>
-                <div class="owner-note">
-                    <?php if ($commission_metrics_are_actual): ?>
-                        Commission and partner payout figures are now coming from real `partner_settlements` records using the configured commission rules. No partner product list is shown in this owner dashboard.
-                    <?php else: ?>
-                        Commission and partner revenue figures are still estimated from approved partner order sales using a <?php echo number_format($platform_commission_percent, 2); ?>% commission rate. Run Tenant Scope Migration once to create and backfill real settlement records.
-                    <?php endif; ?>
-                </div>
-                <?php if (!$has_user_control_status): ?>
-                    <div class="owner-note">
-                        Partner suspension, ban, and restriction controls will appear here after you run <a href="tenant_scope_migration.php" class="owner-link">Tenant Scope Migration</a>.
+                <!-- 4 Primary Executive KPI Cards -->
+                <div class="owner-kpi-grid">
+                    <div class="owner-kpi-card">
+                        <div class="owner-kpi-top">
+                            <span class="owner-kpi-label">Plan Subscriptions</span>
+                            <span class="owner-kpi-icon crimson"><i class="fas fa-crown"></i></span>
+                        </div>
+                        <div class="owner-kpi-value">PHP <?php echo number_format($total_subscription_revenue_collected, 2); ?></div>
+                        <div class="owner-kpi-sub">
+                            <span>Total Plan Revenue</span>
+                            <span class="owner-kpi-badge success"><i class="fas fa-check"></i> <?php echo number_format($active_subscribers_count); ?> active tiers</span>
+                        </div>
                     </div>
-                <?php endif; ?>
+
+                    <div class="owner-kpi-card">
+                        <div class="owner-kpi-top">
+                            <span class="owner-kpi-label">Partner Network</span>
+                            <span class="owner-kpi-icon blue"><i class="fas fa-store"></i></span>
+                        </div>
+                        <div class="owner-kpi-value"><?php echo number_format($approved_partners); ?> Stores</div>
+                        <div class="owner-kpi-sub">
+                            <span>Approved businesses</span>
+                            <?php if ($pending_applications > 0): ?>
+                                <span class="owner-kpi-badge warning"><i class="fas fa-clock"></i> <?php echo number_format($pending_applications); ?> pending</span>
+                            <?php else: ?>
+                                <span class="owner-kpi-badge healthy">All clear</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <div class="owner-kpi-card">
+                        <div class="owner-kpi-top">
+                            <span class="owner-kpi-label"><?php echo $commission_metrics_are_actual ? 'Actual Commission' : 'Est. Commission'; ?></span>
+                            <span class="owner-kpi-icon emerald"><i class="fas fa-percent"></i></span>
+                        </div>
+                        <div class="owner-kpi-value">PHP <?php echo number_format($platform_commission_total, 2); ?></div>
+                        <div class="owner-kpi-sub">
+                            <span>From <?php echo htmlspecialchars($current_month_label); ?> sales</span>
+                            <span class="owner-kpi-badge neutral">PHP <?php echo number_format($partner_sales_this_month, 2); ?> gross</span>
+                        </div>
+                    </div>
+
+                    <div class="owner-kpi-card">
+                        <div class="owner-kpi-top">
+                            <span class="owner-kpi-label">Orders &amp; Dispatch</span>
+                            <span class="owner-kpi-icon neutral"><i class="fas fa-motorcycle"></i></span>
+                        </div>
+                        <div class="owner-kpi-value"><?php echo number_format($today_orders); ?> Today</div>
+                        <div class="owner-kpi-sub">
+                            <span>Today's order volume</span>
+                            <span class="owner-kpi-badge info"><i class="fas fa-location-arrow"></i> <?php echo number_format($active_deliveries); ?> active</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Secondary Compact Operational Metrics Strip -->
+                <div class="owner-submetrics-strip">
+                    <div class="owner-submetric-tile">
+                        <div class="owner-submetric-icon"><i class="fas fa-users"></i></div>
+                        <div class="owner-submetric-body">
+                            <span class="owner-submetric-label">Customers</span>
+                            <span class="owner-submetric-val"><?php echo number_format($total_customers); ?></span>
+                            <span class="owner-submetric-hint">Platform registered</span>
+                        </div>
+                    </div>
+
+                    <div class="owner-submetric-tile">
+                        <div class="owner-submetric-icon"><i class="fas fa-user-shield"></i></div>
+                        <div class="owner-submetric-body">
+                            <span class="owner-submetric-label">Staff Accounts</span>
+                            <span class="owner-submetric-val"><?php echo number_format($total_admins); ?> Admins</span>
+                            <span class="owner-submetric-hint"><?php echo number_format($total_employees); ?> employees</span>
+                        </div>
+                    </div>
+
+                    <div class="owner-submetric-tile">
+                        <div class="owner-submetric-icon"><i class="fas fa-chart-line"></i></div>
+                        <div class="owner-submetric-body">
+                            <span class="owner-submetric-label">Platform Revenue</span>
+                            <span class="owner-submetric-val">PHP <?php echo number_format($monthly_revenue, 2); ?></span>
+                            <span class="owner-submetric-hint">Net: PHP <?php echo number_format($net_income, 2); ?></span>
+                        </div>
+                    </div>
+
+                    <div class="owner-submetric-tile">
+                        <div class="owner-submetric-icon"><i class="fas fa-wallet"></i></div>
+                        <div class="owner-submetric-body">
+                            <span class="owner-submetric-label">Partner Payout</span>
+                            <span class="owner-submetric-val">PHP <?php echo number_format($partner_net_revenue_total, 2); ?></span>
+                            <span class="owner-submetric-hint"><?php echo $commission_metrics_are_actual ? 'Actual net payable' : 'Estimated net'; ?></span>
+                        </div>
+                    </div>
+
+                    <div class="owner-submetric-tile">
+                        <div class="owner-submetric-icon"><i class="fas fa-star" style="color: #f59e0b;"></i></div>
+                        <div class="owner-submetric-body">
+                            <span class="owner-submetric-label">Store Rating</span>
+                            <span class="owner-submetric-val"><?php echo $avg_business_rating > 0 ? number_format($avg_business_rating, 2) : '0.00'; ?> <small style="font-size:0.75rem; color:#64748b;">/ 5</small></span>
+                            <span class="owner-submetric-hint">Customer feedback</span>
+                        </div>
+                    </div>
+
+                    <div class="owner-submetric-tile">
+                        <div class="owner-submetric-icon"><i class="fas fa-triangle-exclamation"></i></div>
+                        <div class="owner-submetric-body">
+                            <span class="owner-submetric-label">Partner Warnings</span>
+                            <span class="owner-submetric-val"><?php echo number_format($active_partner_warnings_total); ?></span>
+                            <span class="owner-submetric-hint"><?php echo number_format($partners_with_active_warnings); ?> flagged stores</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="owner-note">
+                    <i class="fas fa-circle-info"></i>
+                    <div>
+                        <?php if ($commission_metrics_are_actual): ?>
+                            Commission and partner payout figures are aggregated from recorded <code>partner_settlements</code> using active rate policies.
+                        <?php else: ?>
+                            Commission figures are estimated at <?php echo number_format($platform_commission_percent, 2); ?>%. Run Tenant Scope Migration to backfill actual settlement ledgers.
+                        <?php endif; ?>
+                        <?php if (!$has_user_control_status): ?>
+                            Partner suspension, ban, and restriction controls will appear after running <a href="tenant_scope_migration.php" class="owner-link">Tenant Scope Migration</a>.
+                        <?php endif; ?>
+                    </div>
+                </div>
 
                 <div class="owner-section">
                     <div class="owner-section-head">
@@ -2588,6 +3253,133 @@ if ($dashboard_flash_payload === false) {
                     </div>
                 </div>
 
+                <!-- Partner Plan Subscriptions & Revenue Desk -->
+                <div class="owner-section" id="partnerSubscriptionsBoard">
+                    <div class="owner-section-head">
+                        <div>
+                            <h3><i class="fas fa-crown" style="color: #b3261e; margin-right: 6px;"></i> Partner Plan Subscriptions &amp; Revenue</h3>
+                            <p>Real-time oversight of partner shops subscribed to Lechon Delights platform plans, amounts paid, and renewal schedules.</p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <a href="../super_admin/platform_monetization.php#subscription_events" class="owner-link" style="background: #ffffff; border: 1px solid #d0d5dd; color: #344054;">
+                                <i class="fas fa-history"></i> Switch &amp; Cancellation Log
+                            </a>
+                            <a href="../super_admin/platform_monetization.php" class="owner-link">
+                                <i class="fas fa-sack-dollar"></i> Monetization Controls
+                            </a>
+                        </div>
+                    </div>
+
+                    <?php if (!empty($partner_subscriptions_list)): ?>
+                        <div class="table-responsive" style="overflow-x: auto;">
+                            <table class="table" style="width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 0; font-size: 0.88rem;">
+                                <thead>
+                                    <tr style="background: #f8fafc; border-bottom: 2px solid #eaecf0; color: #475569; font-weight: 800;">
+                                        <th style="padding: 12px 14px; border-top-left-radius: 10px;">Partner Store &amp; Owner</th>
+                                        <th style="padding: 12px 14px;">Plan Subscribed</th>
+                                        <th style="padding: 12px 14px;">Plan Rate</th>
+                                        <th style="padding: 12px 14px;">Total Paid</th>
+                                        <th style="padding: 12px 14px;">Status</th>
+                                        <th style="padding: 12px 14px;">Subscribed Date</th>
+                                        <th style="padding: 12px 14px;">Next Renewal / Expiration</th>
+                                        <th style="padding: 12px 14px; text-align: right; border-top-right-radius: 10px;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($partner_subscriptions_list as $sub): ?>
+                                        <?php
+                                            $subStatus = strtolower(trim((string)($sub['subscription_status'] ?? 'active')));
+                                            $cycleLabel = ucfirst((string)($sub['billing_cycle'] ?? 'monthly'));
+                                            $planName = (string)($sub['plan_name'] ?? 'Partner Plan');
+                                            $planPrice = (float)($sub['plan_price'] ?? 0);
+                                            $totalPaid = (float)($sub['total_paid_to_date'] ?? 0);
+                                            $startedFormatted = !empty($sub['started_at']) ? date('M d, Y', strtotime((string)$sub['started_at'])) : '-';
+                                            $renewsRaw = (string)($sub['renews_at'] ?? '');
+                                            $renewsFormatted = !empty($renewsRaw) ? date('M d, Y', strtotime($renewsRaw)) : 'N/A';
+                                            $daysLeft = !empty($renewsRaw) ? (int)ceil((strtotime($renewsRaw) - time()) / 86400) : null;
+                                            
+                                            $pillClass = ($subStatus === 'active' || $subStatus === 'trial') ? 'active' : (($subStatus === 'past_due' || $subStatus === 'paused') ? 'restricted' : 'banned');
+                                        ?>
+                                        <tr style="border-bottom: 1px solid #eaecf0; vertical-align: middle;">
+                                            <td style="padding: 12px 14px;">
+                                                <strong style="color: #101828; font-size: 0.92rem;"><?php echo htmlspecialchars((string)$sub['business_name']); ?></strong>
+                                                <div style="color: #64748b; font-size: 0.78rem; margin-top: 2px;">
+                                                    <span><i class="fas fa-user"></i> <?php echo htmlspecialchars((string)$sub['owner_name']); ?></span>
+                                                    &bull; <span><i class="fas fa-envelope"></i> <?php echo htmlspecialchars((string)$sub['email']); ?></span>
+                                                </div>
+                                            </td>
+                                            <td style="padding: 12px 14px;">
+                                                <span style="font-weight: 800; color: #b3261e;"><?php echo htmlspecialchars($planName); ?></span>
+                                                <div style="font-size: 0.76rem; color: #64748b;"><?php echo htmlspecialchars($cycleLabel); ?> Billing</div>
+                                                <?php if (!empty($sub['switched_at']) && !empty($sub['previous_plan_name'])): ?>
+                                                    <div style="margin-top: 4px;">
+                                                        <span style="display: inline-block; font-size: 0.72rem; background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff; border-radius: 4px; padding: 2px 6px; font-weight: 600;">
+                                                            <i class="fas fa-exchange-alt"></i> Switched from <?php echo htmlspecialchars($sub['previous_plan_name']); ?>
+                                                            <span style="color: #667085; font-weight: 400;">(<?php echo date('M d, Y', strtotime($sub['switched_at'])); ?>)</span>
+                                                        </span>
+                                                    </div>
+                                                <?php endif; ?>
+                                                <?php if (!empty($sub['cancelled_at']) || $subStatus === 'cancelled'): ?>
+                                                    <div style="margin-top: 4px;">
+                                                        <span style="display: inline-block; font-size: 0.72rem; background: #fff1f0; color: #b3261e; border: 1px solid #fee4e2; border-radius: 4px; padding: 2px 6px; font-weight: 600;">
+                                                            <i class="fas fa-ban"></i> Cancelled on <?php echo !empty($sub['cancelled_at']) ? date('M d, Y', strtotime($sub['cancelled_at'])) : 'Recorded'; ?>
+                                                        </span>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td style="padding: 12px 14px; font-weight: 700; color: #101828;">
+                                                PHP <?php echo number_format($planPrice, 2); ?>
+                                                <div style="font-size: 0.74rem; color: #64748b; font-weight: 400;"><?php echo $cycleLabel === 'Annual' ? 'per year' : 'per month'; ?></div>
+                                            </td>
+                                            <td style="padding: 12px 14px;">
+                                                <strong style="color: #027a48; font-size: 0.95rem;">PHP <?php echo number_format($totalPaid, 2); ?></strong>
+                                                <?php if (!empty($sub['last_payment_date'])): ?>
+                                                    <div style="font-size: 0.74rem; color: #64748b;">Paid: <?php echo date('M d, Y', strtotime($sub['last_payment_date'])); ?></div>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td style="padding: 12px 14px;">
+                                                <span class="owner-status-pill <?php echo htmlspecialchars($pillClass); ?>">
+                                                    <?php echo htmlspecialchars(strtoupper($subStatus)); ?>
+                                                </span>
+                                            </td>
+                                            <td style="padding: 12px 14px; color: #475569;">
+                                                <?php echo htmlspecialchars($startedFormatted); ?>
+                                            </td>
+                                            <td style="padding: 12px 14px;">
+                                                <?php if ($subStatus === 'cancelled' || !empty($sub['cancelled_at'])): ?>
+                                                    <strong style="color: #b3261e;">Access until <?php echo htmlspecialchars($renewsFormatted); ?></strong>
+                                                    <div style="font-size: 0.74rem; color: #64748b; font-weight: 600;">
+                                                        <i class="fas fa-calendar-times"></i> Terminating after current cycle
+                                                    </div>
+                                                <?php else: ?>
+                                                    <strong style="color: #b3261e;"><?php echo htmlspecialchars($renewsFormatted); ?></strong>
+                                                    <?php if ($daysLeft !== null && $daysLeft >= 0): ?>
+                                                        <div style="font-size: 0.74rem; color: #027a48; font-weight: 600;"><i class="fas fa-clock"></i> <?php echo $daysLeft; ?> days remaining</div>
+                                                    <?php elseif ($daysLeft !== null && $daysLeft < 0): ?>
+                                                        <div style="font-size: 0.74rem; color: #b3261e; font-weight: 600;"><i class="fas fa-exclamation-triangle"></i> Ended</div>
+                                                    <?php endif; ?>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td style="padding: 12px 14px; text-align: right; white-space: nowrap;">
+                                                <a href="../super_admin/platform_monetization.php" class="btn btn-sm btn-outline-primary" style="padding: 4px 10px; font-size: 0.78rem; border-radius: 8px;">
+                                                    <i class="fas fa-file-invoice"></i> Invoices
+                                                </a>
+                                                <a href="../super_admin/platform_monetization.php#subscription_events" class="btn btn-sm btn-outline-secondary" style="padding: 4px 8px; font-size: 0.78rem; border-radius: 8px; margin-left: 4px;" title="View Switch &amp; Cancellation Events">
+                                                    <i class="fas fa-history"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php else: ?>
+                        <div class="owner-empty">
+                            No partner subscriptions recorded yet. Partners can subscribe from their admin portal or storefront plans page.
+                        </div>
+                    <?php endif; ?>
+                </div>
+
                 <div class="owner-section" id="businessPerformanceBoard">
                     <div class="owner-section-head">
                         <div>
@@ -2745,7 +3537,7 @@ if ($dashboard_flash_payload === false) {
                                                             data-sa-confirm-title-template="Set Partner Access to {field_label:target_status}?"
                                                             data-sa-confirm-text-template="This will update this partner account access status to {field_label:target_status} immediately."
                                                             data-sa-confirm-confirm-text-template="Yes, Set to {field_label:target_status}"
-                                                            data-sa-confirm-confirm-color="#9f1239">
+                                                            data-sa-confirm-confirm-color="#b3261e">
                                                         Apply
                                                     </button>
                                                 </div>
@@ -2791,7 +3583,7 @@ if ($dashboard_flash_payload === false) {
                                                         data-sa-confirm-title="Issue Partner Warning?"
                                                         data-sa-confirm-text-template="Severity: {field_label:warning_severity}. Follow-up: {field_label:warning_followup_status}."
                                                         data-sa-confirm-confirm-text-template="Yes, Issue {field_label:warning_severity} Warning"
-                                                        data-sa-confirm-confirm-color="#b91c1c">
+                                                        data-sa-confirm-confirm-color="#b3261e">
                                                     Issue Warning
                                                 </button>
                                             </div>
@@ -2864,6 +3656,279 @@ if ($dashboard_flash_payload === false) {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="admin.js"></script>
     <script>
+        (function () {
+            // Endpoints
+            const alertsEndpoint = '../super_admin/get_alerts.php';
+            const escapeHtml = (val) => String(val ?? '').replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]);
+
+            // -------------------------------------------------------------
+            // 1. Alerts Logic
+            // -------------------------------------------------------------
+            const alertBtn = document.getElementById('saAlertBtn');
+            const alertDropdown = document.getElementById('saAlertDropdown');
+            const alertBadge = document.getElementById('saAlertBadge');
+            const alertList = document.getElementById('saAlertList');
+            const alertPages = document.getElementById('saAlertPages');
+            const alertPrev = document.getElementById('saAlertPrev');
+            const alertNext = document.getElementById('saAlertNext');
+            const alertPageLabel = document.getElementById('saAlertPageLabel');
+            const alertFilters = document.getElementById('saAlertFilters');
+
+            let rawAlerts = [];
+            let filteredAlerts = [];
+            let alertPage = 0;
+            const alertPageSize = 4;
+            let currentFilter = 'all';
+
+            function filterAndRenderAlerts() {
+                if (currentFilter === 'all') {
+                    filteredAlerts = rawAlerts;
+                } else if (currentFilter === 'security') {
+                    filteredAlerts = rawAlerts.filter(a => a.category === 'security' || a.category === 'anomaly' || a.category === 'incident');
+                } else if (currentFilter === 'complaints') {
+                    filteredAlerts = rawAlerts.filter(a => a.category === 'complaint' || a.category === 'warning');
+                }
+                const totalAlertPages = Math.max(1, Math.ceil(filteredAlerts.length / alertPageSize));
+                alertPage = Math.min(Math.max(0, alertPage), totalAlertPages - 1);
+                alertList.innerHTML = '';
+
+                if (!filteredAlerts.length) {
+                    alertList.innerHTML = '<div class="p-4 text-center text-muted" style="font-size:0.83rem;"><i class="fas fa-check-circle text-success me-1"></i> No active alerts found</div>';
+                    if (alertPages) alertPages.hidden = true;
+                    return;
+                }
+
+                const pageItems = filteredAlerts.slice(alertPage * alertPageSize, (alertPage + 1) * alertPageSize);
+                pageItems.forEach(item => {
+                    const el = document.createElement('a');
+                    el.className = 'sa-item';
+                    el.href = item.link || '#';
+                    const tagClass = item.category ? item.category : 'default';
+                    el.innerHTML = `
+                        <div class="sa-item-header">
+                            <span class="sa-tag ${tagClass}">${escapeHtml(item.category_label || item.category || 'Alert')}</span>
+                            <span class="sa-tag ${item.severity === 'critical' ? 'rejected' : (item.severity === 'high' ? 'incomplete' : 'default')}">${escapeHtml(item.severity || 'info')}</span>
+                        </div>
+                        <div class="sa-item-title"><i class="fas ${escapeHtml(item.icon || 'fa-triangle-exclamation')} me-1 text-muted"></i> ${escapeHtml(item.title)}</div>
+                        <div class="sa-item-desc">${escapeHtml(item.message)}</div>
+                        <time class="sa-item-time">${escapeHtml(item.time_ago || '')}</time>
+                    `;
+                    alertList.appendChild(el);
+                });
+
+                if (alertPages) alertPages.hidden = totalAlertPages <= 1;
+                if (alertPageLabel) alertPageLabel.textContent = (alertPage + 1) + ' / ' + totalAlertPages;
+                if (alertPrev) alertPrev.disabled = alertPage === 0;
+                if (alertNext) alertNext.disabled = alertPage >= totalAlertPages - 1;
+            }
+
+            function loadAlerts() {
+                fetch(alertsEndpoint + '?action=get_alerts', { credentials: 'same-origin' })
+                    .then(res => res.json())
+                    .then(data => {
+                        rawAlerts = Array.isArray(data.alerts) ? data.alerts : [];
+                        const criticalOrHigh = rawAlerts.filter(a => ['critical', 'high', 'medium'].includes(a.severity)).length;
+                        if (alertBadge) {
+                            alertBadge.textContent = criticalOrHigh > 99 ? '99+' : String(criticalOrHigh);
+                            alertBadge.style.display = criticalOrHigh > 0 ? 'inline-flex' : 'none';
+                        }
+                        filterAndRenderAlerts();
+                    })
+                    .catch(() => {
+                        if (alertList) alertList.innerHTML = '<div class="p-3 text-muted">Alerts unavailable</div>';
+                    });
+            }
+
+            if (alertFilters) {
+                alertFilters.querySelectorAll('.sa-filter-pill').forEach(pill => {
+                    pill.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        alertFilters.querySelectorAll('.sa-filter-pill').forEach(p => p.classList.remove('active'));
+                        pill.classList.add('active');
+                        currentFilter = pill.getAttribute('data-filter') || 'all';
+                        alertPage = 0;
+                        filterAndRenderAlerts();
+                    });
+                });
+            }
+
+            if (alertBtn && alertDropdown) {
+                alertBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (notifDropdown) {
+                        notifDropdown.classList.remove('show');
+                        if (notifBtn) notifBtn.classList.remove('is-active');
+                    }
+                    alertDropdown.classList.toggle('show');
+                    alertBtn.classList.toggle('is-active', alertDropdown.classList.contains('show'));
+                    if (alertDropdown.classList.contains('show')) loadAlerts();
+                });
+            }
+            if (alertPrev) {
+                alertPrev.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (alertPage > 0) { alertPage--; filterAndRenderAlerts(); }
+                });
+            }
+            if (alertNext) {
+                alertNext.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const totalAlertPages = Math.max(1, Math.ceil(filteredAlerts.length / alertPageSize));
+                    if (alertPage < totalAlertPages - 1) { alertPage++; filterAndRenderAlerts(); }
+                });
+            }
+
+            // -------------------------------------------------------------
+            // 2. Notifications Logic
+            // -------------------------------------------------------------
+            const notifBtn = document.getElementById('saNotificationBtn');
+            const notifDropdown = document.getElementById('saNotificationDropdown');
+            const notifBadge = document.getElementById('saNotificationBadge');
+            const notifList = document.getElementById('saNotificationList');
+            const notifPages = document.getElementById('saNotificationPages');
+            const notifPrev = document.getElementById('saNotificationPrev');
+            const notifNext = document.getElementById('saNotificationNext');
+            const notifPageLabel = document.getElementById('saNotificationPageLabel');
+            const markAllBtn = document.getElementById('saMarkAllNotifsRead');
+
+            let notifications = [];
+            let notifPage = 0;
+            const notifPageSize = 4;
+
+            function renderNotifications() {
+                const totalPages = Math.max(1, Math.ceil(notifications.length / notifPageSize));
+                notifPage = Math.min(Math.max(0, notifPage), totalPages - 1);
+                notifList.innerHTML = '';
+
+                if (!notifications.length) {
+                    notifList.innerHTML = '<div class="p-4 text-center text-muted" style="font-size:0.83rem;"><i class="fas fa-bell-slash text-muted me-1"></i> No notifications</div>';
+                    if (notifPages) notifPages.hidden = true;
+                    return;
+                }
+
+                const pageItems = notifications.slice(notifPage * notifPageSize, (notifPage + 1) * notifPageSize);
+                pageItems.forEach((notification) => {
+                    const rawType = String(notification.type || '').toLowerCase();
+                    const match = rawType.match(/franchise_(approved|rejected|incomplete)/);
+                    const statusTag = match ? match[1] : (notification.related_type || 'update');
+                    const isUnread = Number(notification.is_read) === 0;
+
+                    const item = document.createElement('a');
+                    item.className = `sa-item ${isUnread ? 'unread' : ''}`;
+                    item.href = notification.link || '#';
+                    item.innerHTML = `
+                        <div class="sa-item-header">
+                            <span class="sa-tag ${statusTag}">${escapeHtml(statusTag.toUpperCase())}</span>
+                            ${isUnread ? '<span class="sa-tag complaint" style="font-size:0.6rem; padding:1px 5px;">NEW</span>' : ''}
+                        </div>
+                        <div class="sa-item-title"><i class="fas fa-bell me-1 text-muted"></i> ${escapeHtml(notification.title || 'Platform Notification')}</div>
+                        <div class="sa-item-desc">${escapeHtml(notification.message || '')}</div>
+                        <time class="sa-item-time">${escapeHtml(notification.time_ago || '')}</time>
+                    `;
+                    item.addEventListener('click', () => {
+                        if (isUnread) {
+                            const form = new FormData();
+                            form.append('id', notification.id);
+                            fetch(alertsEndpoint + '?action=mark_notification_read', { method: 'POST', body: form }).catch(() => {});
+                        }
+                    });
+                    notifList.appendChild(item);
+                });
+
+                if (notifPages) notifPages.hidden = totalPages <= 1;
+                if (notifPageLabel) notifPageLabel.textContent = (notifPage + 1) + ' / ' + totalPages;
+                if (notifPrev) notifPrev.disabled = notifPage === 0;
+                if (notifNext) notifNext.disabled = notifPage >= totalPages - 1;
+            }
+
+            function loadNotifications() {
+                fetch(alertsEndpoint + '?action=get_notifications', { credentials: 'same-origin' })
+                    .then(res => res.json())
+                    .then(data => {
+                        notifications = Array.isArray(data.notifications) ? data.notifications : [];
+                        const unread = Number(data.unread_count ?? notifications.filter(n => Number(n.is_read) === 0).length);
+                        if (notifBadge) {
+                            notifBadge.textContent = unread > 99 ? '99+' : String(unread);
+                            notifBadge.style.display = unread > 0 ? 'inline-flex' : 'none';
+                        }
+                        renderNotifications();
+                    })
+                    .catch(() => {
+                        if (notifList) notifList.innerHTML = '<div class="p-3 text-muted">Notifications unavailable</div>';
+                    });
+            }
+
+            if (notifBtn && notifDropdown) {
+                notifBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (alertDropdown) {
+                        alertDropdown.classList.remove('show');
+                        if (alertBtn) alertBtn.classList.remove('is-active');
+                    }
+                    notifDropdown.classList.toggle('show');
+                    notifBtn.classList.toggle('is-active', notifDropdown.classList.contains('show'));
+                    if (notifDropdown.classList.contains('show')) loadNotifications();
+                });
+            }
+            if (notifPrev) {
+                notifPrev.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (notifPage > 0) { notifPage--; renderNotifications(); }
+                });
+            }
+            if (notifNext) {
+                notifNext.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const totalPages = Math.max(1, Math.ceil(notifications.length / notifPageSize));
+                    if (notifPage < totalPages - 1) { notifPage++; renderNotifications(); }
+                });
+            }
+            if (markAllBtn) {
+                markAllBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    fetch(alertsEndpoint + '?action=mark_all_notifications_read', { method: 'POST' })
+                        .then(() => loadNotifications())
+                        .catch(() => {});
+                });
+            }
+
+            // Close on outside click
+            document.addEventListener('click', (event) => {
+                if (alertDropdown && !alertDropdown.contains(event.target) && event.target !== alertBtn) {
+                    alertDropdown.classList.remove('show');
+                    if (alertBtn) alertBtn.classList.remove('is-active');
+                }
+                if (notifDropdown && !notifDropdown.contains(event.target) && event.target !== notifBtn) {
+                    notifDropdown.classList.remove('show');
+                    if (notifBtn) notifBtn.classList.remove('is-active');
+                }
+            });
+
+            // Initial counts & periodic sync
+            function refreshAllCounts() {
+                fetch(alertsEndpoint + '?action=count', { credentials: 'same-origin' })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data && data.success) {
+                            if (alertBadge) {
+                                alertBadge.textContent = data.alerts_count > 99 ? '99+' : String(data.alerts_count);
+                                alertBadge.style.display = data.alerts_count > 0 ? 'inline-flex' : 'none';
+                            }
+                            if (notifBadge) {
+                                notifBadge.textContent = data.notifications_count > 99 ? '99+' : String(data.notifications_count);
+                                notifBadge.style.display = data.notifications_count > 0 ? 'inline-flex' : 'none';
+                            }
+                        }
+                    }).catch(() => {});
+            }
+
+            loadAlerts();
+            loadNotifications();
+            refreshAllCounts();
+            window.setInterval(refreshAllCounts, 30000);
+        })();
+    </script>
+    <script>
         const dashboardFlashMessages = <?php echo $dashboard_flash_payload; ?>;
         const body = document.body;
         const themeToggler = document.getElementById('themeToggler');
@@ -2915,7 +3980,7 @@ if ($dashboard_flash_payload === false) {
                     icon,
                     title,
                     text: message,
-                    confirmButtonColor: '#9f1239'
+                    confirmButtonColor: '#b3261e'
                 }));
             });
         }
@@ -2987,7 +4052,7 @@ if ($dashboard_flash_payload === false) {
                     icon: source.saConfirmIcon || 'warning',
                     confirmText: resolveConfirmTemplate(source.saConfirmConfirmTextTemplate || source.saConfirmConfirmText, form) || 'Yes, Continue',
                     cancelText: resolveConfirmTemplate(source.saConfirmCancelTextTemplate || source.saConfirmCancelText, form) || 'Cancel',
-                    confirmColor: source.saConfirmConfirmColor || '#9f1239',
+                    confirmColor: source.saConfirmConfirmColor || '#b3261e',
                     cancelColor: source.saConfirmCancelColor || '#64748b'
                 };
             };
@@ -3036,3 +4101,4 @@ if ($dashboard_flash_payload === false) {
     </script>
 </body>
 </html>
+

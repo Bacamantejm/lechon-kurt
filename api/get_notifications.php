@@ -34,18 +34,32 @@ if (
     }
 }
 
-if ($action === 'get_unread') {
-    $stmt = $conn->prepare("SELECT n_scope.id, n_scope.title, n_scope.message, n_scope.type, n_scope.related_id, n_scope.created_at
+if ($action === 'get_unread' || $action === 'get_recent') {
+    $stmt = $conn->prepare("SELECT n_scope.id, n_scope.title, n_scope.message, n_scope.type, n_scope.related_id, n_scope.related_type, n_scope.is_read, n_scope.created_at
                             FROM notifications n_scope
-                            WHERE n_scope.user_id = ? AND n_scope.is_read = 0{$tenant_scope_sql}
+                            WHERE n_scope.user_id = ?{$tenant_scope_sql}
                             ORDER BY n_scope.created_at DESC
-                            LIMIT 10");
+                            LIMIT 25");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $result = $stmt->get_result();
     $notifications = $result->fetch_all(MYSQLI_ASSOC);
-    echo json_encode(['notifications' => $notifications]);
     $stmt->close();
+
+    $count_stmt = $conn->prepare("SELECT COUNT(*) AS unread_count
+                                  FROM notifications n_scope
+                                  WHERE n_scope.user_id = ? AND n_scope.is_read = 0{$tenant_scope_sql}");
+    $count_stmt->bind_param("i", $user_id);
+    $count_stmt->execute();
+    $c_res = $count_stmt->get_result();
+    $c_row = $c_res->fetch_assoc();
+    $unread_count = intval($c_row['unread_count'] ?? 0);
+    $count_stmt->close();
+
+    echo json_encode([
+        'notifications' => $notifications,
+        'unread_count' => $unread_count
+    ]);
 } elseif ($action === 'count') {
     $stmt = $conn->prepare("SELECT COUNT(*) AS unread_count
                             FROM notifications n_scope

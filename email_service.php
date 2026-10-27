@@ -21,7 +21,7 @@ class EmailService {
     public function __construct($conn, bool $forceLocalMailer = false) {
         $this->conn = $conn;
         $this->mail = new PHPMailer(true);
-        $this->local_mail_path = realpath(__DIR__ . '/../tmp/local_mail') ?: (__DIR__ . '/../tmp/local_mail');
+        $this->local_mail_path = __DIR__ . '/tmp/local_mail';
 
         $smtp_host = trim((string)(defined('SMTP_HOST') ? SMTP_HOST : ''));
         $smtp_port = (int)(defined('SMTP_PORT') ? SMTP_PORT : 587);
@@ -128,55 +128,102 @@ class EmailService {
         }
     }
 
-    public function sendNotificationEmail($email, $subject, $message) {
-        try {
-            $this->resetMessage();
-            $safe_email = trim((string)$email);
-            if ($safe_email === '') {
-                return false;
-            }
-
-            $safe_subject = trim((string)$subject);
-            $safe_message = nl2br(htmlspecialchars((string)$message));
-            $html = "
-            <html>
-            <body style='font-family:Arial,sans-serif;background:#f8fafc;color:#0f172a;padding:24px;'>
-                <div style='max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;'>
-                    <h2 style='margin-top:0;color:#b91c1c;'>Lechon Delights Notice</h2>
-                    <p>{$safe_message}</p>
-                    <p style='margin-top:24px;color:#64748b;font-size:13px;'>This is an automated platform message.</p>
-                </div>
-            </body>
-            </html>";
-
-            $this->mail->addAddress($safe_email);
-            $this->mail->Subject = $safe_subject;
-            $this->mail->Body = $html;
-            $this->mail->AltBody = strip_tags((string)$message);
-            return $this->mail->send();
-        } catch (Exception $e) {
-            $this->recordFailure("Notification email sending failed: " . $e->getMessage(), $e);
-
-            if ($this->used_local_smtp && !$this->local_mail_fallback) {
-                $this->local_mail_fallback = true;
-                error_log('Local SMTP failed, retrying with PHP mail() fallback.');
-                try {
-                    $this->resetMessage();
-                    $this->mail->isMail();
-                    $this->mail->addAddress($safe_email);
-                    $this->mail->Subject = $safe_subject;
-                    $this->mail->Body = $html;
-                    $this->mail->AltBody = strip_tags((string)$message);
-                    return $this->mail->send();
-                } catch (Exception $e2) {
-                    $this->recordFailure("PHP mail() fallback failed: " . $e2->getMessage(), $e2);
-                    error_log('Mail function failed, writing email to local file fallback.');
-                    return $this->writeLocalMailFile($safe_email, $safe_subject, $html, strip_tags((string)$message));
-                }
-            }
-
+    public function dispatchMessage(string $safe_email, string $safe_subject, string $html, string $alt_body, string $recipient_name = ''): bool {
+        $safe_email = trim($safe_email);
+        if ($safe_email === '' || !filter_var($safe_email, FILTER_VALIDATE_EMAIL)) {
+            $this->last_error = 'Invalid recipient email address.';
             return false;
         }
+
+        // 1. Primary configured mailer attempt (e.g. SMTP or Laragon Mailpit)
+        try {
+            $this->resetMessage();
+            if ($recipient_name !== '') {
+                $this->mail->addAddress($safe_email, $recipient_name);
+            } else {
+                $this->mail->addAddress($safe_email);
+            }
+            $this->mail->Subject = $safe_subject;
+            $this->mail->Body    = $html;
+            $this->mail->AltBody = $alt_body !== '' ? $alt_body : strip_tags($html);
+
+            if ($this->mail->send()) {
+                return true;
+            }
+        } catch (Exception $e) {
+            $this->recordFailure("Primary mailer failed for {$safe_email}: " . $e->getMessage(), $e);
+        }
+
+        // 2. Fallback attempt: PHPMailer isMail() transport
+        try {
+            $this->resetMessage();
+            $this->mail->isMail();
+            if ($recipient_name !== '') {
+                $this->mail->addAddress($safe_email, $recipient_name);
+            } else {
+                $this->mail->addAddress($safe_email);
+            }
+            $this->mail->Subject = $safe_subject;
+            $this->mail->Body    = $html;
+            $this->mail->AltBody = $alt_body !== '' ? $alt_body : strip_tags($html);
+
+            if ($this->mail->send()) {
+                error_log("Email to {$safe_email} sent successfully via PHPMailer isMail() fallback.");
+                return true;
+            }
+        } catch (Exception $e2) {
+            $this->recordFailure("PHPMailer isMail() fallback failed for {$safe_email}: " . $e2->getMessage(), $e2);
+        }
+
+        // 3. Fallback attempt: Native PHP mail() function directly
+        try {
+            $from_name = $this->mail->FromName ?: 'Lechon Delights';
+            $from_addr = $this->mail->From ?: 'no-reply@lechondelights.com';
+            $headers = [
+                'MIME-Version: 1.0',
+                'Content-type: text/html; charset=UTF-8',
+                'From: ' . $from_name . ' <' . $from_addr . '>',
+                'Reply-To: ' . $from_addr,
+                'X-Mailer: PHP/' . phpversion()
+            ];
+            if (@mail($safe_email, $safe_subject, $html, implode("\r\n", $headers))) {
+                error_log("Email to {$safe_email} sent successfully via native PHP mail() function.");
+                return true;
+            }
+        } catch (Throwable $e3) {
+            $this->recordFailure("Native PHP mail() fallback failed for {$safe_email}: " . $e3->getMessage(), $e3);
+        }
+
+        // 4. Fallback attempt: Save local HTML email artifact
+        $written = $this->writeLocalMailFile($safe_email, $safe_subject, $html, $alt_body !== '' ? $alt_body : strip_tags($html));
+        if ($written) {
+            error_log("Email to {$safe_email} saved to local mail file as fallback.");
+            return true;
+        }
+
+        return false;
+    }
+
+    public function sendNotificationEmail($email, $subject, $message) {
+        $safe_email = trim((string)$email);
+        if ($safe_email === '') {
+            return false;
+        }
+
+        $safe_subject = trim((string)$subject);
+        $safe_message = nl2br(htmlspecialchars((string)$message));
+        $html = "
+        <html>
+        <body style='font-family:Arial,sans-serif;background:#f8fafc;color:#0f172a;padding:24px;'>
+            <div style='max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;'>
+                <h2 style='margin-top:0;color:#b91c1c;'>Lechon Delights Notice</h2>
+                <p>{$safe_message}</p>
+                <p style='margin-top:24px;color:#64748b;font-size:13px;'>This is an automated platform message.</p>
+            </div>
+        </body>
+        </html>";
+
+        return $this->dispatchMessage($safe_email, $safe_subject, $html, strip_tags((string)$message));
     }
 
     private function writeLocalMailFile(string $to, string $subject, string $html, string $altBody): bool {
@@ -306,9 +353,102 @@ class EmailService {
         }
     }
 
-    public function sendPasswordResetEmail(string $email, string $full_name, string $reset_link): bool {
+    public function sendRegistrationOtpEmail(string $email, string $full_name, string $otp_code): bool {
         try {
             $this->resetMessage();
+            $safe_email = trim($email);
+            if ($safe_email === '') {
+                return false;
+            }
+
+            $safe_name = htmlspecialchars(trim($full_name) !== '' ? $full_name : 'there');
+            $safe_otp  = htmlspecialchars(trim($otp_code));
+
+            $html = "<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1.0'>
+<title>Your Verification Code</title>
+</head>
+<body style='margin:0;padding:0;background-color:#fff8ef;font-family:Arial,Helvetica,sans-serif;'>
+  <table width='100%' cellpadding='0' cellspacing='0' style='background-color:#fff8ef;padding:40px 16px;'>
+    <tr>
+      <td align='center'>
+        <table width='100%' cellpadding='0' cellspacing='0' style='max-width:580px;background:#ffffff;border:1px solid #efddcd;border-radius:20px;overflow:hidden;box-shadow:0 8px 32px rgba(74,32,20,0.10);'>
+
+          <!-- Header -->
+          <tr>
+            <td style='background:linear-gradient(135deg,#b3261e 0%,#ef6b2e 100%);padding:34px 40px 30px;text-align:center;'>
+              <p style='margin:0 0 8px;font-size:12px;color:rgba(255,255,255,0.78);letter-spacing:1.5px;text-transform:uppercase;font-weight:600;'>Lechon Delights Security</p>
+              <h1 style='margin:0;font-size:24px;color:#ffffff;font-weight:700;'>Verify Account Registration</h1>
+              <p style='margin:8px 0 0;font-size:14px;color:rgba(255,255,255,0.88);'>Use the 6-digit code below to confirm your account creation.</p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style='padding:36px 40px;'>
+              <p style='margin:0 0 16px;font-size:16px;color:#2a211d;'>Hi <strong>{$safe_name}</strong>,</p>
+              <p style='margin:0 0 24px;font-size:15px;color:#7b6d64;line-height:1.6;'>
+                Thank you for creating an account with <strong>Lechon Delights</strong>. Enter this One-Time PIN (OTP) code on the verification page to complete your registration:
+              </p>
+
+              <!-- OTP Code Display Box -->
+              <table width='100%' cellpadding='0' cellspacing='0' style='margin-bottom:28px;'>
+                <tr>
+                  <td align='center'>
+                    <div style='background:#fff5ea;border:2px dashed #ef6b2e;border-radius:14px;padding:20px 30px;display:inline-block;'>
+                      <span style='font-size:36px;font-weight:800;letter-spacing:12px;color:#b3261e;font-family:Courier,monospace;'>{$safe_otp}</span>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Notice -->
+              <table width='100%' cellpadding='0' cellspacing='0' style='margin-bottom:24px;'>
+                <tr>
+                  <td style='background:#fffaf3;border:1px solid #efddcd;border-radius:10px;padding:14px 16px;'>
+                    <p style='margin:0;font-size:13px;color:#7b6d64;line-height:1.5;'>
+                      ⏱️ This verification code will expire in <strong style='color:#2a211d;'>15 minutes</strong>. Do not share this code with anyone.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <p style='margin:0;font-size:13px;color:#7b6d64;line-height:1.6;'>
+                If you did not create a Lechon Delights account, you can safely ignore this email.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style='background:#fff8ef;border-top:1px solid #efddcd;padding:18px 40px;text-align:center;'>
+              <p style='margin:0;font-size:12px;color:#7b6d64;'>
+                &copy; " . date('Y') . " Lechon Delights &nbsp;&bull;&nbsp; Automated Security System
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>";
+
+            $alt_body = "Hi {$full_name},\n\nYour 6-digit Lechon Delights registration verification code (OTP) is: {$otp_code}\n\nThis code expires in 15 minutes. Please do not share it with anyone.\n\n-- Lechon Delights";
+
+            return $this->dispatchMessage($safe_email, "{$otp_code} is your Lechon Delights verification code", $html, $alt_body, $full_name);
+        } catch (Exception $e) {
+            $this->recordFailure("Registration OTP email failed: " . $e->getMessage(), $e);
+            return false;
+        }
+    }
+
+    public function sendPasswordResetEmail(string $email, string $full_name, string $reset_link): bool {
+        try {
             $safe_email = trim($email);
             if ($safe_email === '') {
                 return false;
@@ -400,14 +540,9 @@ class EmailService {
 
             $alt_body = "Hi {$full_name},\n\nWe received a request to reset your Lechon Delights account password.\n\nClick the link below to reset it (valid for 10 minutes):\n{$reset_link}\n\nIf you did not request this, you can safely ignore this email.\n\n-- Lechon Delights";
 
-            $this->mail->addAddress($safe_email);
-            $this->mail->Subject = 'Reset Your Password - Lechon Delights';
-            $this->mail->Body    = $html;
-            $this->mail->AltBody = $alt_body;
-            return $this->mail->send();
+            return $this->dispatchMessage($safe_email, 'Reset Your Password - Lechon Delights', $html, $alt_body, $full_name);
         } catch (Exception $e) {
             $this->recordFailure("Password reset email failed: " . $e->getMessage(), $e);
-            error_log("PHPMailer error info: " . $this->mail->ErrorInfo);
             return false;
         }
     }
@@ -1190,6 +1325,206 @@ class EmailService {
             return true;
         } catch (Exception $e) {
             error_log("Cancellation email sending failed: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    public function sendFranchiseSubmissionEmail($recipient_email, array $app_data): bool {
+        try {
+            $this->resetMessage();
+            $safe_email = trim((string)$recipient_email);
+            if ($safe_email === '' || !filter_var($safe_email, FILTER_VALIDATE_EMAIL)) {
+                return false;
+            }
+
+            $applicant_name = htmlspecialchars($app_data['contact_person'] ?? $app_data['full_name'] ?? 'Applicant');
+            $app_number = htmlspecialchars($app_data['application_number'] ?? '');
+            $business_name = htmlspecialchars($app_data['business_name'] ?? '');
+            $raw_capital = (float)($app_data['capital_investment'] ?? 0);
+            $capital_line = ($raw_capital > 0) ? "<p style='margin:0;'><strong>Capital Investment:</strong> PHP " . number_format($raw_capital, 2) . "</p>" : "";
+            $business_address = htmlspecialchars($app_data['business_address'] ?? 'Cavite');
+
+            $subject = "Franchise Application Received - [{$app_number}]";
+            $this->mail->addAddress($safe_email, $applicant_name);
+            $this->mail->Subject = $subject;
+
+            $content = "
+                <h2 style='color:#b3261e;margin-top:0;'>Application Submitted Successfully</h2>
+                <p>Dear <strong>{$applicant_name}</strong>,</p>
+                <p>Thank you for submitting your franchise application with <strong>Lechon Delights / Lechong Sarao</strong>!</p>
+                <div style='background:#f8f9fa;border:1px solid #eaecf0;border-radius:12px;padding:16px;margin:20px 0;'>
+                    <p style='margin:0 0 8px;'><strong>Application Number:</strong> {$app_number}</p>
+                    <p style='margin:0 0 8px;'><strong>Business Name:</strong> {$business_name}</p>
+                    <p style='margin:0" . ($capital_line !== '' ? " 0 8px;" : ";") . "'><strong>Proposed Location:</strong> {$business_address}</p>
+                    {$capital_line}
+                </div>
+                <p>Our management team is currently reviewing your compliance documents and business profile. You will receive an email update once our review is complete.</p>
+                <p style='margin-top:20px;'>You can check your live application status anytime by logging into your account under <strong>My Account &gt; Franchise Applications</strong>.</p>
+                <p style='margin-top:24px;'>Best regards,<br><strong>Lechon Delights Franchise Management</strong></p>
+            ";
+
+            $this->mail->Body = $this->wrapInTemplate("Franchise Application Submission", $content);
+            $this->mail->AltBody = strip_tags($content);
+
+            if ($this->mail->send()) {
+                return true;
+            }
+            if ($this->local_mail_fallback) {
+                return $this->writeLocalMailFile($safe_email, $subject, $this->mail->Body, $this->mail->AltBody);
+            }
+            return false;
+        } catch (Exception $e) {
+            error_log("Franchise submission email error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    public function sendFranchiseStatusEmail($recipient_email, string $status, array $app_data, string $admin_notes = '', array $incomplete_documents = [], $deadline = null): bool {
+        try {
+            $this->resetMessage();
+            $safe_email = trim((string)$recipient_email);
+            if ($safe_email === '' || !filter_var($safe_email, FILTER_VALIDATE_EMAIL)) {
+                return false;
+            }
+
+            $applicant_name = htmlspecialchars($app_data['contact_person'] ?? $app_data['full_name'] ?? 'Applicant');
+            $app_number = htmlspecialchars($app_data['application_number'] ?? '');
+            $business_name = htmlspecialchars($app_data['business_name'] ?? '');
+            $notes_html = !empty($admin_notes) ? nl2br(htmlspecialchars($admin_notes)) : '';
+            $deadline_display = !empty($deadline) ? date('F j, Y', strtotime($deadline)) : '';
+
+            $doc_type_names = [
+                'business_logo' => 'Store Business Logo',
+                'dti_doc' => 'DTI / SEC Certificate',
+                'bir_doc' => 'BIR Registration (Form 2303)',
+                'mayor_doc' => "Mayor's Permit",
+                'barangay_clearance' => 'Barangay Clearance',
+                'lease_or_title' => 'Lease Contract / Title',
+                'occupancy_certificate' => 'Certificate of Occupancy',
+                'fire_safety_certificate' => 'Fire Safety Certificate',
+                'community_tax_certificate' => 'Community Tax Certificate (Cedula)',
+                'sanitary_permit' => 'Sanitary Permit',
+                'valid_id' => 'Valid ID of Owner',
+                'address_proof' => 'Proof of Address',
+                'bank_proof' => 'Bank Account Proof',
+                'bir_form' => 'BIR Form 1901/1903',
+                'sss_registration' => 'SSS Registration',
+                'philhealth_registration' => 'PhilHealth Registration',
+                'pagibig_registration' => 'Pag-IBIG Registration',
+                'industry_permit' => 'Industry-Specific Permit'
+            ];
+
+            $this->mail->addAddress($safe_email, $applicant_name);
+
+            if ($status === 'approved') {
+                $subject = "Good News! Your Franchise Application Has Been Accepted - [{$app_number}]";
+                $content = "
+                    <h2 style='color:#027a48;margin-top:0;'>Application Accepted!</h2>
+                    <p>Dear <strong>{$applicant_name}</strong>,</p>
+                    <p>We are thrilled to inform you that your franchise application for <strong>{$business_name}</strong> (App #{$app_number}) has been <strong>ACCEPTED & APPROVED</strong>!</p>
+                    <div style='background:#ecfdf3;border:1px solid #abefc6;border-radius:12px;padding:16px;margin:20px 0;color:#027a48;'>
+                        <p style='margin:0 0 8px;'><strong>Status:</strong> Approved & Partner Trial Activated</p>
+                        <p style='margin:0 0 8px;'><strong>Business Name:</strong> {$business_name}</p>
+                        <p style='margin:0;'><strong>Application Number:</strong> {$app_number}</p>
+                    </div>
+                ";
+                if (!empty($notes_html)) {
+                    $content .= "<div style='background:#f8f9fa;border-left:4px solid #027a48;padding:12px 16px;margin-bottom:20px;'><strong>Management Feedback:</strong><br>{$notes_html}</div>";
+                }
+                $content .= "
+                    <p><strong>Next Steps:</strong></p>
+                    <ul>
+                        <li>Your account now has <strong>Business Owner Admin Access</strong>.</li>
+                        <li>A <strong>1-month free platform trial</strong> has been activated for your store.</li>
+                        <li>You can now log in to the Admin Portal to set up your store menu, manage inventory, and configure delivery parameters.</li>
+                    </ul>
+                    <p>Our franchise onboarding team will contact you shortly regarding the formal franchise agreement.</p>
+                    <p style='margin-top:24px;'>Welcome to the Lechon Delights Family!<br><strong>Franchise Management Team</strong></p>
+                ";
+            } elseif ($status === 'incomplete') {
+                $subject = "Action Required: Re-upload Specific Requirements for Franchise Application [{$app_number}]";
+                $deadline_banner = !empty($deadline_display)
+                    ? "<p style='margin:8px 0 0;font-weight:700;color:#b3261e;'><strong>Compliance Deadline:</strong> {$deadline_display}</p>"
+                    : '';
+                $content = "
+                    <h2 style='color:#b54708;margin-top:0;'>Action Required: Document Revision Needed</h2>
+                    <p>Dear <strong>{$applicant_name}</strong>,</p>
+                    <p>Thank you for submitting your franchise application for <strong>{$business_name}</strong> (App #{$app_number}).</p>
+                    <p>Upon reviewing your submission, our compliance team noted that specific requirements need correction (e.g. blurry image or updated document).</p>
+                    <div style='background:#fffaeb;border:1px solid #fedf89;border-radius:12px;padding:16px;margin:20px 0;color:#b54708;'>
+                        <p style='margin:0 0 8px;'><strong>Application Status:</strong> Incomplete Requirements / Re-upload Needed</p>
+                        <p style='margin:0;'><strong>Application Number:</strong> {$app_number}</p>
+                        {$deadline_banner}
+                    </div>
+                ";
+
+                if (!empty($incomplete_documents)) {
+                    $content .= "
+                        <div style='background:#ffffff;border:1.5px solid #fedf89;border-radius:12px;padding:18px;margin-bottom:20px;'>
+                            <h3 style='color:#b54708;margin:0 0 12px;font-size:16px;'>Items Requiring Re-upload:</h3>
+                            <ul style='margin:0;padding-left:20px;color:#344054;'>
+                    ";
+                    foreach ($incomplete_documents as $doc_key => $reason) {
+                        $doc_label = is_array($reason) ? ($reason['label'] ?? ($doc_type_names[$doc_key] ?? ucfirst(str_replace('_', ' ', $doc_key)))) : ($doc_type_names[$doc_key] ?? ucfirst(str_replace('_', ' ', $doc_key)));
+                        $reason_text = is_array($reason) ? ($reason['reason'] ?? 'Document needs clear re-upload') : (!empty($reason) ? htmlspecialchars($reason) : 'Document needs clear re-upload');
+                        $content .= "<li style='margin-bottom:8px;'><strong>{$doc_label}:</strong> <span style='color:#b54708;'>{$reason_text}</span></li>";
+                    }
+                    $content .= "
+                            </ul>
+                            <p style='margin:12px 0 0;font-size:13px;color:#667085;'><em>Great news: All your other submitted details and approved files have been saved. You only need to re-upload the flagged document(s) above!</em></p>
+                        </div>
+                    ";
+                }
+
+                if (!empty($notes_html)) {
+                    $content .= "
+                        <div style='background:#f8f9fa;border:1px solid #eaecf0;border-radius:12px;padding:16px;margin-bottom:20px;'>
+                            <strong style='color:#344054;'>Admin Instructions:</strong>
+                            <p style='margin:8px 0 0;color:#475467;'>{$notes_html}</p>
+                        </div>
+                    ";
+                }
+
+                $content .= "
+                    <p><strong>How to update your application:</strong></p>
+                    <p>1. Sign in to your account.<br>2. Visit the <a href='http://" . ($_SERVER['HTTP_HOST'] ?? 'localhost') . "/franchise_application.php' style='color:#b3261e;font-weight:700;'>Business Application Page</a>.<br>3. Upload only the flagged document(s) and click <strong>Submit Revisions</strong>.</p>
+                    <p style='margin-top:24px;'>Best regards,<br><strong>Lechon Delights Compliance Team</strong></p>
+                ";
+            } else { // rejected
+                $subject = "Update on Your Franchise Application - [{$app_number}]";
+                $content = "
+                    <h2 style='color:#b3261e;margin-top:0;'>Franchise Application Update</h2>
+                    <p>Dear <strong>{$applicant_name}</strong>,</p>
+                    <p>Thank you for your interest in joining the Lechon Delights franchise network with your application for <strong>{$business_name}</strong> (App #{$app_number}).</p>
+                    <p>After careful evaluation, we regret to inform you that your application status has been marked as <strong>NOT ACCEPTED / REJECTED</strong> at this time.</p>
+                ";
+                if (!empty($notes_html)) {
+                    $content .= "
+                        <div style='background:#fff1f0;border:1px solid #fee4e2;border-radius:12px;padding:16px;margin:20px 0;color:#b3261e;'>
+                            <strong>Evaluation Feedback:</strong>
+                            <p style='margin:8px 0 0;color:#344054;'>{$notes_html}</p>
+                        </div>
+                    ";
+                }
+                $content .= "
+                    <p>If eligible, you may submit a revised application after completing the 3-day evaluation cooldown period.</p>
+                    <p style='margin-top:24px;'>Best regards,<br><strong>Lechon Delights Franchise Evaluation Board</strong></p>
+                ";
+            }
+
+            $this->mail->Subject = $subject;
+            $this->mail->Body = $this->wrapInTemplate($subject, $content);
+            $this->mail->AltBody = strip_tags($content);
+
+            if ($this->mail->send()) {
+                return true;
+            }
+            if ($this->local_mail_fallback) {
+                return $this->writeLocalMailFile($safe_email, $subject, $this->mail->Body, $this->mail->AltBody);
+            }
+            return false;
+        } catch (Exception $e) {
+            error_log("Franchise status email error: " . $e->getMessage());
             return false;
         }
     }

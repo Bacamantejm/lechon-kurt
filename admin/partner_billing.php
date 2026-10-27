@@ -11,9 +11,35 @@ $current_user_id = (int)($_SESSION['user_id'] ?? 0);
 $csrf_token = generateCSRFToken();
 $is_partner_scoped_admin = isApprovedFranchiseSellerAccount($conn, $current_user_id);
 $seller_scope_id = $is_partner_scoped_admin ? getFranchiseSellerScopeOwnerId($conn, $current_user_id) : null;
+
+// Ensure any shop owner / business owner account has seller scope established
+$user_role_name = strtolower(trim((string)($_SESSION['role_name'] ?? '')));
+if ($user_role_name === '' && $current_user_id > 0 && function_exists('getUserRole')) {
+    $current_role = getUserRole($conn, $current_user_id);
+    if ($current_role && !empty($current_role['name'])) {
+        $user_role_name = strtolower(trim((string)$current_role['name']));
+        $_SESSION['role_name'] = $user_role_name;
+    }
+}
+
+$is_store_owner = false;
+if ($current_user_id > 0) {
+    $storeCheck = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE owner_user_id = {$current_user_id} LIMIT 1");
+    if ($storeCheck && mysqli_num_rows($storeCheck) > 0) {
+        $is_store_owner = true;
+    }
+}
+
+$is_shop_owner_account = $is_store_owner || in_array($user_role_name, ['business_owner', 'partner_owner', 'store_owner', 'shop_owner'], true);
+
+if ($is_shop_owner_account && ($seller_scope_id === null || !$is_partner_scoped_admin)) {
+    $seller_scope_id = $current_user_id;
+    $is_partner_scoped_admin = true;
+}
+
 $is_super_admin_user = $current_user_id > 0 && function_exists('isSuperAdmin')
     ? isSuperAdmin($conn, $current_user_id)
-    : (strtolower(trim((string)($_SESSION['role_name'] ?? ''))) === 'super_admin');
+    : ($user_role_name === 'super_admin');
 if ($is_super_admin_user && !$is_partner_scoped_admin) {
     header('Location: ../super_admin/platform_monetization.php');
     exit;
@@ -21,6 +47,7 @@ if ($is_super_admin_user && !$is_partner_scoped_admin) {
 
 $is_partner_owner_admin = $is_partner_scoped_admin && (int)$seller_scope_id === $current_user_id;
 $has_partner_billing_access = $is_partner_owner_admin
+    || $is_shop_owner_account
     || (function_exists('hasPermission') && (hasPermission($conn, $current_user_id, 'billing.view') || hasPermission($conn, $current_user_id, 'billing.manage')))
     || (function_exists('hasModuleAccess') && hasModuleAccess($conn, $current_user_id, 'billing'));
 if (!$is_partner_scoped_admin || $seller_scope_id === null) {
@@ -42,8 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $action = strtolower(trim((string)($_POST['action'] ?? '')));
     $invoice_id = (int)($_POST['invoice_id'] ?? 0);
-    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $base_url = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/lechonsystem';
+    $base_url = function_exists('appBaseUrl') ? appBaseUrl() : (((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
 
     if ($action === 'start_invoice_payment') {
         $result = $monetizationService->createInvoicePaymentSession(
@@ -77,7 +103,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($result) {
             $_SESSION['success'] = 'Your subscription request has been submitted to the platform owner.';
         } else {
-            $_SESSION['error'] = 'Unable to submit the subscription request right now. You may already have a pending request.';
+            $_SESSION['error'] = 'Unable to submit the subscription request right now. You may already have an active subscription with these exact parameters.';
+        }
+    } elseif ($action === 'cancel_subscription_request') {
+        $request_id = (int)($_POST['request_id'] ?? 0);
+        $result = $monetizationService->cancelSubscriptionRequest($request_id, (int)$seller_scope_id, $current_user_id);
+        if ($result) {
+            $_SESSION['success'] = 'Subscription request has been cancelled.';
+        } else {
+            $_SESSION['error'] = 'Unable to cancel this request. It may have already been reviewed.';
         }
     }
 
@@ -707,53 +741,85 @@ $latestReminder = $billingReminders[0] ?? null;
                     </div>
                 </div>
 
-                <div class="billing-card">
-                    <h3 class="billing-title">Subscription Request Center</h3>
-                    <p class="billing-sub">Apply as a new subscriber, renew your current plan, or request a plan change directly from your shop billing dashboard.</p>
-                    <?php if ($has_prefill_request): ?>
-                        <div class="alert alert-info" style="border-radius:14px;">
-                            The plan request form was prefilled from the Subscription Plans page. Review it, adjust anything you want, then submit.
+                <div class="form-section-card mb-4">
+                    <div class="form-section-head">
+                        <div class="form-section-title">
+                            <i class="fas fa-crown"></i>
+                            Subscription Request Center
                         </div>
-                    <?php endif; ?>
-                    <form method="post" class="row g-3">
-                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                        <input type="hidden" name="action" value="submit_subscription_request">
-                        <div class="col-12 col-md-4">
-                            <label class="form-label">Request Type</label>
-                            <select name="request_type" class="form-select" required>
-                                <option value="new" <?php echo $requested_request_type === 'new' ? 'selected' : ''; ?>>New Subscription</option>
-                                <option value="renew" <?php echo $requested_request_type === 'renew' ? 'selected' : ''; ?>>Renew Current Plan</option>
-                                <option value="upgrade" <?php echo $requested_request_type === 'upgrade' ? 'selected' : ''; ?>>Upgrade Plan</option>
-                                <option value="downgrade" <?php echo $requested_request_type === 'downgrade' ? 'selected' : ''; ?>>Downgrade Plan</option>
-                                <option value="change_plan" <?php echo $requested_request_type === 'change_plan' ? 'selected' : ''; ?>>Change Plan</option>
-                            </select>
-                        </div>
-                        <div class="col-12 col-md-4">
-                            <label class="form-label">Plan</label>
-                            <select name="plan_id" class="form-select" required>
-                                <option value="">Select plan</option>
-                                <?php foreach ($availablePlans as $plan): ?>
-                                    <option value="<?php echo (int)$plan['id']; ?>" <?php echo $requested_plan_id === (int)$plan['id'] ? 'selected' : ''; ?>>
-                                        <?php echo htmlspecialchars((string)$plan['plan_name'] . ' - PHP ' . number_format((float)($plan['monthly_price'] ?? 0), 2) . '/mo'); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-12 col-md-4">
-                            <label class="form-label">Billing Cycle</label>
-                            <select name="billing_cycle" class="form-select" required>
-                                <option value="monthly" <?php echo $requested_billing_cycle === 'monthly' ? 'selected' : ''; ?>>Monthly</option>
-                                <option value="annual" <?php echo $requested_billing_cycle === 'annual' ? 'selected' : ''; ?>>Annual</option>
-                            </select>
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">Notes</label>
-                            <textarea name="partner_notes" class="form-control" rows="3" placeholder="Optional note for the platform owner, such as why you want to upgrade or renew."></textarea>
-                        </div>
-                        <div class="col-12">
-                            <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit Subscription Request</button>
-                        </div>
-                    </form>
+                        <span class="form-req-pill">Plan Application</span>
+                    </div>
+                    <div class="p-3">
+                        <p class="text-muted small mb-3">Apply as a new subscriber, renew your current plan, or request a plan change directly from your shop billing dashboard.</p>
+                        <?php if ($has_prefill_request): ?>
+                            <div class="alert alert-info py-2 px-3 mb-3" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; border-radius:10px; font-size:0.88rem;">
+                                <i class="fas fa-info-circle me-1"></i> The plan request form was prefilled from the Subscription Plans page. Review it, adjust anything you want, then submit.
+                            </div>
+                        <?php endif; ?>
+                        <form method="post">
+                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                            <input type="hidden" name="action" value="submit_subscription_request">
+                            <div class="row g-3">
+                                <div class="col-12 col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Request Type</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-exchange-alt form-input-icon"></i>
+                                            <select name="request_type" class="form-control" required>
+                                                <option value="new" <?php echo $requested_request_type === 'new' ? 'selected' : ''; ?>>New Subscription</option>
+                                                <option value="renew" <?php echo $requested_request_type === 'renew' ? 'selected' : ''; ?>>Renew Current Plan</option>
+                                                <option value="upgrade" <?php echo $requested_request_type === 'upgrade' ? 'selected' : ''; ?>>Upgrade Plan</option>
+                                                <option value="downgrade" <?php echo $requested_request_type === 'downgrade' ? 'selected' : ''; ?>>Downgrade Plan</option>
+                                                <option value="change_plan" <?php echo $requested_request_type === 'change_plan' ? 'selected' : ''; ?>>Change Plan</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Plan</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-layer-group form-input-icon"></i>
+                                            <select name="plan_id" class="form-control" required>
+                                                <option value="">Select plan</option>
+                                                <?php foreach ($availablePlans as $plan): ?>
+                                                    <option value="<?php echo (int)$plan['id']; ?>" <?php echo $requested_plan_id === (int)$plan['id'] ? 'selected' : ''; ?>>
+                                                        <?php echo htmlspecialchars((string)$plan['plan_name'] . ' - PHP ' . number_format((float)($plan['monthly_price'] ?? 0), 2) . '/mo'); ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Billing Cycle</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-calendar-alt form-input-icon"></i>
+                                            <select name="billing_cycle" class="form-control" required>
+                                                <option value="monthly" <?php echo $requested_billing_cycle === 'monthly' ? 'selected' : ''; ?>>Monthly</option>
+                                                <option value="annual" <?php echo $requested_billing_cycle === 'annual' ? 'selected' : ''; ?>>Annual</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Notes / Justification <span class="text-muted fw-normal">(Optional)</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-comment-alt form-input-icon"></i>
+                                            <textarea name="partner_notes" class="form-control" rows="2" placeholder="Optional note for the platform owner, such as why you want to upgrade or renew."></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12 text-end">
+                                    <button type="submit" class="btn btn-modal-primary px-4 py-2">
+                                        <i class="fas fa-paper-plane me-1"></i> Submit Subscription Request
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
                 </div>
 
                 <div class="billing-card">
@@ -761,10 +827,10 @@ $latestReminder = $billingReminders[0] ?? null;
                     <p class="billing-sub">Track plan requests you have sent to the platform owner and see their latest status.</p>
                     <div class="billing-table-wrap">
                         <table class="billing-table">
-                            <thead><tr><th>Requested Plan</th><th>Type</th><th>Cycle</th><th>Status</th><th>Requested</th><th>Review Notes</th></tr></thead>
+                            <thead><tr><th>Requested Plan</th><th>Type</th><th>Cycle</th><th>Status</th><th>Requested</th><th>Review Notes</th><th>Action</th></tr></thead>
                             <tbody>
                             <?php if (empty($subscriptionRequests)): ?>
-                                <tr><td colspan="6" style="text-align:center;color:#64748b;">No subscription requests submitted yet.</td></tr>
+                                <tr><td colspan="7" style="text-align:center;color:#64748b;">No subscription requests submitted yet.</td></tr>
                             <?php else: foreach ($subscriptionRequests as $request): ?>
                                 <?php
                                     $requestStatus = (string)($request['request_status'] ?? 'pending');
@@ -780,6 +846,20 @@ $latestReminder = $billingReminders[0] ?? null;
                                     <td><span class="billing-chip <?php echo $requestClass; ?>"><?php echo htmlspecialchars(ucfirst($requestStatus)); ?></span></td>
                                     <td><?php echo !empty($request['created_at']) ? htmlspecialchars(date('M d, Y h:i A', strtotime((string)$request['created_at']))) : '-'; ?></td>
                                     <td><?php echo htmlspecialchars(trim((string)($request['review_notes'] ?? '')) !== '' ? (string)$request['review_notes'] : ((string)($request['partner_notes'] ?? '') !== '' ? 'Partner note: ' . (string)$request['partner_notes'] : '-')); ?></td>
+                                    <td>
+                                        <?php if ($requestStatus === 'pending'): ?>
+                                        <form method="POST" style="display:inline-block;" onsubmit="return confirm('Are you sure you want to cancel this plan request?');">
+                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                                            <input type="hidden" name="action" value="cancel_subscription_request">
+                                            <input type="hidden" name="request_id" value="<?php echo (int)($request['id'] ?? 0); ?>">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" style="padding: 2px 8px; font-size: 0.78rem; border-radius: 6px;">
+                                                <i class="fas fa-times"></i> Cancel
+                                            </button>
+                                        </form>
+                                        <?php else: ?>
+                                            <span style="color:#94a3b8;font-size:.82rem;">-</span>
+                                        <?php endif; ?>
+                                    </td>
                                 </tr>
                             <?php endforeach; endif; ?>
                             </tbody>

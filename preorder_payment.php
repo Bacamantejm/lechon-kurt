@@ -19,8 +19,8 @@ $preorder_service = new PreOrderService($conn);
 
 // Initialize PayMongo with API keys
 $paymongo = new PayMongoIntegration(
-    'sk_test_YOUR_PAYMONGO_SECRET_KEY_HERE',  // Secret key
-    'pk_test_YOUR_PAYMONGO_PUBLIC_KEY_HERE'   // Public key
+    appConfigValue('PAYMONGO_SECRET_KEY'),
+    appConfigValue('PAYMONGO_PUBLIC_KEY')
 );
 
 // Get pre-order ID and payment type
@@ -117,8 +117,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_payment'])) {
             'customer_email' => $user_details['email'],
             'customer_phone' => $user_details['phone'],
             'payment_method' => 'all',
-            'success_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/preorder_payment_success.php?id=' . $pre_order_id . '&type=' . $payment_type,
-            'cancel_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/preorder_payment.php?id=' . $pre_order_id . '&type=' . $payment_type . '&cancelled=1'
+            'success_url' => appBaseUrl('preorder_payment_success.php?id=' . $pre_order_id . '&type=' . $payment_type),
+            'cancel_url' => appBaseUrl('preorder_payment.php?id=' . $pre_order_id . '&type=' . $payment_type . '&cancelled=1')
         ]);
         
         if ($checkout_data['success']) {
@@ -250,6 +250,38 @@ if ($payment_amount <= 0) {
         }
         .alert {
             margin: 20px 0;
+        }
+
+        /* Dark Mode Overrides */
+        body.dark-mode {
+            background: #0f172a !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode h1, body.dark-mode h5, body.dark-mode .method-title {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .payment-card {
+            background: #1e293b !important;
+            border: 1px solid #334155 !important;
+            color: #f8fafc !important;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.25) !important;
+        }
+        body.dark-mode .order-summary {
+            background: #111827 !important;
+            border: 1px solid #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .method-option {
+            background: #111827 !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .method-option:hover {
+            background: #1e293b !important;
+            border-color: #b3261e !important;
+        }
+        body.dark-mode .method-desc {
+            color: #94a3b8 !important;
         }
     </style>
 </head>

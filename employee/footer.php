@@ -3,25 +3,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-<?php
-if (isset($_SESSION['message'])) {
-    $type = $_SESSION['msg_type'];
-    $msg = $_SESSION['message'];
-    $swal_icon = ($type == 'danger') ? 'error' : $type;
-    $swal_title = ($type == 'success') ? 'Success!' : 'Notice';
-    
-    echo "<script>
-        Swal.fire({
-            icon: '$swal_icon',
-            title: '$swal_title',
-            text: '$msg',
-            confirmButtonColor: '#1976d2'
-        });
-    </script>";
-    unset($_SESSION['message']);
-    unset($_SESSION['msg_type']);
-}
-?>
+<?php require_once __DIR__ . '/../includes/popup_alert.php'; ?>
 
 <script>
     window.swalConfirmAction = window.swalConfirmAction || function(options) {
@@ -31,8 +13,8 @@ if (isset($_SESSION['message'])) {
             icon: 'warning',
             confirmButtonText: 'Confirm',
             cancelButtonText: 'Cancel',
-            confirmButtonColor: '#1976d2',
-            cancelButtonColor: '#d33'
+            confirmButtonColor: 'var(--danger, #ef4444)',
+            cancelButtonColor: 'var(--secondary, #64748b)'
         }, options || {});
 
         if (typeof Swal !== 'undefined') {
@@ -69,8 +51,8 @@ if (isset($_SESSION['message'])) {
                     icon: form.dataset.swConfirmIcon || 'warning',
                     confirmButtonText: form.dataset.swConfirmConfirmText || 'Confirm',
                     cancelButtonText: form.dataset.swConfirmCancelText || 'Cancel',
-                    confirmButtonColor: form.dataset.swConfirmConfirmColor || '#1976d2',
-                    cancelButtonColor: form.dataset.swConfirmCancelColor || '#d33'
+                    confirmButtonColor: form.dataset.swConfirmConfirmColor || 'var(--danger, #ef4444)',
+                    cancelButtonColor: form.dataset.swConfirmCancelColor || 'var(--secondary, #64748b)'
                 }).then((confirmed) => {
                     if (confirmed) {
                         form.dataset.swConfirmed = '1';

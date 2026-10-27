@@ -70,11 +70,13 @@ $orderSql = "
         o.updated_at,
         lt.current_status AS tracking_status,
         lt.driver_name,
+        r.rating AS driver_rating,
         lt.estimated_delivery,
         lt.last_location_update,
         lt.updated_at AS tracking_updated_at
     FROM orders o
     LEFT JOIN logistics_tracking lt ON lt.order_id = o.id
+    LEFT JOIN riders r ON lt.driver_id = r.id
     WHERE o.user_id = ?
       AND (
         (lt.id IS NOT NULL AND lt.current_status IN ('pending','assigned','picked_up','on_the_way','arriving'))
@@ -157,6 +159,7 @@ while ($row = $orderResult->fetch_assoc()) {
         'status' => $status_for_label,
         'status_label' => $status_label,
         'driver_name' => trim((string)($row['driver_name'] ?? '')),
+        'driver_rating' => isset($row['driver_rating']) && $row['driver_rating'] !== null ? number_format((float)$row['driver_rating'], 1) : null,
         'eta_text' => $eta_text,
         'estimated_delivery' => ($estimated_delivery !== '') ? $estimated_delivery : null,
         'last_location_update' => !empty($row['last_location_update']) ? $row['last_location_update'] : null,

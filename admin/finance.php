@@ -543,7 +543,7 @@ function financeProcessRefundAction($conn, $refund_id, $action, $admin_user_id, 
                 SELECT 1
                 FROM order_items oi_scope
                 INNER JOIN products p_scope
-                    ON (oi_scope.product_id = p_scope.product_id OR oi_scope.product_id = CAST(p_scope.id AS CHAR))
+                    ON (oi_scope.product_id COLLATE utf8mb4_general_ci = p_scope.product_id COLLATE utf8mb4_general_ci OR oi_scope.product_id COLLATE utf8mb4_general_ci = CAST(p_scope.id AS CHAR) COLLATE utf8mb4_general_ci)
                 WHERE oi_scope.order_id = o.id
                   AND p_scope.seller_id = " . (int)$seller_scope_id . "
             )";
@@ -962,7 +962,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $incoming_finance_action !== '') {
                     SELECT 1
                     FROM order_items oi_scope
                     INNER JOIN products p_scope
-                        ON (oi_scope.product_id = p_scope.product_id OR oi_scope.product_id = CAST(p_scope.id AS CHAR))
+                        ON (oi_scope.product_id COLLATE utf8mb4_general_ci = p_scope.product_id COLLATE utf8mb4_general_ci OR oi_scope.product_id COLLATE utf8mb4_general_ci = CAST(p_scope.id AS CHAR) COLLATE utf8mb4_general_ci)
                     WHERE oi_scope.order_id = o.id
                       AND p_scope.seller_id = ?
                 )";
@@ -2279,6 +2279,7 @@ $audit_reset_url = 'finance.php?' . http_build_query($audit_base_params) . '#dec
         <div class="admin-content">
             <div class="admin-topbar">
                 <div class="topbar-content">
+                    <button class="sidebar-toggler" id="sidebarToggler"><i class="fas fa-bars"></i></button>
                     <h1>Finance Management</h1>
                     <span class="finance-scope-badge <?php echo htmlspecialchars($finance_scope_badge_class); ?>">
                         <i class="fas <?php echo htmlspecialchars($finance_scope_badge_icon); ?>"></i>
@@ -2863,14 +2864,22 @@ $audit_reset_url = 'finance.php?' . http_build_query($audit_base_params) . '#dec
     </div>
 
     <!-- Payroll Review Modal -->
-    <div class="modal fade" id="payrollReviewModal" tabindex="-1" aria-labelledby="payrollReviewModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl">
+    <div class="modal fade modern-form-modal" id="payrollReviewModal" tabindex="-1" aria-labelledby="payrollReviewModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="payrollReviewModalLabel">Review Payroll</h5>
+                <div class="modal-header modal-header-modern">
+                    <div class="modal-header-content">
+                        <div class="modal-header-icon">
+                            <i class="fas fa-file-invoice-dollar"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title" id="payrollReviewModalLabel">Review Payroll Record</h5>
+                            <div class="modal-subtitle">Audit pay period hours, gross compensation, and statutory deductions</div>
+                        </div>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body" id="payrollReviewDetails">
+                <div class="modal-body p-4" id="payrollReviewDetails">
                     <!-- Content loaded via AJAX -->
                 </div>
             </div>

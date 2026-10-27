@@ -2,16 +2,44 @@
 session_start();
 include 'auth.php';
 include '../includes/config.php';
+include '../includes/security.php';
 require_once '../includes/PlatformMonetizationService.php';
 
 checkAdminAccess();
 $admin_info = getAdminInfo($conn);
 $current_user_id = (int)($_SESSION['user_id'] ?? 0);
+$csrf_token = generateCSRFToken();
 $is_partner_scoped_admin = isApprovedFranchiseSellerAccount($conn, $current_user_id);
 $seller_scope_id = $is_partner_scoped_admin ? getFranchiseSellerScopeOwnerId($conn, $current_user_id) : null;
+
+// Ensure any shop owner / business owner account has seller scope established
+$user_role_name = strtolower(trim((string)($_SESSION['role_name'] ?? '')));
+if ($user_role_name === '' && $current_user_id > 0 && function_exists('getUserRole')) {
+    $current_role = getUserRole($conn, $current_user_id);
+    if ($current_role && !empty($current_role['name'])) {
+        $user_role_name = strtolower(trim((string)$current_role['name']));
+        $_SESSION['role_name'] = $user_role_name;
+    }
+}
+
+$is_store_owner = false;
+if ($current_user_id > 0) {
+    $storeCheck = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE owner_user_id = {$current_user_id} LIMIT 1");
+    if ($storeCheck && mysqli_num_rows($storeCheck) > 0) {
+        $is_store_owner = true;
+    }
+}
+
+$is_shop_owner_account = $is_store_owner || in_array($user_role_name, ['business_owner', 'partner_owner', 'store_owner', 'shop_owner'], true);
+
+if ($is_shop_owner_account && ($seller_scope_id === null || !$is_partner_scoped_admin)) {
+    $seller_scope_id = $current_user_id;
+    $is_partner_scoped_admin = true;
+}
+
 $is_super_admin_user = $current_user_id > 0 && function_exists('isSuperAdmin')
     ? isSuperAdmin($conn, $current_user_id)
-    : (strtolower(trim((string)($_SESSION['role_name'] ?? ''))) === 'super_admin');
+    : ($user_role_name === 'super_admin');
 if ($is_super_admin_user && !$is_partner_scoped_admin) {
     header('Location: ../super_admin/platform_monetization.php');
     exit;
@@ -19,6 +47,7 @@ if ($is_super_admin_user && !$is_partner_scoped_admin) {
 
 $is_partner_owner_admin = $is_partner_scoped_admin && (int)$seller_scope_id === $current_user_id;
 $has_partner_billing_access = $is_partner_owner_admin
+    || $is_shop_owner_account
     || (function_exists('hasPermission') && (hasPermission($conn, $current_user_id, 'billing.view') || hasPermission($conn, $current_user_id, 'billing.manage')))
     || (function_exists('hasModuleAccess') && hasModuleAccess($conn, $current_user_id, 'billing'));
 if (!$is_partner_scoped_admin || $seller_scope_id === null) {
@@ -30,6 +59,65 @@ if (!$has_partner_billing_access) {
 
 $monetizationService = new PlatformMonetizationService($conn);
 $monetizationService->ensureReady($current_user_id);
+
+// Handle Direct Instant PayMongo Subscription Checkout
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'instant_subscription_checkout') {
+    if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
+        $_SESSION['error'] = 'Invalid request token. Please refresh and try again.';
+        header('Location: subscription_plans.php');
+        exit;
+    }
+
+    $plan_id = (int)($_POST['plan_id'] ?? 0);
+    $billing_cycle = strtolower(trim((string)($_POST['billing_cycle'] ?? 'monthly')));
+    $payment_method = strtolower(trim((string)($_POST['payment_method'] ?? 'gcash')));
+    $agree_terms = !empty($_POST['agree_terms']);
+
+    if (!$agree_terms) {
+        $_SESSION['error'] = 'You must agree to the Subscription Terms & Cancellation Policy to proceed.';
+        header('Location: subscription_plans.php');
+        exit;
+    }
+
+    $base_url = function_exists('appBaseUrl') ? appBaseUrl() : (((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+
+    $result = $monetizationService->createDirectSubscriptionPaymentSession(
+        (int)$seller_scope_id,
+        $plan_id,
+        $billing_cycle,
+        $base_url,
+        $payment_method,
+        $current_user_id
+    );
+
+    if (!empty($result['success']) && !empty($result['checkout_url'])) {
+        header('Location: ' . $result['checkout_url']);
+        exit;
+    }
+
+    $_SESSION['error'] = (string)($result['message'] ?? 'Unable to create PayMongo checkout session.');
+    header('Location: subscription_plans.php');
+    exit;
+}
+
+// Handle Subscription Cancellation
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'cancel_active_subscription') {
+    if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
+        $_SESSION['error'] = 'Invalid request token. Please refresh and try again.';
+        header('Location: subscription_plans.php');
+        exit;
+    }
+
+    $cancelResult = $monetizationService->cancelActiveSubscription((int)$seller_scope_id, $current_user_id);
+    if (!empty($cancelResult['success'])) {
+        $_SESSION['success'] = (string)$cancelResult['message'];
+    } else {
+        $_SESSION['error'] = (string)($cancelResult['message'] ?? 'Unable to cancel subscription right now.');
+    }
+    header('Location: subscription_plans.php');
+    exit;
+}
+
 $plans = array_values(array_filter($monetizationService->getPlans(), static function ($plan) {
     return (int)($plan['is_active'] ?? 0) === 1;
 }));
@@ -53,7 +141,7 @@ $featured_plan_code = 'growth';
         .plans-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}.plan-card{position:relative;background:#fff;border:1px solid #e2e8f0;border-radius:22px;padding:20px;box-shadow:0 14px 34px rgba(15,23,42,.06);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}.plan-card:hover{transform:translateY(-4px);box-shadow:0 18px 36px rgba(15,23,42,.1)}.plan-card.featured{border-color:rgba(185,28,28,.35);background:linear-gradient(180deg,#fffdfd 0%,#fff7f7 100%)}.plan-card.is-recommended{border-color:#b91c1c;box-shadow:0 20px 42px rgba(185,28,28,.16)}
         .plan-badge,.plan-live-badge{display:inline-flex;padding:6px 10px;border-radius:999px;font-size:.73rem;font-weight:800;margin-bottom:12px}.plan-badge{background:#fee2e2;color:#991b1b}.plan-live-badge{position:absolute;top:14px;right:14px;background:#b91c1c;color:#fff}.plan-card h3{margin:0;font-size:1.2rem;font-weight:800;color:#0f172a}.plan-card p{margin:8px 0 0;color:#64748b;font-size:.92rem;min-height:48px}
         .plan-price{margin-top:16px;font-size:2rem;font-weight:800;color:#0f172a}.plan-price-label{color:#64748b;font-size:.86rem}.plan-note{margin-top:12px;padding:12px;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0;color:#475569;font-size:.84rem}.plan-note strong,.plan-note span{display:block}.plan-features{list-style:none;padding:0;margin:16px 0 0;display:grid;gap:10px}.plan-features li{display:flex;gap:10px;align-items:flex-start;color:#334155;font-size:.9rem}.plan-features li i{width:18px;color:#b91c1c;margin-top:3px}
-        .plans-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;padding:11px 16px;font-weight:700;text-decoration:none}.plans-btn-primary{background:#b91c1c;color:#fff;border:1px solid #b91c1c}.plans-btn-secondary{background:#fff;color:#b91c1c;border:1px solid #fca5a5}.plans-btn:hover{color:inherit;text-decoration:none}
+        .plans-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;padding:10px 24px;font-weight:700;font-size:.9rem;text-decoration:none;transition:all .2s ease;width:100%}.plans-btn-primary{background:#b3261e;color:#fff !important;border:1px solid #b3261e}.plans-btn-primary:hover{background:#931e18;border-color:#931e18;box-shadow:0 4px 12px rgba(179,38,30,.25)}.plans-btn-secondary{background:#fff;color:#b3261e !important;border:1.5px solid #efddcd}.plans-btn-secondary:hover{background:#fff8ef;border-color:#b3261e;color:#b3261e !important}
         .mode-toggle,.sticky-toggle{display:inline-flex;gap:8px;padding:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:999px}.mode-btn,.sticky-btn{border:none;background:transparent;color:#475569;padding:10px 16px;border-radius:999px;font-size:.92rem;font-weight:700}.mode-btn.active,.sticky-btn.active{background:#b91c1c;color:#fff}
         .hero-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:18px}.hero-meta-box{border:1px solid #e2e8f0;border-radius:16px;padding:14px;background:rgba(255,255,255,.88)}.hero-meta-box strong{display:block;font-size:1.05rem;color:#0f172a}.hero-meta-box span{display:block;margin-top:4px;color:#64748b;font-size:.84rem}
         .sticky-card{position:sticky;top:82px;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:16px;background:rgba(255,255,255,.94);backdrop-filter:blur(10px)}.sticky-copy strong{display:block;color:#0f172a}.sticky-copy span{color:#64748b;font-size:.88rem}.sticky-savings{display:inline-flex;align-items:center;gap:6px;padding:9px 12px;border-radius:999px;background:#fee2e2;color:#991b1b;font-weight:700;font-size:.84rem}
@@ -69,161 +157,1604 @@ $featured_plan_code = 'growth';
 <div class="admin-content">
 <div class="admin-topbar"><div class="topbar-content"><button class="sidebar-toggler" id="sidebarToggler"><i class="fas fa-bars"></i></button><h1>Subscription Plans</h1><div class="topbar-right"><div class="admin-profile"><span><?php echo htmlspecialchars((string)($admin_info['full_name'] ?? 'Partner')); ?></span><i class="fas fa-user-circle"></i></div></div></div></div>
 <div class="plans-shell">
-<section class="plans-card plans-hero">
-    <span class="plans-kicker">Partner Subscription Plans</span>
-    <h2 class="plans-title">Compare plans without leaving your partner dashboard.</h2>
-    <p class="plans-sub">Your shop can now review pricing, fee structure, and support tiers inside admin, then jump straight into a prefilled billing request.</p>
-    <div class="mode-toggle mt-3" aria-label="Billing mode toggle">
-        <button type="button" class="mode-btn active" data-billing-mode="monthly">Compare Monthly</button>
-        <button type="button" class="mode-btn" data-billing-mode="annual">Compare Annual</button>
-    </div>
-    <div class="hero-meta">
-        <div class="hero-meta-box"><strong><?php echo htmlspecialchars($businessName); ?></strong><span>Current business dashboard</span></div>
-        <div class="hero-meta-box"><strong><?php echo htmlspecialchars((string)($subscription['plan_name'] ?? 'Unassigned')); ?></strong><span>Current plan</span></div>
-        <div class="hero-meta-box"><strong><?php echo number_format(count($plans)); ?></strong><span>Active pricing tiers</span></div>
-    </div>
-</section>
 
-<section class="plans-card sticky-card">
-    <div class="sticky-copy">
-        <strong id="stickyBillingModeText">Monthly billing selected</strong>
-        <span id="stickyRecommendationText">Recommended plan will update as you use the quick selector below.</span>
-    </div>
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <span class="sticky-savings" id="stickySavingsChip">Annual savings available: PHP 0.00</span>
-        <div class="sticky-toggle">
-            <button type="button" class="sticky-btn active" data-billing-mode="monthly">Monthly</button>
-            <button type="button" class="sticky-btn" data-billing-mode="annual">Annual</button>
+<?php if ($subscription && !empty($subscription['plan_name'])): ?>
+<?php
+    $activeStatus = strtolower(trim((string)($subscription['subscription_status'] ?? 'active')));
+    $activePlanName = (string)($subscription['plan_name'] ?? 'Partner Plan');
+    $activeCycle = ucfirst((string)($subscription['billing_cycle'] ?? 'monthly'));
+    $startedAtFormatted = !empty($subscription['started_at']) ? date('M d, Y', strtotime((string)$subscription['started_at'])) : 'Recently';
+    $renewsAtRaw = (string)($subscription['renews_at'] ?? '');
+    $renewsAtFormatted = !empty($renewsAtRaw) ? date('M d, Y', strtotime($renewsAtRaw)) : 'N/A';
+    $daysRemaining = !empty($renewsAtRaw) ? (int)ceil((strtotime($renewsAtRaw) - time()) / 86400) : 0;
+    $isCancelled = ($activeStatus === 'cancelled' || $activeStatus === 'canceled');
+    $statusClass = ($activeStatus === 'active' || $activeStatus === 'trial') ? 'status-active' : ($isCancelled ? 'status-cancelled' : ($activeStatus === 'past_due' ? 'status-overdue' : 'status-pending'));
+?>
+<div class="active-subscription-hero-card">
+    <div class="hero-card-left">
+        <div class="hero-crown-mark">
+            <i class="fas fa-crown"></i>
         </div>
-        <a href="partner_billing.php" class="plans-btn plans-btn-primary" id="stickyRequestLink">Continue</a>
-    </div>
-</section>
-
-<section class="plans-card">
-    <h3 class="m-0" style="font-weight:800;color:#0f172a;">Quick Match</h3>
-    <p class="plans-section-sub">Use this helper to see which plan best matches your staff size and support needs.</p>
-    <div class="calc-grid">
-        <div class="calc-pane">
-            <label for="planStaffRange" class="form-label fw-bold">How many staff accounts does your shop need?</label>
-            <div class="d-flex justify-content-between align-items-center gap-3">
-                <strong id="planStaffValue">2 staff</strong>
-                <span class="text-muted small">Adjust based on your current or near-term operations team.</span>
+        <div>
+            <div class="hero-plan-title-row">
+                <h2 class="hero-plan-title"><?php echo htmlspecialchars($activePlanName); ?> Plan</h2>
+                <span class="hero-status-pill <?php echo $statusClass; ?>">
+                    <i class="<?php echo $isCancelled ? 'fas fa-ban' : 'fas fa-check-circle'; ?>"></i> <?php echo strtoupper($activeStatus); ?>
+                </span>
+                <span class="hero-cycle-pill"><?php echo htmlspecialchars($activeCycle); ?> Billing</span>
             </div>
-            <input type="range" id="planStaffRange" class="form-range mt-3" min="1" max="20" step="1" value="2">
-            <div class="calc-checks">
-                <label class="calc-check"><input type="checkbox" id="needAiAutomation"> <span>We want AI support automation</span></label>
-                <label class="calc-check"><input type="checkbox" id="needPrioritySupport"> <span>We need priority support</span></label>
-                <label class="calc-check"><input type="checkbox" id="needFeaturedPlacement"> <span>We want featured placement / more visibility</span></label>
-                <label class="calc-check"><input type="checkbox" id="needCustomBranding"> <span>We want custom branding / premium presentation</span></label>
-            </div>
-        </div>
-        <div class="calc-result">
-            <span class="plans-kicker" style="margin-bottom:0;">Recommended Plan</span>
-            <h3 id="recommendedPlanName">Growth</h3>
-            <p id="recommendedPlanReason">A plan recommendation will appear here based on your shop needs.</p>
-            <div class="calc-meta">
-                <div><span>Best for</span><strong id="recommendedPlanFit">Growing partner shops</strong></div>
-                <div><span>Billing mode</span><strong id="recommendedPlanBilling">Monthly</strong></div>
-                <div><span>Current price</span><strong id="recommendedPlanPrice">PHP 0.00</strong></div>
-            </div>
-            <div class="mt-3"><a href="partner_billing.php" class="plans-btn plans-btn-primary" id="recommendedPlanLink">Open This Plan</a></div>
-            <div class="why-wrap">
-                <button type="button" class="why-toggle" id="recommendedPlanWhyToggle" aria-expanded="false" aria-controls="recommendedPlanWhyBody"><span>Why this plan?</span><i class="fas fa-chevron-down"></i></button>
-                <div class="why-body" id="recommendedPlanWhyBody" hidden>
-                    <p id="recommendedPlanWhySummary">This recommendation updates as your staffing and support needs change.</p>
-                    <ul>
-                        <li id="recommendedPlanWhyReasonOne">Your selected inputs will shape the recommendation details here.</li>
-                        <li id="recommendedPlanWhyReasonTwo">Feature needs like AI, visibility, and support can shift the best-fit tier.</li>
-                        <li id="recommendedPlanWhyReasonThree">Billing mode changes will keep pricing and savings aligned with your choice.</li>
-                    </ul>
-                </div>
+            <div class="hero-plan-dates-row">
+                <span><i class="fas fa-calendar-check"></i> Subscribed: <strong><?php echo htmlspecialchars($startedAtFormatted); ?></strong></span>
+                <span class="dates-sep">&bull;</span>
+                <span><i class="fas fa-credit-card"></i> <?php echo $isCancelled ? 'Active Until / Terminates On:' : 'Next Renewal / Due Date:'; ?> <strong class="text-accent-danger"><?php echo htmlspecialchars($renewsAtFormatted); ?></strong></span>
             </div>
         </div>
     </div>
-</section>
+    <div class="hero-card-right">
+        <?php if ($daysRemaining >= 0): ?>
+            <div class="hero-countdown-box">
+                <i class="fas fa-hourglass-half"></i>
+                <span><strong><?php echo $daysRemaining; ?></strong> days left in billing cycle</span>
+            </div>
+        <?php endif; ?>
+        <a href="partner_billing.php" class="hero-billing-btn">
+            <i class="fas fa-file-invoice-dollar"></i> Manage Billing &amp; Invoices
+        </a>
+        <?php if (!$isCancelled): ?>
+        <form method="POST" action="subscription_plans.php" style="display:inline-block;" onsubmit="return confirmSubscriptionCancellation(event, '<?php echo htmlspecialchars($activePlanName, ENT_QUOTES, 'UTF-8'); ?>', '<?php echo htmlspecialchars($renewsAtFormatted, ENT_QUOTES, 'UTF-8'); ?>');">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+            <input type="hidden" name="action" value="cancel_active_subscription">
+            <button type="submit" class="hero-billing-btn" style="background:#fff1f0; border-color:#fee4e2; color:#b3261e; cursor:pointer;">
+                <i class="fas fa-ban"></i> Cancel Subscription
+            </button>
+        </form>
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
 
-<section class="plans-grid">
+<?php
+$upgrade_notice = $_SESSION['subscription_upgrade_notice'] ?? null;
+unset($_SESSION['subscription_upgrade_notice']);
+$locked_feature_param = $_GET['locked_feature'] ?? ($upgrade_notice['feature'] ?? '');
+$required_tier_param = $_GET['required_tier'] ?? ($upgrade_notice['required_tier'] ?? '');
+$feature_label_display = $locked_feature_param ? SubscriptionAccessService::getFeatureLabel($locked_feature_param) : ($upgrade_notice['feature_label'] ?? '');
+$required_tier_label = $required_tier_param ? SubscriptionAccessService::getTierLabel($required_tier_param) : ($upgrade_notice['required_tier_name'] ?? '');
+?>
+
+<?php if ($locked_feature_param !== ''): ?>
+<div class="alert alert-danger" style="background:#fff1f0; border:1.5px solid #fee4e2; border-radius:16px; padding:18px 24px; margin-bottom:24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px; box-shadow:0 8px 24px rgba(179,38,30,0.12);">
+    <div style="display:flex; align-items:center; gap:14px;">
+        <div style="width:48px; height:48px; border-radius:50%; background:#fee4e2; display:flex; align-items:center; justify-content:center; color:#b3261e; font-size:1.3rem; flex-shrink:0;">
+            <i class="fas fa-lock"></i>
+        </div>
+        <div>
+            <h4 style="margin:0 0 4px; font-size:1.05rem; font-weight:800; color:#b3261e;">
+                Feature Locked: Upgrade Required for "<?php echo htmlspecialchars($feature_label_display); ?>"
+            </h4>
+            <p style="margin:0; font-size:0.9rem; color:#475467;">
+                This feature requires an active <strong><?php echo htmlspecialchars($required_tier_label); ?></strong> or higher. Upgrade your shop plan below to unlock instant access.
+            </p>
+        </div>
+    </div>
+    <a href="#planCardsSection" class="btn" style="background:#b3261e; color:#ffffff; font-weight:700; border-radius:999px; padding:10px 22px; text-decoration:none;">
+        <i class="fas fa-arrow-down"></i> Choose Plan
+    </a>
+</div>
+<?php endif; ?>
+
+<?php if (!$subscription || empty($subscription['plan_name']) || !in_array(strtolower((string)($subscription['subscription_status'] ?? '')), ['active', 'trial'], true)): ?>
+<div style="background:#ffffff; border:1.5px solid #fedf89; border-radius:18px; padding:22px 26px; margin-bottom:24px; box-shadow:0 6px 20px rgba(181, 71, 8, 0.08); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;">
+    <div style="display:flex; align-items:center; gap:16px;">
+        <div style="width:52px; height:52px; border-radius:14px; background:#fff8ef; border:1px solid #fedf89; display:flex; align-items:center; justify-content:center; color:#b3261e; font-size:1.4rem; flex-shrink:0;">
+            <i class="fas fa-lock"></i>
+        </div>
+        <div>
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+                <h3 style="margin:0; font-size:1.15rem; font-weight:800; color:#101828;">Current Status: Non-Subscribed / New Account</h3>
+                <span style="background:#fff8ef; color:#b54708; border:1px solid #fedf89; font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:999px;">LIMITED ACCESS</span>
+            </div>
+            <p style="margin:0; color:#475467; font-size:0.9rem;">
+                Your store currently has restricted access. Changing Store Name &amp; Logo, uploading products, and advanced system features are locked. Subscribe to a plan below to activate your store.
+            </p>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<section class="sp-minimal-grid" id="planCardsSection">
+<?php 
+$activeSubPlanId = $subscription && in_array(strtolower((string)($subscription['subscription_status'] ?? '')), ['active', 'trial'], true)
+    ? (int)($subscription['plan_id'] ?? 0)
+    : 0;
+?>
 <?php foreach ($plans as $plan): ?>
 <?php
 $planCode = strtolower(trim((string)($plan['plan_code'] ?? '')));
+$isPro = $planCode === 'pro';
 $isFeatured = $planCode === $featured_plan_code;
+$isCurrentActivePlan = ($activeSubPlanId > 0 && (int)$plan['id'] === $activeSubPlanId);
 $monthlyPrice = (float)($plan['monthly_price'] ?? 0);
 $annualPrice = (float)($plan['annual_price'] ?? 0);
 $annualEquivalent = $annualPrice > 0 ? round($annualPrice / 12, 2) : 0;
 $annualSavings = $annualPrice > 0 ? max(0, ($monthlyPrice * 12) - $annualPrice) : 0;
-$requestType = $isFeatured ? 'upgrade' : 'change_plan';
-$monthlyRequestHref = 'partner_billing.php?plan_id=' . (int)($plan['id'] ?? 0) . '&billing_cycle=monthly&request_type=' . urlencode($requestType);
-$annualRequestHref = 'partner_billing.php?plan_id=' . (int)($plan['id'] ?? 0) . '&billing_cycle=annual&request_type=' . urlencode($requestType);
+$staffAccounts = (int)($plan['max_staff_accounts'] ?? 1);
+$feePercent = (float)($plan['included_order_fee_percent'] ?? 0);
+$feeFlat = (float)($plan['included_order_fee_flat'] ?? 0);
+$hasAi = (int)($plan['includes_ai_automation'] ?? 0) === 1;
+$hasPriority = (int)($plan['includes_priority_support'] ?? 0) === 1;
+$hasFeatured = (int)($plan['includes_featured_placement'] ?? 0) === 1;
+$hasBranding = (int)($plan['includes_custom_branding'] ?? 0) === 1;
 ?>
-<article class="plan-card <?php echo $isFeatured ? 'featured' : ''; ?>" data-plan-card data-plan-code="<?php echo htmlspecialchars($planCode); ?>" data-plan-name="<?php echo htmlspecialchars((string)($plan['plan_name'] ?? 'Plan')); ?>" data-monthly-price="<?php echo htmlspecialchars(number_format($monthlyPrice, 2, '.', '')); ?>" data-annual-price="<?php echo htmlspecialchars(number_format($annualPrice, 2, '.', '')); ?>" data-annual-equivalent="<?php echo htmlspecialchars(number_format($annualEquivalent, 2, '.', '')); ?>" data-annual-savings="<?php echo htmlspecialchars(number_format($annualSavings, 2, '.', '')); ?>" data-monthly-href="<?php echo htmlspecialchars($monthlyRequestHref); ?>" data-annual-href="<?php echo htmlspecialchars($annualRequestHref); ?>" data-max-staff="<?php echo (int)($plan['max_staff_accounts'] ?? 1); ?>" data-ai="<?php echo (int)($plan['includes_ai_automation'] ?? 0); ?>" data-priority="<?php echo (int)($plan['includes_priority_support'] ?? 0); ?>" data-featured-placement="<?php echo (int)($plan['includes_featured_placement'] ?? 0); ?>" data-custom-branding="<?php echo (int)($plan['includes_custom_branding'] ?? 0); ?>">
-    <?php if ($isFeatured): ?><span class="plan-badge">Most Balanced</span><?php endif; ?>
-    <span class="plan-live-badge" data-plan-live-badge hidden>Best Match</span>
-    <h3><?php echo htmlspecialchars((string)($plan['plan_name'] ?? 'Plan')); ?></h3>
-    <p><?php echo htmlspecialchars((string)($plan['description'] ?? '')); ?></p>
-    <div class="plan-price" data-plan-price>PHP <?php echo number_format($monthlyPrice, 2); ?></div>
-    <div class="plan-price-label" data-plan-price-label>per month</div>
-    <div class="plan-note" data-plan-price-note><strong>Annual: PHP <?php echo number_format($annualPrice, 2); ?></strong><span><?php echo $annualSavings > 0 ? 'Save PHP ' . number_format($annualSavings, 2) . ' yearly' : 'PHP ' . number_format($annualEquivalent, 2) . ' monthly equivalent'; ?></span></div>
-    <ul class="plan-features">
-        <li><i class="fas fa-users"></i> Up to <?php echo number_format((int)($plan['max_staff_accounts'] ?? 1)); ?> staff accounts</li>
-        <li><i class="fas fa-percent"></i> Included fee rate: <?php echo number_format((float)($plan['included_order_fee_percent'] ?? 0), 2); ?>%</li>
-        <li><i class="fas fa-receipt"></i> Flat fee per order: PHP <?php echo number_format((float)($plan['included_order_fee_flat'] ?? 0), 2); ?></li>
-        <li><i class="fas fa-robot"></i> AI automation <?php echo (int)($plan['includes_ai_automation'] ?? 0) === 1 ? 'included' : 'not included'; ?></li>
-        <li><i class="fas fa-headset"></i> Priority support <?php echo (int)($plan['includes_priority_support'] ?? 0) === 1 ? 'included' : 'not included'; ?></li>
-        <li><i class="fas fa-bullhorn"></i> Featured placement <?php echo (int)($plan['includes_featured_placement'] ?? 0) === 1 ? 'included' : 'not included'; ?></li>
-        <li><i class="fas fa-palette"></i> Custom branding <?php echo (int)($plan['includes_custom_branding'] ?? 0) === 1 ? 'included' : 'not included'; ?></li>
+<article class="sp-minimal-card <?php echo $isCurrentActivePlan ? 'is-current-active-plan' : ($isPro ? 'sp-pro-card' : ($isFeatured ? 'sp-featured-card' : '')); ?>">
+    <div class="sp-badge-wrap">
+        <?php if ($isCurrentActivePlan): ?>
+            <span class="sp-top-pill sp-current-plan-badge"><i class="fas fa-check-circle"></i> YOUR CURRENT ACTIVE PLAN</span>
+        <?php elseif ($isPro): ?>
+            <span class="sp-top-pill sp-pro-badge"><i class="fas fa-fire"></i> MOST POPULAR &amp; BEST VALUE</span>
+        <?php else: ?>
+            <span class="sp-top-pill <?php echo $isFeatured ? 'sp-pill-featured' : ''; ?>">
+                <?php echo $annualSavings > 0 ? 'Save PHP ' . number_format($annualSavings, 0) . ' yearly' : 'PHP ' . number_format($annualPrice, 0) . ' / year'; ?>
+            </span>
+        <?php endif; ?>
+    </div>
+
+    <div class="sp-card-header">
+        <div class="sp-brand-sub"><i class="fas fa-layer-group"></i> Partner Tier <?php echo $isPro ? '&bull; Recommended' : ''; ?></div>
+        <h2 class="sp-plan-title"><?php echo htmlspecialchars((string)($plan['plan_name'] ?? 'Plan')); ?></h2>
+        
+        <div class="sp-price-main">PHP <?php echo number_format($monthlyPrice, 0); ?></div>
+        <div class="sp-price-sub">per month</div>
+        <div class="sp-price-annual">Annual: PHP <?php echo number_format($annualPrice, 0); ?></div>
+    </div>
+
+    <div class="sp-divider"></div>
+
+    <ul class="sp-bullet-list">
+        <?php if ($planCode === 'starter'): ?>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Change Store Name &amp; Logo</strong></li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Upload &amp; Add Products</strong> to Store</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Marketplace Storefront</strong> &amp; Online Orders</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Real-time POS</strong> &amp; Delivery Tracking</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Customer Live Chat</strong> Messaging</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Up to <?php echo $staffAccounts; ?> Staff</strong> Accounts</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> Fee Rate: <strong><?php echo number_format($feePercent, 2); ?>% + ₱<?php echo number_format($feeFlat, 2); ?></strong> / order</li>
+            <li style="color:#94a3b8;"><span class="bullet-dot" style="color:#cbd5e1;"><i class="fas fa-times"></i></span> No HR Department Access</li>
+            <li style="color:#94a3b8;"><span class="bullet-dot" style="color:#cbd5e1;"><i class="fas fa-times"></i></span> No MRP Roasting Calculator</li>
+            <li style="color:#94a3b8;"><span class="bullet-dot" style="color:#cbd5e1;"><i class="fas fa-times"></i></span> No AI Demand Forecasting</li>
+        <?php elseif ($planCode === 'growth'): ?>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Everything in Starter</strong> (Logo, Name, Uploads)</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Full HR Department</strong> (Employees, Attendance, Leave, Payroll, Performance, Turnover, Recruitment)</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Inventory &amp; MRP Batch Roasting</strong> Yield Calculator</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Store Availability</strong> &amp; Custom Order Policies</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Shop Expenses</strong> &amp; Finance Tracking</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Up to <?php echo $staffAccounts; ?> Staff</strong> Accounts</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> Lower Fee: <strong><?php echo number_format($feePercent, 2); ?>% + ₱<?php echo number_format($feeFlat, 2); ?></strong> / order</li>
+            <li style="color:#94a3b8;"><span class="bullet-dot" style="color:#cbd5e1;"><i class="fas fa-times"></i></span> No AI Demand Forecasting (Pro Exclusive)</li>
+            <li style="color:#94a3b8;"><span class="bullet-dot" style="color:#cbd5e1;"><i class="fas fa-times"></i></span> No DSS Decision Support Platform Reports</li>
+            <li style="color:#94a3b8;"><span class="bullet-dot" style="color:#cbd5e1;"><i class="fas fa-times"></i></span> No Custom Staff RBAC Management</li>
+        <?php else: ?>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>FULL ACCESS: Everything Across Entire Platform</strong></li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>All Starter &amp; Growth Features</strong> Included</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Complete HR &amp; Automated Payroll</strong> Suite</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>AI Demand Forecasting</strong> &amp; Predictive Trends</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>DSS Decision Support Reports</strong> &amp; Platform Analytics</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Custom Staff RBAC Roles</strong> &amp; Permissions</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Featured Homepage Placement</strong> Spotlight</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Custom Receipt Branding</strong> &amp; Partner Banking</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Priority 24/7 Hotline</strong> Support</li>
+            <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> Lowest Fee: <strong><?php echo number_format($feePercent, 2); ?>% + ₱<?php echo number_format($feeFlat, 2); ?></strong> / order</li>
+        <?php endif; ?>
     </ul>
-    <div class="mt-3"><a href="<?php echo htmlspecialchars($monthlyRequestHref); ?>" class="plans-btn <?php echo $isFeatured ? 'plans-btn-primary' : 'plans-btn-secondary'; ?>" data-plan-request-link>Request This Plan</a></div>
+
+    <div class="sp-card-action">
+        <?php if ($isCurrentActivePlan): ?>
+            <div style="display:flex; flex-direction:column; gap:8px; width:100%;">
+                <button type="button" class="sp-pill-button sp-btn-current-active" disabled>
+                    <i class="fas fa-check-circle"></i> Current Active Plan
+                </button>
+                <?php if (!$isCancelled): ?>
+                <form method="POST" action="subscription_plans.php" style="width:100%; text-align:center;" onsubmit="return confirmSubscriptionCancellation(event, '<?php echo htmlspecialchars((string)$plan['plan_name'], ENT_QUOTES, 'UTF-8'); ?>', '<?php echo htmlspecialchars($renewsAtFormatted, ENT_QUOTES, 'UTF-8'); ?>');">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                    <input type="hidden" name="action" value="cancel_active_subscription">
+                    <button type="submit" style="background:none; border:none; color:#b3261e; font-size:0.82rem; font-weight:700; text-decoration:underline; cursor:pointer; padding:4px;">
+                        <i class="fas fa-times-circle"></i> Cancel Subscription
+                    </button>
+                </form>
+                <?php else: ?>
+                <div style="text-align:center; font-size:0.8rem; color:#b54708; font-weight:700; padding:4px;">
+                    <i class="fas fa-clock"></i> Access until <?php echo htmlspecialchars($renewsAtFormatted); ?>
+                </div>
+                <?php endif; ?>
+            </div>
+        <?php else: ?>
+            <button type="button" 
+                    class="sp-pill-button <?php echo $isPro ? 'sp-pro-button' : ($isFeatured ? 'btn-highlight' : ''); ?>"
+                    onclick="openSubscriptionCheckoutModal(<?php echo (int)($plan['id'] ?? 0); ?>, <?php echo htmlspecialchars(json_encode((string)($plan['plan_name'] ?? 'Plan')), ENT_QUOTES, 'UTF-8'); ?>, <?php echo $monthlyPrice; ?>, <?php echo $annualPrice; ?>, '<?php echo $planCode; ?>')">
+                <?php echo $activeSubPlanId > 0 ? 'Switch to this Plan' : 'Get This Plan'; ?>
+            </button>
+        <?php endif; ?>
+        <p class="sp-fineprint">
+            PHP <?php echo number_format($monthlyPrice, 0); ?> per month. Subscription payments are non-refundable. Upon cancellation, you retain full plan access until your paid 1-month cycle ends.
+        </p>
+    </div>
 </article>
 <?php endforeach; ?>
 </section>
-<section class="plans-card">
-    <h3 class="m-0" style="font-weight:800;color:#0f172a;">Feature Matrix</h3>
-    <p class="plans-section-sub">Quick comparison to help your team choose the right subscription level before submitting a plan request.</p>
-    <div class="matrix-wrap">
-        <table class="matrix-table">
-            <thead><tr><th>Feature</th><?php foreach ($plans as $plan): ?><th><?php echo htmlspecialchars((string)($plan['plan_name'] ?? 'Plan')); ?></th><?php endforeach; ?></tr></thead>
+
+<!-- Feature Comparison Matrix -->
+<div style="margin-top: 40px; background: #ffffff; border: 1px solid #eaecf0; border-radius: 18px; padding: 28px; box-shadow: 0 4px 16px rgba(16, 24, 40, 0.04);">
+    <div style="margin-bottom: 22px;">
+        <h3 style="font-size: 1.3rem; font-weight: 800; color: #101828; margin: 0 0 6px;">
+            <i class="fas fa-table-list" style="color: #b3261e; margin-right: 8px;"></i> Access Control &amp; Feature Comparison Matrix
+        </h3>
+        <p style="color: #475467; font-size: 0.92rem; margin: 0;">Comprehensive breakdown of provisions, privileges, and system permissions across each subscription tier.</p>
+    </div>
+    <div style="overflow-x: auto;">
+        <table style="width: 100%; min-width: 780px; border-collapse: collapse; font-size: 0.9rem;">
+            <thead>
+                <tr style="background: #f8f9fa;">
+                    <th style="padding: 14px 16px; border-bottom: 2px solid #eaecf0; color: #344054; font-weight: 700; text-align: left;">System Feature / Privilege</th>
+                    <th style="padding: 14px 16px; border-bottom: 2px solid #eaecf0; color: #64748b; font-weight: 700; text-align: center;">Non-Subscribed<br><small style="font-weight:400; color:#98a2b3;">Limited Access</small></th>
+                    <th style="padding: 14px 16px; border-bottom: 2px solid #eaecf0; color: #101828; font-weight: 700; text-align: center;">Starter / Basic<br><small style="font-weight:400; color:#667085;">₱500 / mo</small></th>
+                    <th style="padding: 14px 16px; border-bottom: 2px solid #eaecf0; color: #101828; font-weight: 700; text-align: center; background: #fff8ef;">Growth<br><small style="font-weight:400; color:#b54708;">₱1,000 / mo</small></th>
+                    <th style="padding: 14px 16px; border-bottom: 2px solid #eaecf0; color: #b3261e; font-weight: 800; text-align: center; background: #fff1f0;">Pro (Full Access)<br><small style="font-weight:400; color:#b3261e;">₱1,199 / mo</small></th>
+                </tr>
+            </thead>
             <tbody>
-                <tr><td>Monthly price</td><?php foreach ($plans as $plan): ?><td>PHP <?php echo number_format((float)($plan['monthly_price'] ?? 0), 2); ?></td><?php endforeach; ?></tr>
-                <tr><td>Annual price</td><?php foreach ($plans as $plan): ?><td>PHP <?php echo number_format((float)($plan['annual_price'] ?? 0), 2); ?></td><?php endforeach; ?></tr>
-                <tr><td>Max staff accounts</td><?php foreach ($plans as $plan): ?><td><?php echo number_format((int)($plan['max_staff_accounts'] ?? 1)); ?></td><?php endforeach; ?></tr>
-                <tr><td>Included fee %</td><?php foreach ($plans as $plan): ?><td><?php echo number_format((float)($plan['included_order_fee_percent'] ?? 0), 2); ?>%</td><?php endforeach; ?></tr>
-                <tr><td>Flat fee per order</td><?php foreach ($plans as $plan): ?><td>PHP <?php echo number_format((float)($plan['included_order_fee_flat'] ?? 0), 2); ?></td><?php endforeach; ?></tr>
-                <tr><td>AI automation</td><?php foreach ($plans as $plan): ?><td><?php echo (int)($plan['includes_ai_automation'] ?? 0) === 1 ? 'Yes' : 'No'; ?></td><?php endforeach; ?></tr>
-                <tr><td>Priority support</td><?php foreach ($plans as $plan): ?><td><?php echo (int)($plan['includes_priority_support'] ?? 0) === 1 ? 'Yes' : 'No'; ?></td><?php endforeach; ?></tr>
-                <tr><td>Featured placement</td><?php foreach ($plans as $plan): ?><td><?php echo (int)($plan['includes_featured_placement'] ?? 0) === 1 ? 'Yes' : 'No'; ?></td><?php endforeach; ?></tr>
-                <tr><td>Custom branding</td><?php foreach ($plans as $plan): ?><td><?php echo (int)($plan['includes_custom_branding'] ?? 0) === 1 ? 'Yes' : 'No'; ?></td><?php endforeach; ?></tr>
+                <tr style="border-bottom: 1px solid #eaecf0;">
+                    <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-store text-muted me-2"></i> Update Store Name &amp; Logo</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #b3261e;"><i class="fas fa-times"></i> Locked</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600;"><i class="fas fa-check"></i> Yes</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffdfa;"><i class="fas fa-check"></i> Yes</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffafa;"><i class="fas fa-check"></i> Yes</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eaecf0;">
+                    <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-box text-muted me-2"></i> Upload &amp; Add Products</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #b3261e;"><i class="fas fa-times"></i> Locked</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600;"><i class="fas fa-check"></i> Yes</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffdfa;"><i class="fas fa-check"></i> Yes</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffafa;"><i class="fas fa-check"></i> Yes</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eaecf0;">
+                    <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-shopping-cart text-muted me-2"></i> Marketplace Orders, POS &amp; Live Chat</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48;"><i class="fas fa-check"></i> Basic</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600;"><i class="fas fa-check"></i> Full</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffdfa;"><i class="fas fa-check"></i> Full</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffafa;"><i class="fas fa-check"></i> Full</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eaecf0;">
+                    <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-people-arrows text-muted me-2"></i> HR Department (Staff, Attendance, Payroll, Leave)</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #b3261e; font-weight: 600;"><i class="fas fa-times"></i> Restricted</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 700; background: #fffdfa;"><i class="fas fa-check"></i> Included</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 700; background: #fffafa;"><i class="fas fa-check"></i> Included</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eaecf0;">
+                    <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-warehouse text-muted me-2"></i> Inventory &amp; MRP Batch Yield Roaster</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffdfa;"><i class="fas fa-check"></i> Yes</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffafa;"><i class="fas fa-check"></i> Yes</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eaecf0;">
+                    <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-receipt text-muted me-2"></i> Shop Expense Tracking &amp; Finance</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffdfa;"><i class="fas fa-check"></i> Yes</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffafa;"><i class="fas fa-check"></i> Yes</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eaecf0;">
+                    <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-clock text-muted me-2"></i> Store Availability &amp; Order Policy Settings</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffdfa;"><i class="fas fa-check"></i> Yes</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffafa;"><i class="fas fa-check"></i> Yes</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eaecf0;">
+                    <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-brain text-muted me-2"></i> AI Demand Forecasting &amp; Predictive Trends</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #b3261e;"><i class="fas fa-times"></i> Locked</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 700; background: #fffafa;"><i class="fas fa-check"></i> Exclusive</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eaecf0;">
+                    <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-chart-line text-muted me-2"></i> DSS Decision Support &amp; Deep Platform Analytics</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #b3261e;"><i class="fas fa-times"></i> Locked</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 700; background: #fffafa;"><i class="fas fa-check"></i> Exclusive</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eaecf0;">
+                    <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-user-shield text-muted me-2"></i> Custom Staff RBAC Role Management</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #b3261e;"><i class="fas fa-times"></i> Locked</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 700; background: #fffafa;"><i class="fas fa-check"></i> Exclusive</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eaecf0;">
+                    <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-crown text-muted me-2"></i> Priority Support &amp; Featured Placement</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #98a2b3; background: #fffdfa;"><i class="fas fa-times"></i> No</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 700; background: #fffafa;"><i class="fas fa-check"></i> 24/7 Hotline</td>
+                </tr>
+                <tr>
+                    <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-percentage text-muted me-2"></i> Platform Order Transaction Fee</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #64748b;">10% + ₱10</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #344054; font-weight: 600;">7.5% + ₱5</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #344054; font-weight: 600; background: #fffdfa;">6.0% + ₱3</td>
+                    <td style="padding: 12px 16px; text-align: center; color: #b3261e; font-weight: 800; background: #fffafa;">4.5% + ₱2 (Lowest)</td>
+                </tr>
             </tbody>
         </table>
     </div>
-</section>
+</div>
 
-<section class="plans-card">
-    <h3 class="m-0" style="font-weight:800;color:#0f172a;">Partner Workflow</h3>
-    <p class="plans-section-sub">Your team can now stay inside admin from comparison through subscription request.</p>
-    <div class="workflow-grid">
-        <div class="workflow-step"><strong>1. Compare plans</strong><span>Review the pricing and support tiers in this admin module.</span></div>
-        <div class="workflow-step"><strong>2. Choose billing mode</strong><span>Switch between monthly and annual to see the live request route and savings.</span></div>
-        <div class="workflow-step"><strong>3. Request a plan</strong><span>Click any plan card to prefill the billing request form in your partner billing center.</span></div>
-        <div class="workflow-step"><strong>4. Platform owner reviews</strong><span>The system owner approves or rejects the request from the monetization queue.</span></div>
-        <div class="workflow-step"><strong>5. Billing starts</strong><span>Once approved, invoices appear in your billing module for payment and tracking.</span></div>
+<!-- Subscription & Cancellation Agreement Box -->
+<div style="margin-top: 40px; background: #ffffff; border: 1px solid #eaecf0; border-radius: 16px; padding: 24px 28px; box-shadow: 0 4px 16px rgba(16, 24, 40, 0.04);">
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+        <i class="fas fa-shield-alt" style="font-size: 1.3rem; color: #b3261e;"></i>
+        <h3 style="font-size: 1.15rem; font-weight: 800; color: #101828; margin: 0;">Subscription Terms &amp; Cancellation Policy</h3>
     </div>
-</section>
+    <p style="color: #475467; font-size: 0.9rem; margin-bottom: 16px;">Please review the platform subscription terms before submitting plan change or upgrade requests:</p>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px;">
+        <div style="padding: 14px; background: #f8f9fa; border: 1px solid #eaecf0; border-radius: 10px; font-size: 0.86rem;">
+            <strong style="display:block; color:#101828; margin-bottom: 4px;"><i class="fas fa-ban text-danger"></i> Non-Refundable Fees</strong>
+            <span style="color:#475467;">All subscription payments are final and non-refundable once billed or settled. No cash or prorated refunds are issued upon cancellation.</span>
+        </div>
+        <div style="padding: 14px; background: #f8f9fa; border: 1px solid #eaecf0; border-radius: 10px; font-size: 0.86rem;">
+            <strong style="display:block; color:#101828; margin-bottom: 4px;"><i class="fas fa-clock text-primary"></i> 1-Month Continued Access</strong>
+            <span style="color:#475467;">If you cancel your subscription, your shop retains 100% active access to all plan features and discount rates until the end of your current 1-month paid billing cycle.</span>
+        </div>
+        <div style="padding: 14px; background: #f8f9fa; border: 1px solid #eaecf0; border-radius: 10px; font-size: 0.86rem;">
+            <strong style="display:block; color:#101828; margin-bottom: 4px;"><i class="fas fa-check-circle text-success"></i> Auto-Termination</strong>
+            <span style="color:#475467;">After your 1-month paid cycle expires, recurring billing ends and the subscription terminates automatically without further charges.</span>
+        </div>
+    </div>
+</div>
 
 </div>
 </div>
 </div>
+<style>
+.plans-shell {
+    padding: 40px 20px 80px 20px;
+    background: #fff9f2;
+    min-height: 100vh;
+}
+
+/* Active Subscription Hero Card */
+.active-subscription-hero-card {
+    max-width: 1140px;
+    margin: 0 auto 32px auto;
+    background: #ffffff;
+    border: 1.5px solid #abefc6;
+    border-radius: 18px;
+    padding: 24px 28px;
+    box-shadow: 0 4px 20px rgba(2, 122, 72, 0.08);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+    background: linear-gradient(135deg, #ffffff 0%, #f6fef9 100%);
+}
+.hero-card-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+.hero-crown-mark {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    background: #ecfdf3;
+    color: #027a48;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    border: 1px solid #abefc6;
+    flex-shrink: 0;
+}
+.hero-plan-title-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+.hero-plan-title {
+    margin: 0;
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: #101828;
+}
+.hero-status-pill {
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+.hero-status-pill.status-active {
+    background: #ecfdf3;
+    color: #027a48;
+    border: 1px solid #abefc6;
+}
+.hero-status-pill.status-overdue {
+    background: #fff1f0;
+    color: #b3261e;
+    border: 1px solid #fee4e2;
+}
+.hero-status-pill.status-pending {
+    background: #fffaeb;
+    color: #b54708;
+    border: 1px solid #fedf89;
+}
+.hero-cycle-pill {
+    background: #f2f4f7;
+    color: #344054;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 6px;
+    border: 1px solid #eaecf0;
+}
+.hero-plan-dates-row {
+    font-size: 0.88rem;
+    color: #475467;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.hero-plan-dates-row strong {
+    color: #101828;
+}
+.text-accent-danger {
+    color: #b3261e !important;
+    font-weight: 800 !important;
+}
+.dates-sep {
+    color: #d0d5dd;
+}
+.hero-card-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.hero-countdown-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: #ecfdf3;
+    border: 1px solid #abefc6;
+    border-radius: 10px;
+    font-size: 0.84rem;
+    color: #027a48;
+}
+.hero-billing-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: #ffffff;
+    border: 1.5px solid #d0d5dd;
+    border-radius: 10px;
+    color: #344054;
+    font-weight: 700;
+    font-size: 0.86rem;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+.hero-billing-btn:hover {
+    background: #f8f9fa;
+    border-color: #101828;
+    color: #101828;
+    text-decoration: none;
+}
+
+/* Current Active Plan Card Highlight */
+.is-current-active-plan {
+    border: 2.5px solid #027a48 !important;
+    background: linear-gradient(180deg, #ffffff 0%, #f6fef9 100%) !important;
+    box-shadow: 0 10px 30px rgba(2, 122, 72, 0.14) !important;
+}
+.sp-current-plan-badge {
+    background: #027a48 !important;
+    color: #ffffff !important;
+    font-size: 0.78rem !important;
+    font-weight: 800 !important;
+    padding: 6px 12px !important;
+    border-radius: 6px !important;
+    box-shadow: 0 2px 8px rgba(2, 122, 72, 0.25);
+}
+.sp-btn-current-active {
+    background: #ecfdf3 !important;
+    color: #027a48 !important;
+    border: 1.5px solid #abefc6 !important;
+    cursor: default !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+.sp-minimal-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+    max-width: 1140px;
+    margin: 0 auto;
+}
+
+.sp-minimal-card {
+    background: #ffffff;
+    border: 1px solid #efddcd;
+    border-radius: 18px;
+    padding: 28px 24px;
+    color: #2a211d;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    box-shadow: 0 4px 16px rgba(42, 33, 29, 0.05);
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.sp-minimal-card:hover {
+    transform: translateY(-5px);
+    border-color: #ef6b2e;
+    box-shadow: 0 12px 30px rgba(179, 38, 30, 0.12);
+}
+
+.sp-featured-card {
+    border: 2px solid #b3261e;
+    background: #fffdfa;
+    box-shadow: 0 6px 20px rgba(179, 38, 30, 0.1);
+}
+
+.sp-badge-wrap {
+    margin-bottom: 16px;
+}
+
+.sp-top-pill {
+    display: inline-block;
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 800;
+    background: #fff8ef;
+    color: #ef6b2e;
+    border: 1px solid #efddcd;
+}
+
+.sp-pill-featured {
+    background: #b3261e;
+    color: #ffffff;
+    border: 1px solid #b3261e;
+}
+
+.sp-brand-sub {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #7b6d64;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sp-plan-title {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #2a211d;
+    margin: 0 0 16px 0;
+    letter-spacing: -0.5px;
+}
+
+.sp-price-main {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #2a211d;
+    line-height: 1.1;
+}
+
+.sp-price-sub {
+    font-size: 0.85rem;
+    color: #7b6d64;
+    margin-top: 2px;
+}
+
+.sp-price-annual {
+    font-size: 0.85rem;
+    color: #2a211d;
+    font-weight: 700;
+    margin-top: 4px;
+}
+
+.sp-divider {
+    height: 1px;
+    background: #efddcd;
+    margin: 20px 0;
+}
+
+.sp-bullet-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 28px 0;
+    color: #2a211d;
+    font-size: 0.9rem;
+    line-height: 1.95;
+    flex-grow: 1;
+}
+
+.sp-bullet-list li {
+    padding: 3px 0;
+}
+
+.bullet-dot {
+    color: #b3261e;
+    font-weight: 800;
+    margin-right: 4px;
+}
+
+.sp-card-action {
+    text-align: center;
+}
+
+.sp-pill-button {
+    display: block;
+    width: 100%;
+    padding: 13px 20px;
+    border-radius: 50px;
+    background-color: #b3261e;
+    color: #ffffff !important;
+    border: 2px solid #b3261e;
+    font-weight: 800;
+    font-size: 0.95rem;
+    text-decoration: none;
+    text-align: center;
+    transition: all 0.25s ease;
+    box-sizing: border-box;
+}
+
+.sp-pill-button:hover,
+.sp-pill-button.btn-highlight:hover {
+    background-color: #ef6b2e;
+    border-color: #ef6b2e;
+    color: #ffffff !important;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(239, 107, 46, 0.35);
+    text-decoration: none;
+}
+
+.sp-pro-card {
+    border: 2.5px solid #b3261e !important;
+    background: linear-gradient(180deg, #ffffff 0%, #fff4eb 100%) !important;
+    box-shadow: 0 12px 36px rgba(179, 38, 30, 0.2) !important;
+    transform: translateY(-6px);
+    position: relative;
+    z-index: 2;
+}
+
+.sp-pro-card:hover {
+    transform: translateY(-8px) scale(1.01);
+    box-shadow: 0 16px 40px rgba(179, 38, 30, 0.28) !important;
+    border-color: #ef6b2e !important;
+}
+
+.sp-pro-badge {
+    background: #b3261e !important;
+    color: #ffffff !important;
+    font-size: 0.82rem !important;
+    font-weight: 800 !important;
+    padding: 6px 14px !important;
+    border-radius: 6px !important;
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.3);
+}
+
+.sp-pro-button {
+    background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%) !important;
+    border: none !important;
+    color: #ffffff !important;
+    box-shadow: 0 6px 18px rgba(179, 38, 30, 0.35);
+}
+
+.sp-pro-button:hover {
+    background: linear-gradient(135deg, #931e18 0%, #d85317 100%) !important;
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 10px 25px rgba(239, 107, 46, 0.45) !important;
+}
+
+.sp-fineprint {
+    font-size: 0.74rem;
+    color: #7b6d64;
+    margin-top: 14px;
+    margin-bottom: 0;
+    line-height: 1.4;
+    text-align: center;
+}
+
+@media (max-width: 768px) {
+    .plans-shell {
+        padding: 16px 12px 90px 12px;
+    }
+    .sp-minimal-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    .sp-minimal-card {
+        padding: 22px 18px;
+    }
+    .sp-pro-card {
+        transform: none;
+    }
+}
+</style>
+<!-- Instant Subscription Checkout Modal -->
+<div id="subscriptionCheckoutModal" class="sub-modal-backdrop" style="display: none;">
+    <div class="sub-modal-card">
+        <div class="sub-modal-header">
+            <div class="sub-modal-title-wrap">
+                <span class="sub-modal-kicker"><i class="fas fa-bolt"></i> Instant Subscription Checkout</span>
+                <h2 id="modalPlanTitle" class="sub-modal-title">Upgrade Plan</h2>
+            </div>
+            <button type="button" class="sub-modal-close" onclick="closeSubscriptionCheckoutModal()">&times;</button>
+        </div>
+
+        <form method="POST" action="subscription_plans.php" id="subscriptionCheckoutForm" onsubmit="return submitSubscriptionCheckout(event);">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+            <input type="hidden" name="action" value="instant_subscription_checkout">
+            <input type="hidden" name="plan_id" id="modalPlanId" value="0">
+
+            <div class="sub-modal-body">
+                <!-- Billing Cycle Selector -->
+                <div class="sub-term-group">
+                    <label class="sub-field-label">Select Billing Term</label>
+                    <div class="sub-cycle-toggle-grid">
+                        <label class="sub-cycle-option" id="cycleOptionMonthly">
+                            <input type="radio" name="billing_cycle" value="monthly" checked onchange="updateModalCycle('monthly')">
+                            <div class="sub-cycle-content">
+                                <div class="sub-cycle-name">Monthly Billing</div>
+                                <div class="sub-cycle-price" id="modalMonthlyPriceLabel">PHP 0 / month</div>
+                                <span class="sub-cycle-desc">Billed every month. Cancel anytime.</span>
+                            </div>
+                        </label>
+                        <label class="sub-cycle-option" id="cycleOptionAnnual">
+                            <input type="radio" name="billing_cycle" value="annual" onchange="updateModalCycle('annual')">
+                            <div class="sub-cycle-content">
+                                <div class="sub-cycle-name">Annual Billing <span class="sub-badge-save">SAVE 2 MONTHS</span></div>
+                                <div class="sub-cycle-price" id="modalAnnualPriceLabel">PHP 0 / year</div>
+                                <span class="sub-cycle-desc" id="modalAnnualEquivalentLabel">Equivalent to PHP 0 / mo</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Payment Method (PayMongo) -->
+                <div class="sub-pay-group">
+                    <label class="sub-field-label">Payment Method (via PayMongo)</label>
+                    <div class="sub-pay-grid">
+                        <label class="sub-pay-option">
+                            <input type="radio" name="payment_method" value="gcash" checked>
+                            <div class="sub-pay-card">
+                                <i class="fas fa-wallet" style="color: #007dfe;"></i>
+                                <span>GCash</span>
+                            </div>
+                        </label>
+                        <label class="sub-pay-option">
+                            <input type="radio" name="payment_method" value="paymaya">
+                            <div class="sub-pay-card">
+                                <i class="fas fa-mobile-alt" style="color: #00d632;"></i>
+                                <span>Maya</span>
+                            </div>
+                        </label>
+                        <label class="sub-pay-option">
+                            <input type="radio" name="payment_method" value="card">
+                            <div class="sub-pay-card">
+                                <i class="fas fa-credit-card" style="color: #1a1f71;"></i>
+                                <span>Card (Visa/MC)</span>
+                            </div>
+                        </label>
+                        <label class="sub-pay-option">
+                            <input type="radio" name="payment_method" value="grab_pay">
+                            <div class="sub-pay-card">
+                                <i class="fas fa-car" style="color: #00b14f;"></i>
+                                <span>GrabPay</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Terms and Cancellation Agreement Box -->
+                <div class="sub-terms-card">
+                    <div class="sub-terms-top">
+                        <i class="fas fa-file-contract sub-terms-top-icon"></i>
+                        <strong>Terms &amp; Cancellation Agreement</strong>
+                    </div>
+                    <ul class="sub-terms-list">
+                        <li><strong>Non-Refundable Policy:</strong> All subscription fee payments are strictly non-refundable once billed or processed. No cash refunds or prorated amounts are provided upon cancellation.</li>
+                        <li><strong>1-Month Continued Access:</strong> If you cancel your subscription at any time, your shop continues to have <strong>100% full active access</strong> to all plan features, tools, and discounts until the end of your paid 1-month billing cycle.</li>
+                        <li><strong>Auto-Termination:</strong> After your 1-month paid period concludes, recurring billing ends and the subscription terminates automatically.</li>
+                    </ul>
+                    <label class="sub-agree-checkbox-wrap">
+                        <input type="checkbox" name="agree_terms" id="agreeTermsCheckbox" required>
+                        <span>I have read, understand, and agree to the <strong>Subscription Terms &amp; Cancellation Policy</strong>.</span>
+                    </label>
+                </div>
+
+                <!-- Total Summary Bar -->
+                <div class="sub-total-bar">
+                    <div class="sub-total-copy">
+                        <span>Total Due Today:</span>
+                        <strong id="modalTotalAmount">PHP 0.00</strong>
+                    </div>
+                    <button type="submit" class="sub-btn-pay" id="subSubmitBtn">
+                        <i class="fas fa-lock"></i> <span>Proceed to PayMongo</span>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+/* Checkout Modal Styles */
+.sub-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+.sub-modal-card {
+    background: #ffffff;
+    border-radius: 20px;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+    max-width: 580px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    border: 1px solid #eaecf0;
+    animation: modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes modalPop {
+    from { opacity: 0; transform: scale(0.95) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.sub-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 24px 28px 16px 28px;
+    border-bottom: 1px solid #eaecf0;
+}
+.sub-modal-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.76rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #b3261e;
+    letter-spacing: 0.06em;
+}
+.sub-modal-title {
+    margin: 4px 0 0 0;
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: #101828;
+}
+.sub-modal-close {
+    background: transparent;
+    border: none;
+    font-size: 1.6rem;
+    color: #98a2b3;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    transition: color 0.15s ease;
+}
+.sub-modal-close:hover {
+    color: #101828;
+}
+.sub-modal-body {
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+.sub-field-label {
+    display: block;
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: #344054;
+    margin-bottom: 8px;
+}
+.sub-cycle-toggle-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+.sub-cycle-option {
+    position: relative;
+    cursor: pointer;
+    margin: 0;
+}
+.sub-cycle-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+}
+.sub-cycle-content {
+    border: 2px solid #eaecf0;
+    border-radius: 12px;
+    padding: 14px;
+    background: #ffffff;
+    transition: all 0.2s ease;
+}
+.sub-cycle-option input[type="radio"]:checked + .sub-cycle-content {
+    border-color: #b3261e;
+    background: #fff8f7;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.12);
+}
+.sub-cycle-name {
+    font-weight: 700;
+    font-size: 0.92rem;
+    color: #101828;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.sub-cycle-price {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #b3261e;
+    margin-bottom: 2px;
+}
+.sub-cycle-desc {
+    font-size: 0.75rem;
+    color: #667085;
+    display: block;
+}
+.sub-badge-save {
+    background: #027a48;
+    color: #ffffff;
+    font-size: 0.65rem;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.sub-pay-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+.sub-pay-option {
+    position: relative;
+    cursor: pointer;
+    margin: 0;
+}
+.sub-pay-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+}
+.sub-pay-card {
+    border: 1.5px solid #eaecf0;
+    border-radius: 10px;
+    padding: 12px 6px;
+    text-align: center;
+    background: #ffffff;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+.sub-pay-card i {
+    font-size: 1.3rem;
+}
+.sub-pay-card span {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #344054;
+}
+.sub-pay-option input[type="radio"]:checked + .sub-pay-card {
+    border-color: #b3261e;
+    background: #fff8f7;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.12);
+}
+.sub-terms-card {
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    border-radius: 12px;
+    padding: 16px;
+}
+.sub-terms-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #101828;
+    font-size: 0.88rem;
+    margin-bottom: 8px;
+}
+.sub-terms-top-icon {
+    color: #b3261e;
+}
+.sub-terms-list {
+    margin: 0 0 12px 0;
+    padding-left: 18px;
+    font-size: 0.8rem;
+    color: #475467;
+    line-height: 1.55;
+}
+.sub-agree-checkbox-wrap {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: #101828;
+    margin: 0;
+    padding-top: 8px;
+    border-top: 1px solid #eaecf0;
+}
+.sub-agree-checkbox-wrap input[type="checkbox"] {
+    margin-top: 3px;
+    accent-color: #b3261e;
+}
+.sub-total-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 14px;
+    border-top: 1px solid #eaecf0;
+}
+.sub-total-copy span {
+    display: block;
+    font-size: 0.78rem;
+    color: #667085;
+}
+.sub-total-copy strong {
+    display: block;
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #101828;
+}
+.sub-btn-pay {
+    background: #b3261e;
+    color: #ffffff;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 24px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.sub-btn-pay:hover {
+    background: #931e18;
+    box-shadow: 0 6px 18px rgba(179, 38, 30, 0.3);
+}
+
+/* ==========================================================================
+   SUBSCRIPTION PLANS DARK MODE THEME ENGINE
+   ========================================================================== */
+html.dark-mode body,
+body.dark-mode {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .plans-shell {
+    background: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .active-subscription-hero-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-mode .hero-crown-mark {
+    background: rgba(2, 122, 72, 0.2) !important;
+    border-color: rgba(2, 122, 72, 0.4) !important;
+    color: #4ade80 !important;
+}
+
+body.dark-mode .hero-plan-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .hero-cycle-pill {
+    background: #334155 !important;
+    color: #cbd5e1 !important;
+    border-color: #475569 !important;
+}
+
+body.dark-mode .hero-plan-dates-row {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .hero-plan-dates-row strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .dates-sep {
+    color: #475569 !important;
+}
+
+body.dark-mode .hero-countdown-box {
+    background: rgba(2, 122, 72, 0.2) !important;
+    border-color: rgba(2, 122, 72, 0.4) !important;
+    color: #4ade80 !important;
+}
+
+body.dark-mode .hero-billing-btn {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .hero-billing-btn:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+    border-color: #475569 !important;
+}
+
+body.dark-mode .sp-minimal-card,
+body.dark-mode .plan-card,
+body.dark-mode .plans-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .sp-minimal-card:hover,
+body.dark-mode .plan-card:hover {
+    border-color: #475569 !important;
+}
+
+body.dark-mode .sp-featured-card,
+body.dark-mode .plan-card.featured {
+    border-color: #b3261e !important;
+    background: #1e293b !important;
+}
+
+body.dark-mode .is-current-active-plan {
+    border-color: #027a48 !important;
+    background: #1e293b !important;
+}
+
+body.dark-mode .sp-top-pill {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sp-pill-featured {
+    background: #b3261e !important;
+    color: #ffffff !important;
+    border-color: #b3261e !important;
+}
+
+body.dark-mode .sp-brand-sub {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sp-plan-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sp-price-main {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sp-price-sub {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sp-price-annual {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .sp-divider {
+    background: #334155 !important;
+}
+
+body.dark-mode .sp-bullet-list {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .sp-bullet-list li {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .plan-features li {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .plan-note {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .plan-card h3 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .plan-card p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .plan-price {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .plan-price-label {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .plans-btn-secondary {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .plans-btn-secondary:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+    border-color: #475569 !important;
+}
+
+body.dark-mode .mode-toggle,
+body.dark-mode .sticky-toggle {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .mode-btn,
+body.dark-mode .sticky-btn {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .mode-btn.active,
+body.dark-mode .sticky-btn.active {
+    background: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .hero-meta-box {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .hero-meta-box strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .hero-meta-box span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sticky-card {
+    background: rgba(30, 41, 59, 0.95) !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .sticky-copy strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sticky-copy span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .calc-pane,
+body.dark-mode .calc-result {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .calc-meta div {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .calc-meta strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .calc-meta span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .matrix-table th {
+    background: #111827 !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .matrix-table td {
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .workflow-step {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .workflow-step strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sub-modal-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sub-modal-header {
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .sub-modal-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sub-modal-close {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sub-field-label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sub-cycle-content {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sub-cycle-name {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sub-cycle-desc {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sub-cycle-option input[type="radio"]:checked + .sub-cycle-content {
+    border-color: #b3261e !important;
+    background: rgba(179, 38, 30, 0.15) !important;
+}
+
+body.dark-mode .sub-pay-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .sub-pay-card span {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .sub-pay-option input[type="radio"]:checked + .sub-pay-card {
+    border-color: #b3261e !important;
+    background: rgba(179, 38, 30, 0.15) !important;
+}
+
+body.dark-mode .sub-terms-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .sub-terms-top {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sub-terms-list {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sub-agree-checkbox-wrap {
+    color: #f8fafc !important;
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .sub-total-bar {
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .sub-total-copy span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sub-total-copy strong {
+    color: #f8fafc !important;
+}
+</style>
+
 <script src="../js/bootstrap.bundle.min.js"></script>
 <script>
-(function(){
-const cards=[...document.querySelectorAll('[data-plan-card]')];const buttons=[...document.querySelectorAll('.mode-btn')];const stickyButtons=[...document.querySelectorAll('.sticky-btn')];const staffRange=document.getElementById('planStaffRange');const staffValue=document.getElementById('planStaffValue');const needAi=document.getElementById('needAiAutomation');const needPriority=document.getElementById('needPrioritySupport');const needFeatured=document.getElementById('needFeaturedPlacement');const needBranding=document.getElementById('needCustomBranding');const stickyBillingModeText=document.getElementById('stickyBillingModeText');const stickyRecommendationText=document.getElementById('stickyRecommendationText');const stickySavingsChip=document.getElementById('stickySavingsChip');const stickyRequestLink=document.getElementById('stickyRequestLink');const recommendedPlanName=document.getElementById('recommendedPlanName');const recommendedPlanReason=document.getElementById('recommendedPlanReason');const recommendedPlanFit=document.getElementById('recommendedPlanFit');const recommendedPlanBilling=document.getElementById('recommendedPlanBilling');const recommendedPlanPrice=document.getElementById('recommendedPlanPrice');const recommendedPlanLink=document.getElementById('recommendedPlanLink');const whyToggle=document.getElementById('recommendedPlanWhyToggle');const whyBody=document.getElementById('recommendedPlanWhyBody');const whySummary=document.getElementById('recommendedPlanWhySummary');const whyOne=document.getElementById('recommendedPlanWhyReasonOne');const whyTwo=document.getElementById('recommendedPlanWhyReasonTwo');const whyThree=document.getElementById('recommendedPlanWhyReasonThree');let activeMode='monthly';
-function peso(v){return 'PHP '+Number(v||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});}
-function list(items){if(items.length<=1)return items[0]||'';if(items.length===2)return items[0]+' and '+items[1];return items.slice(0,-1).join(', ')+', and '+items[items.length-1];}
-function meta(card){return{code:String(card.dataset.planCode||'').toLowerCase(),name:String(card.dataset.planName||'Plan'),monthlyPrice:Number(card.dataset.monthlyPrice||0),annualPrice:Number(card.dataset.annualPrice||0),monthlyHref:String(card.dataset.monthlyHref||'#'),annualHref:String(card.dataset.annualHref||'#'),maxStaff:Number(card.dataset.maxStaff||1)}}
-function recommend(){const staff=Number(staffRange?staffRange.value:2);const byCode={};cards.forEach(card=>{byCode[String(card.dataset.planCode||'').toLowerCase()]=card;});if((staff>=10||needFeatured.checked||needBranding.checked)&&byCode.pro)return byCode.pro;if((staff>=3||needAi.checked||needPriority.checked)&&byCode.growth)return byCode.growth;if(byCode.starter)return byCode.starter;return cards[0]||null;}
-function whyPlan(m,staff){const wants=[];if(needAi.checked)wants.push('AI automation');if(needPriority.checked)wants.push('priority support');if(needFeatured.checked)wants.push('featured placement');if(needBranding.checked)wants.push('custom branding');return{summary:wants.length?m.name+' fits your current setup because it covers a '+staff+'-staff team while staying aligned with your need for '+list(wants)+'.':m.name+' fits your current setup because it matches a '+staff+'-staff shop without forcing you to pay for extras you are not asking for yet.',reasons:[staff<=m.maxStaff?'Your selected team size of '+staff+' staff fits inside this plan\'s '+m.maxStaff+' staff-account allowance.':'You selected '+staff+' staff accounts, so the recommendation shifts upward to give your team more breathing room.',wants.length?'You turned on '+list(wants)+', and this plan is the first sensible tier that supports those priorities without overcomplicating the choice.':'Because you left premium needs turned off, the recommendation stays focused on the most efficient fit for your current stage.',m.code==='pro'?'Pro becomes the stronger match once visibility, branding control, and heavier support start affecting daily execution and partner revenue.':(m.code==='growth'?'Growth is usually the best middle ground when a shop needs stronger support and flexibility without jumping straight into the highest-priced tier.':'Starter keeps the system simple for newer or smaller partner shops while still leaving room to upgrade later.')]};}
-function update(){const card=recommend();if(!card)return;const staff=Number(staffRange?staffRange.value:2);const m=meta(card);const price=activeMode==='annual'?m.annualPrice:m.monthlyPrice;const href=activeMode==='annual'?m.annualHref:m.monthlyHref;const savings=Math.max(0,m.monthlyPrice*12-m.annualPrice);if(staffValue)staffValue.textContent=staff+(staff===1?' staff':' staff');recommendedPlanName.textContent=m.name;recommendedPlanReason.textContent=m.code==='pro'?'This plan fits larger partner operations that want visibility boosts, branding control, and heavier day-to-day support.':(m.code==='growth'?'This is the balanced choice for teams that need more staff access, stronger support, or AI assistance as they scale.':'This plan keeps subscription costs light while covering the essentials for a smaller shop team.');recommendedPlanFit.textContent=m.code==='pro'?'High-volume stores':(m.code==='growth'?'Growing partner shops':'Lean partner shops');recommendedPlanBilling.textContent=activeMode==='annual'?'Annual':'Monthly';recommendedPlanPrice.textContent=peso(price);recommendedPlanLink.href=href;stickyRequestLink.href=href;stickyRequestLink.textContent=m.code==='starter'?'Start with '+m.name:'Request '+m.name;stickyRecommendationText.textContent=m.name+' is the current best match for a shop with '+staff+' staff and your selected support needs.';stickySavingsChip.textContent=(activeMode==='annual'?'Estimated yearly savings: ':'Annual savings available: ')+peso(savings);const why=whyPlan(m,staff);whySummary.textContent=why.summary;whyOne.textContent=why.reasons[0]||'';whyTwo.textContent=why.reasons[1]||'';whyThree.textContent=why.reasons[2]||'';cards.forEach(c=>{const active=c===card;c.classList.toggle('is-recommended',active);const badge=c.querySelector('[data-plan-live-badge]');if(badge)badge.hidden=!active;});}
-function apply(mode){activeMode=mode==='annual'?'annual':'monthly';buttons.forEach(b=>b.classList.toggle('active',b.dataset.billingMode===activeMode));stickyButtons.forEach(b=>b.classList.toggle('active',b.dataset.billingMode===activeMode));stickyBillingModeText.textContent=activeMode==='annual'?'Annual billing selected':'Monthly billing selected';cards.forEach(card=>{const price=card.querySelector('[data-plan-price]');const label=card.querySelector('[data-plan-price-label]');const note=card.querySelector('[data-plan-price-note]');const link=card.querySelector('[data-plan-request-link]');const monthlyPrice=Number(card.dataset.monthlyPrice||0);const annualPrice=Number(card.dataset.annualPrice||0);const annualEquivalent=Number(card.dataset.annualEquivalent||0);const annualSavings=Number(card.dataset.annualSavings||0);if(activeMode==='annual'){if(price)price.textContent=peso(annualPrice);if(label)label.textContent='per year';if(note)note.innerHTML='<strong>Monthly equivalent: '+peso(annualEquivalent)+'</strong><span>'+(annualSavings>0?'Save '+peso(annualSavings)+' yearly':'Annual billing active')+'</span>';if(link)link.href=card.dataset.annualHref||'#';}else{if(price)price.textContent=peso(monthlyPrice);if(label)label.textContent='per month';if(note)note.innerHTML='<strong>Annual: '+peso(annualPrice)+'</strong><span>'+(annualSavings>0?'Save '+peso(annualSavings)+' yearly':peso(annualEquivalent)+' monthly equivalent')+'</span>';if(link)link.href=card.dataset.monthlyHref||'#';}});update();}
-buttons.concat(stickyButtons).forEach(btn=>btn.addEventListener('click',function(){apply(this.dataset.billingMode||'monthly');}));[staffRange,needAi,needPriority,needFeatured,needBranding].forEach(control=>{if(!control)return;control.addEventListener('input',update);control.addEventListener('change',update);});if(whyToggle&&whyBody){whyToggle.addEventListener('click',function(){const expanded=this.getAttribute('aria-expanded')==='true';this.setAttribute('aria-expanded',expanded?'false':'true');whyBody.hidden=expanded;});}apply('monthly');})();
+function confirmSubscriptionCancellation(e, planName, renewsDate) {
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    const form = e ? (e.target || e.currentTarget) : null;
+    if (form && form.dataset.confirmed === '1') {
+        return true;
+    }
+
+    const htmlContent = `
+        <p style="margin-bottom: 12px; font-weight: 700;">Are you sure you want to cancel your <strong>${planName}</strong> subscription?</p>
+        <div style="text-align: left; background: rgba(0,0,0,0.04); padding: 12px 14px; border-radius: 12px; font-size: 0.85rem; line-height: 1.6; margin-bottom: 8px;">
+            <div style="margin-bottom: 6px;"><i class="fas fa-exclamation-circle" style="color:#b3261e; width:16px;"></i> <strong>Non-Refundable:</strong> Payments are non-refundable per terms.</div>
+            <div style="margin-bottom: 6px;"><i class="fas fa-check-circle" style="color:#027a48; width:16px;"></i> <strong>Continued Access:</strong> You retain 100% full active access until <strong>${renewsDate}</strong>.</div>
+            <div><i class="fas fa-clock" style="color:#b54708; width:16px;"></i> <strong>Auto-Termination:</strong> Recurring billing will stop automatically.</div>
+        </div>
+    `;
+
+    if (window.showConfirmDialog) {
+        window.showConfirmDialog({
+            title: 'Cancel Subscription',
+            html: htmlContent,
+            icon: 'warning',
+            confirmText: 'Yes, Cancel Plan',
+            confirmColor: '#b3261e',
+            cancelText: 'Keep My Plan'
+        }).then((confirmed) => {
+            if (confirmed && form) {
+                form.dataset.confirmed = '1';
+                form.submit();
+            }
+        });
+    } else if (confirm("Are you sure you want to cancel your " + planName + " subscription?")) {
+        if (form) {
+            form.dataset.confirmed = '1';
+            form.submit();
+        }
+    }
+    return false;
+}
+
+let currentModalPlan = {
+    id: 0,
+    name: '',
+    monthlyPrice: 0,
+    annualPrice: 0,
+    planCode: '',
+    cycle: 'monthly'
+};
+
+function openSubscriptionCheckoutModal(planId, planName, monthlyPrice, annualPrice, planCode) {
+    currentModalPlan = {
+        id: planId,
+        name: planName,
+        monthlyPrice: parseFloat(monthlyPrice) || 0,
+        annualPrice: parseFloat(annualPrice) || 0,
+        planCode: planCode,
+        cycle: 'monthly'
+    };
+
+    document.getElementById('modalPlanId').value = planId;
+    document.getElementById('modalPlanTitle').textContent = 'Subscribe to ' + planName + ' Plan';
+    document.getElementById('modalMonthlyPriceLabel').textContent = 'PHP ' + currentModalPlan.monthlyPrice.toLocaleString('en-US') + ' / month';
+    document.getElementById('modalAnnualPriceLabel').textContent = 'PHP ' + currentModalPlan.annualPrice.toLocaleString('en-US') + ' / year';
+    
+    const annualEq = currentModalPlan.annualPrice > 0 ? Math.round(currentModalPlan.annualPrice / 12) : 0;
+    document.getElementById('modalAnnualEquivalentLabel').textContent = 'Equivalent to PHP ' + annualEq.toLocaleString('en-US') + ' / mo';
+
+    // Default to monthly radio
+    const monthlyRadio = document.querySelector('input[name="billing_cycle"][value="monthly"]');
+    if (monthlyRadio) monthlyRadio.checked = true;
+
+    updateModalCycle('monthly');
+
+    // Uncheck agreement to ensure fresh confirmation
+    const agreeCheck = document.getElementById('agreeTermsCheckbox');
+    if (agreeCheck) agreeCheck.checked = false;
+
+    // Reset button state
+    const submitBtn = document.getElementById('subSubmitBtn');
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-lock"></i> <span>Proceed to PayMongo</span>';
+    }
+
+    const modal = document.getElementById('subscriptionCheckoutModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function updateModalCycle(cycle) {
+    currentModalPlan.cycle = cycle;
+    const isAnnual = cycle === 'annual';
+    const amount = isAnnual ? currentModalPlan.annualPrice : currentModalPlan.monthlyPrice;
+    document.getElementById('modalTotalAmount').textContent = 'PHP ' + amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function closeSubscriptionCheckoutModal() {
+    const modal = document.getElementById('subscriptionCheckoutModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+}
+
+function submitSubscriptionCheckout(e) {
+    const agreeCheck = document.getElementById('agreeTermsCheckbox');
+    if (!agreeCheck || !agreeCheck.checked) {
+        alert('Please check and agree to the Subscription Terms & Cancellation Policy to continue.');
+        return false;
+    }
+
+    const submitBtn = document.getElementById('subSubmitBtn');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> <span>Redirecting to PayMongo...</span>';
+    }
+    return true;
+}
+
+// Close modal when clicking backdrop & handle pre-fill from query params
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('subscriptionCheckoutModal');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                closeSubscriptionCheckoutModal();
+            }
+        });
+    }
+
+    <?php if (!empty($_GET['plan_id'])): ?>
+    <?php
+        $prefillPlanId = (int)$_GET['plan_id'];
+        $prefillCycle = strtolower(trim((string)($_GET['billing_cycle'] ?? 'monthly')));
+        $targetPlan = null;
+        foreach ($plans as $p) {
+            if ((int)$p['id'] === $prefillPlanId) {
+                $targetPlan = $p;
+                break;
+            }
+        }
+        if ($targetPlan):
+    ?>
+    openSubscriptionCheckoutModal(
+        <?php echo (int)$targetPlan['id']; ?>,
+        <?php echo json_encode((string)$targetPlan['plan_name']); ?>,
+        <?php echo (float)$targetPlan['monthly_price']; ?>,
+        <?php echo (float)$targetPlan['annual_price']; ?>,
+        <?php echo json_encode((string)$targetPlan['plan_code']); ?>
+    );
+    <?php if ($prefillCycle === 'annual'): ?>
+    const annualRadio = document.querySelector('input[name="billing_cycle"][value="annual"]');
+    if (annualRadio) {
+        annualRadio.checked = true;
+        updateModalCycle('annual');
+    }
+    <?php endif; ?>
+    <?php endif; ?>
+    <?php endif; ?>
+});
 </script>
 </body>
 </html>

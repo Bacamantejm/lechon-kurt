@@ -18,14 +18,7 @@ $partner_economics_trend = ['labels' => [], 'revenue' => [], 'booked_expenses' =
 $partner_expense_sync = ['billing_synced' => 0, 'refunds_synced' => 0, 'procurement_synced' => 0, 'supplier_invoices_synced' => 0];
 $seller_scoped_orders_exists_sql = '';
 if ($seller_scope_id !== null) {
-    $seller_scoped_orders_exists_sql = "EXISTS (
-        SELECT 1
-        FROM order_items oi_scope
-        INNER JOIN products p_scope
-            ON (oi_scope.product_id = p_scope.product_id OR oi_scope.product_id = CAST(p_scope.id AS CHAR))
-        WHERE oi_scope.order_id = o.id
-          AND p_scope.seller_id = " . (int)$seller_scope_id . "
-    )";
+    $seller_scoped_orders_exists_sql = getFranchiseScopedOrderExistsSql($conn, (int)$seller_scope_id, 'o.id');
 }
 
 $conversion_window_days = 30;
@@ -324,6 +317,7 @@ if ($seller_scope_id === null) {
         <div class="admin-content">
             <div class="admin-topbar">
                 <div class="topbar-content">
+                    <button class="sidebar-toggler" id="sidebarToggler"><i class="fas fa-bars"></i></button>
                     <h1>Business Statistics</h1>
                     <button class="theme-toggler" id="themeToggler" title="Toggle Theme" style="margin-left: auto;">
                         <i class="fas fa-moon"></i>

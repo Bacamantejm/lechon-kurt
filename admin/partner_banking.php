@@ -196,58 +196,102 @@ $payout_method_labels = [
             <?php endif; ?>
 
             <div class="banking-grid">
-                <section class="banking-card">
-                    <h2 class="banking-title">Payout Account Details</h2>
-                    <p class="banking-subtitle">Keep your active payout destination updated so billing and finance records can reference the correct account.</p>
+                <section class="form-section-card" style="box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+                    <div class="form-section-head mb-3">
+                        <div class="form-section-title">
+                            <i class="fas fa-university text-danger"></i>
+                            Payout Account Details
+                        </div>
+                        <span class="form-req-pill">Active Destination</span>
+                    </div>
+                    <p class="text-muted small mb-3">Keep your active payout destination updated so billing and franchise payout records reference the correct settlement account.</p>
+
                     <form method="POST">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                         <div class="banking-form-grid">
                             <div>
-                                <label class="form-label fw-semibold">Payout Method</label>
-                                <select class="form-select" name="payout_method" required>
-                                    <?php foreach ($payout_method_labels as $method_key => $method_label): ?>
-                                        <option value="<?php echo htmlspecialchars($method_key); ?>" <?php echo $payout_method === $method_key ? 'selected' : ''; ?>>
-                                            <?php echo htmlspecialchars($method_label); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern">Payout Method</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-money-check-alt form-input-icon"></i>
+                                        <select class="form-select" name="payout_method" required>
+                                            <?php foreach ($payout_method_labels as $method_key => $method_label): ?>
+                                                <option value="<?php echo htmlspecialchars($method_key); ?>" <?php echo $payout_method === $method_key ? 'selected' : ''; ?>>
+                                                    <?php echo htmlspecialchars($method_label); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
                             <div>
-                                <label class="form-label fw-semibold">Account Holder</label>
-                                <input type="text" class="form-control" name="account_holder" maxlength="180" value="<?php echo htmlspecialchars((string)($banking_account['account_holder'] ?? '')); ?>" required>
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern">Account Holder Name</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-user form-input-icon"></i>
+                                        <input type="text" class="form-control" name="account_holder" maxlength="180" value="<?php echo htmlspecialchars((string)($banking_account['account_holder'] ?? '')); ?>" required placeholder="Registered account holder name">
+                                    </div>
+                                </div>
                             </div>
                             <div>
-                                <label class="form-label fw-semibold">Bank or Wallet Name</label>
-                                <input type="text" class="form-control" name="financial_institution" maxlength="180" value="<?php echo htmlspecialchars((string)($banking_account['financial_institution'] ?? '')); ?>" placeholder="Example: BDO, BPI, GCash">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern">Bank or Wallet Name</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-landmark form-input-icon"></i>
+                                        <input type="text" class="form-control" name="financial_institution" maxlength="180" value="<?php echo htmlspecialchars((string)($banking_account['financial_institution'] ?? '')); ?>" placeholder="e.g. BDO, BPI, GCash, Maya">
+                                    </div>
+                                </div>
                             </div>
                             <div>
-                                <label class="form-label fw-semibold">Account Type</label>
-                                <input type="text" class="form-control" name="account_type" maxlength="80" value="<?php echo htmlspecialchars((string)($banking_account['account_type'] ?? '')); ?>" placeholder="Savings, Current, Wallet">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern">Account Type</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-layer-group form-input-icon"></i>
+                                        <input type="text" class="form-control" name="account_type" maxlength="80" value="<?php echo htmlspecialchars((string)($banking_account['account_type'] ?? '')); ?>" placeholder="Savings, Current, Merchant Wallet">
+                                    </div>
+                                </div>
                             </div>
                             <div>
-                                <label class="form-label fw-semibold">Account Number</label>
-                                <input type="text" class="form-control" name="account_number" maxlength="140" value="<?php echo htmlspecialchars((string)($banking_account['account_number'] ?? '')); ?>" required>
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern">Account Number</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-credit-card form-input-icon"></i>
+                                        <input type="text" class="form-control" name="account_number" maxlength="140" value="<?php echo htmlspecialchars((string)($banking_account['account_number'] ?? '')); ?>" required placeholder="Account or mobile wallet number">
+                                    </div>
+                                </div>
                             </div>
                             <div>
-                                <label class="form-label fw-semibold">Branch Name (Optional)</label>
-                                <input type="text" class="form-control" name="branch_name" maxlength="120" value="<?php echo htmlspecialchars((string)($banking_account['branch_name'] ?? '')); ?>">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern">Branch Name <span class="text-muted fw-normal">(Optional)</span></label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-map-pin form-input-icon"></i>
+                                        <input type="text" class="form-control" name="branch_name" maxlength="120" value="<?php echo htmlspecialchars((string)($banking_account['branch_name'] ?? '')); ?>" placeholder="e.g. San Pedro Laguna Branch">
+                                    </div>
+                                </div>
                             </div>
                             <div class="full">
-                                <label class="form-label fw-semibold">Routing Reference (Optional)</label>
-                                <input type="text" class="form-control" name="routing_reference" maxlength="120" value="<?php echo htmlspecialchars((string)($banking_account['routing_reference'] ?? '')); ?>" placeholder="SWIFT / routing number / transfer note">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern">Routing Reference <span class="text-muted fw-normal">(Optional)</span></label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-hashtag form-input-icon"></i>
+                                        <input type="text" class="form-control" name="routing_reference" maxlength="120" value="<?php echo htmlspecialchars((string)($banking_account['routing_reference'] ?? '')); ?>" placeholder="SWIFT / routing code / transfer memo">
+                                    </div>
+                                </div>
                             </div>
                             <div class="full">
-                                <label class="form-label fw-semibold">Internal Notes</label>
-                                <textarea class="form-control" name="notes" rows="3" maxlength="800" placeholder="Add payout handling notes for your team"><?php echo htmlspecialchars((string)($banking_account['notes'] ?? '')); ?></textarea>
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern">Internal Notes <span class="text-muted fw-normal">(Optional)</span></label>
+                                    <textarea class="form-control" name="notes" rows="2" maxlength="800" placeholder="Add payout handling instructions for the finance team"><?php echo htmlspecialchars((string)($banking_account['notes'] ?? '')); ?></textarea>
+                                </div>
                             </div>
                             <div class="full form-check mt-1">
                                 <input class="form-check-input" type="checkbox" value="1" id="is_active" name="is_active" <?php echo (int)($banking_account['is_active'] ?? 1) === 1 ? 'checked' : ''; ?>>
-                                <label class="form-check-label" for="is_active">
+                                <label class="form-check-label fw-semibold" for="is_active" style="color: #101828;">
                                     Mark this account as active payout destination
                                 </label>
                             </div>
                             <div class="full mt-2">
-                                <button type="submit" class="btn btn-primary">
+                                <button type="submit" class="btn-modal-primary" style="padding: 10px 22px;">
                                     <i class="fas fa-save me-1"></i> Save Banking Setup
                                 </button>
                             </div>
@@ -255,9 +299,17 @@ $payout_method_labels = [
                     </form>
                 </section>
 
-                <aside class="banking-card">
-                    <h3 class="banking-title">Current Account Snapshot</h3>
-                    <p class="banking-subtitle">Quick reference for your currently stored payout account.</p>
+                <aside class="form-section-card" style="box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+                    <div class="form-section-head mb-3">
+                        <div class="form-section-title">
+                            <i class="fas fa-id-card text-danger"></i>
+                            Account Snapshot
+                        </div>
+                        <span class="badge" style="background: <?php echo (int)($banking_account['is_active'] ?? 0) === 1 ? '#ecfdf3' : '#fff1f0'; ?>; color: <?php echo (int)($banking_account['is_active'] ?? 0) === 1 ? '#027a48' : '#b3261e'; ?>; border: 1px solid <?php echo (int)($banking_account['is_active'] ?? 0) === 1 ? '#abefc6' : '#fee4e2'; ?>; font-weight: 600; font-size: 12px; padding: 4px 10px; border-radius: 20px;">
+                            <?php echo (int)($banking_account['is_active'] ?? 0) === 1 ? 'Active' : 'Inactive'; ?>
+                        </span>
+                    </div>
+                    <p class="text-muted small mb-3">Quick verification snapshot for current store payout settings.</p>
                     <ul class="banking-summary-list">
                         <li>
                             <span>Payout Method</span>
@@ -274,10 +326,6 @@ $payout_method_labels = [
                         <li>
                             <span>Masked Account Number</span>
                             <strong><?php echo htmlspecialchars($masked_account_preview !== '' ? $masked_account_preview : 'Not set'); ?></strong>
-                        </li>
-                        <li>
-                            <span>Status</span>
-                            <strong><?php echo (int)($banking_account['is_active'] ?? 0) === 1 ? 'Active' : 'Inactive'; ?></strong>
                         </li>
                     </ul>
                 </aside>

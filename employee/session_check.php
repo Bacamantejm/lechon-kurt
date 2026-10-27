@@ -66,6 +66,12 @@ if ($result->num_rows > 0) {
 }
 $stmt->close();
 
+require_once __DIR__ . '/../includes/rider_helper.php';
+if (isDeliveryDriverUser($conn, $user_id)) {
+    header("Location: ../rider/index.php");
+    exit();
+}
+
 // For admins without an employee record, they can still view some pages, but actions requiring an employee_id will fail gracefully.
 // For users with 'employee' type, not having a record is a configuration error.
 // We allow the script to continue so the page can handle the display of this error gracefully.

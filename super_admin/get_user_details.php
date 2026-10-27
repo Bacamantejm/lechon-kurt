@@ -50,67 +50,99 @@ if (saTableExists($conn, 'orders')) {
 }
 ?>
 
-<div class="user-details">
-    <div class="user-header">
-        <div class="user-avatar">
-            <i class="fas fa-user-circle"></i>
-        </div>
-        <div class="user-info">
-            <h4><?php echo htmlspecialchars($user['full_name']); ?></h4>
-            <p><?php echo htmlspecialchars($user['email']); ?></p>
+<div class="user-details-modern">
+    <!-- Section 1: Customer Profile Overview -->
+    <div class="form-section-card mb-3">
+        <div class="form-section-head">
+            <span class="form-section-title"><i class="fas fa-user-circle"></i> Profile Overview</span>
             <?php $user_is_active = (int)($user['is_active'] ?? 0) === 1; ?>
-            <span class="status-chip <?php echo $user_is_active ? 'chip-success' : 'chip-danger'; ?>">
-                <?php echo $user_is_active ? 'Active' : 'Inactive'; ?>
+            <span class="<?php echo $user_is_active ? 'form-req-pill' : 'form-opt-pill'; ?>">
+                <?php echo $user_is_active ? 'Active Account' : 'Suspended'; ?>
             </span>
         </div>
-    </div>
-    
-    <div class="user-info-grid">
-        <div class="info-item">
-            <label>Phone</label>
-            <p><?php echo htmlspecialchars($user['phone'] ?? 'Not provided'); ?></p>
-        </div>
-        <div class="info-item">
-            <label>Account Type</label>
-            <p><?php echo htmlspecialchars(ucfirst((string)($user['account_type'] ?? 'unknown'))); ?></p>
-        </div>
-        <div class="info-item">
-            <label>Address</label>
-            <p><?php echo htmlspecialchars($user['address'] ?? 'Not provided'); ?></p>
-        </div>
-        <div class="info-item">
-            <label>Joined</label>
-            <p><?php echo htmlspecialchars(saFormatDateTime($user['created_at'] ?? null, 'M d, Y', 'N/A')); ?></p>
-        </div>
-    </div>
-    
-    <div class="user-stats">
-        <h6>Order Statistics</h6>
-        <div class="stats-row">
-            <span>Total Orders:</span>
-            <strong><?php echo $orders_stats['count'] ?? 0; ?></strong>
-        </div>
-        <div class="stats-row">
-            <span>Total Spent:</span>
-            <strong>PHP <?php echo number_format((float)($orders_stats['total'] ?? 0), 2); ?></strong>
-        </div>
-    </div>
-    
-    <?php if ($user['business_name']): ?>
-        <div class="business-info">
-            <h6>Business Information</h6>
-            <div class="info-item">
-                <label>Business Name</label>
-                <p><?php echo htmlspecialchars($user['business_name']); ?></p>
+        
+        <div class="d-flex align-items-center gap-3 mb-3">
+            <div style="width: 52px; height: 52px; border-radius: 12px; background: #fff1f0; color: #b3261e; display: flex; align-items: center; justify-content: center; font-size: 26px; border: 1px solid #fee4e2;">
+                <i class="fas fa-user"></i>
             </div>
-            <div class="info-item">
-                <label>Business Type</label>
-                <p><?php echo htmlspecialchars($user['business_type'] ?? 'Not specified'); ?></p>
-            </div>
-            <div class="info-item">
-                <label>Tax ID</label>
-                <p><?php echo htmlspecialchars($user['tax_id'] ?? 'Not provided'); ?></p>
+            <div>
+                <h5 class="fw-bold mb-0" style="color: #101828; font-size: 16px;"><?php echo htmlspecialchars($user['full_name']); ?></h5>
+                <span class="text-muted" style="font-size: 13px;"><?php echo htmlspecialchars($user['email']); ?></span>
             </div>
         </div>
+
+        <div class="row g-3">
+            <div class="col-sm-6">
+                <div class="p-2 rounded bg-light border">
+                    <span class="d-block text-muted" style="font-size: 11px; font-weight: 600;">PHONE NUMBER</span>
+                    <strong style="font-size: 13px; color: #101828;"><?php echo htmlspecialchars($user['phone'] ?? 'Not provided'); ?></strong>
+                </div>
+            </div>
+            <div class="col-sm-6">
+                <div class="p-2 rounded bg-light border">
+                    <span class="d-block text-muted" style="font-size: 11px; font-weight: 600;">ACCOUNT TYPE</span>
+                    <strong style="font-size: 13px; color: #101828;"><?php echo htmlspecialchars(ucfirst((string)($user['account_type'] ?? 'Individual'))); ?></strong>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="p-2 rounded bg-light border">
+                    <span class="d-block text-muted" style="font-size: 11px; font-weight: 600;">DELIVERY ADDRESS</span>
+                    <span style="font-size: 13px; color: #101828;"><?php echo htmlspecialchars($user['address'] ?? 'Not provided'); ?></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 2: Order Activity & Financials -->
+    <div class="form-section-card mb-3">
+        <div class="form-section-head">
+            <span class="form-section-title"><i class="fas fa-chart-line"></i> Transaction Stats</span>
+            <span class="form-opt-pill">Financials</span>
+        </div>
+        <div class="row g-2">
+            <div class="col-6">
+                <div class="p-2 rounded bg-light border text-center">
+                    <span class="d-block text-muted" style="font-size: 11px; font-weight: 600;">COMPLETED ORDERS</span>
+                    <strong style="font-size: 18px; color: #101828;"><?php echo number_format((int)($orders_stats['count'] ?? 0)); ?></strong>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="p-2 rounded bg-light border text-center">
+                    <span class="d-block text-muted" style="font-size: 11px; font-weight: 600;">TOTAL SPENT</span>
+                    <strong style="font-size: 18px; color: #b3261e;">₱<?php echo number_format((float)($orders_stats['total'] ?? 0), 2); ?></strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <?php if (!empty($user['business_name'])): ?>
+    <!-- Section 3: Commercial Details -->
+    <div class="form-section-card">
+        <div class="form-section-head">
+            <span class="form-section-title"><i class="fas fa-building"></i> Commercial Entity</span>
+            <span class="form-opt-pill">Enterprise</span>
+        </div>
+        <div class="row g-3">
+            <div class="col-sm-6">
+                <div class="form-group-modern">
+                    <label class="form-label-modern">Registered Business Name</label>
+                    <div class="form-input-wrap">
+                        <i class="fas fa-store form-input-icon"></i>
+                        <input type="text" class="form-control" value="<?php echo htmlspecialchars($user['business_name']); ?>" disabled>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6">
+                <div class="form-group-modern">
+                    <label class="form-label-modern">Tax Identification Number</label>
+                    <div class="form-input-wrap">
+                        <i class="fas fa-id-card form-input-icon"></i>
+                        <input type="text" class="form-control" value="<?php echo htmlspecialchars($user['tax_id'] ?? 'N/A'); ?>" disabled>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     <?php endif; ?>
 </div>
+

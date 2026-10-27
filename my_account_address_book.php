@@ -457,6 +457,10 @@ if (!$is_embedded) {
 }
 ?>
 
+<!-- Leaflet Map API -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
 <div class="<?php echo $is_embedded ? 'address-embed-wrap' : 'account-page'; ?>">
     <div class="<?php echo $is_embedded ? 'address-embed-container' : 'container'; ?>">
         <div class="address-book-head">
@@ -751,21 +755,19 @@ if (!$is_embedded) {
 </div>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-
 :root {
     --acc-red: #b3261e;
     --acc-orange: #ef6b2e;
-    --acc-ink: #2f1f18;
-    --acc-muted: #6b7280;
-    --acc-border: #e8ddd2;
-    --acc-shadow: 0 16px 36px rgba(37, 20, 12, 0.12);
+    --acc-ink: #171922;
+    --acc-muted: #667085;
+    --acc-border: #efddcd;
+    --acc-shadow: 0 14px 34px rgba(23, 25, 34, 0.06);
 }
 
 .address-embed-wrap {
-    padding: 4px;
+    padding: 20px;
     background: transparent;
-    font-family: 'Plus Jakarta Sans', 'Segoe UI', Tahoma, sans-serif;
+    font-family: inherit;
 }
 
 .address-embed-container {
@@ -773,13 +775,10 @@ if (!$is_embedded) {
 }
 
 .account-page {
-    padding: 86px 0 56px;
+    padding: 50px 0 80px;
     min-height: 100vh;
-    font-family: 'Plus Jakarta Sans', 'Segoe UI', Tahoma, sans-serif;
-    background:
-        radial-gradient(circle at 95% -5%, rgba(239, 107, 46, 0.2), transparent 38%),
-        radial-gradient(circle at 0% 20%, rgba(179, 38, 30, 0.11), transparent 35%),
-        linear-gradient(180deg, #fffaf4 0%, #fff5ea 44%, #fffdf8 100%);
+    font-family: inherit;
+    background: linear-gradient(180deg, #fff9f2 0%, #fff4e8 100%);
 }
 
 .address-book-head {
@@ -788,37 +787,42 @@ if (!$is_embedded) {
     align-items: flex-start;
     gap: 14px;
     margin-bottom: 20px;
+    border-bottom: 1px solid #f3e8de;
+    padding-bottom: 16px;
 }
 
 .address-book-head h1,
 .address-book-head h2 {
     margin: 0;
-    color: var(--acc-ink);
+    color: #171922;
+    font-weight: 800;
 }
 
 .account-subtitle {
     margin: 6px 0 0;
-    color: var(--acc-muted);
+    color: #667085;
+    font-size: 0.9rem;
 }
 
 .address-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 18px;
+    gap: 20px;
 }
 
 .address-card {
-    background: #fff;
-    border: 1px solid var(--acc-border);
-    border-radius: 16px;
-    box-shadow: var(--acc-shadow);
+    background: #ffffff;
+    border: 1px solid #efddcd;
+    border-radius: 18px;
+    box-shadow: 0 14px 34px rgba(23, 25, 34, 0.06);
     padding: 24px;
 }
 
 .address-card h2 {
     margin: 0 0 16px;
-    color: var(--acc-ink);
+    color: #171922;
     font-size: 1.25rem;
+    font-weight: 800;
 }
 
 .form-row {
@@ -828,33 +832,37 @@ if (!$is_embedded) {
 }
 
 .form-group {
-    margin-bottom: 14px;
+    margin-bottom: 16px;
 }
 
 .form-group label {
     display: block;
     margin-bottom: 7px;
-    color: #3c2d25;
-    font-weight: 600;
+    color: #171922;
+    font-weight: 700;
+    font-size: 0.92rem;
 }
 
 .form-group input,
 .form-group textarea,
 .form-group select {
     width: 100%;
-    border: 1px solid #e1d5c8;
-    border-radius: 10px;
-    background: #fffefb;
+    border: 1px solid #efddcd;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #171922;
     padding: 11px 12px;
+    font-size: 0.95rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .form-group input:focus,
 .form-group textarea:focus,
 .form-group select:focus {
     outline: none;
-    border-color: #d56f36;
-    box-shadow: 0 0 0 3px rgba(239, 107, 46, 0.15);
-    background: #fff;
+    border-color: #b3261e;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.12);
+    background: #ffffff;
 }
 
 .psgc-help {
@@ -1160,60 +1168,148 @@ body.theme-dark .empty-addresses {
     color: #ccb7aa;
 }
 
+body.dark-mode .account-page,
+body.theme-dark .account-page {
+    background: #0f172a !important;
+}
+
+body.dark-mode .address-book-head,
+body.theme-dark .address-book-head {
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .address-book-head h1,
+body.dark-mode .address-book-head h2,
+body.theme-dark .address-book-head h1,
+body.theme-dark .address-book-head h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .account-subtitle,
+body.theme-dark .account-subtitle {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .address-card,
+body.dark-mode .address-item,
+body.dark-mode .edit-details-form,
+body.dark-mode .address-map-modal,
 body.theme-dark .address-card,
 body.theme-dark .address-item,
 body.theme-dark .edit-details-form,
 body.theme-dark .address-map-modal {
-    background: #201a16;
-    border-color: #3a2f27;
-    color: #f3ece6;
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
 }
 
+body.dark-mode .address-card h2,
+body.theme-dark .address-card h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .address-item.is-default,
 body.theme-dark .address-item.is-default {
-    background: #2b211b;
+    background: #111827 !important;
+    border-color: #ef4444 !important;
 }
 
+body.dark-mode .address-item-title,
+body.dark-mode .address-item strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .address-item-location,
+body.dark-mode .address-item p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .form-group label,
+body.dark-mode .checkbox-row,
 body.theme-dark .form-group label,
 body.theme-dark .checkbox-row {
-    color: #d9c3b5;
+    color: #f8fafc !important;
 }
 
+body.dark-mode .form-group input,
+body.dark-mode .form-group textarea,
+body.dark-mode .form-group select,
+body.dark-mode .address-map-search-row input,
 body.theme-dark .form-group input,
 body.theme-dark .form-group textarea,
 body.theme-dark .form-group select,
 body.theme-dark .address-map-search-row input {
-    background: #2b241f;
-    border-color: #46372c;
-    color: #fff6ef;
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
 }
 
+body.dark-mode .form-group input:focus,
+body.dark-mode .form-group textarea:focus,
+body.dark-mode .form-group select:focus,
+body.theme-dark .form-group input:focus,
+body.theme-dark .form-group textarea:focus,
+body.theme-dark .form-group select:focus {
+    border-color: #b3261e !important;
+    background: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .psgc-help,
 body.theme-dark .psgc-help {
-    color: #c4ac9d;
+    color: #94a3b8 !important;
 }
 
+body.dark-mode .btn-outline,
 body.theme-dark .btn-outline {
-    background: #2e251f;
-    border-color: #4b3b2f;
-    color: #ecd7c9;
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
 }
 
+body.dark-mode .btn-outline:hover,
 body.theme-dark .btn-outline:hover {
-    background: #3a2e26;
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #ffffff !important;
 }
 
+body.dark-mode .btn-danger,
 body.theme-dark .btn-danger {
-    border-color: #a94433;
-    background: #4a221c;
-    color: #f2bcb3;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    background: rgba(179, 38, 30, 0.2) !important;
+    color: #f87171 !important;
 }
 
+body.dark-mode .address-map-overlay,
 body.theme-dark .address-map-overlay {
-    background: rgba(0, 0, 0, 0.65);
+    background: rgba(0, 0, 0, 0.65) !important;
 }
 
+body.dark-mode .address-map-head,
+body.dark-mode .address-map-foot {
+    border-color: #334155 !important;
+}
+
+body.dark-mode .address-map-head h3 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .address-map-head p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .address-map-close {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode #addressMapCanvas,
 body.theme-dark #addressMapCanvas {
-    background: #2b241f;
-    border-color: #46372c;
+    background: #0f172a !important;
+    border-color: #334155 !important;
 }
 
 @media (max-width: 900px) {
@@ -1435,10 +1531,22 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         return '';
     };
+    const normalizeAddressText = (value) => {
+        let text = String(value || '');
+        if (!text) return '';
+        text = text.replace(/\u00c3\u0192\u00c2\u00b1/g, 'ñ');
+        text = text.replace(/\u00c3\u00b1/g, 'ñ');
+        text = text.replace(/\u00c3\u0091/g, 'Ñ');
+        text = text.replace(/\u251c\u2592/g, 'ñ');
+        text = text.replace(/\u251c\u00e6/g, 'Ñ');
+        text = text.replace(/\u0393\u00f6\u00a3\u0393\u00fb\u00c6/g, 'ñ');
+        text = text.replace(/Dasmari(?:[^a-zA-Z0-9\s]{1,6}|n)as/gi, 'Dasmariñas');
+        return text.trim();
+    };
     const extractAddressParts = (components = []) => {
         const getLongName = (typeMatcher) => {
             const match = (components || []).find((component) => (component.types || []).some(typeMatcher));
-            return match?.long_name || '';
+            return normalizeAddressText(match?.long_name || '');
         };
         return {
             region: getLongName((type) => type === 'administrative_area_level_1'),
@@ -1450,11 +1558,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const composeAddressFromParts = (parts = {}, street = '') => {
         const values = [
-            String(street || '').trim(),
-            String(parts?.barangay || '').trim(),
-            String(parts?.city || '').trim(),
-            String(parts?.province || '').trim(),
-            String(parts?.region || '').trim()
+            normalizeAddressText(street || ''),
+            normalizeAddressText(parts?.barangay || ''),
+            normalizeAddressText(parts?.city || ''),
+            normalizeAddressText(parts?.province || ''),
+            normalizeAddressText(parts?.region || '')
         ].filter(Boolean);
         return values.join(', ');
     };
@@ -1475,8 +1583,8 @@ document.addEventListener('DOMContentLoaded', function () {
                             || types.includes('locality');
                     }) || results[0];
                     const parts = extractAddressParts(prioritized?.address_components || []);
-                    const formatted = String(prioritized?.formatted_address || results[0]?.formatted_address || '').trim()
-                        || composeAddressFromParts(parts, '');
+                    const rawFormatted = String(prioritized?.formatted_address || results[0]?.formatted_address || '').trim();
+                    const formatted = normalizeAddressText(rawFormatted || composeAddressFromParts(parts, ''));
                     resolve({ formatted, parts });
                     return;
                 }
@@ -1506,13 +1614,14 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await response.json();
             const address = data?.address || {};
             const parts = {
-                barangay: String(address.suburb || address.neighbourhood || address.village || address.hamlet || '').trim(),
-                city: String(address.city || address.town || address.municipality || address.county || '').trim(),
-                province: String(address.state_district || address.province || address.county || '').trim(),
-                region: String(address.state || address.region || '').trim()
+                barangay: normalizeAddressText(address.suburb || address.neighbourhood || address.village || address.hamlet || ''),
+                city: normalizeAddressText(address.city || address.town || address.municipality || address.county || ''),
+                province: normalizeAddressText(address.state_district || address.province || address.county || ''),
+                region: normalizeAddressText(address.state || address.region || '')
             };
-            const street = String(address.road || address.residential || address.pedestrian || '').trim();
-            const formatted = String(data?.display_name || '').trim() || composeAddressFromParts(parts, street);
+            const street = normalizeAddressText(address.road || address.residential || address.pedestrian || '');
+            const rawFormatted = String(data?.display_name || '').trim();
+            const formatted = normalizeAddressText(rawFormatted || composeAddressFromParts(parts, street));
             return { formatted, parts };
         } catch (error) {
             console.error('Nominatim reverse geocode failed:', error);
@@ -1920,104 +2029,52 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         setTimeout(() => {
-            if (window.google && google.maps && google.maps.event && mapInstance) {
-                google.maps.event.trigger(mapInstance, 'resize');
-                const markerPosition = mapMarker?.getPosition?.();
-                if (markerPosition) {
-                    mapInstance.setCenter(markerPosition);
+            if (mapInstance) {
+                mapInstance.invalidateSize();
+                const markerLatLng = mapMarker?.getLatLng?.();
+                if (markerLatLng) {
+                    mapInstance.setView(markerLatLng, mapInstance.getZoom());
                 }
             }
             if (mapSearchInput) mapSearchInput.focus();
         }, 80);
     };
 
-    const ensureGoogleMapsLoaded = () => {
-        if (window.google && window.google.maps) return Promise.resolve(true);
-        if (mapsLoadPromise) return mapsLoadPromise;
-        if (!addressBookGoogleMapsApiKey) {
-            fireSwal('Map Unavailable', 'Google Maps API key is missing.', 'error');
-            return Promise.resolve(false);
-        }
-
-        mapsLoadPromise = new Promise((resolve) => {
-            const existing = document.querySelector('script[data-address-book-map="1"]');
-            if (existing) {
-                existing.addEventListener('load', () => resolve(!!(window.google && window.google.maps)), { once: true });
-                existing.addEventListener('error', () => resolve(false), { once: true });
-                return;
-            }
-
-            const script = document.createElement('script');
-            script.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(addressBookGoogleMapsApiKey) + '&libraries=places';
-            script.async = true;
-            script.defer = true;
-            script.dataset.addressBookMap = '1';
-            script.onload = () => resolve(!!(window.google && window.google.maps));
-            script.onerror = () => resolve(false);
-            document.head.appendChild(script);
-        });
-
-        return mapsLoadPromise;
-    };
-
     const ensureMapReady = async () => {
-        const loaded = await ensureGoogleMapsLoaded();
-        if (!loaded || !window.google || !google.maps || !mapCanvas) {
-            fireSwal('Map Unavailable', 'Google Maps failed to load. Please refresh and try again.', 'error');
+        if (!window.L || !mapCanvas) {
+            fireSwal('Map Unavailable', 'Leaflet Map failed to load. Please refresh and try again.', 'error');
             return false;
         }
 
         if (!mapInstance) {
-            mapInstance = new google.maps.Map(mapCanvas, {
-                center: defaultCoordinates,
-                zoom: 15,
-                mapTypeControl: false,
-                streetViewControl: false,
-                fullscreenControl: false
-            });
+            mapInstance = L.map(mapCanvas).setView([defaultCoordinates.lat, defaultCoordinates.lng], 15);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(mapInstance);
 
-            mapGeocoder = new google.maps.Geocoder();
-            mapMarker = new google.maps.Marker({
-                map: mapInstance,
-                draggable: true,
-                position: defaultCoordinates
-            });
+            mapMarker = L.marker([defaultCoordinates.lat, defaultCoordinates.lng], {
+                draggable: true
+            }).addTo(mapInstance);
 
-            mapInstance.addListener('click', (event) => {
-                if (!event || !event.latLng) return;
-                const point = { lat: event.latLng.lat(), lng: event.latLng.lng() };
+            mapInstance.on('click', (event) => {
+                if (!event || !event.latlng) return;
+                const point = { lat: event.latlng.lat, lng: event.latlng.lng };
                 setMapPoint(point, true);
             });
 
-            mapMarker.addListener('dragend', () => {
-                const markerPos = mapMarker.getPosition();
-                if (!markerPos) return;
-                const point = { lat: markerPos.lat(), lng: markerPos.lng() };
+            mapMarker.on('dragend', () => {
+                const latlng = mapMarker.getLatLng();
+                if (!latlng) return;
+                const point = { lat: latlng.lat, lng: latlng.lng };
                 setMapPoint(point, true);
             });
-
-            if (mapSearchInput && google.maps.places && typeof google.maps.places.Autocomplete === 'function') {
-                mapAutocomplete = new google.maps.places.Autocomplete(mapSearchInput);
-                mapAutocomplete.bindTo('bounds', mapInstance);
-                mapAutocomplete.addListener('place_changed', () => {
-                    const place = mapAutocomplete.getPlace();
-                    if (!place || !place.geometry || !place.geometry.location) return;
-                    const point = { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() };
-                    setMapPoint(point, false);
-                    selectedAddressText = String(place.formatted_address || mapSearchInput.value || '').trim();
-                    selectedAddressComponents = extractAddressParts(place.address_components || []);
-                    if (selectedAddressText && mapSearchInput) mapSearchInput.value = selectedAddressText;
-                });
-            }
         }
         return true;
     };
 
     const reverseGeocode = async (lat, lng) => {
-        const googleResult = await reverseGeocodeFromGoogle(lat, lng);
-        if ((googleResult?.formatted || '') !== '' || composeAddressFromParts(googleResult?.parts || {}, '') !== '') {
-            return googleResult;
-        }
         const fallbackResult = await reverseGeocodeFromNominatim(lat, lng);
         if ((fallbackResult?.formatted || '') !== '' || composeAddressFromParts(fallbackResult?.parts || {}, '') !== '') {
             return fallbackResult;
@@ -2025,51 +2082,23 @@ document.addEventListener('DOMContentLoaded', function () {
         return { formatted: '', parts: null };
     };
 
-    const geocodeAddress = (addressText) => {
-        if (!addressText) return Promise.resolve(false);
-        const applyFromFallback = async () => {
-            const fallback = await forwardGeocodeFromNominatim(addressText);
-            if (!fallback || !fallback.point) {
-                return false;
-            }
-            await setMapPoint(fallback.point, false);
-            selectedAddressText = String(fallback.formatted || addressText).trim();
-            selectedAddressComponents = fallback.parts || null;
-            if (mapSearchInput) mapSearchInput.value = selectedAddressText;
-            return true;
-        };
-
-        if (!mapGeocoder || !mapGoogleGeocodingAvailable) {
-            return applyFromFallback();
+    const geocodeAddress = async (addressText) => {
+        if (!addressText) return false;
+        const fallback = await forwardGeocodeFromNominatim(addressText);
+        if (!fallback || !fallback.point) {
+            return false;
         }
-
-        return new Promise((resolve) => {
-            mapGeocoder.geocode({ address: addressText }, async (results, status) => {
-                if (status !== 'OK' || !Array.isArray(results) || !results.length || !results[0].geometry || !results[0].geometry.location) {
-                    if (isGoogleGeocodingUnavailableStatus(status)) {
-                        mapGoogleGeocodingAvailable = false;
-                    }
-                    resolve(await applyFromFallback());
-                    return;
-                }
-                const point = {
-                    lat: results[0].geometry.location.lat(),
-                    lng: results[0].geometry.location.lng()
-                };
-                setMapPoint(point, false);
-                selectedAddressText = String(results[0].formatted_address || addressText).trim();
-                selectedAddressComponents = extractAddressParts(results[0].address_components || []);
-                if (mapSearchInput) mapSearchInput.value = selectedAddressText;
-                resolve(true);
-            });
-        });
+        await setMapPoint(fallback.point, false);
+        selectedAddressText = String(fallback.formatted || addressText).trim();
+        selectedAddressComponents = fallback.parts || null;
+        if (mapSearchInput) mapSearchInput.value = selectedAddressText;
+        return true;
     };
 
     const setMapPoint = async (point, lookupAddress) => {
         if (!mapInstance || !mapMarker || !point) return;
-        mapInstance.setCenter(point);
-        mapInstance.setZoom(16);
-        mapMarker.setPosition(point);
+        mapInstance.setView([point.lat, point.lng], 16);
+        mapMarker.setLatLng([point.lat, point.lng]);
         selectedCoordinates = point;
 
         if (lookupAddress) {

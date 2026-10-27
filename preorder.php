@@ -15,6 +15,7 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 require_once 'includes/config.php';
+require_once 'includes/preorder_schedule_helper.php';
 $google_maps_api_key = function_exists('getGoogleMapsApiKey')
     ? getGoogleMapsApiKey()
     : trim((string)(defined('GOOGLE_MAPS_API_KEY') ? GOOGLE_MAPS_API_KEY : (getenv('GOOGLE_MAPS_API_KEY') ?: '')));
@@ -66,6 +67,40 @@ function preorderExtractAddressParts($rawAddress) {
 }
 
 $requested_seller_id = isset($_GET['seller_id']) ? (int)$_GET['seller_id'] : 0;
+$requested_product_id = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
+// Cart prefill from checkout.php switch — format: "id:qty,id:qty,..."
+$prefill_cart_items = [];
+if (!empty($_GET['prefill'])) {
+    $prefill_raw = (string)$_GET['prefill'];
+    foreach (explode(',', $prefill_raw) as $prefill_pair) {
+        $prefill_pair = trim($prefill_pair);
+        if (strpos($prefill_pair, ':') !== false) {
+            [$pfid, $pfqty] = explode(':', $prefill_pair, 2);
+            $pfid  = (int)$pfid;
+            $pfqty = max(1, (int)$pfqty);
+            if ($pfid > 0) {
+                $prefill_cart_items[] = ['id' => $pfid, 'qty' => $pfqty];
+            }
+        }
+    }
+}
+
+if ($requested_product_id > 0 && $requested_seller_id <= 0) {
+    $p_stmt = mysqli_prepare($conn, "SELECT seller_id FROM products WHERE id = ? LIMIT 1");
+    if ($p_stmt) {
+        mysqli_stmt_bind_param($p_stmt, "i", $requested_product_id);
+        mysqli_stmt_execute($p_stmt);
+        $p_res = mysqli_stmt_get_result($p_stmt);
+        if ($p_row = mysqli_fetch_assoc($p_res)) {
+            $resolved_p_seller = (int)($p_row['seller_id'] ?? 0);
+            if ($resolved_p_seller > 0) {
+                $requested_seller_id = $resolved_p_seller;
+            }
+        }
+        mysqli_stmt_close($p_stmt);
+    }
+}
+
 if ($requested_seller_id > 0) {
     $_SESSION['storefront_seller_id'] = $requested_seller_id;
 }
@@ -91,6 +126,9 @@ if ($active_seller_id > 0) {
         mysqli_stmt_close($store_stmt);
     }
 }
+
+$preorder_schedule = posGetSellerSchedule($conn, (int)$active_seller_id);
+$initial_calendar_data = posGetCalendarAvailability($conn, (int)$active_seller_id);
 
 $user_profile = [
     'full_name' => '',
@@ -139,53 +177,40 @@ if ($prefill_province === '') {
     $prefill_province = 'Cavite';
 }
 
-// Fetch products with optional tenant/storefront scope
-$products_base_sql = "SELECT id, product_id, name, description, price, image, category
-                      FROM products
-                      WHERE is_active = 1
-                        AND (is_archived = 0 OR is_archived IS NULL)";
+// Fetch products for pre-ordering (load full catalog with seller association and live inventory)
+$products_sql = "SELECT p.id, p.product_id, p.seller_id, p.name, p.description, p.price, p.image, p.category,
+                        COALESCE(latest_i.current_stock, p.stock) AS stock
+                 FROM products p
+                 LEFT JOIN (
+                     SELECT i.product_id, i.current_stock
+                     FROM inventory i
+                     INNER JOIN (
+                         SELECT product_id, MAX(inventory_date) AS max_date
+                         FROM inventory
+                         WHERE is_archived = 0
+                         GROUP BY product_id
+                     ) im ON i.product_id = im.product_id AND i.inventory_date = im.max_date AND i.is_archived = 0
+                 ) latest_i ON p.id = latest_i.product_id
+                 WHERE p.is_active = 1
+                   AND (p.is_archived = 0 OR p.is_archived IS NULL)
+                 ORDER BY p.category, p.name ASC";
+$products_result = mysqli_query($conn, $products_sql);
 $all_products = [];
-
-if ($active_seller_id > 0) {
-    $products_sql = $products_base_sql . " AND seller_id = ? ORDER BY category, name ASC";
-    $products_stmt = mysqli_prepare($conn, $products_sql);
-    if ($products_stmt) {
-        mysqli_stmt_bind_param($products_stmt, "i", $active_seller_id);
-        mysqli_stmt_execute($products_stmt);
-        $products_result = mysqli_stmt_get_result($products_stmt);
-        if ($products_result) {
-            while ($row = mysqli_fetch_assoc($products_result)) {
-                $all_products[] = [
-                    'id' => (int)$row['id'],
-                    'product_id' => (string)($row['product_id'] ?? ''),
-                    'name' => (string)($row['name'] ?? ''),
-                    'description' => (string)($row['description'] ?? ''),
-                    'price' => (float)($row['price'] ?? 0),
-                    'image' => (string)($row['image'] ?? 'default.jpg'),
-                    'category' => (string)($row['category'] ?? 'lechon')
-                ];
-            }
-            mysqli_free_result($products_result);
-        }
-        mysqli_stmt_close($products_stmt);
+if ($products_result) {
+    while ($row = mysqli_fetch_assoc($products_result)) {
+        $all_products[] = [
+            'id' => (int)$row['id'],
+            'product_id' => (string)($row['product_id'] ?? ''),
+            'seller_id' => ($row['seller_id'] !== null && (int)$row['seller_id'] > 0) ? (int)$row['seller_id'] : 1,
+            'name' => (string)($row['name'] ?? ''),
+            'description' => (string)($row['description'] ?? ''),
+            'price' => (float)($row['price'] ?? 0),
+            'stock' => (int)($row['stock'] ?? 0),
+            'image' => (string)($row['image'] ?? 'default.jpg'),
+            'category' => (string)($row['category'] ?? 'lechon')
+        ];
     }
-} else {
-    $products_sql = $products_base_sql . " ORDER BY category, name ASC";
-    $products_result = mysqli_query($conn, $products_sql);
-    if ($products_result) {
-        while ($row = mysqli_fetch_assoc($products_result)) {
-            $all_products[] = [
-                'id' => (int)$row['id'],
-                'product_id' => (string)($row['product_id'] ?? ''),
-                'name' => (string)($row['name'] ?? ''),
-                'description' => (string)($row['description'] ?? ''),
-                'price' => (float)($row['price'] ?? 0),
-                'image' => (string)($row['image'] ?? 'default.jpg'),
-                'category' => (string)($row['category'] ?? 'lechon')
-            ];
-        }
-        mysqli_free_result($products_result);
-    }
+    mysqli_free_result($products_result);
 }
 
 // Get distinct categories for filter
@@ -198,10 +223,2449 @@ sort($categories);
 
 $store_scope_query = $active_seller_id > 0 ? '?seller_id=' . $active_seller_id : '';
 
+function preorderGetStoreImage($store_id, $store_name, $custom_image = '') {
+    $custom = trim((string)$custom_image);
+    if ($custom !== '' && $custom !== 'default.jpg') {
+        if (str_starts_with($custom, 'http') || str_starts_with($custom, 'images/') || str_starts_with($custom, 'uploads/')) {
+            return $custom;
+        }
+        if (file_exists('uploads/business_logos/' . $custom)) {
+            return 'uploads/business_logos/' . $custom;
+        }
+        if (file_exists('images/' . $custom)) {
+            return 'images/' . $custom;
+        }
+    }
+    
+    $image_map = [
+        1 => 'images/store-bg.jpg',               // Dasmariñas Central Branch
+        2 => 'images/panda_preorder_lechon.jpg',  // Bacoor Express Branch
+        3 => 'images/about-us-bg.jpg',             // Imus Heritage Branch
+        4 => 'images/hero-bg.jpg',                 // Tagaytay Ridge Branch
+        5 => 'images/panda_fresh_lechon.jpg',     // Janna Restaurant
+        6 => 'images/store-bg.jpg',               // Justine Business
+        7 => 'images/panda_preorder_lechon.jpg',  // JM Lechon
+    ];
+    if (isset($image_map[$store_id])) {
+        return $image_map[$store_id];
+    }
+    
+    $name_lower = strtolower((string)$store_name);
+    if (str_contains($name_lower, 'lydia')) return 'images/panda_fresh_lechon.jpg';
+    if (str_contains($name_lower, 'linda')) return 'images/about-us-bg.jpg';
+    if (str_contains($name_lower, 'tagaytay')) return 'images/hero-bg.jpg';
+    if (str_contains($name_lower, 'bacoor')) return 'images/panda_preorder_lechon.jpg';
+    if (str_contains($name_lower, 'imus')) return 'images/about-us-bg.jpg';
+    return 'images/store-bg.jpg';
+}
+
+$official_owner_ids = [0, 1, 42, 43, 44, 45];
+
+// Fetch active store locations & partner vendor stores for pick-up / pre-order
+$stores = [];
+$branch_sql = "SELECT sl.store_id AS id, sl.store_id, sl.owner_user_id, sl.store_name, sl.address, sl.city, sl.province, sl.phone, sl.opening_hours, sl.opening_time, sl.closing_time, sl.latitude, sl.longitude,
+                      CASE WHEN sps.id IS NOT NULL AND sps.is_active = 1 THEN 1 ELSE 0 END AS has_reservation_schedule,
+                      sps.lead_time_days, sps.cutoff_time, sps.max_advance_days
+               FROM store_locations sl
+               LEFT JOIN shop_preorder_schedules sps ON (sps.seller_id = sl.owner_user_id OR sps.seller_id = sl.store_id) AND sps.is_active = 1
+               WHERE sl.is_active = 1
+               ORDER BY has_reservation_schedule DESC, sl.store_name ASC";
+$branch_res = mysqli_query($conn, $branch_sql);
+if ($branch_res) {
+    while ($r = mysqli_fetch_assoc($branch_res)) {
+        $b_owner = (int)($r['owner_user_id'] ?? 1);
+        $is_partner = ($b_owner > 0 && !in_array($b_owner, $official_owner_ids, true));
+        $r['seller_id'] = $b_owner;
+        $r['store_category'] = $is_partner ? 'partner' : 'branch';
+        $r['store_type_label'] = $is_partner ? 'Partner Store' : 'Pickup Branch';
+        $r['image'] = preorderGetStoreImage((int)$r['store_id'], $r['store_name']);
+        $stores[] = $r;
+    }
+    mysqli_free_result($branch_res);
+}
+
+// Add approved partner organization stores that are not already listed as physical branches
+$seller_sql = "SELECT u.id AS seller_id, u.full_name, u.business_name, u.business_type, u.business_logo, u.profile_image, u.address, u.phone,
+                      sl.store_id, sl.latitude, sl.longitude, sl.city, sl.province,
+                      CASE WHEN sps.id IS NOT NULL AND sps.is_active = 1 THEN 1 ELSE 0 END AS has_reservation_schedule,
+                      sps.lead_time_days, sps.cutoff_time, sps.max_advance_days
+               FROM users u
+               LEFT JOIN store_locations sl ON sl.owner_user_id = u.id AND sl.is_active = 1
+               LEFT JOIN shop_preorder_schedules sps ON sps.seller_id = u.id AND sps.is_active = 1
+               WHERE (u.account_type = 'organization' OR u.user_type = 'seller') AND u.is_active = 1";
+$seller_res = mysqli_query($conn, $seller_sql);
+if ($seller_res) {
+    while ($r = mysqli_fetch_assoc($seller_res)) {
+        $sid = (int)$r['seller_id'];
+        $already_in = false;
+        foreach ($stores as $st) {
+            if ((int)($st['owner_user_id'] ?? 0) === $sid) {
+                $already_in = true;
+                break;
+            }
+        }
+        if (!$already_in) {
+            $name = trim((string)$r['business_name']) ?: (trim((string)$r['full_name']) . ' Store');
+            $city = !empty($r['city']) ? $r['city'] : 'Cavite';
+            $prov = !empty($r['province']) ? $r['province'] : 'Cavite';
+            $partner_img = !empty($r['business_logo']) ? $r['business_logo'] : (!empty($r['profile_image']) ? $r['profile_image'] : '');
+            $stores[] = [
+                'id' => 9000 + $sid,
+                'store_id' => !empty($r['store_id']) ? (int)$r['store_id'] : 1,
+                'owner_user_id' => $sid,
+                'seller_id' => $sid,
+                'store_name' => $name,
+                'address' => $r['address'] ?: ($city . ', Cavite'),
+                'city' => $city,
+                'province' => $prov,
+                'phone' => $r['phone'] ?? '',
+                'opening_hours' => '8:00 AM - 8:00 PM',
+                'opening_time' => '08:00:00',
+                'closing_time' => '20:00:00',
+                'latitude' => !empty($r['latitude']) ? $r['latitude'] : '14.3294',
+                'longitude' => !empty($r['longitude']) ? $r['longitude'] : '120.9367',
+                'store_category' => 'partner',
+                'store_type_label' => 'Partner Store',
+                'image' => preorderGetStoreImage(9000 + $sid, $name, $partner_img),
+                'has_reservation_schedule' => (int)$r['has_reservation_schedule'],
+                'lead_time_days' => $r['lead_time_days'] ?? 1,
+                'cutoff_time' => $r['cutoff_time'] ?? '18:00:00',
+                'max_advance_days' => $r['max_advance_days'] ?? 30
+            ];
+        }
+    }
+    mysqli_free_result($seller_res);
+}
+
+// Split into Official Branches and Partner Stores for hierarchical presentation
+$official_branches = array_filter($stores, function($s) {
+    return ($s['store_category'] ?? 'branch') === 'branch';
+});
+$partner_stores = array_filter($stores, function($s) {
+    return ($s['store_category'] ?? '') === 'partner';
+});
+
+// Extract unique cities for quick filter pills
+$store_cities = [];
+foreach ($stores as $s) {
+    $c = trim((string)($s['city'] ?? ''));
+    if ($c !== '' && !in_array($c, $store_cities, true)) {
+        $store_cities[] = $c;
+    }
+}
+sort($store_cities);
+
 $time_slots = ['8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM', '7:00 PM', '8:00 PM', '9:00 PM'];
 
 include 'includes/header.php';
 ?>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+:root {
+    --primary-color: #b3261e;
+    --primary-dark: #981b15;
+    --pre-red: #b3261e;
+    --pre-red-hover: #981b15;
+    --pre-ink: #101828;
+    --pre-muted: #475467;
+    --pre-border: #eaecf0;
+    --pre-border-input: #d0d5dd;
+    --pre-bg: #f8f9fa;
+    --pre-card: #ffffff;
+    --text-main: #101828;
+    --text-light: #475467;
+    --bg-light: #f8f9fa;
+    --card-radius: 16px;
+    --transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.04);
+    --shadow-md: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+
+body {
+    background: var(--pre-bg) !important;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: var(--pre-ink);
+}
+
+/* Page Header - Clean, Flat, High-Contrast */
+.page-header {
+    background: #ffffff;
+    border-bottom: 1px solid var(--pre-border);
+    padding: 32px 20px 24px;
+    text-align: center;
+    margin-bottom: 0;
+    position: static;
+}
+
+.page-header h1 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--pre-ink);
+    margin: 0 0 6px;
+    letter-spacing: -0.02em;
+    text-shadow: none;
+}
+
+.page-header p {
+    font-size: 0.95rem;
+    color: var(--pre-muted);
+    max-width: 600px;
+    margin: 0 auto;
+    font-weight: 400;
+    opacity: 1;
+}
+
+.preorder-section {
+    padding: 24px 0 80px;
+    background-color: var(--pre-bg);
+    min-height: 80vh;
+}
+
+.preorder-container {
+    background: #ffffff;
+    border: 1px solid var(--pre-border);
+    border-radius: var(--card-radius);
+    box-shadow: var(--shadow-sm);
+    padding: 28px;
+    max-width: 900px;
+    margin: 0 auto;
+    position: relative;
+}
+
+.preorder-container.expanded {
+    max-width: 1200px;
+}
+
+/* Checkout Type Switch */
+.checkout-type-switch {
+    border: 1px solid var(--pre-border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    background: #f8f9fa;
+    margin-bottom: 20px;
+}
+
+.checkout-type-title {
+    margin: 0 0 8px;
+    color: var(--pre-ink);
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.checkout-type-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.checkout-type-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    text-decoration: none;
+    padding: 8px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--pre-border-input);
+    background: #ffffff;
+    color: #344054;
+    font-weight: 700;
+    font-size: 0.85rem;
+    transition: all 0.15s ease;
+}
+
+.checkout-type-chip:hover {
+    background: #f8f9fa;
+    color: var(--pre-red);
+    border-color: #d0d5dd;
+}
+
+.checkout-type-chip.is-active {
+    background: var(--pre-red);
+    border-color: var(--pre-red);
+    color: #ffffff;
+    cursor: default;
+    pointer-events: none;
+}
+
+.checkout-type-note {
+    margin: 8px 0 0;
+    color: var(--pre-muted);
+    font-size: 0.8rem;
+}
+
+/* Progress Stepper */
+.progress-bar-container {
+    margin-bottom: 24px;
+    padding: 16px 20px 12px;
+    border: 1px solid var(--pre-border);
+    border-radius: 14px;
+    background: #ffffff;
+}
+
+.progress-steps {
+    display: flex;
+    justify-content: space-between;
+    position: relative;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.progress-steps::before {
+    content: '';
+    position: absolute;
+    top: 18px;
+    left: 40px;
+    right: 40px;
+    height: 4px;
+    background: #eaecf0;
+    z-index: 0;
+    border-radius: 4px;
+}
+
+.progress-step {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    width: 90px;
+}
+
+.progress-step-circle {
+    width: 36px;
+    height: 36px;
+    background: #ffffff;
+    border: 2px solid #d0d5dd;
+    color: #98a2b3;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 0.9rem;
+    margin: 0 auto 8px;
+    transition: var(--transition);
+}
+
+.progress-step.active .progress-step-circle {
+    border-color: var(--pre-red);
+    background: var(--pre-red);
+    color: #ffffff;
+    transform: scale(1.08);
+    box-shadow: 0 0 0 4px rgba(179, 38, 30, 0.15);
+}
+
+.progress-step.completed .progress-step-circle {
+    border-color: #027a48;
+    background: #027a48;
+    color: #ffffff;
+}
+
+.progress-step-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #667085;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.progress-step.active .progress-step-label {
+    color: var(--pre-red);
+}
+
+.progress-step.completed .progress-step-label {
+    color: #027a48;
+}
+
+/* Steps Content */
+.step-content {
+    display: none;
+    animation: fadeIn 0.25s ease;
+    border: 1px solid var(--pre-border);
+    border-radius: 16px;
+    background: #ffffff;
+    padding: 24px;
+}
+
+.step-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.step-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--pre-ink);
+    margin-bottom: 20px;
+    text-align: left;
+    position: relative;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f2f4f7;
+}
+
+.tenant-scope-note {
+    margin: -6px 0 16px;
+    padding: 10px 14px;
+    border: 1px solid #b2ddff;
+    border-radius: 10px;
+    background: #eff8ff;
+    color: #175cd3;
+    font-size: 0.88rem;
+}
+
+.autofill-note {
+    margin: -4px 0 16px;
+    color: #475467;
+    font-size: 0.84rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.autofill-note i {
+    color: #027a48;
+}
+
+/* Category Filter Nav */
+.category-nav {
+    background-color: #ffffff;
+    padding: 8px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--pre-border);
+    box-shadow: none;
+    margin: 0 0 20px;
+    position: static;
+}
+
+.category-list {
+    display: flex;
+    justify-content: flex-start;
+    overflow-x: auto;
+    gap: 8px;
+    padding: 4px 0;
+    scrollbar-width: none;
+}
+
+.category-list::-webkit-scrollbar {
+    display: none;
+}
+
+.category-link {
+    white-space: nowrap;
+    padding: 7px 16px;
+    background-color: #ffffff;
+    color: #344054;
+    border: 1px solid var(--pre-border-input);
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.84rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.category-link:hover {
+    background: #f8f9fa;
+    color: var(--pre-red);
+    border-color: #d0d5dd;
+}
+
+.category-link.active {
+    background: var(--pre-red);
+    color: #ffffff;
+    border-color: var(--pre-red);
+    box-shadow: none;
+}
+
+/* Product Cards */
+#productList {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.product-card {
+    border: 1px solid var(--pre-border);
+    border-radius: 14px;
+    background: #ffffff;
+    padding: 0;
+    overflow: hidden;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+
+.product-card:hover {
+    transform: translateY(-2px);
+    border-color: #d0d5dd;
+    box-shadow: 0 4px 12px rgba(16, 24, 40, 0.08);
+}
+
+/* Sold out styling */
+.product-card.product-sold-out {
+    position: relative;
+    opacity: 0.6;
+    pointer-events: none;
+}
+.product-card.product-sold-out .product-image::after {
+    content: "SOLD OUT";
+    position: absolute;
+    inset: 0;
+    background: rgba(16,24,40,0.65);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+}
+
+
+.product-image {
+    height: 150px;
+    background: #f8f9fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.product-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.product-image i {
+    font-size: 2.5rem;
+    color: #cbd5e1;
+}
+
+.product-info {
+    padding: 14px;
+    text-align: left;
+}
+
+.product-info h4 {
+    margin: 0 0 4px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--pre-ink);
+}
+
+.product-price {
+    color: var(--pre-red);
+    font-weight: 800;
+    font-size: 1.05rem;
+    margin-bottom: 8px;
+}
+
+.product-card.selected {
+    border-color: var(--pre-red);
+    box-shadow: 0 0 0 2px rgba(179, 38, 30, 0.2);
+}
+
+.check-icon {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 24px;
+    height: 24px;
+    background: var(--pre-red);
+    color: #ffffff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    opacity: 0;
+    transform: scale(0);
+    transition: var(--transition);
+}
+
+.product-card.selected .check-icon {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Step 1: Hierarchical Store Selection & Storefront Image Cards */
+.store-selection-container {
+    background: #ffffff;
+    border: 1px solid var(--pre-border);
+    border-radius: 16px;
+    padding: 22px;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+
+.store-selection-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.store-selection-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.store-selection-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: #fff1f0;
+    color: #b3261e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.store-selection-title h3 {
+    margin: 0;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--pre-ink);
+}
+
+.store-selection-title p {
+    margin: 2px 0 0 0;
+    font-size: 0.82rem;
+    color: var(--pre-muted);
+}
+
+/* Hierarchy Category Tabs */
+.store-hierarchy-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.store-hierarchy-tab {
+    background: #ffffff;
+    border: 1.5px solid #eaecf0;
+    color: #344054;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.store-hierarchy-tab:hover {
+    border-color: #d0d5dd;
+    background: #f8f9fa;
+    color: #101828;
+}
+
+.store-hierarchy-tab.active {
+    background: #b3261e;
+    border-color: #b3261e;
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(179, 38, 30, 0.2);
+}
+
+.store-city-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #f2f4f7;
+}
+
+.store-city-pill {
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    color: #475467;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.store-city-pill:hover {
+    border-color: #d0d5dd;
+    color: #101828;
+    background: #ffffff;
+}
+
+.store-city-pill.active {
+    background: #101828;
+    border-color: #101828;
+    color: #ffffff;
+}
+
+/* Store Hierarchy Sections */
+.store-hierarchy-section {
+    margin-bottom: 22px;
+}
+
+.store-hierarchy-section:last-child {
+    margin-bottom: 0;
+}
+
+.store-hierarchy-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #eaecf0;
+}
+
+.store-hierarchy-heading h4 {
+    margin: 0;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.02rem;
+    font-weight: 800;
+    color: var(--pre-ink);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.store-hierarchy-heading span {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--pre-muted);
+}
+
+.store-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+/* Store Card Item with Image Banner */
+.store-card-item {
+    background: #ffffff;
+    border: 1.5px solid #eaecf0;
+    border-radius: 14px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.store-card-item:hover {
+    border-color: #d0d5dd;
+    box-shadow: 0 6px 18px rgba(16, 24, 40, 0.08);
+    transform: translateY(-2px);
+}
+
+.store-card-item.selected {
+    border-color: #b3261e;
+    box-shadow: 0 6px 20px rgba(179, 38, 30, 0.16);
+}
+
+.store-card-img-banner {
+    height: 125px;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    background-color: #f2f4f7;
+    border-bottom: 1px solid #eaecf0;
+}
+
+.store-card-img-banner::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.1) 40%, rgba(0,0,0,0.6) 100%);
+}
+
+.store-card-badge-top-left {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.store-card-badge-top-right {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+}
+
+.store-badge-branch {
+    background: #175cd3;
+    color: #ffffff;
+    font-size: 0.68rem;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.store-badge-partner {
+    background: #b54708;
+    color: #ffffff;
+    font-size: 0.68rem;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.store-badge-res-tag {
+    background: #027a48;
+    color: #ffffff;
+    font-size: 0.66rem;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.store-badge-dist {
+    background: rgba(16, 24, 40, 0.85);
+    backdrop-filter: blur(4px);
+    color: #ffffff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+.store-card-body {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    justify-content: space-between;
+}
+
+.store-card-name-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.store-card-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.98rem;
+    font-weight: 800;
+    color: var(--pre-ink);
+    margin: 0;
+    line-height: 1.3;
+}
+
+.store-card-check-pill {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid #d0d5dd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.68rem;
+    color: #ffffff;
+    background: transparent;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.store-card-item.selected .store-card-check-pill {
+    background: #b3261e;
+    border-color: #b3261e;
+}
+
+.store-card-address-row {
+    font-size: 0.78rem;
+    color: #475467;
+    margin-bottom: 8px;
+    line-height: 1.35;
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+}
+
+.store-card-address-row i {
+    color: #b3261e;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.store-card-info-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: #667085;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #f2f4f7;
+}
+
+.store-card-select-btn {
+    width: 100%;
+    margin-top: 10px;
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-align: center;
+    border: 1px solid #eaecf0;
+    background: #f8f9fa;
+    color: #344054;
+    transition: all 0.15s ease;
+}
+
+.store-card-item:hover .store-card-select-btn {
+    border-color: #d0d5dd;
+    background: #ffffff;
+    color: #101828;
+}
+
+.store-card-item.selected .store-card-select-btn {
+    border-color: #b3261e;
+    background: #b3261e;
+    color: #ffffff;
+}
+
+/* Progressive Disclosure for Store Selection -> Menu Display */
+.store-select-prompt-box {
+    background: #ffffff;
+    border: 2px dashed #d0d5dd;
+    border-radius: 16px;
+    padding: 42px 24px;
+    text-align: center;
+    margin-top: 10px;
+    transition: all 0.3s ease;
+}
+
+.store-select-prompt-icon {
+    width: 62px;
+    height: 62px;
+    border-radius: 50%;
+    background: #fff1f0;
+    color: #b3261e;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.65rem;
+    margin-bottom: 14px;
+}
+
+.store-select-prompt-box h4 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--pre-ink);
+    margin: 0 0 6px;
+}
+
+.store-select-prompt-box p {
+    font-size: 0.88rem;
+    color: var(--pre-muted);
+    max-width: 480px;
+    margin: 0 auto;
+    line-height: 1.45;
+}
+
+.dishes-menu-wrapper {
+    display: none;
+    margin-top: 20px;
+    animation: preorderMenuFadeIn 0.35s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+}
+
+.dishes-menu-wrapper.is-visible {
+    display: block;
+}
+
+@keyframes preorderMenuFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Step 1: 2-Column Product Catalog & Sticky Pre-Order Cart Layout */
+.preorder-step1-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 24px;
+    align-items: start;
+}
+
+.preorder-catalog-main {
+    min-width: 0;
+}
+
+.preorder-cart-sidebar {
+    position: sticky;
+    top: 90px;
+}
+
+.preorder-cart-card {
+    background: #ffffff;
+    border: 1px solid var(--pre-border);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+
+.preorder-cart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.preorder-cart-header h4 {
+    margin: 0;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--pre-ink);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.preorder-cart-badge {
+    background: #fff1f0;
+    color: var(--pre-red);
+    border: 1px solid #fee4e2;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 800;
+}
+
+.btn-clear-cart {
+    background: transparent;
+    border: 1px solid var(--pre-border-input);
+    color: #667085;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-clear-cart:hover {
+    background: #fff1f0;
+    border-color: #fee4e2;
+    color: var(--pre-red);
+}
+
+.preorder-cart-sub {
+    margin: 0 0 14px;
+    font-size: 0.8rem;
+    color: var(--pre-muted);
+}
+
+.cart-items-container {
+    max-height: 320px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+    padding-right: 4px;
+}
+
+.empty-cart-msg {
+    text-align: center;
+    padding: 28px 16px;
+    color: #667085;
+    font-size: 0.86rem;
+    line-height: 1.4;
+    background: #f8f9fa;
+    border: 1px dashed var(--pre-border-input);
+    border-radius: 12px;
+    margin: 0;
+}
+
+.preorder-cart-totals {
+    border-top: 1px solid #eaecf0;
+    padding-top: 12px;
+    margin-bottom: 16px;
+}
+
+.preorder-total-line {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.84rem;
+    color: var(--pre-muted);
+    margin-bottom: 6px;
+}
+
+.preorder-total-line strong {
+    color: var(--pre-ink);
+}
+
+.preorder-total-line.grand-total {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--pre-ink);
+    border-top: 1px solid #eaecf0;
+    padding-top: 8px;
+    margin-top: 8px;
+}
+
+.preorder-total-line.grand-total strong {
+    color: var(--pre-red);
+}
+
+.preorder-cart-actions .btn-block {
+    width: 100%;
+    padding: 12px 18px;
+}
+
+/* Cart item row & Summary Box */
+.summary-box {
+    background: #f8f9fa;
+    border: 1px solid var(--pre-border);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-top: 20px;
+}
+
+.cart-item-row {
+    background: #ffffff;
+    border: 1px solid var(--pre-border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+}
+
+.cart-item-image-col {
+    width: 44px;
+    height: 44px;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+.cart-item-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+.cart-item-thumb-placeholder {
+    width: 100%;
+    height: 100%;
+    background: #f1f5f9;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+}
+
+.cart-item-details-col {
+    flex-grow: 1;
+}
+
+.cart-item-name {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--pre-ink);
+    margin-bottom: 2px;
+}
+
+.cart-item-price-single {
+    font-size: 0.78rem;
+    color: var(--pre-muted);
+}
+
+.cart-item-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.tiny-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    border: 1px solid var(--pre-border-input);
+    background: #ffffff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--pre-ink);
+    font-size: 0.72rem;
+    transition: all 0.15s ease;
+}
+
+.tiny-btn:hover {
+    background: #f8f9fa;
+    color: var(--pre-red);
+    border-color: #d0d5dd;
+}
+
+.qty-display {
+    font-weight: 700;
+    font-size: 0.88rem;
+    min-width: 20px;
+    text-align: center;
+    color: var(--pre-ink);
+}
+
+.cart-item-total-col {
+    text-align: right;
+    margin-left: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: space-between;
+    height: 44px;
+}
+
+.cart-item-price {
+    font-weight: 800;
+    color: var(--pre-red);
+    font-size: 0.95rem;
+}
+
+.remove-item-btn {
+    background: none;
+    border: none;
+    color: #b3261e;
+    cursor: pointer;
+    font-size: 0.88rem;
+    padding: 2px;
+    opacity: 0.8;
+    transition: opacity 0.15s ease;
+}
+
+.remove-item-btn:hover {
+    opacity: 1;
+}
+
+.cart-total-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--pre-ink);
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--pre-border);
+}
+
+.cart-total-row span:last-child {
+    color: var(--pre-red);
+}
+
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.88rem;
+    color: var(--pre-muted);
+    margin-bottom: 8px;
+}
+
+.summary-row.total {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--pre-border);
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--pre-ink);
+}
+
+.summary-row.total span:last-child,
+#summaryTotal, #payTotal {
+    color: var(--pre-red);
+}
+
+/* Form Controls */
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.form-row.full {
+    grid-template-columns: 1fr;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-label {
+    font-weight: 700;
+    font-size: 0.88rem;
+    color: var(--pre-ink);
+}
+
+.form-control, .form-select {
+    padding: 10px 14px;
+    border: 1px solid var(--pre-border-input);
+    border-radius: 10px;
+    font-size: 0.92rem;
+    color: var(--pre-ink);
+    background: #ffffff;
+    outline: none;
+    transition: all 0.15s ease;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--pre-red);
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.12);
+}
+
+.payment-options-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.payment-option-card {
+    border: 1px solid var(--pre-border-input);
+    border-radius: 12px;
+    padding: 16px;
+    background: #ffffff;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.payment-option-card:hover {
+    border-color: var(--pre-red);
+    background: #fff8f0;
+}
+
+.payment-option-card.selected {
+    border-color: var(--pre-red);
+    background: #fff1f0;
+    box-shadow: 0 0 0 2px rgba(179, 38, 30, 0.2);
+}
+
+.store-details-card {
+    background: #f8f9fa;
+    border: 1px solid var(--pre-border);
+    border-radius: 14px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.store-details-info h4 {
+    margin: 0 0 6px;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--pre-ink);
+}
+
+.store-details-info p {
+    margin: 0;
+    font-size: 0.86rem;
+    color: var(--pre-muted);
+}
+
+.button-group {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.92rem;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+}
+
+.btn-primary {
+    background: var(--pre-red);
+    color: #ffffff;
+    border-color: var(--pre-red);
+}
+
+.btn-primary:hover {
+    background: var(--pre-red-hover);
+    border-color: var(--pre-red-hover);
+}
+
+.btn-secondary {
+    background: #ffffff;
+    border-color: var(--pre-border-input);
+    color: #344054;
+}
+
+.btn-secondary:hover {
+    background: #f8f9fa;
+    border-color: #d0d5dd;
+    color: #101828;
+}
+
+.slot-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    margin-top: 2px;
+}
+.slot-badge.badge-open {
+    background: #ecfdf3;
+    color: #027a48;
+    border: 1px solid #abefc6;
+}
+.slot-badge.badge-full {
+    background: #fff1f0;
+    color: #b3261e;
+    border: 1px solid #fee4e2;
+}
+
+@media (max-width: 768px) {
+    .page-header h1 { font-size: 1.6rem; }
+    .preorder-section { padding-bottom: 140px !important; }
+    .preorder-container { padding: 16px; border-radius: 16px; }
+    .preorder-step1-layout { grid-template-columns: 1fr; }
+    .preorder-cart-sidebar { position: static; }
+    .form-row { grid-template-columns: 1fr; gap: 12px; }
+    .button-group { flex-direction: column-reverse; }
+    .btn { width: 100%; }
+    .payment-options-grid { grid-template-columns: 1fr; }
+    .checkout-type-actions { flex-direction: column; }
+    .progress-step { width: 70px; }
+    .progress-step-circle { width: 32px; height: 32px; font-size: 0.8rem; }
+    .store-details-card { flex-direction: column; align-items: flex-start; }
+    .btn-directions { width: 100%; }
+}
+
+@media (max-width: 480px) {
+    .store-cards-grid {
+        grid-template-columns: 1fr !important;
+    }
+    .progress-step {
+        width: 60px;
+        font-size: 0.72rem;
+    }
+    .progress-step-circle {
+        width: 28px;
+        height: 28px;
+        font-size: 0.74rem;
+    }
+    .page-header h1 {
+        font-size: 1.35rem;
+    }
+}
+
+/* ==========================================================================
+   PREORDER DARK MODE THEME ENGINE
+   ========================================================================== */
+html.dark-mode body,
+body.dark-mode {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .page-header {
+    background: #1e293b !important;
+    border-bottom: 1px solid #334155 !important;
+}
+
+body.dark-mode .page-header h1 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .page-header p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .preorder-section {
+    background: #0f172a !important;
+}
+
+body.dark-mode .preorder-container {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .checkout-type-switch {
+    background: #111827 !important;
+    border: 1px solid #334155 !important;
+}
+
+body.dark-mode .checkout-type-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .checkout-type-note {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .checkout-type-chip {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .checkout-type-chip:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .checkout-type-chip.is-active {
+    background: #b3261e !important;
+    color: #ffffff !important;
+    border-color: #b3261e !important;
+}
+
+body.dark-mode .progress-bar-container {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .progress-steps::before {
+    background: #334155 !important;
+}
+
+body.dark-mode .progress-step-circle {
+    background: #1e293b !important;
+    border-color: #475569 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .progress-step.active .progress-step-circle {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .progress-step.completed .progress-step-circle {
+    background: #027a48 !important;
+    border-color: #027a48 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .progress-step-label {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .progress-step.active .progress-step-label {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .progress-step.completed .progress-step-label {
+    color: #027a48 !important;
+}
+
+body.dark-mode .step-content {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .step-title {
+    color: #f8fafc !important;
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .tenant-scope-note {
+    background: rgba(23, 92, 211, 0.15) !important;
+    border-color: #175cd3 !important;
+    color: #93c5fd !important;
+}
+
+body.dark-mode .autofill-note {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .category-nav {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .category-link {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .category-link:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .category-link.active {
+    background: #b3261e !important;
+    color: #ffffff !important;
+    border-color: #b3261e !important;
+}
+
+body.dark-mode .product-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .product-card:hover {
+    border-color: #475569 !important;
+}
+
+body.dark-mode .product-image {
+    background: #0f172a !important;
+}
+
+body.dark-mode .product-info h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .product-price {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .product-desc {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .preorder-cart-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .preorder-cart-header h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .preorder-cart-sub {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .empty-cart-msg {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-item-row {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .cart-item-name {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-item-price-single {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .tiny-btn {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .tiny-btn:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .qty-display {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-item-price {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .preorder-cart-totals {
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .preorder-total-line {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .preorder-total-line strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .preorder-total-line.grand-total {
+    color: #f8fafc !important;
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .preorder-total-line.grand-total strong {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .btn-clear-cart {
+    border-color: #334155 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .btn-clear-cart:hover {
+    background: rgba(179, 38, 30, 0.2) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    color: #ef4444 !important;
+}
+
+body.dark-mode .summary-box {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-row {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .summary-row.total {
+    border-top-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-row.total span:last-child {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .form-label,
+body.dark-mode label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-control,
+body.dark-mode .form-select {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-control:focus,
+body.dark-mode .form-select:focus {
+    background: #0f172a !important;
+    border-color: #b3261e !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .payment-option-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .payment-option-card:hover {
+    border-color: #475569 !important;
+}
+
+body.dark-mode .payment-option-card.selected {
+    border-color: #b3261e !important;
+    background: rgba(179, 38, 30, 0.1) !important;
+}
+
+body.dark-mode .store-details-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-details-info h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-details-info p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .btn-secondary {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .btn-secondary:hover {
+    background: #475569 !important;
+    color: #ffffff !important;
+}
+
+/* Step 1 Store Hierarchy & Image Cards Dark Theme */
+body.dark-mode .store-selection-container {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .store-selection-icon {
+    background: rgba(179, 38, 30, 0.2) !important;
+    color: #ef4444 !important;
+}
+
+body.dark-mode .store-selection-title h3 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-selection-title p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .store-hierarchy-tabs {
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .store-hierarchy-tab {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .store-hierarchy-tab:hover {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .store-hierarchy-tab.active {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(179, 38, 30, 0.35) !important;
+}
+
+body.dark-mode .store-city-filters {
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .store-city-pill {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .store-city-pill:hover {
+    background: #1e293b !important;
+    border-color: #475569 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-city-pill.active {
+    background: #f8fafc !important;
+    border-color: #f8fafc !important;
+    color: #0f172a !important;
+}
+
+body.dark-mode .store-hierarchy-heading h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-hierarchy-heading span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .store-card-item {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .store-card-item:hover {
+    border-color: #475569 !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.dark-mode .store-card-item.selected {
+    border-color: #b3261e !important;
+    background: #18192a !important;
+    box-shadow: 0 6px 22px rgba(179, 38, 30, 0.35) !important;
+}
+
+body.dark-mode .store-card-img-banner {
+    border-bottom-color: #334155 !important;
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .store-card-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-card-check-pill {
+    border-color: #475569 !important;
+    background: transparent !important;
+}
+
+body.dark-mode .store-card-item.selected .store-card-check-pill {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .store-card-address-row {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .store-card-address-row i {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .store-card-info-footer {
+    border-top-color: #334155 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .store-card-select-btn {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .store-card-item:hover .store-card-select-btn {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .store-card-item.selected .store-card-select-btn {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .store-select-prompt-box {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-select-prompt-icon {
+    background: rgba(179, 38, 30, 0.2) !important;
+    color: #ef4444 !important;
+}
+
+body.dark-mode .store-select-prompt-box h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-select-prompt-box p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode #step1SelectedStoreBadge {
+    background: rgba(179, 38, 30, 0.2) !important;
+    border-color: rgba(239, 68, 68, 0.35) !important;
+    color: #ef4444 !important;
+}
+
+body.dark-mode #step1ActiveStoreName {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #storePickupMap {
+    border-color: #334155 !important;
+}
+
+body.dark-mode .leaflet-popup-content-wrapper {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border: 1px solid #334155 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.dark-mode .leaflet-popup-tip {
+    background: #1e293b !important;
+}
+
+/* ==========================================================================
+   PRE-ORDER INTERACTIVE CALENDAR & TIME SLOTS STYLES
+   ========================================================================== */
+.preorder-cal-widget {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+
+.cal-widget-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #eaecf0;
+}
+
+.cal-widget-title {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 800;
+    font-size: 1.15rem;
+    color: #101828;
+    letter-spacing: -0.01em;
+}
+
+.cal-nav-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid #d0d5dd;
+    background: #ffffff;
+    color: #344054;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+}
+
+.cal-nav-btn:hover:not(:disabled) {
+    background: #f8f9fa;
+    border-color: #98a2b3;
+    color: #101828;
+}
+
+.cal-nav-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.cal-schedule-policy-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 10px 14px;
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    color: #475467;
+    margin-bottom: 16px;
+}
+
+.cal-schedule-policy-bar span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cal-schedule-policy-bar strong {
+    color: #101828;
+}
+
+.cal-grid-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+.cal-grid-weekdays div {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #667085;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 6px 0;
+}
+
+.cal-grid-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+}
+
+.cal-day-cell {
+    aspect-ratio: 1;
+    min-height: 52px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border: 1px solid #eaecf0;
+    background: #ffffff;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    text-decoration: none;
+    position: relative;
+}
+
+.cal-day-cell.is-blank {
+    background: transparent;
+    border-color: transparent;
+    cursor: default;
+}
+
+.cal-day-num {
+    font-weight: 800;
+    font-size: 0.95rem;
+    color: #101828;
+    line-height: 1.1;
+}
+
+.cal-day-sub {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #027a48;
+    margin-top: 2px;
+    line-height: 1;
+}
+
+.cal-day-sub.muted {
+    color: #98a2b3;
+}
+
+.cal-day-sub.full {
+    color: #b3261e;
+}
+
+.cal-day-cell.is-available {
+    background: #ffffff;
+    border-color: #abefc6;
+}
+
+.cal-day-cell.is-available:hover {
+    border-color: #b3261e;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.12);
+}
+
+.cal-day-cell.is-disabled {
+    background: #f8f9fa;
+    border-color: #eaecf0;
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.cal-day-cell.is-disabled .cal-day-num {
+    color: #98a2b3;
+}
+
+.cal-day-cell.is-selected {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.35) !important;
+}
+
+.cal-day-cell.is-selected .cal-day-num {
+    color: #ffffff !important;
+}
+
+.cal-day-cell.is-selected .cal-day-sub {
+    color: #fedf89 !important;
+}
+
+.cal-legend-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid #eaecf0;
+    justify-content: center;
+}
+
+.cal-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: #475467;
+    font-weight: 600;
+}
+
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.legend-dot.available {
+    background: #12b76a;
+    border: 1px solid #027a48;
+}
+
+.legend-dot.selected {
+    background: #b3261e;
+}
+
+.legend-dot.disabled {
+    background: #d0d5dd;
+}
+
+.legend-dot.full {
+    background: #f04438;
+}
+
+/* Time Slots Grid */
+.time-slots-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+}
+
+.time-slot-card {
+    background: #ffffff;
+    border: 1.5px solid #eaecf0;
+    border-radius: 12px;
+    padding: 12px 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.time-slot-card:hover:not(.is-disabled) {
+    border-color: #b3261e;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.12);
+}
+
+.time-slot-card.is-selected {
+    background: #fff1f0;
+    border-color: #b3261e;
+    box-shadow: 0 0 0 2px rgba(179, 38, 30, 0.2);
+}
+
+.time-slot-card.is-disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: #f8f9fa;
+}
+
+.slot-time {
+    font-weight: 800;
+    font-size: 0.92rem;
+    color: #101828;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.slot-time i {
+    font-size: 0.8rem;
+    color: #b3261e;
+}
+
+.slot-label {
+    font-size: 0.75rem;
+    color: #667085;
+}
+
+.slot-badge {
+    font-size: 0.68rem;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-top: 2px;
+}
+
+.slot-badge.badge-open {
+    background: #ecfdf3;
+    color: #027a48;
+}
+
+.slot-badge.badge-full {
+    background: #fef3f2;
+    color: #b42318;
+}
+
+/* Dark Mode Overrides for Calendar Widget & Time Slots */
+body.dark-mode .preorder-cal-widget {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .cal-widget-header {
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .cal-widget-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cal-nav-btn {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cal-nav-btn:hover:not(:disabled) {
+    background: #334155 !important;
+    border-color: #475569 !important;
+}
+
+body.dark-mode .cal-schedule-policy-bar {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .cal-schedule-policy-bar strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cal-grid-weekdays div {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cal-day-cell {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .cal-day-cell.is-available {
+    background: #111827 !important;
+    border-color: #166534 !important;
+}
+
+body.dark-mode .cal-day-cell.is-available:hover {
+    border-color: #ef4444 !important;
+    background: #1e293b !important;
+}
+
+body.dark-mode .cal-day-num {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cal-day-sub {
+    color: #4ade80 !important;
+}
+
+body.dark-mode .cal-day-sub.muted {
+    color: #64748b !important;
+}
+
+body.dark-mode .cal-day-sub.full {
+    color: #f87171 !important;
+}
+
+body.dark-mode .cal-day-cell.is-disabled {
+    background: rgba(15, 23, 42, 0.6) !important;
+    border-color: #1e293b !important;
+    opacity: 0.4;
+}
+
+body.dark-mode .cal-day-cell.is-disabled .cal-day-num {
+    color: #64748b !important;
+}
+
+body.dark-mode .cal-day-cell.is-selected {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+}
+
+body.dark-mode .cal-legend-bar {
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .cal-legend-item {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .time-slot-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .time-slot-card:hover:not(.is-disabled) {
+    border-color: #ef4444 !important;
+}
+
+body.dark-mode .time-slot-card.is-selected {
+    background: rgba(179, 38, 30, 0.2) !important;
+    border-color: #ef4444 !important;
+}
+
+body.dark-mode .time-slot-card.is-disabled {
+    background: rgba(15, 23, 42, 0.6) !important;
+    border-color: #1e293b !important;
+}
+
+body.dark-mode .slot-time {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .slot-label {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .preorder-schedule-selected-badge {
+    background: rgba(2, 122, 72, 0.15) !important;
+    border-color: rgba(74, 222, 128, 0.4) !important;
+    color: #4ade80 !important;
+}
+</style>
 
 <section class="page-header">
     <div class="container">
@@ -234,7 +2698,7 @@ include 'includes/header.php';
             </div>
             <div class="progress-step" data-step="2">
                 <div class="progress-step-circle">2</div>
-                <div class="progress-step-label">Address</div>
+                <div class="progress-step-label">Pick-up</div>
             </div>
             <div class="progress-step" data-step="3">
                 <div class="progress-step-circle">3</div>
@@ -248,166 +2712,418 @@ include 'includes/header.php';
     </div>
 
     <form id="preorderForm" method="POST">
-        <!-- Step 1: Product Selection -->
+        <!-- Step 1: Store & Product Selection with Dedicated Pre-Order Cart -->
         <div class="step-content active" data-step="1">
-            <div class="step-title">Select Your Product</div>
-            <?php if ($active_seller_id > 0): ?>
-                <p class="tenant-scope-note">
-                    Showing products from
-                    <strong><?php echo htmlspecialchars($storefront_name !== '' ? $storefront_name : ('Partner #' . $active_seller_id)); ?></strong>
-                    only.
-                </p>
-            <?php endif; ?>
-            
-            <!-- Category Filter -->
-            <div class="category-nav">
-                <div class="category-list">
-                    <button type="button" class="category-link active" data-category="all">All</button>
-                    <?php foreach ($categories as $cat): ?>
-                        <button type="button" class="category-link" data-category="<?php echo htmlspecialchars($cat); ?>">
-                            <?php echo htmlspecialchars($cat); ?>
-                        </button>
-                    <?php endforeach; ?>
-                </div>
-            </div>
+            <div class="preorder-step1-layout">
+                <!-- Left Main: Store Selection & Product Catalog -->
+                <div class="preorder-catalog-main">
+                    <!-- Step 1 Store Choice Hierarchy Grid & Selector Container -->
+                    <div class="store-selection-container">
+                        <div class="store-selection-header">
+                            <div class="store-selection-title">
+                                <div class="store-selection-icon">
+                                    <i class="fas fa-store"></i>
+                                </div>
+                                <div>
+                                    <h3>Choose Roasting Branch or Partner Store</h3>
+                                    <p>Select your preferred Cavite store to view dishes and live roasting availability.</p>
+                                </div>
+                            </div>
+                            <!-- Hidden select for form submission & legacy sync -->
+                            <select id="step1StoreSelect" class="form-control" style="display:none;" onchange="onStep1StoreChange(this.value)">
+                                <?php foreach ($stores as $store): ?>
+                                    <option value="<?php echo (int)$store['id']; ?>"
+                                        data-seller-id="<?php echo (int)($store['seller_id'] ?? $store['owner_user_id'] ?? 1); ?>"
+                                        data-name="<?php echo htmlspecialchars($store['store_name']); ?>"
+                                        data-address="<?php echo htmlspecialchars($store['address'] . ', ' . $store['city'] . ', ' . $store['province']); ?>"
+                                        data-phone="<?php echo htmlspecialchars($store['phone'] ?? ''); ?>"
+                                        data-hours="<?php echo htmlspecialchars($store['opening_hours'] ?? '8:00 AM - 8:00 PM'); ?>"
+                                        data-lat="<?php echo htmlspecialchars($store['latitude'] ?? '14.3294'); ?>"
+                                        data-lng="<?php echo htmlspecialchars($store['longitude'] ?? '120.9367'); ?>"
+                                        data-city="<?php echo htmlspecialchars($store['city'] ?? ''); ?>"
+                                        data-province="<?php echo htmlspecialchars($store['province'] ?? ''); ?>"
+                                        data-type="<?php echo htmlspecialchars($store['store_type_label'] ?? 'Pickup Branch'); ?>"
+                                        data-category="<?php echo htmlspecialchars($store['store_category'] ?? 'branch'); ?>"
+                                        data-reservation="<?php echo !empty($store['has_reservation_schedule']) ? '1' : '0'; ?>">
+                                        <?php echo htmlspecialchars($store['store_name']); ?> — <?php echo htmlspecialchars($store['address'] . ', ' . $store['city']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
 
-            <div class="form-group">
-                <div id="productList" class="product-grid"></div>
-            </div>
+                        <!-- Store Type Hierarchy Tabs -->
+                        <div class="store-hierarchy-tabs">
+                            <button type="button" class="store-hierarchy-tab active" data-type="all" onclick="filterStoreCardsByType('all', this)">
+                                <i class="fas fa-layer-group"></i> All Stores (<?php echo count($stores); ?>)
+                            </button>
+                            <button type="button" class="store-hierarchy-tab" data-type="branch" onclick="filterStoreCardsByType('branch', this)">
+                                <i class="fas fa-building-flag"></i> Official Roasting Hubs (<?php echo count($official_branches); ?>)
+                            </button>
+                            <button type="button" class="store-hierarchy-tab" data-type="partner" onclick="filterStoreCardsByType('partner', this)">
+                                <i class="fas fa-handshake"></i> Partner Stores (<?php echo count($partner_stores); ?>)
+                            </button>
+                        </div>
 
-            <!-- Cart Section for Pre-order -->
-            <div class="preorder-cart-section">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h4 style="margin: 0; display: flex; align-items: center; gap: 10px;">Your Pre-order Items <span id="cartCountBadge" style="display:none; background: var(--primary-color); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">0</span></h4>
-                    <button type="button" id="clearCartBtn" class="btn-sm" style="display:none; background: #fff; border: 1px solid #ddd; color: #666; font-size: 0.8rem; padding: 4px 12px; border-radius: 20px; cursor: pointer;" onclick="clearCart()"><i class="fas fa-trash-alt"></i> Clear</button>
-                </div>
-                <div id="preorderCartItems" class="cart-items-container">
-                    <p class="empty-cart-msg">No items selected yet.</p>
-                </div>
-                <div class="cart-total-row">
-                    <span>Total Estimated (Incl. VAT):</span>
-                    <span id="cartTotalDisplay">₱0.00</span>
-                </div>
-            </div>
+                        <!-- City Quick Filters -->
+                        <div class="store-city-filters">
+                            <button type="button" class="store-city-pill active" data-city="all" onclick="filterStoreCardsByCity('all', this)">
+                                <i class="fas fa-globe"></i> All Cities
+                            </button>
+                            <?php foreach ($store_cities as $scity): ?>
+                                <button type="button" class="store-city-pill" data-city="<?php echo htmlspecialchars(strtolower($scity)); ?>" onclick="filterStoreCardsByCity('<?php echo htmlspecialchars(addslashes($scity)); ?>', this)">
+                                    <i class="fas fa-map-pin"></i> <?php echo htmlspecialchars($scity); ?>
+                                </button>
+                            <?php endforeach; ?>
+                        </div>
 
-            <div class="button-group">
-                <button type="button" class="btn btn-primary next-btn">Next</button>
+                        <!-- Store Choice Cards Grid (Hierarchical with Image Banners) -->
+                        <div class="store-cards-grid" id="storeCardsGrid">
+                            <?php foreach ($stores as $idx => $store): 
+                                $sId = (int)$store['id'];
+                                $sellerId = (int)($store['seller_id'] ?? $store['owner_user_id'] ?? 1);
+                                $hasRes = !empty($store['has_reservation_schedule']);
+                                $cat = $store['store_category'] ?? 'branch';
+                                $isBranch = ($cat === 'branch');
+                                $typeLabel = $store['store_type_label'] ?? ($isBranch ? 'Pickup Branch' : 'Partner Store');
+                                $storeImg = $store['image'] ?? 'images/store-bg.jpg';
+                                $isPreselected = ($requested_seller_id > 0 && $sellerId === $requested_seller_id);
+                            ?>
+                                <div class="store-card-item <?php echo $isPreselected ? 'selected' : ''; ?>"
+                                     id="store-card-<?php echo $sId; ?>"
+                                     data-store-id="<?php echo $sId; ?>"
+                                     data-seller-id="<?php echo $sellerId; ?>"
+                                     data-category="<?php echo htmlspecialchars($cat); ?>"
+                                     data-city="<?php echo htmlspecialchars(strtolower($store['city'] ?? '')); ?>"
+                                     data-lat="<?php echo htmlspecialchars($store['latitude'] ?? '14.3294'); ?>"
+                                     data-lng="<?php echo htmlspecialchars($store['longitude'] ?? '120.9367'); ?>"
+                                     data-name="<?php echo htmlspecialchars($store['store_name']); ?>"
+                                     data-address="<?php echo htmlspecialchars(($store['address'] ?? '') . ', ' . ($store['city'] ?? '')); ?>"
+                                     data-hours="<?php echo htmlspecialchars($store['opening_hours'] ?? '8:00 AM - 8:00 PM'); ?>"
+                                     data-phone="<?php echo htmlspecialchars($store['phone'] ?? ''); ?>"
+                                     data-reservation="<?php echo $hasRes ? '1' : '0'; ?>"
+                                     onclick="selectPreorderStore('<?php echo $sId; ?>', '<?php echo $sellerId; ?>', false, true)">
+                                    
+                                    <!-- Store Image Banner with Overlaid Badges -->
+                                    <div class="store-card-img-banner" style="background-image:url('<?php echo htmlspecialchars($storeImg); ?>');">
+                                        <div class="store-card-badge-top-left">
+                                            <span class="<?php echo $isBranch ? 'store-badge-branch' : 'store-badge-partner'; ?>">
+                                                <i class="<?php echo $isBranch ? 'fas fa-building-flag' : 'fas fa-handshake'; ?>"></i>
+                                                <?php echo htmlspecialchars($typeLabel); ?>
+                                            </span>
+                                            <?php if ($hasRes): ?>
+                                                <span class="store-badge-res-tag"><i class="fas fa-calendar-check"></i> Reservation Ready</span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="store-card-badge-top-right">
+                                            <span class="store-badge-dist" id="store-dist-<?php echo $sId; ?>">
+                                                <i class="fas fa-location-arrow"></i> <span class="dist-val">Near Cavite</span>
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Store Details Body -->
+                                    <div class="store-card-body">
+                                        <div>
+                                            <div class="store-card-name-row">
+                                                <h4 class="store-card-title"><?php echo htmlspecialchars($store['store_name']); ?></h4>
+                                                <div class="store-card-check-pill"><i class="fas fa-check"></i></div>
+                                            </div>
+                                            <div class="store-card-address-row">
+                                                <i class="fas fa-location-dot"></i>
+                                                <span><?php echo htmlspecialchars(($store['address'] ?? '') . ', ' . ($store['city'] ?? '')); ?></span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div class="store-card-info-footer">
+                                                <span><i class="fas fa-clock"></i> <?php echo htmlspecialchars($store['opening_hours'] ?? '8:00 AM - 8:00 PM'); ?></span>
+                                                <?php if (!empty($store['phone'])): ?>
+                                                    <span><i class="fas fa-phone"></i> <?php echo htmlspecialchars($store['phone']); ?></span>
+                                                <?php endif; ?>
+                                            </div>
+                                            <div class="store-card-select-btn">
+                                                <i class="fas fa-store"></i> Select Store
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+
+                    <!-- Call-to-action prompt when user hasn't selected a store yet -->
+                    <div id="storeSelectPromptBox" class="store-select-prompt-box">
+                        <div class="store-select-prompt-icon">
+                            <i class="fas fa-store"></i>
+                        </div>
+                        <h4>Select a Roasting Store Above</h4>
+                        <p>Click on any of the available Cavite roasting branches or partner stores above to unlock their fresh specialty dishes, roasting schedules, and advance reservation menu.</p>
+                    </div>
+
+                    <!-- Progressive Dishes Menu Container (Revealed only after picking a store) -->
+                    <div id="dishesMenuWrapper" class="dishes-menu-wrapper">
+                        <div class="step-title" style="margin-top: 0; display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between; gap:10px;">
+                            <span>Select Your Pre-Order Dishes</span>
+                            <span id="step1SelectedStoreBadge" style="font-size:0.82rem; font-weight:700; color:#b3261e; background:#fff1f0; border:1px solid #fee4e2; padding:3px 12px; border-radius:999px;">
+                                <i class="fas fa-store"></i> <span id="step1ActiveStoreName"><?php echo htmlspecialchars($stores[0]['store_name'] ?? 'Main Branch'); ?></span>
+                            </span>
+                        </div>
+                        
+                        <!-- Category Filter -->
+                        <div class="category-nav">
+                            <div class="category-list">
+                                <button type="button" class="category-link active" data-category="all">All</button>
+                                <?php foreach ($categories as $cat): ?>
+                                    <button type="button" class="category-link" data-category="<?php echo htmlspecialchars($cat); ?>">
+                                        <?php echo htmlspecialchars($cat); ?>
+                                    </button>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div id="productList" class="product-grid">
+                                <?php if (empty($all_products)): ?>
+                                    <p class="empty-product-note"><?php echo $active_seller_id > 0 ? 'No active products are currently posted for this partner.' : 'No active products are currently available.'; ?></p>
+                                <?php else: ?>
+                                    <?php foreach ($all_products as $p): 
+                                        $imgSrc = (string)($p['image'] ?? 'default.jpg');
+                                        if ($imgSrc !== '' && $imgSrc !== 'default.jpg') {
+                                            if (!str_starts_with($imgSrc, 'http') && !str_contains($imgSrc, '/')) {
+                                                $imgSrc = 'images/menu/' . $imgSrc;
+                                            }
+                                        }
+                                    ?>
+                                    <div class="product-card" data-product-id="<?php echo (int)$p['id']; ?>" onclick="addToCart(<?php echo (int)$p['id']; ?>)">
+                                        <div class="check-icon"><i class="fas fa-check"></i></div>
+                                        <div class="product-image">
+                                            <?php if ($imgSrc !== '' && $imgSrc !== 'default.jpg'): ?>
+                                                <img src="<?php echo htmlspecialchars($imgSrc); ?>" alt="<?php echo htmlspecialchars($p['name']); ?>">
+                                            <?php else: ?>
+                                                <i class="fas fa-drumstick-bite"></i>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="product-info">
+                                            <h4><?php echo htmlspecialchars($p['name']); ?></h4>
+                                            <div class="product-price">₱<?php echo number_format($p['price'], 2); ?></div>
+                                            <button type="button" class="btn btn-outline btn-sm btn-block btn-add-preorder" data-product-id="<?php echo (int)$p['id']; ?>" onclick="event.stopPropagation(); addToCart(<?php echo (int)$p['id']; ?>)">
+                                                <i class="fas fa-plus"></i> Add to Order
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Sidebar: Dedicated Sticky Pre-Order Cart Panel -->
+                <aside class="preorder-cart-sidebar">
+                    <div class="preorder-cart-card">
+                        <div class="preorder-cart-header">
+                            <h4>
+                                <i class="fas fa-calendar-check" style="color:var(--pre-red);"></i>
+                                Pre-Order Cart
+                                <span id="cartCountBadge" class="preorder-cart-badge" style="display:none;">0</span>
+                            </h4>
+                            <button type="button" id="clearCartBtn" class="btn-clear-cart" style="display:none;" onclick="clearCart()">
+                                <i class="fas fa-trash-alt"></i> Clear
+                            </button>
+                        </div>
+                        <p class="preorder-cart-sub">Items selected exclusively for your advance reservation.</p>
+
+                        <div id="preorderCartItems" class="cart-items-container">
+                            <p class="empty-cart-msg"><i class="fas fa-basket-shopping"></i> No items added yet. Click on any dish to add it to your pre-order.</p>
+                        </div>
+
+                        <div class="preorder-cart-totals">
+                            <div class="preorder-total-line">
+                                <span>Estimated Subtotal</span>
+                                <strong id="cartSubtotalDisplay">₱0.00</strong>
+                            </div>
+                            <div class="preorder-total-line">
+                                <span>VAT (12%)</span>
+                                <strong id="cartVatDisplay">₱0.00</strong>
+                            </div>
+                            <div class="preorder-total-line grand-total">
+                                <span>Estimated Total</span>
+                                <strong id="cartTotalDisplay">₱0.00</strong>
+                            </div>
+                        </div>
+
+                        <div class="preorder-cart-actions">
+                            <button type="button" class="btn btn-primary next-btn btn-block">
+                                Continue to Pick-up Details <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </aside>
             </div>
         </div>
 
-        <!-- Step 2: Address Information -->
+        <!-- Step 2: Store Pick-up & Schedule Information -->
         <div class="step-content" data-step="2">
-            <div class="step-title">Delivery Address</div>
+            <div class="step-title"><i class="fas fa-store" style="color:var(--pre-red); margin-right:6px;"></i> Store Pick-up Details</div>
 
-            <div class="form-row full">
-                <div class="form-group">
-                    <label for="fullName">Full Name *</label>
-                    <input type="text" id="fullName" name="fullName" placeholder="Enter your full name" value="<?php echo htmlspecialchars($user_profile['full_name']); ?>" required>
-                </div>
+            <div class="preorder-pickup-banner">
+                <div class="preorder-pickup-badge"><i class="fas fa-bag-shopping"></i> Self Pick-up Order</div>
+                <p>This pre-order is for store pick-up. Your lechon feast will be freshly roasted and packaged ready for pick-up at your selected branch.</p>
             </div>
 
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="email">Email *</label>
-                    <input type="email" id="email" name="email" placeholder="your@email.com" value="<?php echo htmlspecialchars($user_profile['email']); ?>" required>
-                </div>
-                <div class="form-group">
-                    <label for="phone">Phone Number *</label>
-                    <input type="tel" id="phone" name="phone" placeholder="09XXXXXXXXX" value="<?php echo htmlspecialchars($user_profile['phone']); ?>" required>
-                </div>
-            </div>
-            <p class="autofill-note"><i class="fas fa-user-check"></i> We auto-filled your account details to make pre-order faster. You can still edit them.</p>
-
-            <div class="form-row full">
-                <div class="form-group">
-                    <label for="streetAddress">Street Address *</label>
-                    <input type="text" id="streetAddress" name="streetAddress" placeholder="House no., Street name, Building" value="<?php echo htmlspecialchars($prefill_street); ?>" required>
-                </div>
-            </div>
-
-            <div class="form-row full">
-                <div class="form-group">
-                    <label for="preorderAddressSearch">Map Pinpoint (Recommended)</label>
-                    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-                        <input type="text" id="preorderAddressSearch" placeholder="Type address and pick from suggestions" style="flex:1; min-width:220px;">
-                        <button type="button" class="btn btn-secondary" id="preorderUseMyLocation"><i class="fas fa-location-arrow"></i> Use My Location</button>
+            <!-- Contact Person for Claiming -->
+            <div class="preorder-section-block">
+                <h4 class="preorder-block-title"><i class="fas fa-user-check"></i> Claimant Contact Information</h4>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="fullName">Full Name (Order Claimant) *</label>
+                        <input type="text" id="fullName" name="fullName" placeholder="Enter your full name" value="<?php echo htmlspecialchars($user_profile['full_name']); ?>" required>
                     </div>
-                    <div id="preorderMap" style="height:300px; margin-top:12px; border-radius:12px; border:1px solid #e5e7eb; background:#f8fafc;"></div>
-                    <small style="display:block; margin-top:8px; color:#64748b;">Pin the exact location on the map for better address accuracy.</small>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="phone">Mobile Phone Number *</label>
+                        <input type="tel" id="phone" name="phone" placeholder="09XXXXXXXXX" value="<?php echo htmlspecialchars($user_profile['phone']); ?>" required>
+                        <small style="color:#667085; font-size:0.78rem;">We will send SMS updates when your roast is hot & ready for pick-up.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email Address *</label>
+                        <input type="email" id="email" name="email" placeholder="your@email.com" value="<?php echo htmlspecialchars($user_profile['email']); ?>" required>
+                        <small style="color:#667085; font-size:0.78rem;">Order receipt and Claim QR Code will be sent here.</small>
+                    </div>
                 </div>
             </div>
 
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="preorderRegion">Region (PSGC) *</label>
-                    <select id="preorderRegion" required>
-                        <option value="">-- Select Region --</option>
+            <!-- Pick-up Store Location & Interactive Map -->
+            <div class="preorder-section-block">
+                <h4 class="preorder-block-title"><i class="fas fa-location-dot"></i> Pick-up Store Branch & Map</h4>
+                
+                <div class="form-group" style="margin-bottom: 14px;">
+                    <label for="storeSelect">Select Fulfillment Branch *</label>
+                    <select id="storeSelect" name="store_id" class="form-control" onchange="onStoreChange(this.value)">
+                        <?php foreach ($stores as $store): ?>
+                            <option value="<?php echo (int)$store['id']; ?>" 
+                                data-name="<?php echo htmlspecialchars($store['store_name']); ?>"
+                                data-address="<?php echo htmlspecialchars($store['address'] . ', ' . $store['city'] . ', ' . $store['province']); ?>"
+                                data-phone="<?php echo htmlspecialchars($store['phone'] ?? ''); ?>"
+                                data-hours="<?php echo htmlspecialchars($store['opening_hours'] ?? '8:00 AM - 8:00 PM'); ?>"
+                                data-lat="<?php echo htmlspecialchars($store['latitude'] ?? '14.3294'); ?>"
+                                data-lng="<?php echo htmlspecialchars($store['longitude'] ?? '120.9367'); ?>"
+                                data-city="<?php echo htmlspecialchars($store['city'] ?? ''); ?>"
+                                data-province="<?php echo htmlspecialchars($store['province'] ?? ''); ?>">
+                                <?php echo htmlspecialchars($store['store_name']); ?> — <?php echo htmlspecialchars($store['address'] . ', ' . $store['city']); ?>
+                            </option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label for="preorderProvince">Province (PSGC) *</label>
-                    <select id="preorderProvince" required>
-                        <option value="">-- Select Province --</option>
-                    </select>
+
+                <!-- Selected Store Details Card -->
+                <div class="store-details-card" id="storeInfoCard">
+                    <div class="store-details-main">
+                        <div class="store-icon"><i class="fas fa-store"></i></div>
+                        <div class="store-info-text">
+                            <h5 id="storeNameDisplay"><?php echo htmlspecialchars($stores[0]['store_name'] ?? 'Main Branch'); ?></h5>
+                            <p class="store-address-p" id="storeAddressDisplay"><i class="fas fa-location-dot"></i> <?php echo htmlspecialchars(($stores[0]['address'] ?? '') . ', ' . ($stores[0]['city'] ?? '') . ', ' . ($stores[0]['province'] ?? '')); ?></p>
+                            <div class="store-meta-tags">
+                                <span class="store-tag" id="storeHoursDisplay"><i class="fas fa-clock"></i> Hours: <?php echo htmlspecialchars($stores[0]['opening_hours'] ?? '8:00 AM - 8:00 PM'); ?></span>
+                                <?php if (!empty($stores[0]['phone'])): ?>
+                                    <span class="store-tag" id="storePhoneDisplay"><i class="fas fa-phone"></i> <?php echo htmlspecialchars($stores[0]['phone']); ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                    <a href="https://www.google.com/maps/dir/?api=1&destination=<?php echo htmlspecialchars($stores[0]['latitude'] ?? '14.3294'); ?>,<?php echo htmlspecialchars($stores[0]['longitude'] ?? '120.9367'); ?>" id="storeDirectionsLink" target="_blank" class="btn-directions">
+                        <i class="fas fa-directions"></i> Get Directions
+                    </a>
+                </div>
+
+                <!-- Store Interactive Leaflet Map -->
+                <div class="store-map-wrapper">
+                    <div id="storePickupMap" style="height: 280px; width: 100%; border-radius: 12px; border: 1px solid #eaecf0; margin-top: 12px; z-index: 1;"></div>
+                    <small style="display:block; margin-top:6px; color:#667085;"><i class="fas fa-circle-info"></i> Map displays the exact store location where you will pick up your feast.</small>
                 </div>
             </div>
 
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="city">City / Municipality *</label>
-                    <select id="city" name="city" required>
-                        <option value="">-- Select City/Municipality --</option>
-                    </select>
+            <!-- Pick-up Date & Time Schedule -->
+            <div class="preorder-section-block">
+                <h4 class="preorder-block-title"><i class="fas fa-calendar-check"></i> Select Roasting &amp; Pick-up Schedule</h4>
+                <p style="color: #667085; font-size: 0.85rem; margin-top: -6px; margin-bottom: 16px;">
+                    Choose an available pick-up date from our store calendar. Available dates and daily roasting batch capacities automatically update in real-time.
+                </p>
+
+                <!-- Hidden inputs for seamless form submission & validation -->
+                <input type="hidden" id="pickupDate" name="pickupDate" value="" required>
+                <input type="hidden" id="pickupTime" name="pickupTime" value="" required>
+
+                <!-- Interactive Calendar Widget -->
+                <div class="preorder-cal-widget" id="preorderCalendarWidget">
+                    <div class="cal-widget-header">
+                        <button type="button" class="cal-nav-btn" id="calPrevMonthBtn" title="Previous Month"><i class="fas fa-chevron-left"></i></button>
+                        <div class="cal-widget-title" id="calMonthTitle"><?php echo htmlspecialchars($initial_calendar_data['month_title']); ?></div>
+                        <button type="button" class="cal-nav-btn" id="calNextMonthBtn" title="Next Month"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+
+                    <div class="cal-schedule-policy-bar">
+                        <span><i class="fas fa-clock"></i> <strong>Lead Time:</strong> <?php echo (int)$preorder_schedule['lead_time_days']; ?> day(s) notice</span>
+                        <span><i class="fas fa-hourglass-half"></i> <strong>Daily Cutoff:</strong> <?php echo date('g:i A', strtotime($preorder_schedule['cutoff_time'])); ?></span>
+                        <span><i class="fas fa-calendar-alt"></i> <strong>Window:</strong> Up to <?php echo (int)$preorder_schedule['max_advance_days']; ?> days ahead</span>
+                    </div>
+
+                    <div class="cal-grid-weekdays">
+                        <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+                    </div>
+
+                    <div class="cal-grid-days" id="calDaysGrid">
+                        <!-- Populated by JavaScript and server initial render -->
+                    </div>
+
+                    <div class="cal-legend-bar">
+                        <div class="cal-legend-item"><span class="legend-dot available"></span> Available Date</div>
+                        <div class="cal-legend-item"><span class="legend-dot selected"></span> Selected</div>
+                        <div class="cal-legend-item"><span class="legend-dot disabled"></span> Closed / Cutoff</div>
+                        <div class="cal-legend-item"><span class="legend-dot full"></span> Fully Booked</div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="barangay">Barangay *</label>
-                    <select id="barangay" name="barangay" required>
-                        <option value="">-- Select Barangay --</option>
-                    </select>
+
+                <!-- Available Time Slots for Selected Date -->
+                <div class="preorder-slots-section" id="preorderSlotsSection" style="margin-top: 24px; display: none;">
+                    <h5 style="font-family:'Outfit',sans-serif; font-weight:700; font-size:1rem; color:#101828; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                        <i class="fas fa-clock text-danger"></i> Available Pick-up Time Slots for <span id="slotsSelectedDateText" style="color:#b3261e;"></span>
+                    </h5>
+                    <div class="time-slots-grid" id="timeSlotsGrid">
+                        <!-- Time slot cards dynamically injected here -->
+                    </div>
+                </div>
+
+                <!-- Selected Date & Time Confirmation Banner -->
+                <div class="preorder-schedule-selected-badge" id="scheduleSelectedBadge" style="display: none; margin-top: 18px; background: #ecfdf3; border: 1px solid #abefc6; border-radius: 12px; padding: 14px 18px; color: #027a48; align-items: center; gap: 12px;">
+                    <i class="fas fa-circle-check" style="font-size: 1.3rem;"></i>
+                    <div>
+                        <div style="font-weight: 800; font-size: 0.95rem;">Pick-up Schedule Confirmed</div>
+                        <div style="font-size: 0.86rem;" id="scheduleSelectedSummaryText"></div>
+                    </div>
                 </div>
             </div>
 
-            <input type="hidden" id="province" name="province" value="<?php echo htmlspecialchars($prefill_province); ?>">
+            <!-- Hidden Fields for Backend Compatibility -->
+            <input type="hidden" id="streetAddress" name="streetAddress" value="">
+            <input type="hidden" id="province" name="province" value="">
+            <input type="hidden" id="city" name="city" value="">
+            <input type="hidden" id="barangay" name="barangay" value="Store Pick-up">
             <input type="hidden" id="preorder_region_name" name="preorder_region_name" value="">
             <input type="hidden" id="preorder_region_code" name="preorder_region_code" value="">
             <input type="hidden" id="preorder_province_name" name="preorder_province_name" value="">
             <input type="hidden" id="preorder_province_code" name="preorder_province_code" value="">
             <input type="hidden" id="preorder_city_name" name="preorder_city_name" value="">
             <input type="hidden" id="preorder_city_code" name="preorder_city_code" value="">
-            <input type="hidden" id="preorder_barangay_name" name="preorder_barangay_name" value="">
+            <input type="hidden" id="preorder_barangay_name" name="preorder_barangay_name" value="Store Pick-up">
             <input type="hidden" id="preorder_barangay_code" name="preorder_barangay_code" value="">
             <input type="hidden" id="latitude" name="latitude" value="">
             <input type="hidden" id="longitude" name="longitude" value="">
 
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="pickupDate">Pickup/Delivery Date *</label>
-                    <input type="date" id="pickupDate" name="pickupDate" required>
-                </div>
-                <div class="form-group">
-                    <label for="pickupTime">Preferred Time *</label>
-                    <select id="pickupTime" name="pickupTime" required>
-                        <option value="">-- Select Time --</option>
-                        <option value="8:00 AM">8:00 AM</option>
-                        <option value="9:00 AM">9:00 AM</option>
-                        <option value="10:00 AM">10:00 AM</option>
-                        <option value="11:00 AM">11:00 AM</option>
-                        <option value="12:00 PM">12:00 PM</option>
-                        <option value="1:00 PM">1:00 PM</option>
-                        <option value="2:00 PM">2:00 PM</option>
-                        <option value="3:00 PM">3:00 PM</option>
-                        <option value="4:00 PM">4:00 PM</option>
-                        <option value="5:00 PM">5:00 PM</option>
-                        <option value="6:00 PM">6:00 PM</option>
-                        <option value="7:00 PM">7:00 PM</option>
-                        <option value="8:00 PM">8:00 PM</option>
-                    </select>
-                </div>
-            </div>
-
             <div class="button-group">
                 <button type="button" class="btn btn-secondary prev-btn">Back</button>
-                <button type="button" class="btn btn-primary next-btn">Next</button>
+                <button type="button" class="btn btn-primary next-btn">Proceed to Payment <i class="fas fa-arrow-right"></i></button>
             </div>
         </div>
 
@@ -481,22 +3197,34 @@ include 'includes/header.php';
 <script>
 const products = <?php echo json_encode($all_products); ?>;
 const activeSellerId = <?php echo (int)$active_seller_id; ?>;
-const preferredBarangay = <?php echo json_encode($prefill_barangay); ?>;
-const preferredCity = <?php echo json_encode($prefill_city); ?>;
-const preferredProvince = <?php echo json_encode($prefill_province); ?>;
-const preferredStreet = <?php echo json_encode($prefill_street); ?>;
-const userAddressSeed = <?php echo json_encode((string)$user_profile['address']); ?>;
-const preorderGoogleMapsApiKey = <?php echo json_encode((string)$google_maps_api_key); ?>;
-const PREORDER_PSGC_API_BASE = 'https://psgc.gitlab.io/api';
+const stores = <?php echo json_encode($stores); ?>;
 let cart = []; // Array to store selected items: { id, name, price, quantity, image }
+
+// Pre-populate cart from checkout.php switch (prefill param)
+(function() {
+    const prefill = <?php echo json_encode($prefill_cart_items); ?>;
+    if (!prefill || prefill.length === 0) return;
+    prefill.forEach(function(pf) {
+        const targetId = parseInt(pf.id, 10);
+        const prod = products.find(function(p) { return parseInt(p.id, 10) === targetId; });
+        if (!prod) return;
+        const stock = typeof prod.stock !== 'undefined' ? parseInt(prod.stock, 10) : 10;
+        const qty = stock > 0 ? Math.min(parseInt(pf.qty, 10) || 1, stock) : (parseInt(pf.qty, 10) || 1);
+        cart.push({
+            id: prod.id,
+            product_id: prod.product_id || '',
+            name: prod.name,
+            price: parseFloat(prod.price) || 0,
+            quantity: qty,
+            image: prod.image || ''
+        });
+    });
+})();
+
 const VAT_RATE = 0.12;
-let preorderMap = null;
-let preorderMarker = null;
-let preorderGeocoder = null;
-let preorderGoogleGeocodingAvailable = <?php echo $google_geocoding_enabled ? 'true' : 'false'; ?>;
-let preorderAutocomplete = null;
-let isPreorderMapInitialized = false;
-let latestPreorderResolvedAddress = userAddressSeed || '';
+let storeMap = null;
+let storeMarker = null;
+let currentStep = 1;
 
 function getPreorderTotals() {
     const subtotal = cart.reduce((sum, item) => sum + ((parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0)), 0);
@@ -505,564 +3233,614 @@ function getPreorderTotals() {
     return { subtotal, vatAmount, total };
 }
 
-function preorderNormalizePlaceName(value) {
-    return String(value || '')
-        .toLowerCase()
-        .replace(/\b(region|province|city|municipality|barangay|brgy|of|the)\b/g, '')
-        .replace(/[^a-z0-9]/g, '');
-}
+function initStoreMap() {
+    const mapEl = document.getElementById('storePickupMap');
+    if (!mapEl || typeof L === 'undefined') return;
 
-function preorderGetSelectedText(selectElement) {
-    if (!selectElement || selectElement.selectedIndex < 0) return '';
-    const option = selectElement.options[selectElement.selectedIndex];
-    if (!option || !option.value) return '';
-    return option.textContent.trim();
-}
+    const storeSelect = document.getElementById('storeSelect');
+    if (!storeSelect) return;
+    const selectedOpt = storeSelect.options[storeSelect.selectedIndex];
+    if (!selectedOpt) return;
 
-function preorderSetSelectOptions(selectElement, items, placeholder) {
-    if (!selectElement) return;
-    selectElement.innerHTML = '';
-    const defaultOption = document.createElement('option');
-    defaultOption.value = '';
-    defaultOption.textContent = placeholder;
-    selectElement.appendChild(defaultOption);
+    const lat = parseFloat(selectedOpt.dataset.lat) || 14.3294;
+    const lng = parseFloat(selectedOpt.dataset.lng) || 120.9367;
+    const name = selectedOpt.dataset.name || 'Store Branch';
+    const address = selectedOpt.dataset.address || '';
+    const hours = selectedOpt.dataset.hours || '8:00 AM - 8:00 PM';
+    const phone = selectedOpt.dataset.phone || '';
 
-    [...items]
-        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
-        .forEach((item) => {
-            const option = document.createElement('option');
-            option.value = String(item.code || '');
-            option.textContent = String(item.name || '');
-            selectElement.appendChild(option);
+    // Update Card & Directions Link
+    const storeNameEl = document.getElementById('storeNameDisplay');
+    const storeAddrEl = document.getElementById('storeAddressDisplay');
+    const storeHoursEl = document.getElementById('storeHoursDisplay');
+    const storePhoneEl = document.getElementById('storePhoneDisplay');
+    const dirLink = document.getElementById('storeDirectionsLink');
+
+    if (storeNameEl) storeNameEl.textContent = name;
+    if (storeAddrEl) storeAddrEl.innerHTML = '<i class="fas fa-location-dot"></i> ' + address;
+    if (storeHoursEl) storeHoursEl.innerHTML = '<i class="fas fa-clock"></i> Hours: ' + hours;
+    if (storePhoneEl) {
+        if (phone) {
+            storePhoneEl.innerHTML = '<i class="fas fa-phone"></i> ' + phone;
+            storePhoneEl.style.display = 'inline-flex';
+        } else {
+            storePhoneEl.style.display = 'none';
+        }
+    }
+    if (dirLink) dirLink.href = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+
+    if (!storeMap) {
+        storeMap = L.map('storePickupMap', {
+            scrollWheelZoom: false
+        }).setView([lat, lng], 15);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(storeMap);
+
+        const storeIcon = L.divIcon({
+            className: 'store-custom-marker',
+            html: '<div style="background:#b3261e; color:#ffffff; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 8px rgba(179,38,30,0.35); border:2.5px solid #ffffff;"><i class="fas fa-store" style="font-size:15px;"></i></div>',
+            iconSize: [34, 34],
+            iconAnchor: [17, 17],
+            popupAnchor: [0, -18]
         });
-}
 
-function preorderFindOptionValueByName(selectElement, targetName) {
-    if (!selectElement || !targetName) return '';
-    const normalizedTarget = preorderNormalizePlaceName(targetName);
-    const options = Array.from(selectElement.options || []);
-    for (const option of options) {
-        if (!option.value) continue;
-        const normalizedOption = preorderNormalizePlaceName(option.textContent);
-        if (!normalizedOption) continue;
-        if (
-            normalizedOption === normalizedTarget ||
-            normalizedOption.includes(normalizedTarget) ||
-            normalizedTarget.includes(normalizedOption)
-        ) {
-            return option.value;
+        storeMarker = L.marker([lat, lng], { icon: storeIcon }).addTo(storeMap);
+        storeMarker.bindPopup(`<strong>${name}</strong><br>${address}<br><small style="color:#b3261e; font-weight:700;">Pick-up Branch</small>`).openPopup();
+    } else {
+        storeMap.setView([lat, lng], 15);
+        if (storeMarker) {
+            storeMarker.setLatLng([lat, lng]);
+            storeMarker.setPopupContent(`<strong>${name}</strong><br>${address}<br><small style="color:#b3261e; font-weight:700;">Pick-up Branch</small>`).openPopup();
         }
+        setTimeout(() => { storeMap.invalidateSize(); }, 150);
     }
-    return '';
 }
 
-async function fetchPreorderPsgc(path) {
-    const response = await fetch(PREORDER_PSGC_API_BASE + path, {
-        method: 'GET',
-        headers: { Accept: 'application/json' }
+function haversineKm(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+let currentStoreCategoryFilter = 'all';
+let currentStoreCityFilter = 'all';
+
+function applyStoreCardFilters() {
+    const cards = document.querySelectorAll('.store-card-item');
+    cards.forEach(card => {
+        const cardCat = (card.dataset.category || 'branch').toLowerCase().trim();
+        const cardCity = (card.dataset.city || '').toLowerCase().trim();
+
+        const matchCat = (currentStoreCategoryFilter === 'all') || (cardCat === currentStoreCategoryFilter);
+        const matchCity = (currentStoreCityFilter === 'all') || cardCity.includes(currentStoreCityFilter) || currentStoreCityFilter.includes(cardCity);
+
+        if (matchCat && matchCity) {
+            card.style.display = 'flex';
+        } else {
+            card.style.display = 'none';
+        }
     });
-    if (!response.ok) {
-        throw new Error('PSGC API request failed: ' + path);
-    }
-    return response.json();
 }
 
-function syncPreorderAddressFields() {
-    const regionSelect = document.getElementById('preorderRegion');
-    const provinceSelect = document.getElementById('preorderProvince');
-    const citySelect = document.getElementById('city');
-    const barangaySelect = document.getElementById('barangay');
-    const streetInput = document.getElementById('streetAddress');
-
-    const regionName = preorderGetSelectedText(regionSelect);
-    const provinceName = preorderGetSelectedText(provinceSelect);
-    const cityName = preorderGetSelectedText(citySelect);
-    const barangayName = preorderGetSelectedText(barangaySelect);
-
-    const setValue = (id, value) => {
-        const el = document.getElementById(id);
-        if (el) el.value = value || '';
-    };
-
-    setValue('preorder_region_code', regionSelect?.value || '');
-    setValue('preorder_region_name', regionName);
-    setValue('preorder_province_code', provinceSelect?.value || '');
-    setValue('preorder_province_name', provinceName);
-    setValue('preorder_city_code', citySelect?.value || '');
-    setValue('preorder_city_name', cityName);
-    setValue('preorder_barangay_code', barangaySelect?.value || '');
-    setValue('preorder_barangay_name', barangayName);
-
-    const provinceHidden = document.getElementById('province');
-    if (provinceHidden) {
-        provinceHidden.value = provinceName || regionName || preferredProvince || '';
-    }
-
-    const street = (streetInput?.value || '').trim();
-    const addressParts = [street, barangayName, cityName, provinceHidden?.value || '', regionName].filter(Boolean);
-    if (addressParts.length >= 3) {
-        latestPreorderResolvedAddress = addressParts.join(', ');
-    }
+function filterStoreCardsByType(type, btnEl) {
+    currentStoreCategoryFilter = (type || 'all').toLowerCase().trim();
+    const tabs = document.querySelectorAll('.store-hierarchy-tab');
+    tabs.forEach(t => t.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    applyStoreCardFilters();
 }
 
-async function loadPreorderRegions() {
-    const regionSelect = document.getElementById('preorderRegion');
-    if (!regionSelect) return;
-    const regions = await fetchPreorderPsgc('/regions');
-    preorderSetSelectOptions(regionSelect, regions, '-- Select Region --');
-    regionSelect.disabled = false;
+function filterStoreCardsByCity(city, btnEl) {
+    currentStoreCityFilter = (city || 'all').toLowerCase().trim();
+    const pills = document.querySelectorAll('.store-city-pill');
+    pills.forEach(p => p.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    applyStoreCardFilters();
 }
 
-async function loadPreorderProvinces(regionCode) {
-    const provinceSelect = document.getElementById('preorderProvince');
-    if (!provinceSelect) return [];
-    if (!regionCode) {
-        preorderSetSelectOptions(provinceSelect, [], '-- Select Province --');
-        provinceSelect.disabled = true;
-        return [];
-    }
-    const provinces = await fetchPreorderPsgc('/regions/' + encodeURIComponent(regionCode) + '/provinces');
-    preorderSetSelectOptions(
-        provinceSelect,
-        provinces,
-        provinces.length ? '-- Select Province --' : '-- No Province --'
-    );
-    provinceSelect.disabled = provinces.length === 0;
-    return provinces;
-}
+function selectPreorderStore(storeId, sellerId, skipScheduleReload, isUserInitiated) {
+    const sIdStr = String(storeId);
+    const sellerIdNum = parseInt(sellerId) || 1;
 
-async function loadPreorderCities(regionCode, provinceCode) {
-    const citySelect = document.getElementById('city');
-    if (!citySelect) return [];
-    if (!regionCode) {
-        preorderSetSelectOptions(citySelect, [], '-- Select City/Municipality --');
-        citySelect.disabled = true;
-        return [];
-    }
-
-    const path = provinceCode
-        ? '/provinces/' + encodeURIComponent(provinceCode) + '/cities-municipalities'
-        : '/regions/' + encodeURIComponent(regionCode) + '/cities-municipalities';
-
-    const cities = await fetchPreorderPsgc(path);
-    preorderSetSelectOptions(citySelect, cities, '-- Select City/Municipality --');
-    citySelect.disabled = cities.length === 0;
-    return cities;
-}
-
-async function loadPreorderBarangays(cityCode, selectedBarangayName = '') {
-    const barangaySelect = document.getElementById('barangay');
-    if (!barangaySelect) return [];
-    if (!cityCode) {
-        preorderSetSelectOptions(barangaySelect, [], '-- Select Barangay --');
-        barangaySelect.disabled = true;
-        syncPreorderAddressFields();
-        return [];
-    }
-
-    const barangays = await fetchPreorderPsgc('/cities-municipalities/' + encodeURIComponent(cityCode) + '/barangays');
-    preorderSetSelectOptions(barangaySelect, barangays, '-- Select Barangay --');
-    barangaySelect.disabled = barangays.length === 0;
-
-    if (selectedBarangayName) {
-        const optionValue = preorderFindOptionValueByName(barangaySelect, selectedBarangayName);
-        if (optionValue) {
-            barangaySelect.value = optionValue;
+    // 1. Update Card Selected States
+    const allCards = document.querySelectorAll('.store-card-item');
+    allCards.forEach(c => {
+        const btn = c.querySelector('.store-card-select-btn');
+        if (String(c.dataset.storeId) === sIdStr) {
+            c.classList.add('selected');
+            if (btn) btn.innerHTML = '<i class="fas fa-check"></i> Selected Store';
+        } else {
+            c.classList.remove('selected');
+            if (btn) btn.innerHTML = '<i class="fas fa-store"></i> Select Store';
         }
+    });
+
+    // 2. Reveal Menu & Hide Placeholder Prompt
+    const menuWrap = document.getElementById('dishesMenuWrapper');
+    const promptBox = document.getElementById('storeSelectPromptBox');
+    if (menuWrap) {
+        menuWrap.classList.add('is-visible');
+    }
+    if (promptBox) {
+        promptBox.style.display = 'none';
     }
 
-    syncPreorderAddressFields();
-    return barangays;
-}
-
-function extractPreorderAddressParts(components = []) {
-    const getLongName = (typeMatcher) => {
-        const match = components.find((component) => (component.types || []).some(typeMatcher));
-        return match?.long_name || '';
-    };
-
-    return {
-        region: getLongName((type) => type === 'administrative_area_level_1'),
-        province: getLongName((type) => type === 'administrative_area_level_2'),
-        city: getLongName((type) => type === 'locality' || type === 'administrative_area_level_3'),
-        barangay: getLongName((type) => type === 'sublocality_level_1' || type === 'neighborhood')
-    };
-}
-
-function isGoogleGeocodingUnavailableStatus(status) {
-    const normalized = String(status || '').trim().toUpperCase();
-    return normalized === 'REQUEST_DENIED'
-        || normalized === 'OVER_QUERY_LIMIT'
-        || normalized === 'OVER_DAILY_LIMIT'
-        || normalized === 'INVALID_REQUEST';
-}
-
-async function reversePreorderGeocodeFromNominatim(lat, lng) {
-    if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
-        return { formattedAddress: '', parts: {} };
+    // 3. Sync hidden / Step 2 selects
+    const step1Select = document.getElementById('step1StoreSelect');
+    const step2Select = document.getElementById('storeSelect');
+    if (step1Select && step1Select.value !== sIdStr) {
+        step1Select.value = sIdStr;
     }
+    if (step2Select && step2Select.value !== sIdStr) {
+        step2Select.value = sIdStr;
+    }
+
+    // 4. Update active store text & badges
+    const targetCard = document.getElementById('store-card-' + sIdStr) || document.querySelector(`.store-card-item[data-store-id="${sIdStr}"]`);
+    if (targetCard) {
+        const storeName = targetCard.dataset.name || 'Main Branch';
+        const badgeNameEl = document.getElementById('step1ActiveStoreName');
+        const nameEl = document.getElementById('step1StoreNameDisplay');
+        if (badgeNameEl) badgeNameEl.textContent = storeName;
+        if (nameEl) nameEl.textContent = storeName;
+    }
+
+    // 5. Update global activeSellerId and activeStoreId
+    window.activeSellerId = sellerIdNum;
+    window.activeStoreId = sIdStr;
+
+    // 6. Refresh products immediately for this specific shop
+    const activeCatBtn = document.querySelector('.category-link.active');
+    renderProducts(activeCatBtn ? activeCatBtn.dataset.category : 'all');
+
+    // 7. Sync addresses & Leaflet Map
+    syncPreorderStoreAddress();
+    initStoreMap();
+
+    // 8. Reload Roasting Schedule for selected store if schedule widget is present
+    if (!skipScheduleReload && typeof loadCalendarMonth === 'function' && typeof currentCalMonth !== 'undefined') {
+        loadCalendarMonth(currentCalMonth);
+    }
+
+    // 9. Smoothly scroll to the dishes menu if user clicked
+    if (isUserInitiated && menuWrap) {
+        setTimeout(() => {
+            menuWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 80);
+    }
+}
+
+function onStep1StoreChange(val) {
+    const step1Select = document.getElementById('step1StoreSelect');
+    if (!step1Select) return;
+    const selectedOpt = step1Select.options[step1Select.selectedIndex];
+    const sellerId = selectedOpt ? (selectedOpt.dataset.sellerId || 1) : 1;
+    selectPreorderStore(val, sellerId, false, true);
+}
+
+function onStoreChange(val) {
+    const step2Select = document.getElementById('storeSelect');
+    if (!step2Select) return;
+    const selectedOpt = step2Select.options[step2Select.selectedIndex];
+    const sellerId = selectedOpt ? (selectedOpt.dataset.sellerId || 1) : 1;
+    selectPreorderStore(val, sellerId, false, true);
+}
+
+function prioritizeAndSelectNearbyReservationStore() {
+    const step1Select = document.getElementById('step1StoreSelect');
+    const step2Select = document.getElementById('storeSelect');
+    const cardsGrid = document.getElementById('storeCardsGrid');
+
+    let userLat = 14.3294;
+    let userLng = 120.9367;
+    let hasUserGps = false;
+
     try {
-        const endpoint = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2'
-            + '&addressdetails=1'
-            + '&countrycodes=ph'
-            + '&lat=' + encodeURIComponent(String(lat))
-            + '&lon=' + encodeURIComponent(String(lng));
-        const response = await fetch(endpoint, {
-            method: 'GET',
-            headers: { Accept: 'application/json' }
+        const raw = localStorage.getItem('market_address_payload');
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && Number.isFinite(parseFloat(parsed.latitude)) && Number.isFinite(parseFloat(parsed.longitude))) {
+                const pLat = parseFloat(parsed.latitude);
+                const pLng = parseFloat(parsed.longitude);
+                if (pLat !== 0 && pLng !== 0) {
+                    userLat = pLat;
+                    userLng = pLng;
+                    hasUserGps = true;
+                }
+            }
+        }
+    } catch (e) {}
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const requestedStoreId = urlParams.get('store_id') || urlParams.get('branch_id');
+    const requestedSellerId = urlParams.get('seller_id');
+
+    // 1. Calculate distances for Select Options
+    const selects = [step1Select, step2Select].filter(Boolean);
+    selects.forEach(sel => {
+        const options = Array.from(sel.options);
+        options.forEach(opt => {
+            const lat = parseFloat(opt.dataset.lat) || 14.3294;
+            const lng = parseFloat(opt.dataset.lng) || 120.9367;
+            const distKm = haversineKm(userLat, userLng, lat, lng);
+            opt.dataset.distance = distKm.toFixed(2);
+            const hasRes = opt.dataset.reservation === '1';
+            const baseName = opt.dataset.name || 'Branch';
+            const city = opt.dataset.city || '';
+
+            let label = baseName + (city ? ' — ' + city : '');
+            if (hasUserGps) {
+                label += ` (~${distKm.toFixed(1)} km away)`;
+            }
+            if (hasRes) {
+                label += ' ★ Reservation Ready';
+            }
+            opt.textContent = label;
         });
-        if (!response.ok) {
-            return { formattedAddress: '', parts: {} };
-        }
 
-        const data = await response.json();
-        const address = data?.address || {};
-        return {
-            formattedAddress: String(data?.display_name || '').trim(),
-            parts: {
-                region: String(address.state || address.region || '').trim(),
-                province: String(address.state_district || address.province || address.county || '').trim(),
-                city: String(address.city || address.town || address.municipality || address.county || '').trim(),
-                barangay: String(address.suburb || address.neighbourhood || address.village || address.hamlet || '').trim()
+        options.sort((a, b) => {
+            const resA = a.dataset.reservation === '1' ? 1 : 0;
+            const resB = b.dataset.reservation === '1' ? 1 : 0;
+            if (resA !== resB) return resB - resA;
+            const distA = parseFloat(a.dataset.distance || '999');
+            const distB = parseFloat(b.dataset.distance || '999');
+            return distA - distB;
+        });
+
+        sel.innerHTML = '';
+        options.forEach(opt => sel.appendChild(opt));
+    });
+
+    // 2. Calculate distances and sort Store Cards in Grid
+    if (cardsGrid) {
+        const cardElements = Array.from(cardsGrid.querySelectorAll('.store-card-item'));
+        cardElements.forEach(card => {
+            const lat = parseFloat(card.dataset.lat) || 14.3294;
+            const lng = parseFloat(card.dataset.lng) || 120.9367;
+            const distKm = haversineKm(userLat, userLng, lat, lng);
+            card.dataset.distance = distKm.toFixed(2);
+
+            const distValEl = card.querySelector('.dist-val');
+            if (distValEl) {
+                distValEl.textContent = hasUserGps ? `~${distKm.toFixed(1)} km away` : 'Near Cavite';
             }
-        };
-    } catch (error) {
-        return { formattedAddress: '', parts: {} };
+        });
+
+        cardElements.sort((a, b) => {
+            const resA = a.dataset.reservation === '1' ? 1 : 0;
+            const resB = b.dataset.reservation === '1' ? 1 : 0;
+            if (resA !== resB) return resB - resA;
+            const distA = parseFloat(a.dataset.distance || '999');
+            const distB = parseFloat(b.dataset.distance || '999');
+            return distA - distB;
+        });
+
+        cardsGrid.innerHTML = '';
+        cardElements.forEach(c => cardsGrid.appendChild(c));
+    }
+
+    // 3. Determine initial store to select only if explicitly passed in URL
+    let initialStoreId = null;
+    let initialSellerId = null;
+
+    if (requestedStoreId) {
+        const found = document.querySelector(`.store-card-item[data-store-id="${requestedStoreId}"]`);
+        if (found) {
+            initialStoreId = requestedStoreId;
+            initialSellerId = found.dataset.sellerId;
+        }
+    } else if (requestedSellerId) {
+        const found = document.querySelector(`.store-card-item[data-seller-id="${requestedSellerId}"]`);
+        if (found) {
+            initialStoreId = found.dataset.storeId;
+            initialSellerId = requestedSellerId;
+        }
+    }
+
+    if (!initialStoreId && cart.length > 0 && typeof stores !== 'undefined' && stores.length > 0) {
+        const firstCartProd = products.find(p => parseInt(p.id, 10) === parseInt(cart[0].id, 10));
+        const cartSellerId = firstCartProd ? (parseInt(firstCartProd.seller_id, 10) || 1) : 1;
+        const matchingStore = stores.find(s => parseInt(s.seller_id || s.owner_user_id || 1, 10) === cartSellerId) || stores[0];
+        initialStoreId = String(matchingStore.id || matchingStore.store_id || '1');
+        initialSellerId = String(matchingStore.seller_id || matchingStore.owner_user_id || '1');
+    }
+
+    if (initialStoreId) {
+        selectPreorderStore(initialStoreId, initialSellerId, true, false);
+    } else {
+        // No pre-selected store in URL: show prompt and keep dishes hidden until user picks a store
+        const promptBox = document.getElementById('storeSelectPromptBox');
+        const menuWrap = document.getElementById('dishesMenuWrapper');
+        if (promptBox) promptBox.style.display = 'block';
+        if (menuWrap) menuWrap.classList.remove('is-visible');
+        syncPreorderStoreAddress();
+        initStoreMap();
     }
 }
 
-async function applyPreorderAddressComponents(parts = {}) {
-    const regionSelect = document.getElementById('preorderRegion');
-    const provinceSelect = document.getElementById('preorderProvince');
-    const citySelect = document.getElementById('city');
-    const barangaySelect = document.getElementById('barangay');
-    if (!regionSelect || !provinceSelect || !citySelect || !barangaySelect) return;
+function syncPreorderStoreAddress() {
+    const storeSelect = document.getElementById('storeSelect');
+    if (!storeSelect) return;
+    const selectedOpt = storeSelect.options[storeSelect.selectedIndex];
+    if (!selectedOpt) return;
 
-    const regionCode = preorderFindOptionValueByName(regionSelect, parts.region);
-    if (regionCode) {
-        regionSelect.value = regionCode;
-        const provinces = await loadPreorderProvinces(regionCode);
-        if (!provinces.length) {
-            await loadPreorderCities(regionCode, '');
-        }
-    }
+    const storeName = selectedOpt.dataset.name || selectedOpt.text;
+    const storeAddress = selectedOpt.dataset.address || '';
+    const storeCity = selectedOpt.dataset.city || 'Cavite';
+    const storeProvince = selectedOpt.dataset.province || 'Cavite';
+    const storeLat = selectedOpt.dataset.lat || '14.3294';
+    const storeLng = selectedOpt.dataset.lng || '120.9367';
 
-    const provinceCode = preorderFindOptionValueByName(provinceSelect, parts.province);
-    if (provinceCode) {
-        provinceSelect.value = provinceCode;
-        await loadPreorderCities(regionSelect.value, provinceCode);
-    }
-
-    const cityCode = preorderFindOptionValueByName(citySelect, parts.city);
-    if (cityCode) {
-        citySelect.value = cityCode;
-        await loadPreorderBarangays(cityCode);
-    }
-
-    const barangayCode = preorderFindOptionValueByName(barangaySelect, parts.barangay);
-    if (barangayCode) {
-        barangaySelect.value = barangayCode;
-    }
-
-    syncPreorderAddressFields();
+    const streetAddressInput = document.getElementById('streetAddress');
+    if (streetAddressInput) streetAddressInput.value = 'Store Pick-up: ' + storeName + ' (' + storeAddress + ')';
+    const provinceInput = document.getElementById('province');
+    if (provinceInput) provinceInput.value = storeProvince;
+    const cityInput = document.getElementById('city');
+    if (cityInput) cityInput.value = storeCity;
+    const brgyInput = document.getElementById('barangay');
+    if (brgyInput) brgyInput.value = 'Store Pick-up';
+    const cityNameInput = document.getElementById('preorder_city_name');
+    if (cityNameInput) cityNameInput.value = storeCity;
+    const provNameInput = document.getElementById('preorder_province_name');
+    if (provNameInput) provNameInput.value = storeProvince;
+    const brgyNameInput = document.getElementById('preorder_barangay_name');
+    if (brgyNameInput) brgyNameInput.value = 'Store Pick-up';
+    const latInput = document.getElementById('latitude');
+    if (latInput) latInput.value = storeLat;
+    const lngInput = document.getElementById('longitude');
+    if (lngInput) lngInput.value = storeLng;
 }
 
-async function initializePreorderAddressSection() {
-    const regionSelect = document.getElementById('preorderRegion');
-    const provinceSelect = document.getElementById('preorderProvince');
-    const citySelect = document.getElementById('city');
-    const barangaySelect = document.getElementById('barangay');
-    if (!regionSelect || !provinceSelect || !citySelect || !barangaySelect) return;
-
-    await loadPreorderRegions();
-
-    let seedRegion = '';
-    if ((preferredProvince || '').toLowerCase().includes('cavite')) {
-        seedRegion = 'CALABARZON';
-    } else if (/(manila|ncr|metro manila)/i.test(userAddressSeed || '')) {
-        seedRegion = 'National Capital Region';
+function showPreorderToast(msg) {
+    if (window.showToast) {
+        window.showToast(msg, 'success', 2500);
+        return;
     }
-
-    let initialRegionCode = preorderFindOptionValueByName(regionSelect, seedRegion);
-    if (!initialRegionCode && seedRegion === 'CALABARZON') {
-        initialRegionCode = preorderFindOptionValueByName(regionSelect, 'Region IV-A');
+    if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: msg,
+            showConfirmButton: false,
+            timer: 1500
+        });
+        return;
     }
-    if (!initialRegionCode && seedRegion === 'National Capital Region') {
-        initialRegionCode = preorderFindOptionValueByName(regionSelect, 'NCR');
+    let toast = document.getElementById('preorderToastNotice');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'preorderToastNotice';
+        toast.style.cssText = 'position:fixed; top:24px; right:24px; z-index:99999; background:#101828; color:#ffffff; padding:12px 20px; border-radius:10px; font-weight:700; font-size:0.9rem; box-shadow:0 8px 24px rgba(0,0,0,0.2); transition:all 0.3s ease; display:flex; align-items:center; gap:8px;';
+        document.body.appendChild(toast);
     }
-    if (!initialRegionCode && regionSelect.options.length > 1) {
-        initialRegionCode = regionSelect.options[1].value;
-    }
-    if (initialRegionCode) {
-        regionSelect.value = initialRegionCode;
-        const provinces = await loadPreorderProvinces(initialRegionCode);
-
-        let initialProvinceCode = '';
-        if (provinces.length && preferredProvince) {
-            initialProvinceCode = preorderFindOptionValueByName(provinceSelect, preferredProvince);
-            if (initialProvinceCode) {
-                provinceSelect.value = initialProvinceCode;
-            }
+    toast.innerHTML = '<i class="fas fa-check-circle" style="color:#12b76a;"></i> ' + msg;
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateY(0)';
+    setTimeout(() => {
+        if (toast) {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(-10px)';
         }
-
-        await loadPreorderCities(initialRegionCode, initialProvinceCode);
-
-        if (preferredCity) {
-            const initialCityCode = preorderFindOptionValueByName(citySelect, preferredCity);
-            if (initialCityCode) {
-                citySelect.value = initialCityCode;
-                await loadPreorderBarangays(initialCityCode, preferredBarangay || '');
-            } else {
-                await loadPreorderBarangays(citySelect.value, preferredBarangay || '');
-            }
-        }
-    }
-
-    regionSelect.addEventListener('change', async () => {
-        try {
-            await loadPreorderProvinces(regionSelect.value);
-            await loadPreorderCities(regionSelect.value, '');
-            await loadPreorderBarangays('');
-        } catch (error) {
-            console.error('Failed loading provinces/cities:', error);
-        }
-        syncPreorderAddressFields();
-    });
-
-    provinceSelect.addEventListener('change', async () => {
-        try {
-            await loadPreorderCities(regionSelect.value, provinceSelect.value);
-            await loadPreorderBarangays('');
-        } catch (error) {
-            console.error('Failed loading cities/barangays:', error);
-        }
-        syncPreorderAddressFields();
-    });
-
-    citySelect.addEventListener('change', async () => {
-        try {
-            await updateBarangays();
-        } catch (error) {
-            console.error('Failed loading barangays:', error);
-        }
-        syncPreorderAddressFields();
-    });
-
-    barangaySelect.addEventListener('change', syncPreorderAddressFields);
-    document.getElementById('streetAddress')?.addEventListener('input', syncPreorderAddressFields);
-
-    syncPreorderAddressFields();
+    }, 1800);
 }
 
-async function updatePreorderAddressFromCoordinates(lat, lng) {
-    document.getElementById('latitude').value = String(lat);
-    document.getElementById('longitude').value = String(lng);
+// Pre-Order Roasting Calendar & Time Slot Controller
+let currentCalMonth = <?php echo json_encode($initial_calendar_data['current_month']); ?>;
+let selectedPickupDate = '';
+let selectedPickupTime = '';
 
-    const applyResolvedAddress = async (formattedAddress, parts = {}) => {
-        const normalizedFormatted = String(formattedAddress || '').trim();
-        const streetCandidate = (normalizedFormatted.split(',')[0] || '').trim();
-        const streetInput = document.getElementById('streetAddress');
-        const searchInput = document.getElementById('preorderAddressSearch');
+async function loadCalendarMonth(monthStr) {
+    const daysGrid = document.getElementById('calDaysGrid');
+    const monthTitle = document.getElementById('calMonthTitle');
+    const prevBtn = document.getElementById('calPrevMonthBtn');
+    const nextBtn = document.getElementById('calNextMonthBtn');
+    
+    if (!daysGrid) return;
+    daysGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 20px; color: #667085;"><i class="fas fa-spinner fa-spin"></i> Loading schedule...</div>';
 
-        if (streetInput && streetCandidate) streetInput.value = streetCandidate;
-        if (searchInput && normalizedFormatted) searchInput.value = normalizedFormatted;
-        if (normalizedFormatted) latestPreorderResolvedAddress = normalizedFormatted;
+    try {
+        const res = await fetch(`api/preorder_schedule.php?action=get_calendar&seller_id=${activeSellerId}&month=${encodeURIComponent(monthStr || '')}`);
+        const json = await res.json();
+        if (json.success && json.data) {
+            const data = json.data;
+            currentCalMonth = data.current_month;
+            if (monthTitle) monthTitle.textContent = data.month_title;
+            
+            if (prevBtn) {
+                prevBtn.disabled = !data.prev_month;
+                prevBtn.onclick = () => data.prev_month && loadCalendarMonth(data.prev_month);
+            }
+            if (nextBtn) {
+                nextBtn.disabled = !data.next_month;
+                nextBtn.onclick = () => data.next_month && loadCalendarMonth(data.next_month);
+            }
 
-        await applyPreorderAddressComponents(parts || {});
-        syncPreorderAddressFields();
-    };
+            renderCalendarDays(data);
+        }
+    } catch (e) {
+        console.error('Error loading calendar:', e);
+        daysGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 20px; color: #b3261e;">Failed to load schedule. Please try again.</div>';
+    }
+}
 
-    if (!preorderGeocoder || !preorderGoogleGeocodingAvailable) {
-        const fallback = await reversePreorderGeocodeFromNominatim(lat, lng);
-        await applyResolvedAddress(fallback.formattedAddress, fallback.parts);
+function renderCalendarDays(calData) {
+    const daysGrid = document.getElementById('calDaysGrid');
+    if (!daysGrid) return;
+    daysGrid.innerHTML = '';
+
+    // Leading blanks
+    for (let i = 1; i < calData.first_day_weekday; i++) {
+        const blank = document.createElement('div');
+        blank.className = 'cal-day-cell is-blank';
+        daysGrid.appendChild(blank);
+    }
+
+    calData.days.forEach(day => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `cal-day-cell is-day ${day.available ? 'is-available' : 'is-disabled'}`;
+        if (day.date === selectedPickupDate) {
+            btn.classList.add('is-selected');
+        }
+        btn.title = day.status_reason;
+
+        let statusSub = '';
+        if (day.available) {
+            statusSub = `<span class="cal-day-sub">${day.remaining_capacity} left</span>`;
+        } else if (day.status === 'lead_time_cutoff') {
+            statusSub = `<span class="cal-day-sub muted">Cutoff</span>`;
+        } else if (day.status === 'closed_weekday') {
+            statusSub = `<span class="cal-day-sub muted">Closed</span>`;
+        } else if (day.status === 'fully_booked') {
+            statusSub = `<span class="cal-day-sub full">Full</span>`;
+        } else if (day.status === 'blackout') {
+            statusSub = `<span class="cal-day-sub full">Holiday</span>`;
+        }
+
+        btn.innerHTML = `<span class="cal-day-num">${day.day}</span>${statusSub}`;
+
+        if (day.available) {
+            btn.addEventListener('click', () => {
+                selectCalendarDate(day.date, day);
+            });
+        }
+
+        daysGrid.appendChild(btn);
+    });
+}
+
+async function selectCalendarDate(dateStr, dayData) {
+    selectedPickupDate = dateStr;
+    const pickupDateInput = document.getElementById('pickupDate');
+    if (pickupDateInput) pickupDateInput.value = dateStr;
+
+    // Reset selected time
+    selectedPickupTime = '';
+    const pickupTimeInput = document.getElementById('pickupTime');
+    if (pickupTimeInput) pickupTimeInput.value = '';
+
+    const badge = document.getElementById('scheduleSelectedBadge');
+    if (badge) badge.style.display = 'none';
+
+    document.querySelectorAll('.cal-day-cell.is-day').forEach(cell => cell.classList.remove('is-selected'));
+    const allCells = document.querySelectorAll('.cal-day-cell.is-day');
+    allCells.forEach(cell => {
+        if (cell.title && cell.title.includes(dateStr)) cell.classList.add('is-selected');
+    });
+
+    await loadTimeSlotsForDate(dateStr);
+}
+
+async function loadTimeSlotsForDate(dateStr) {
+    const slotsSection = document.getElementById('preorderSlotsSection');
+    const slotsGrid = document.getElementById('timeSlotsGrid');
+    const dateText = document.getElementById('slotsSelectedDateText');
+
+    if (!slotsSection || !slotsGrid) return;
+
+    slotsSection.style.display = 'block';
+    if (dateText) {
+        const dObj = new Date(dateStr + 'T00:00:00');
+        dateText.textContent = dObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    slotsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:15px; color:#667085;"><i class="fas fa-spinner fa-spin"></i> Loading available slots...</div>';
+
+    try {
+        const res = await fetch(`api/preorder_schedule.php?action=get_slots&seller_id=${activeSellerId}&date=${encodeURIComponent(dateStr)}`);
+        const json = await res.json();
+        if (json.success && json.slots) {
+            renderTimeSlots(json.slots);
+        }
+    } catch (e) {
+        console.error('Error loading time slots:', e);
+        slotsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:15px; color:#b3261e;">Failed to load time slots.</div>';
+    }
+}
+
+function renderTimeSlots(slots) {
+    const slotsGrid = document.getElementById('timeSlotsGrid');
+    if (!slotsGrid) return;
+    slotsGrid.innerHTML = '';
+
+    if (slots.length === 0) {
+        slotsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:15px; color:#667085;">No pickup time slots configured for this date.</div>';
         return;
     }
 
-    preorderGeocoder.geocode({ location: { lat, lng } }, async (results, status) => {
-        if (status === 'OK' && results && results.length) {
-            const result = results[0];
-            await applyResolvedAddress(
-                String(result.formatted_address || '').trim(),
-                extractPreorderAddressParts(result.address_components || [])
-            );
-            return;
+    slots.forEach(slot => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = `time-slot-card ${slot.is_available ? 'is-available' : 'is-disabled'}`;
+        if (slot.time_value === selectedPickupTime) {
+            card.classList.add('is-selected');
         }
 
-        if (isGoogleGeocodingUnavailableStatus(status)) {
-            preorderGoogleGeocodingAvailable = false;
+        card.innerHTML = `
+            <div class="slot-time"><i class="fas fa-clock"></i> ${slot.time_value}</div>
+            <div class="slot-label">${slot.display_label}</div>
+            <span class="slot-badge ${slot.is_available ? 'badge-open' : 'badge-full'}">${slot.badge_text}</span>
+        `;
+
+        if (slot.is_available) {
+            card.addEventListener('click', (e) => {
+                selectTimeSlot(slot.time_value, slot.display_label, card);
+            });
         }
 
-        const fallback = await reversePreorderGeocodeFromNominatim(lat, lng);
-        await applyResolvedAddress(fallback.formattedAddress, fallback.parts);
+        slotsGrid.appendChild(card);
     });
 }
 
-function initPreorderMap() {
-    if (isPreorderMapInitialized) return;
-    const mapCanvas = document.getElementById('preorderMap');
-    if (!mapCanvas || !window.google || !google.maps) return;
+function selectTimeSlot(timeVal, label, clickedEl) {
+    selectedPickupTime = timeVal;
+    const pickupTimeInput = document.getElementById('pickupTime');
+    if (pickupTimeInput) pickupTimeInput.value = timeVal;
 
-    isPreorderMapInitialized = true;
-    preorderMap = new google.maps.Map(mapCanvas, {
-        center: { lat: 14.5995, lng: 120.9842 },
-        zoom: 11
-    });
+    document.querySelectorAll('.time-slot-card').forEach(c => c.classList.remove('is-selected'));
+    if (clickedEl) clickedEl.classList.add('is-selected');
 
-    preorderGeocoder = new google.maps.Geocoder();
-
-    const searchInput = document.getElementById('preorderAddressSearch');
-    if (searchInput && google.maps.places && typeof google.maps.places.Autocomplete === 'function') {
-        preorderAutocomplete = new google.maps.places.Autocomplete(searchInput);
-        preorderAutocomplete.bindTo('bounds', preorderMap);
-        preorderAutocomplete.addListener('place_changed', async () => {
-            const place = preorderAutocomplete.getPlace();
-            if (!place || !place.geometry) return;
-
-            preorderMap.setCenter(place.geometry.location);
-            preorderMap.setZoom(17);
-            preorderMarker.setPosition(place.geometry.location);
-
-            const formattedAddress = String(place.formatted_address || '').trim();
-            const streetCandidate = (formattedAddress.split(',')[0] || '').trim();
-            if (formattedAddress) {
-                latestPreorderResolvedAddress = formattedAddress;
-                searchInput.value = formattedAddress;
-            }
-            const streetInput = document.getElementById('streetAddress');
-            if (streetInput && streetCandidate) streetInput.value = streetCandidate;
-
-            document.getElementById('latitude').value = String(place.geometry.location.lat());
-            document.getElementById('longitude').value = String(place.geometry.location.lng());
-            await applyPreorderAddressComponents(extractPreorderAddressParts(place.address_components || []));
-            syncPreorderAddressFields();
-        });
+    const badge = document.getElementById('scheduleSelectedBadge');
+    const summaryText = document.getElementById('scheduleSelectedSummaryText');
+    if (badge && summaryText && selectedPickupDate) {
+        const dObj = new Date(selectedPickupDate + 'T00:00:00');
+        const formattedDate = dObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        summaryText.innerHTML = `<strong>${formattedDate}</strong> at <strong>${timeVal}</strong> (${label})`;
+        badge.style.display = 'flex';
     }
-
-    preorderMarker = new google.maps.Marker({
-        map: preorderMap,
-        draggable: true
-    });
-
-    preorderMarker.addListener('dragend', () => {
-        const position = preorderMarker.getPosition();
-        if (!position) return;
-        updatePreorderAddressFromCoordinates(position.lat(), position.lng());
-    });
-
-    preorderMap.addListener('click', (event) => {
-        preorderMarker.setPosition(event.latLng);
-        updatePreorderAddressFromCoordinates(event.latLng.lat(), event.latLng.lng());
-    });
 }
-
-// Barangays by City/Municipality in Cavite
-const barangaysByCity = {
-    'Bacoor': ['Alima', 'Aniban I', 'Aniban II', 'Aniban III', 'Aniban IV', 'Aniban V', 'Banalo', 'Bayanan', 'Campo Santo', 'Daang Bukid', 'Digman', 'Dulong Bayan', 'Habay I', 'Habay II', 'Kaingin', 'Ligas I', 'Ligas II', 'Ligas III', 'Mabolo I', 'Mabolo II', 'Mabolo III', 'Maliksi I', 'Maliksi II', 'Maliksi III', 'Molino I', 'Molino II', 'Molino III', 'Molino IV', 'Molino V', 'Molino VI', 'Molino VII', 'Niog I', 'Niog II', 'Niog III', 'Panapaan I', 'Panapaan II', 'Panapaan III', 'Panapaan IV', 'Panapaan V', 'Panapaan VI', 'Panapaan VII', 'Panapaan VIII', 'Queens Row Central', 'Queens Row East', 'Queens Row West', 'Real I', 'Real II', 'Salinas I', 'Salinas II', 'Salinas III', 'Salinas IV', 'San Nicolas I', 'San Nicolas II', 'San Nicolas III', 'Springville', 'Tabing Dagat', 'Talaba I', 'Talaba II', 'Talaba III', 'Talaba IV', 'Talaba V', 'Talaba VI', 'Talaba VII', 'Zapote I', 'Zapote II', 'Zapote III', 'Zapote IV', 'Zapote V'],
-    'Cavite City': ['Barangay 1', 'Barangay 2', 'Barangay 3', 'Barangay 4', 'Barangay 5', 'Barangay 6', 'Barangay 7', 'Barangay 8', 'Barangay 9', 'Barangay 10', 'Barangay 11', 'Barangay 12', 'Barangay 13', 'Barangay 14', 'Barangay 15', 'Barangay 16', 'Barangay 17', 'Barangay 18', 'Barangay 19', 'Barangay 20', 'Barangay 21', 'Barangay 22', 'Barangay 23', 'Barangay 24', 'Barangay 25', 'Barangay 26', 'Barangay 27', 'Barangay 28', 'Barangay 29', 'Barangay 30', 'Barangay 31', 'Barangay 32', 'Barangay 33', 'Barangay 34', 'Barangay 35', 'Barangay 36', 'Barangay 37', 'Barangay 38', 'Barangay 39', 'Barangay 40', 'Barangay 41', 'Barangay 42', 'Barangay 43', 'Barangay 44', 'Barangay 45', 'Barangay 46', 'Barangay 47', 'Barangay 48', 'Barangay 49', 'Barangay 50', 'Barangay 51', 'Barangay 52', 'Barangay 53', 'Barangay 54', 'Barangay 55', 'Barangay 56', 'Barangay 57', 'Barangay 58', 'Barangay 59', 'Barangay 60', 'Barangay 61', 'Barangay 62', 'Barangay 63', 'Barangay 64', 'Barangay 65', 'Barangay 66', 'Barangay 67', 'Barangay 68', 'Barangay 69', 'Barangay 70', 'Barangay 71', 'Barangay 72', 'Barangay 73', 'Barangay 74', 'Barangay 75', 'Barangay 76', 'Barangay 77', 'Barangay 78', 'Barangay 79', 'Barangay 80', 'Barangay 81', 'Barangay 82', 'Barangay 83', 'Barangay 84'],
-    'Dasmarinas': ['Paliparan I', 'Paliparan II', 'Paliparan III', 'Salawag', 'Salitran I', 'Salitran II', 'Salitran III', 'Salitran IV', 'Sampaloc I', 'Sampaloc II', 'Sampaloc III', 'Sampaloc IV', 'Sampaloc V', 'San Agustin I', 'San Agustin II', 'San Agustin III', 'San Andres I', 'San Andres II', 'San Antonio de Padua I', 'San Antonio de Padua II', 'San Dionisio', 'San Esteban', 'San Isidro Labrador I', 'San Isidro Labrador II', 'San Jose', 'San Juan', 'San Lorenzo Ruiz I', 'San Lorenzo Ruiz II', 'San Luis I', 'San Luis II', 'San Mateo', 'San Miguel I', 'San Miguel II', 'San Nicolas I', 'San Nicolas II', 'San Roque', 'San Simon', 'Santa Cristina I', 'Santa Cristina II', 'Santa Lucia', 'Santa Maria', 'Santiago', 'Emmanuel I', 'Emmanuel II', 'Burol I', 'Burol II', 'Burol III', 'Fatima I', 'Fatima II', 'Fatima III', 'Datu Esmael', 'Emmanuel III', 'Langkaan I', 'Langkaan II', 'Luzviminda I', 'Luzviminda II', 'Victoria Reyes', 'Zone I-A', 'Zone I-B', 'Zone II-A', 'Zone II-B', 'Zone III', 'Zone IV-A', 'Zone IV-B'],
-    'Imus': ['Alapan I-A', 'Alapan I-B', 'Alapan I-C', 'Alapan II-A', 'Alapan II-B', 'Anabu I-A', 'Anabu I-B', 'Anabu I-C', 'Anabu I-D', 'Anabu I-E', 'Anabu I-F', 'Anabu I-G', 'Anabu II-A', 'Anabu II-B', 'Anabu II-C', 'Anabu II-D', 'Anabu II-E', 'Anabu II-F', 'Bagong Silang', 'Bayan Luma I', 'Bayan Luma II', 'Bayan Luma III', 'Bayan Luma IV', 'Bayan Luma V', 'Bayan Luma VI', 'Bayan Luma VII', 'Bayan Luma VIII', 'Buhay na Tubig', 'Bucandala I', 'Bucandala II', 'Bucandala III', 'Bucandala IV', 'Bucandala V', 'Carsadang Bago I', 'Carsadang Bago II', 'Magdalo', 'Maharlika', 'Malagasang I-A', 'Malagasang I-B', 'Malagasang I-C', 'Malagasang I-D', 'Malagasang I-E', 'Malagasang I-F', 'Malagasang I-G', 'Malagasang II-A', 'Malagasang II-B', 'Malagasang II-C', 'Malagasang II-D', 'Malagasang II-E', 'Malagasang II-F', 'Mariano Espeleta I', 'Mariano Espeleta II', 'Mariano Espeleta III', 'Medicion I-A', 'Medicion I-B', 'Medicion I-C', 'Medicion I-D', 'Medicion II-A', 'Medicion II-B', 'Medicion II-C', 'Medicion II-D', 'Medicion II-E', 'Medicion II-F', 'Palico I', 'Palico II', 'Palico III', 'Palico IV', 'Pasong Buaya I', 'Pasong Buaya II', 'Poblacion I-A', 'Poblacion I-B', 'Poblacion I-C', 'Poblacion II-A', 'Poblacion II-B', 'Poblacion III-A', 'Poblacion III-B', 'Poblacion IV-A', 'Poblacion IV-B', 'Poblacion IV-C', 'Poblacion IV-D', 'Toclong I-A', 'Toclong I-B', 'Toclong I-C', 'Toclong II-A', 'Toclong II-B'],
-    'Tagaytay': ['Asisan', 'Bagong Tubig', 'Calabuso', 'Dapdap East', 'Dapdap West', 'Francisco', 'Guinhawa North', 'Guinhawa South', 'Iruhin Central', 'Iruhin East', 'Iruhin South', 'Iruhin West', 'Kaybagal Central', 'Kaybagal North', 'Kaybagal South', 'Mag-Asawang Ilat', 'Maharlika East', 'Maharlika West', 'Maitim 2nd Central', 'Maitim 2nd East', 'Maitim 2nd West', 'Mendez Crossing East', 'Mendez Crossing West', 'Neogan', 'Patutong Malaki North', 'Patutong Malaki South', 'Sambong', 'San Jose', 'Silang Crossing East', 'Silang Crossing West', 'Sungay East', 'Sungay West', 'Tolentino East', 'Tolentino West', 'Zambal'],
-    'Trece Martires': ['Aguado', 'Cabezas', 'Cabuco', 'Conchu', 'De Ocampo', 'Gregoria', 'Inocencio', 'Lapidario', 'Llavac', 'Luciano', 'Osorio', 'Perez', 'San Agustin'],
-    'General Trias': ['Alingaro', 'Arnaldo', 'Bacao I', 'Bacao II', 'Bagumbayan', 'Biclatan', 'Buenavista I', 'Buenavista II', 'Buenavista III', 'Corregidor', 'Dulong Bayan', 'Gov. Ferrer', 'Javalera', 'Manggahan', 'Navarro', 'Ninety Sixth', 'Panungyanan', 'Pasong Camachile I', 'Pasong Camachile II', 'Pasong Kawayan I', 'Pasong Kawayan II', 'Pinagtipunan', 'Prinza', 'Sampalucan', 'San Francisco', 'San Gabriel', 'San Juan I', 'San Juan II', 'Santa Clara', 'Santiago', 'Tapia', 'Tejero', 'Vibora'],
-    'Kawit': ['Balsahan-Bisita', 'Binakayan-Aplaya', 'Binakayan-Kanluran', 'Congbalay-Legaspi', 'Gahak', 'Kaingen', 'Kapipol', 'Magdalo (Putol)', 'Manggahan-Lawin', 'Marulas', 'Panamitan', 'Poblacion', 'Pulvorista', 'Samala-Marquez', 'San Sebastian', 'Santa Isabel', 'Tabon I', 'Tabon II', 'Tabon III', 'Toclong', 'Tramo-Bantayan', 'Wakas I', 'Wakas II'],
-    'Noveleta': ['Magdiwang', 'Poblacion', 'Salcedo I', 'Salcedo II', 'San Antonio I', 'San Antonio II', 'San Jose I', 'San Jose II', 'San Juan I', 'San Juan II', 'San Rafael I', 'San Rafael II', 'San Rafael III', 'San Rafael IV', 'Santa Rosa I', 'Santa Rosa II'],
-    'Rosario': ['Bagbad I', 'Bagbad II', 'Kanluran', 'Ligtong I', 'Ligtong II', 'Ligtong III', 'Ligtong IV', 'Muzon I', 'Muzon II', 'Poblacion', 'Sapa I', 'Sapa II', 'Sapa III', 'Sapa IV', 'Silangan I', 'Silangan II', 'Tejeros Convention', 'Wawa I', 'Wawa II', 'Wawa III'],
-    'Tanza': ['Amaya I', 'Amaya II', 'Amaya III', 'Amaya IV', 'Amaya V', 'Amaya VI', 'Amaya VII', 'Bagtas', 'Biga I', 'Biga II', 'Biwas', 'Bucal I', 'Bucal II', 'Bucal III-A', 'Bucal III-B', 'Capipisa', 'Daang Amaya I', 'Daang Amaya II', 'Daang Amaya III', 'Halayhay', 'Julugan I', 'Julugan II', 'Julugan III', 'Julugan IV', 'Julugan V', 'Julugan VI', 'Julugan VII', 'Julugan VIII', 'Lambingan', 'Mulawin', 'Paradahan I', 'Paradahan II', 'Pata', 'Poblacion I', 'Poblacion II', 'Poblacion III', 'Poblacion IV', 'Sahud Ulan', 'Sanja Mayor', 'Santol', 'Tanauan', 'Tres Cruses'],
-    'Naic': ['Bagong Karsada', 'Balsahan', 'Bancaan', 'Bucana', 'Calubcob', 'Capt. C. Nazareno', 'Gomez-Zamora', 'Halang', 'Humbac', 'Ibayo Estacion', 'Ibayo Silangan', 'Kanluran', 'Labac', 'Latoria', 'Mabulo', 'Makina', 'Malainen Bago', 'Malainen Luma', 'Molino', 'Munting Mapino', 'Muzon', 'Palangue Central', 'Palangue North', 'Palangue South', 'Poblacion', 'Sabang', 'San Roque', 'Santulan', 'Sapa', 'Timalan Balsahan', 'Timalan Concepcion'],
-    'Silang': ['Acacia', 'Adlas', 'Anahaw I', 'Anahaw II', 'Balite I', 'Balite II', 'Balite III', 'Balubad', 'Barangay I', 'Barangay II', 'Barangay III', 'Barangay IV', 'Barangay V', 'Batas', 'Biga I', 'Biga II', 'Biluso', 'Bucal', 'Buho', 'Bulihan', 'Cabangaan', 'Carmen', 'Dakila', 'Iba', 'Inchican', 'Ipil I', 'Ipil II', 'Kaong', 'Lalaan I', 'Lalaan II', 'Litlit', 'Lucsuhin', 'Lumil', 'Maguyam', 'Malabag', 'Mataas na Burol', 'Nasugbu', 'Narra I', 'Narra II', 'Narra III', 'Pooc I', 'Pooc II', 'Putingkahoy', 'Sabutan', 'San Miguel I', 'San Miguel II', 'San Vicente I', 'San Vicente II', 'Santa Rosa I', 'Santa Rosa II', 'Santol', 'Soong', 'Tartaria', 'Tibig', 'Toledo', 'Tubuan I', 'Tubuan II', 'Tubuan III', 'Ulat', 'Yakal'],
-    'Amadeo': ['Banaybanay', 'Barangay I', 'Barangay II', 'Barangay III', 'Barangay IV', 'Barangay V', 'Barangay VI', 'Barangay VII', 'Barangay VIII', 'Bucal', 'Buho', 'Dagatan', 'Halang', 'Loma', 'Mapalad', 'Minantok Kanluran', 'Minantok Silangan', 'Pangil', 'Salaban', 'Talon', 'Tamacan'],
-    'Indang': ['Agus-us', 'Alulod', 'Banaba Cerca', 'Banaba Lejos', 'Bancod', 'Barangay 1', 'Barangay 2', 'Barangay 3', 'Barangay 4', 'Buna Cerca', 'Buna Lejos I', 'Buna Lejos II', 'Calumpang Cerca', 'Calumpang Lejos I', 'Calumpang Lejos II', 'Carasuchi', 'Daine I', 'Daine II', 'Guyam Malaki', 'Guyam Munti', 'Harasan', 'Kayquit I', 'Kayquit II', 'Kayquit III', 'Kaytapos', 'Limbon', 'Lumampong Balagbag', 'Lumampong Halayhay', 'Mahabangkahoy Cerca', 'Mahabangkahoy Lejos', 'Mataas na Lupa', 'Pulo', 'Tambo Balagbag', 'Tambo Ilaya', 'Tambo Malaki', 'Tambo Kulit'],
-    'General Mariano Alvarez': ['Aldiano Olaes', 'Barangay 1', 'Barangay 2', 'Barangay 3', 'Barangay 4', 'Benjamin Tirona', 'Bernardo Pulido', 'Epifanio Malia', 'Fiorello Calawit', 'Francisco De Castro', 'Francisco Reyes', 'Gavino Maderan', 'Gregoria De Jesus', 'Inocencio Salud', 'Jacinto Lumbreras', 'Kapitan Kua', 'Koronel Jose P. Elises', 'Macario Dacon', 'Marcelino Memije', 'Nicolasa Virata', 'Pantaleon Granados', 'Rafael Gonzales', 'Ramon Cruz', 'San Gabriel', 'San Jose', 'Severino De Las Alas', 'Tiniente Tiago'],
-    'Carmona': ['Barangay 1', 'Barangay 2', 'Barangay 3', 'Barangay 4', 'Barangay 5', 'Barangay 6', 'Barangay 7', 'Barangay 8', 'Bancal', 'Cabilang Baybay', 'Lantic', 'Lantik', 'Mabuhay', 'Maduya', 'Milagrosa', 'Poblacion 1A', 'Poblacion 1B', 'Poblacion 1C', 'Poblacion 1D', 'Poblacion 2A', 'Poblacion 2B', 'Poblacion 3A', 'Poblacion 3B'],
-    'Alfonso': ['Amuyong', 'Bilog', 'Buck Estate', 'Kaysuyo', 'Luksuhin', 'Mangas I', 'Mangas II', 'Marahan I', 'Marahan II', 'Pajo', 'Poblacion I', 'Poblacion II', 'Sikat', 'Sulsugin', 'Taywanak', 'Upli'],
-    'Magallanes': ['Barangay I', 'Barangay II', 'Barangay III', 'Barangay IV', 'Bend', 'Bombon', 'Crispin Balagtas', 'Kabilang Baybay', 'Medina', 'Pacheco', 'Ramirez', 'San Agustin', 'Tua', 'Urdaneta'],
-    'Maragondon': ['Barangay I', 'Barangay II', 'Barangay III', 'Barangay IV', 'Barangay V', 'Bucal I', 'Bucal II', 'Bucal III', 'Bucal IV-A', 'Bucal IV-B', 'Cabooan', 'Caingin', 'Garita I-A', 'Garita I-B', 'Layong Mabilog', 'Mabato', 'Pantihan I', 'Pantihan II', 'Pantihan III', 'Pantihan IV', 'Patungan', 'Pinagsanhan A', 'Pinagsanhan B', 'Poblacion I-A', 'Poblacion I-B', 'Poblacion II-A', 'Poblacion II-B', 'San Miguel I-A', 'San Miguel I-B', 'San Miguel II-A', 'San Miguel II-B', 'Talipusngo', 'Tulay Kanluran', 'Tulay Silangan'],
-    'Mendez': ['Anuling Cerca I', 'Anuling Cerca II', 'Anuling Lejos I', 'Anuling Lejos II', 'Banayad', 'Bukal', 'Galicia I', 'Galicia II', 'Galicia III', 'Poblacion I', 'Poblacion II', 'Poblacion III'],
-    'Ternate': ['Poblacion I-A', 'Poblacion I-B', 'Poblacion II', 'Poblacion III', 'San Jose', 'San Juan I', 'San Juan II', 'Sapang I', 'Sapang II']
-};
-
-let currentStep = 1;
 
 document.addEventListener('DOMContentLoaded', function() {
     renderProducts('all');
+    updateCartUI(); // Reflect any prefilled cart items (from checkout switch)
     setupButtons();
     setupFilters();
     setupProgressNavigation();
-    
-    // Set minimum date to today for pickup date
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('pickupDate').setAttribute('min', today);
 
-    initializePreorderAddressSection().catch((error) => {
-        console.error('Failed to initialize preorder address section:', error);
-        initializePreorderFallbackAddressOptions();
-        updateBarangays(preferredBarangay || '').catch(() => {});
-        syncPreorderAddressFields();
-        Swal.fire('Warning', 'Address reference data is unavailable right now. Please refresh and try again.', 'warning');
+    prioritizeAndSelectNearbyReservationStore();
+    loadCalendarMonth(currentCalMonth);
+
+    window.addEventListener('storage', function (e) {
+        if (e.key === 'market_address_payload' || e.key === 'market_address') {
+            prioritizeAndSelectNearbyReservationStore();
+        }
     });
-
-    const mapSearchInput = document.getElementById('preorderAddressSearch');
-    if (mapSearchInput && userAddressSeed) {
-        mapSearchInput.value = userAddressSeed;
-    }
-    const streetInputSeed = document.getElementById('streetAddress');
-    if (streetInputSeed && !streetInputSeed.value && preferredStreet) {
-        streetInputSeed.value = preferredStreet;
-    }
-
-    if (!preorderGoogleMapsApiKey) {
-        const mapCanvas = document.getElementById('preorderMap');
-        if (mapCanvas) {
-            mapCanvas.innerHTML = '<div style="padding:16px;color:#991b1b;font-size:14px;">Google Maps is unavailable because API key is missing.</div>';
-        }
-        const useMyLocationBtnNoKey = document.getElementById('preorderUseMyLocation');
-        if (useMyLocationBtnNoKey) {
-            useMyLocationBtnNoKey.disabled = true;
-        }
-    }
-
-    const useMyLocationBtn = document.getElementById('preorderUseMyLocation');
-    if (useMyLocationBtn) {
-        useMyLocationBtn.addEventListener('click', () => {
-            if (!navigator.geolocation) {
-                Swal.fire('Location Unavailable', 'Your browser does not support geolocation.', 'warning');
-                return;
-            }
-
-            if (!preorderMap || !preorderMarker) {
-                if (window.google && window.google.maps) {
-                    initPreorderMap();
-                }
-                if (!preorderMap || !preorderMarker) {
-                    Swal.fire('Map Loading', 'Please wait for the map to load, then try again.', 'info');
-                    return;
-                }
-            }
-
-            useMyLocationBtn.disabled = true;
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const coords = {
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude
-                    };
-                    preorderMap.setCenter(coords);
-                    preorderMap.setZoom(17);
-                    preorderMarker.setPosition(coords);
-                    updatePreorderAddressFromCoordinates(coords.lat, coords.lng);
-                    useMyLocationBtn.disabled = false;
-                },
-                () => {
-                    Swal.fire('Location Error', 'Unable to get your current location. Please allow location access.', 'warning');
-                    useMyLocationBtn.disabled = false;
-                },
-                { enableHighAccuracy: true, timeout: 10000 }
-            );
-        });
-    }
-
-    if (window.google && window.google.maps) {
-        initPreorderMap();
+    window.addEventListener('marketAddressChanged', prioritizeAndSelectNearbyReservationStore);
+    window.addEventListener('marketAddressUpdated', prioritizeAndSelectNearbyReservationStore);
+    
+    // Auto-add product if routed with product_id (e.g. from Menu 'Reserve Event Date')
+    const preselectedProductId = <?php echo (int)$requested_product_id; ?>;
+    if (preselectedProductId > 0) {
+        addToCart(preselectedProductId);
     }
 });
 
@@ -1079,14 +3857,47 @@ function setupFilters() {
 
 function renderProducts(category) {
     const productList = document.getElementById('productList');
+    if (!productList) return;
     
-    const filtered = category === 'all' ? products : products.filter(p => p.category === category);
+    const cat = category || 'all';
+    const officialOwnerIds = [0, 1, 42, 43, 44, 45];
+
+    // Identify current selected store
+    const sIdStr = String(window.activeStoreId || '');
+    let currentStore = null;
+    if (typeof stores !== 'undefined' && Array.isArray(stores)) {
+        currentStore = stores.find(s => String(s.id) === sIdStr || String(s.store_id) === sIdStr);
+    }
+    const storeOwnerId = currentStore ? parseInt(currentStore.seller_id || currentStore.owner_user_id || 1) : parseInt(window.activeSellerId || 1);
+    const isPartnerStore = currentStore && (currentStore.store_category === 'partner' || currentStore.store_type_label === 'Partner Store' || !officialOwnerIds.includes(storeOwnerId));
+
+    // Isolate products belonging strictly to the selected business shop
+    let storeProducts = [];
+    if (isPartnerStore) {
+        // Partner Store: strictly only items where seller_id matches this partner
+        storeProducts = products.filter(p => parseInt(p.seller_id) === storeOwnerId);
+    } else {
+        // Official Branch: foods with seller_id = 1, seller_id is null, or matching branch owner
+        storeProducts = products.filter(p => {
+            const sId = p.seller_id ? parseInt(p.seller_id) : 1;
+            return sId === 1 || sId === storeOwnerId || !p.seller_id;
+        });
+    }
+
+    const filtered = cat === 'all' ? storeProducts : storeProducts.filter(p => p.category === cat);
 
     if (filtered.length === 0) {
-        const emptyMessage = activeSellerId > 0
-            ? 'No active products are currently posted for this partner.'
-            : 'No active products are currently available.';
-        productList.innerHTML = `<p class="empty-product-note">${emptyMessage}</p>`;
+        const storeName = currentStore ? (currentStore.store_name || 'this shop') : 'this shop';
+        const emptyMessage = storeProducts.length === 0
+            ? `No menu items are currently available for ${storeName}. Please choose another branch or shop.`
+            : `No items found in this category for ${storeName}.`;
+        productList.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; background: #ffffff; border: 1px dashed #d0d5dd; border-radius: 14px; color: #475467;">
+                <i class="fas fa-utensils" style="font-size: 2rem; color: #98a2b3; margin-bottom: 10px; display: block;"></i>
+                <h4 style="margin: 0 0 6px; font-family: 'Outfit', sans-serif; font-size: 1.05rem; color: #101828; font-weight: 700;">No Menu Items Available</h4>
+                <p style="margin: 0; font-size: 0.85rem; color: #667085;">${emptyMessage}</p>
+            </div>
+        `;
         return;
     }
     
@@ -1102,64 +3913,106 @@ function renderProducts(category) {
             imageHtml = `<i class="fas fa-drumstick-bite"></i>`;
         }
         
-        // Check if in cart
-        const inCart = cart.find(i => i.id === p.id);
-        const qty = inCart ? inCart.quantity : 0;
-        const btnText = qty > 0 ? `Added (${qty})` : 'Add to Order';
-        const btnClass = qty > 0 ? 'btn-success' : 'btn-outline';
+        const inCart = cart.find(i => String(i.id) === String(p.id) || String(i.product_id) === String(p.product_id));
+        const qty = inCart ? (parseInt(inCart.quantity) || 0) : 0;
+        const isSelected = qty > 0;
+        const priceNum = parseFloat(p.price) || 0;
+        const pStock = typeof p.stock !== 'undefined' ? parseInt(p.stock) : 10;
+        const isSoldOut = pStock <= 0;
         
         return `
-        <div class="product-card ${qty > 0 ? 'selected' : ''}">
-            <div class="product-image">${imageHtml}</div>
-            <div class="product-info">
-                <h4>${p.name}</h4>
-                <p class="product-price">₱${p.price.toLocaleString()}</p>
-                <p class="product-desc">${p.description || 'Premium quality lechon'}</p>
-                <button type="button" class="btn btn-sm ${btnClass} add-cart-btn" onclick="toggleCartItem(${p.id})">${btnText}</button>
+            <div class="product-card ${isSelected ? 'selected' : ''} ${isSoldOut ? 'product-sold-out' : ''}" data-product-id="${p.id}" onclick="${isSoldOut ? '' : `addToCart(${p.id})`}">
+                <div class="check-icon"><i class="fas fa-check"></i></div>
+                <div class="product-image">
+                    ${imageHtml}
+                    ${isSoldOut ? '<div style="position:absolute;inset:0;background:rgba(16,24,40,0.65);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.8rem;border-radius:10px;">SOLD OUT</div>' : ''}
+                </div>
+                <div class="product-info">
+                    <h4>${p.name}</h4>
+                    <div class="product-price">₱${priceNum.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                    <div style="margin: 4px 0 8px; display: flex; align-items: center; gap: 4px;">
+                        ${!isSoldOut 
+                            ? `<span style="font-size:0.72rem; font-weight:700; color:#027a48; background:#ecfdf3; border:1px solid #abefc6; padding:2px 6px; border-radius:4px;"><i class="fas fa-boxes-stacked"></i> ${pStock} in stock</span>`
+                            : `<span style="font-size:0.72rem; font-weight:700; color:#b3261e; background:#fff1f0; border:1px solid #fee4e2; padding:2px 6px; border-radius:4px;"><i class="fas fa-ban"></i> Out of stock</span>`
+                        }
+                    </div>
+                    <button type="button" class="btn ${isSelected ? 'btn-primary' : 'btn-outline'} btn-sm btn-block btn-add-preorder" data-product-id="${p.id}" ${isSoldOut ? 'disabled style="opacity:0.6; cursor:not-allowed;"' : `onclick="event.stopPropagation(); addToCart(${p.id})"`}>
+                        ${isSoldOut ? '<i class="fas fa-ban"></i> Sold Out' : (isSelected ? `<i class="fas fa-check"></i> Added (${qty})` : '<i class="fas fa-plus"></i> Add to Order')}
+                    </button>
+                </div>
             </div>
-        </div>
-    `}).join('');
+        `;
+    }).join('');
 }
 
-function toggleCartItem(id) {
-    const product = products.find(p => p.id === id);
-    if (!product) return;
-    
-    const existingItem = cart.find(i => i.id === id);
-    
-    if (existingItem) {
-        // If already in cart, increment quantity
-        existingItem.quantity++;
-    } else {
-        cart.push({ ...product, quantity: 1 });
+function addToCart(productId) {
+    if (!productId) return;
+    const pIdStr = String(productId);
+    const product = products.find(p => String(p.id) === pIdStr || (p.product_id && String(p.product_id) === pIdStr));
+    if (!product) {
+        console.warn('Product not found for ID:', productId);
+        return;
     }
 
-    Swal.fire({
-        toast: true,
-        position: 'top-end',
-        icon: 'success',
-        title: 'Added to cart',
-        showConfirmButton: false,
-        timer: 1500
-    });
+    const pStock = typeof product.stock !== 'undefined' ? parseInt(product.stock) : 10;
+    if (pStock <= 0) {
+        showPreorderToast('Sorry, ' + product.name + ' is currently out of stock.');
+        return;
+    }
+    
+    const existing = cart.find(i => String(i.id) === String(product.id) || (i.product_id && String(i.product_id) === String(product.product_id)));
+    if (existing) {
+        if (existing.quantity >= pStock) {
+            showPreorderToast('Cannot add more than available stock (' + pStock + ' max).');
+            return;
+        }
+        existing.quantity = (parseInt(existing.quantity) || 1) + 1;
+    } else {
+        cart.push({
+            id: product.id,
+            product_id: product.product_id || '',
+            name: product.name,
+            price: parseFloat(product.price) || 0,
+            image: product.image || 'default.jpg',
+            quantity: 1
+        });
+    }
+    
+    showPreorderToast('Added ' + product.name + ' to Pre-Order Cart');
     
     updateCartUI();
-    // Re-render to update button state
     const activeBtn = document.querySelector('.category-link.active');
     renderProducts(activeBtn ? activeBtn.dataset.category : 'all');
 }
 
 function updateCartItemQty(id, change) {
-    const idx = cart.findIndex(i => i.id === id);
+    const idx = cart.findIndex(i => String(i.id) === String(id) || String(i.product_id) === String(id));
     if (idx === -1) return;
     
-    cart[idx].quantity += change;
+    cart[idx].quantity = (parseInt(cart[idx].quantity) || 1) + change;
     if (cart[idx].quantity <= 0) {
         cart.splice(idx, 1);
     }
     
     updateCartUI();
-    // Re-render grid
+    const activeBtn = document.querySelector('.category-link.active');
+    renderProducts(activeBtn ? activeBtn.dataset.category : 'all');
+}
+
+function removeFromCart(id) {
+    const idx = cart.findIndex(i => String(i.id) === String(id) || String(i.product_id) === String(id));
+    if (idx !== -1) {
+        cart.splice(idx, 1);
+        updateCartUI();
+        const activeBtn = document.querySelector('.category-link.active');
+        renderProducts(activeBtn ? activeBtn.dataset.category : 'all');
+    }
+}
+
+function clearCart() {
+    if (cart.length === 0) return;
+    cart = [];
+    updateCartUI();
     const activeBtn = document.querySelector('.category-link.active');
     renderProducts(activeBtn ? activeBtn.dataset.category : 'all');
 }
@@ -1167,24 +4020,26 @@ function updateCartItemQty(id, change) {
 function updateCartUI() {
     const container = document.getElementById('preorderCartItems');
     const totalDisplay = document.getElementById('cartTotalDisplay');
+    const subtotalDisplay = document.getElementById('cartSubtotalDisplay');
+    const vatDisplay = document.getElementById('cartVatDisplay');
     const countBadge = document.getElementById('cartCountBadge');
     const clearBtn = document.getElementById('clearCartBtn');
 
-    if (!container) return; // Safety check
+    if (!container) return;
     
     const totals = getPreorderTotals();
     const itemCount = cart.reduce((sum, item) => sum + (parseInt(item.quantity) || 0), 0);
     
     if (cart.length === 0) {
-        container.innerHTML = '<p class="empty-cart-msg">No items selected yet.</p>';
-        if(countBadge) countBadge.style.display = 'none';
-        if(clearBtn) clearBtn.style.display = 'none';
+        container.innerHTML = '<p class="empty-cart-msg"><i class="fas fa-basket-shopping" style="font-size:1.4rem; color:#98a2b3; display:block; margin-bottom:6px;"></i> No items selected yet.<br><span style="font-size:0.78rem; color:#98a2b3;">Select dishes to add to pre-order</span></p>';
+        if (countBadge) countBadge.style.display = 'none';
+        if (clearBtn) clearBtn.style.display = 'none';
     } else {
-        if(countBadge) {
+        if (countBadge) {
             countBadge.textContent = itemCount;
-            countBadge.style.display = 'inline-block';
+            countBadge.style.display = 'inline-flex';
         }
-        if(clearBtn) clearBtn.style.display = 'inline-block';
+        if (clearBtn) clearBtn.style.display = 'inline-flex';
 
         const itemsHtml = cart.map(item => {
             let imageHtml = '<div class="cart-item-thumb-placeholder"><i class="fas fa-drumstick-bite"></i></div>';
@@ -1196,45 +4051,52 @@ function updateCartUI() {
                 imageHtml = `<img src="${imgSrc}" alt="${item.name}" class="cart-item-thumb">`;
             }
 
+            const itemPrice = parseFloat(item.price) || 0;
+            const itemQty = parseInt(item.quantity) || 1;
+            const itemTotal = itemPrice * itemQty;
+
             return `
             <div class="cart-item-row">
                 <div class="cart-item-image-col">${imageHtml}</div>
                 <div class="cart-item-details-col">
                     <div class="cart-item-name">${item.name}</div>
-                    <div class="cart-item-price-single">₱${item.price.toLocaleString()} each</div>
+                    <div class="cart-item-price-single">₱${itemPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} each</div>
                     <div class="cart-item-controls">
                         <button type="button" class="tiny-btn" onclick="updateCartItemQty(${item.id}, -1)"><i class="fas fa-minus"></i></button>
-                        <span class="qty-display">${item.quantity}</span>
+                        <span class="qty-display">${itemQty}</span>
                         <button type="button" class="tiny-btn" onclick="updateCartItemQty(${item.id}, 1)"><i class="fas fa-plus"></i></button>
                     </div>
                 </div>
                 <div class="cart-item-total-col">
-                    <div class="cart-item-price">₱${(item.price * item.quantity).toLocaleString()}</div>
+                    <div class="cart-item-price">₱${itemTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
                     <button type="button" class="remove-item-btn" onclick="removeFromCart(${item.id})" title="Remove item"><i class="fas fa-trash"></i></button>
                 </div>
             </div>
-        `;
+            `;
         }).join('');
         
         container.innerHTML = itemsHtml;
     }
     
-    totalDisplay.textContent = '₱' + totals.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (subtotalDisplay) subtotalDisplay.textContent = '₱' + totals.subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (vatDisplay) vatDisplay.textContent = '₱' + totals.vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (totalDisplay) totalDisplay.textContent = '₱' + totals.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     updateSummary();
 }
+
+window.addToCart = addToCart;
+window.updateCartItemQty = updateCartItemQty;
+window.removeFromCart = removeFromCart;
+window.clearCart = clearCart;
+window.renderProducts = renderProducts;
 
 function setupProgressNavigation() {
     document.querySelectorAll('.progress-step').forEach(stepEl => {
         stepEl.addEventListener('click', function() {
             const targetStep = parseInt(this.dataset.step, 10);
-
-            // Only allow navigation to steps that have been completed or are active.
             if (this.classList.contains('completed') || this.classList.contains('active')) {
-                // No validation needed to go back to a completed step.
                 goToStep(targetStep);
             } else {
-                // To move forward, the user must use the "Next" button
-                // which includes validation. We can give a small hint.
                 Swal.fire({
                     toast: true,
                     position: 'top-end',
@@ -1248,23 +4110,18 @@ function setupProgressNavigation() {
     });
 }
 
-function clearCart() {
-    cart = [];
-    updateCartUI();
-    const activeBtn = document.querySelector('.category-link.active');
-    renderProducts(activeBtn ? activeBtn.dataset.category : 'all');
-}
-
 function updateSummary() {
     const totals = getPreorderTotals();
     const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
     
-    document.getElementById('payItemCount').textContent = itemCount;
+    const countEl = document.getElementById('payItemCount');
+    if (countEl) countEl.textContent = itemCount;
     const subtotalElement = document.getElementById('paySubtotal');
     const vatElement = document.getElementById('payVat');
     if (subtotalElement) subtotalElement.textContent = '₱' + totals.subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     if (vatElement) vatElement.textContent = '₱' + totals.vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    document.getElementById('payTotal').textContent = '₱' + totals.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const totalEl = document.getElementById('payTotal');
+    if (totalEl) totalEl.textContent = '₱' + totals.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function setupButtons() {
@@ -1274,16 +4131,6 @@ function setupButtons() {
     document.querySelectorAll('.prev-btn').forEach(btn => {
         btn.addEventListener('click', prevStep);
     });
-}
-
-function removeFromCart(id) {
-    const idx = cart.findIndex(i => i.id === id);
-    if (idx !== -1) {
-        cart.splice(idx, 1);
-        updateCartUI();
-        const activeBtn = document.querySelector('.category-link.active');
-        renderProducts(activeBtn ? activeBtn.dataset.category : 'all');
-    }
 }
 
 function nextStep() {
@@ -1315,144 +4162,64 @@ function goToStep(step) {
     
     currentStep = step;
     window.scrollTo(0, 0);
+
+    if (step === 2) {
+        setTimeout(initStoreMap, 150);
+    }
 }
 
 function validateStep(step) {
     if (step === 1) {
         if (cart.length === 0) {
-            Swal.fire('Error', 'Please select at least one product', 'warning');
+            if (window.showToast) {
+                window.showToast('Please select at least one product for your pre-order.', 'alert');
+            } else if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Selection Required',
+                    text: 'Please select at least one product for your pre-order.',
+                    icon: 'warning',
+                    confirmButtonText: 'Got it'
+                });
+            }
             return false;
         }
     } else if (step === 2) {
         const fullName = document.getElementById('fullName').value.trim();
         const email = document.getElementById('email').value.trim();
         const phone = document.getElementById('phone').value.trim();
-        const street = document.getElementById('streetAddress').value.trim();
-        const regionCode = document.getElementById('preorderRegion').value;
-        const province = document.getElementById('province').value;
-        const city = document.getElementById('city').value;
-        const barangay = document.getElementById('barangay').value;
+        const pickupDate = document.getElementById('pickupDate').value.trim();
+        const pickupTime = document.getElementById('pickupTime').value.trim();
 
         if (!fullName) {
-            Swal.fire('Error', 'Please enter your full name', 'warning');
+            if (window.showToast) window.showToast('Please enter the full name of the person picking up the order.', 'alert');
+            else Swal.fire({ title: 'Claimant Name Required', text: 'Please enter full name.', icon: 'warning' });
             return false;
         }
         if (!email) {
-            Swal.fire('Error', 'Please enter your email', 'warning');
+            if (window.showToast) window.showToast('Please enter your email address for order confirmation.', 'alert');
+            else Swal.fire({ title: 'Email Required', text: 'Please enter email address.', icon: 'warning' });
             return false;
         }
         if (!phone) {
-            Swal.fire('Error', 'Please enter your phone number', 'warning');
+            if (window.showToast) window.showToast('Please enter your mobile phone number.', 'alert');
+            else Swal.fire({ title: 'Phone Required', text: 'Please enter mobile phone number.', icon: 'warning' });
             return false;
         }
-        if (!street) {
-            Swal.fire('Error', 'Please enter your street address', 'warning');
-            return false;
-        }
-        if (!regionCode) {
-            Swal.fire('Error', 'Please select a region', 'warning');
-            return false;
-        }
-        if (!province) {
-            Swal.fire('Error', 'Please select a province', 'warning');
-            return false;
-        }
-        if (!city) {
-            Swal.fire('Error', 'Please select a city', 'warning');
-            return false;
-        }
-        if (!barangay) {
-            Swal.fire('Error', 'Please select a barangay', 'warning');
-            return false;
-        }
-        const pickupDate = document.getElementById('pickupDate').value;
-        const pickupTime = document.getElementById('pickupTime').value;
         if (!pickupDate) {
-            Swal.fire('Error', 'Please select a pickup/delivery date', 'warning');
+            if (window.showToast) window.showToast('Please select your preferred pick-up date.', 'alert');
+            else Swal.fire({ title: 'Pick-up Date Required', text: 'Please select pick-up date.', icon: 'warning' });
             return false;
         }
         if (!pickupTime) {
-            Swal.fire('Error', 'Please select a preferred time', 'warning');
+            if (window.showToast) window.showToast('Please select your preferred pick-up time slot.', 'alert');
+            else Swal.fire({ title: 'Time Slot Required', text: 'Please select time slot.', icon: 'warning' });
             return false;
         }
+        syncPreorderStoreAddress();
     } else if (step === 3) {
         populateConfirmation();
     }
     return true;
-}
-
-function initializePreorderFallbackAddressOptions() {
-    const regionSelect = document.getElementById('preorderRegion');
-    const provinceSelect = document.getElementById('preorderProvince');
-    const citySelect = document.getElementById('city');
-    if (!regionSelect || !provinceSelect || !citySelect) return;
-
-    preorderSetSelectOptions(regionSelect, [{ code: '040000000', name: 'CALABARZON' }], '-- Select Region --');
-    regionSelect.value = '040000000';
-    regionSelect.disabled = false;
-
-    preorderSetSelectOptions(provinceSelect, [{ code: '042100000', name: 'Cavite' }], '-- Select Province --');
-    provinceSelect.value = '042100000';
-    provinceSelect.disabled = false;
-
-    const fallbackCities = Object.keys(barangaysByCity).map((name) => ({ code: name, name }));
-    preorderSetSelectOptions(citySelect, fallbackCities, '-- Select City/Municipality --');
-    citySelect.disabled = false;
-
-    if (preferredCity) {
-        const cityOption = preorderFindOptionValueByName(citySelect, preferredCity);
-        if (cityOption) {
-            citySelect.value = cityOption;
-        }
-    }
-}
-
-async function updateBarangays(selectedBarangay = '') {
-    const citySelect = document.getElementById('city');
-    const brgySelect = document.getElementById('barangay');
-    if (!citySelect || !brgySelect) return;
-
-    const cityValue = citySelect.value || '';
-    if (!cityValue) {
-        preorderSetSelectOptions(brgySelect, [], '-- Select Barangay --');
-        brgySelect.disabled = true;
-        syncPreorderAddressFields();
-        return;
-    }
-
-    const cityLooksLikePsgcCode = /^\d{6,12}$/.test(cityValue);
-    if (cityLooksLikePsgcCode) {
-        try {
-            await loadPreorderBarangays(cityValue, selectedBarangay);
-            return;
-        } catch (error) {
-            console.error('PSGC barangay load failed, using fallback list:', error);
-        }
-    }
-
-    const fallbackCityName = preorderGetSelectedText(citySelect) || cityValue;
-    const fallbackBarangays = Array.isArray(barangaysByCity[fallbackCityName]) ? barangaysByCity[fallbackCityName] : [];
-    brgySelect.innerHTML = '<option value="">-- Select Barangay --</option>';
-    fallbackBarangays.forEach((brgy) => {
-        const option = document.createElement('option');
-        option.value = brgy;
-        option.textContent = brgy;
-        brgySelect.appendChild(option);
-    });
-    brgySelect.disabled = fallbackBarangays.length === 0;
-
-    if (selectedBarangay) {
-        const hasMatch = Array.from(brgySelect.options).some((option) => option.value === selectedBarangay);
-        if (!hasMatch) {
-            const opt = document.createElement('option');
-            opt.value = selectedBarangay;
-            opt.textContent = selectedBarangay;
-            brgySelect.appendChild(opt);
-        }
-        brgySelect.value = selectedBarangay;
-    }
-
-    syncPreorderAddressFields();
 }
 
 function selectPaymentOption(radio) {
@@ -1469,35 +4236,33 @@ function populateConfirmation() {
     const paymentType = document.querySelector('input[name="payment_type"]:checked').value;
     const paymentAmount = paymentType === 'downpayment' ? total * 0.30 : total;
     const remaining = total - paymentAmount;
-    const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
     const fullName = document.getElementById('fullName').value;
     const email = document.getElementById('email').value;
     const phone = document.getElementById('phone').value;
-    const street = document.getElementById('streetAddress').value;
-    const city = document.getElementById('preorder_city_name').value || preorderGetSelectedText(document.getElementById('city'));
-    const barangay = document.getElementById('preorder_barangay_name').value || preorderGetSelectedText(document.getElementById('barangay'));
-    const province = document.getElementById('province').value;
     const pickupDate = document.getElementById('pickupDate').value;
     const pickupTime = document.getElementById('pickupTime').value;
 
-    const address = `${street}, ${barangay}, ${city}, ${province}`;
+    const storeSelect = document.getElementById('storeSelect');
+    const selectedStoreOpt = storeSelect ? storeSelect.options[storeSelect.selectedIndex] : null;
+    const storeName = selectedStoreOpt ? (selectedStoreOpt.dataset.name || selectedStoreOpt.text) : 'Main Branch';
+    const storeAddress = selectedStoreOpt ? (selectedStoreOpt.dataset.address || '') : '';
 
     let itemsTable = `
         <table class="confirmation-table" style="width:100%; border-collapse: collapse; margin-bottom: 15px;">
             <thead>
-                <tr style="border-bottom: 1px solid #ddd; background-color: #f8f9fa;">
-                    <th style="text-align: left; padding: 10px; font-size: 0.9rem;">Product</th>
-                    <th style="text-align: center; padding: 10px; font-size: 0.9rem;">Qty</th>
-                    <th style="text-align: right; padding: 10px; font-size: 0.9rem;">Total</th>
+                <tr style="border-bottom: 1px solid #eaecf0; background-color: #f8f9fa;">
+                    <th style="text-align: left; padding: 10px; font-size: 0.85rem; color:#475467;">Dish / Item</th>
+                    <th style="text-align: center; padding: 10px; font-size: 0.85rem; color:#475467;">Qty</th>
+                    <th style="text-align: right; padding: 10px; font-size: 0.85rem; color:#475467;">Total</th>
                 </tr>
             </thead>
             <tbody>
                 ${cart.map(item => `
-                    <tr style="border-bottom: 1px solid #eee;">
-                        <td style="padding: 10px; font-size: 0.95rem;">${item.name}</td>
-                        <td style="text-align: center; padding: 10px; font-size: 0.95rem;">${item.quantity}</td>
-                        <td style="text-align: right; padding: 10px; font-size: 0.95rem;">₱${(item.price * item.quantity).toLocaleString()}</td>
+                    <tr style="border-bottom: 1px solid #f2f4f7;">
+                        <td style="padding: 10px; font-size: 0.92rem; font-weight:600; color:#101828;">${item.name}</td>
+                        <td style="text-align: center; padding: 10px; font-size: 0.92rem; color:#475467;">${item.quantity}</td>
+                        <td style="text-align: right; padding: 10px; font-size: 0.92rem; font-weight:700; color:#101828;">₱${(item.price * item.quantity).toLocaleString()}</td>
                     </tr>
                 `).join('')}
             </tbody>
@@ -1505,63 +4270,69 @@ function populateConfirmation() {
     `;
 
     let summaryHTML = `
-        <h4 style="color: #c62828; margin-bottom: 20px;">Order Summary</h4>
+        <h4 style="color: #b3261e; margin-bottom: 16px; font-family:'Outfit', sans-serif; font-size:1.15rem;"><i class="fas fa-clipboard-check"></i> Pre-Order Summary</h4>
         ${itemsTable}
         <div class="summary-row">
-            <span><strong>Subtotal:</strong></span>
-            <span>₱${subtotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+            <span>Subtotal:</span>
+            <strong>₱${subtotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
         </div>
         <div class="summary-row">
-            <span><strong>VAT (12%):</strong></span>
-            <span>₱${vatAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+            <span>VAT (12%):</span>
+            <strong>₱${vatAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
+        </div>
+        <div class="summary-row total">
+            <span>Grand Total (Incl. VAT):</span>
+            <strong>₱${total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
+        </div>
+        <hr style="margin: 16px 0; border: none; border-top: 1px solid #eaecf0;">
+        <h4 style="color: #b3261e; margin: 16px 0; font-family:'Outfit', sans-serif; font-size:1.15rem;"><i class="fas fa-store"></i> Store Pick-up Details</h4>
+        <div class="summary-row">
+            <span><strong>Fulfillment Branch:</strong></span>
+            <span style="color:#101828; font-weight:700;">${storeName}</span>
         </div>
         <div class="summary-row">
-            <span><strong>Total (Incl. VAT):</strong></span>
-            <span>₱${total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+            <span><strong>Store Address:</strong></span>
+            <span>${storeAddress}</span>
         </div>
-        <hr style="margin: 15px 0; border: 1px solid #e0e0e0;">
-        <h4 style="color: #c62828; margin: 20px 0;">Delivery Information</h4>
+        <div class="summary-row">
+            <span><strong>Scheduled Date:</strong></span>
+            <span style="color:#027a48; font-weight:700;">${new Date(pickupDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+        </div>
+        <div class="summary-row">
+            <span><strong>Pick-up Time Slot:</strong></span>
+            <span style="color:#027a48; font-weight:700;">${pickupTime}</span>
+        </div>
+        <hr style="margin: 16px 0; border: none; border-top: 1px solid #eaecf0;">
+        <h4 style="color: #b3261e; margin: 16px 0; font-family:'Outfit', sans-serif; font-size:1.15rem;"><i class="fas fa-user-check"></i> Claimant Information</h4>
         <div class="summary-row">
             <span><strong>Full Name:</strong></span>
             <span>${fullName}</span>
         </div>
         <div class="summary-row">
-            <span><strong>Email:</strong></span>
-            <span>${email}</span>
-        </div>
-        <div class="summary-row">
-            <span><strong>Phone:</strong></span>
+            <span><strong>Mobile Phone:</strong></span>
             <span>${phone}</span>
         </div>
         <div class="summary-row">
-            <span><strong>Delivery Address:</strong></span>
-            <span>${address}</span>
+            <span><strong>Email:</strong></span>
+            <span>${email}</span>
         </div>
+        <hr style="margin: 16px 0; border: none; border-top: 1px solid #eaecf0;">
+        <h4 style="color: #b3261e; margin: 16px 0; font-family:'Outfit', sans-serif; font-size:1.15rem;"><i class="fas fa-credit-card"></i> Payment Breakdown</h4>
         <div class="summary-row">
-            <span><strong>Pickup/Delivery Date:</strong></span>
-            <span>${new Date(pickupDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-        </div>
-        <div class="summary-row">
-            <span><strong>Preferred Time:</strong></span>
-            <span>${pickupTime}</span>
-        </div>
-        <hr style="margin: 15px 0; border: 1px solid #e0e0e0;">
-        <h4 style="color: #c62828; margin: 20px 0;">Payment Details</h4>
-        <div class="summary-row">
-            <span><strong>Payment Type:</strong></span>
+            <span><strong>Payment Option:</strong></span>
             <span>${paymentType === 'downpayment' ? '30% Downpayment' : 'Full Payment'}</span>
         </div>
         <div class="summary-row">
             <span><strong>Amount to Pay Now:</strong></span>
-            <span style="color: #c62828; font-weight: bold;">₱${paymentAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+            <span style="color: #b3261e; font-size:1.1rem; font-weight: 800;">₱${paymentAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
         </div>
     `;
 
     if (paymentType === 'downpayment') {
         summaryHTML += `
         <div class="summary-row">
-            <span><strong>Remaining Balance:</strong></span>
-            <span>₱${remaining.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+            <span><strong>Remaining Balance (Upon Pick-up):</strong></span>
+            <span style="color:#475467; font-weight:700;">₱${remaining.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
         </div>
         `;
     }
@@ -1571,29 +4342,27 @@ function populateConfirmation() {
 
 document.getElementById('preorderForm').addEventListener('submit', function(e) {
     e.preventDefault();
-    syncPreorderAddressFields();
+    syncPreorderStoreAddress();
     
     if (cart.length === 0) {
         Swal.fire('Error', 'Your cart is empty', 'error');
         return;
     }
 
-    // Show loading state
     const submitBtn = this.querySelector('button[type="submit"]');
     const originalText = submitBtn.textContent;
     submitBtn.disabled = true;
     submitBtn.textContent = 'Processing Payment...';
 
     const formData = {
-        items: cart, // Send cart items array
-        // Legacy fields for backward compatibility if backend check fails, though we will update backend
+        items: cart,
         full_name: document.getElementById('fullName').value,
         email: document.getElementById('email').value,
         phone: document.getElementById('phone').value,
         street_address: document.getElementById('streetAddress').value,
         province: document.getElementById('province').value,
-        city: document.getElementById('preorder_city_name').value || preorderGetSelectedText(document.getElementById('city')),
-        barangay: document.getElementById('preorder_barangay_name').value || preorderGetSelectedText(document.getElementById('barangay')),
+        city: document.getElementById('city').value,
+        barangay: document.getElementById('barangay').value,
         region_name: document.getElementById('preorder_region_name').value,
         region_code: document.getElementById('preorder_region_code').value,
         province_name: document.getElementById('preorder_province_name').value,
@@ -1610,7 +4379,6 @@ document.getElementById('preorderForm').addEventListener('submit', function(e) {
         seller_id: activeSellerId
     };
 
-    // Send to backend to create PayMongo session
     fetch('process_preorder_payment.php', {
         method: 'POST',
         headers: {
@@ -1619,24 +4387,6 @@ document.getElementById('preorderForm').addEventListener('submit', function(e) {
         body: JSON.stringify(formData)
     })
     .then(response => {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/877aa32d-157e-483d-b038-7c4939dc8ba5',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({
-                sessionId:'debug-session',
-                runId:'pre-fix-1',
-                hypothesisId:'H1',
-                location:'preorder.php:872',
-                message:'Received response from process_preorder_payment.php',
-                data:{status:response.status,statusText:response.statusText,url:response.url},
-                timestamp:Date.now()
-            })
-        }).catch(()=>{});
-        // #endregion
-
-        // Always read and attempt to parse JSON, even if status != 200,
-        // because the backend may still return a valid JSON body.
         return response.text().then(text => {
             try {
                 const parsed = JSON.parse(text);
@@ -1648,26 +4398,7 @@ document.getElementById('preorderForm').addEventListener('submit', function(e) {
         });
     })
     .then(data => {
-        console.log('Payment response:', data);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/877aa32d-157e-483d-b038-7c4939dc8ba5',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({
-                sessionId:'debug-session',
-                runId:'pre-fix-1',
-                hypothesisId:'H3',
-                location:'preorder.php:888',
-                message:'Parsed payment response JSON',
-                data:{success:data.success,hasCheckoutUrl:!!data.checkout_url,error:data.error||null},
-                timestamp:Date.now()
-            })
-        }).catch(()=>{});
-        // #endregion
-        
         if (data.success) {
-            // Redirect to PayMongo checkout
-            console.log('Redirecting to:', data.checkout_url);
             window.location.href = data.checkout_url;
         } else {
             const errorMsg = data.error || 'Payment processing failed. Please try again.';
@@ -1679,947 +4410,16 @@ document.getElementById('preorderForm').addEventListener('submit', function(e) {
     })
     .catch(error => {
         console.error('Request failed:', error.message);
-        console.error('Full error:', error);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/877aa32d-157e-483d-b038-7c4939dc8ba5',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({
-                sessionId:'debug-session',
-                runId:'pre-fix-1',
-                hypothesisId:'H2',
-                location:'preorder.php:903',
-                message:'Fetch to process_preorder_payment.php failed',
-                data:{errorMessage:error.message},
-                timestamp:Date.now()
-            })
-        }).catch(()=>{});
-        // #endregion
-        
         let errorMessage = error.message;
         if (error.message.includes('JSON')) {
-            errorMessage = 'Server response error. Please check the browser console (F12) for details.';
+            errorMessage = 'Server response error. Please check the browser console for details.';
         }
-        
         Swal.fire('Error', errorMessage, 'error');
         submitBtn.disabled = false;
         submitBtn.textContent = originalText;
     });
 });
 </script>
-<?php if ($google_maps_api_key !== ''): ?>
-<script src="https://maps.googleapis.com/maps/api/js?key=<?php echo urlencode($google_maps_api_key); ?>&libraries=places&callback=initPreorderMap" async defer></script>
-<?php endif; ?>
 
-<style>
-:root {
-    --primary-color: #c62828;
-    --primary-dark: #b71c1c;
-    --secondary-color: #ff9800;
-    --text-main: #2d3436;
-    --text-light: #636e72;
-    --bg-light: #f8f9fa;
-    --card-radius: 16px;
-    --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-    --shadow-sm: 0 4px 6px rgba(0,0,0,0.05);
-    --shadow-md: 0 10px 20px rgba(0,0,0,0.08);
-    --shadow-hover: 0 20px 40px rgba(0,0,0,0.12);
-}
 
-/* Page Header */
-.page-header {
-    background: linear-gradient(135deg, rgba(0,0,0,0.85), rgba(0,0,0,0.7)), url('images/menu-bg.jpg');
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-    color: white;
-    text-align: center;
-    padding: 160px 20px 100px;
-    position: relative;
-    margin-bottom: -60px;
-    z-index: 1;
-}
-
-.page-header h1 {
-    font-size: 3.5rem;
-    font-weight: 800;
-    margin-bottom: 15px;
-    text-shadow: 0 2px 10px rgba(0,0,0,0.3);
-}
-
-.page-header p {
-    font-size: 1.2rem;
-    opacity: 0.9;
-    max-width: 600px;
-    margin: 0 auto;
-    font-weight: 300;
-}
-
-.preorder-section {
-    padding-bottom: 80px;
-    background-color: var(--bg-light);
-    min-height: 80vh;
-}
-
-.preorder-container {
-    background: white;
-    border-radius: var(--card-radius);
-    box-shadow: var(--shadow-md);
-    padding: 40px;
-    max-width: 900px;
-    margin: 0 auto;
-    position: relative;
-    z-index: 2;
-}
-
-.preorder-container.expanded {
-    max-width: 1200px;
-}
-
-/* Progress Bar */
-.progress-bar-container {
-    margin-bottom: 40px;
-    padding: 0 20px;
-}
-
-.progress-steps {
-    display: flex;
-    justify-content: space-between;
-    position: relative;
-    max-width: 600px;
-    margin: 0 auto;
-}
-
-.progress-steps::before {
-    content: '';
-    position: absolute;
-    top: 20px;
-    left: 0;
-    right: 0;
-    height: 4px;
-    background: #eee;
-    z-index: 0;
-    border-radius: 4px;
-}
-
-.progress-step {
-    position: relative;
-    z-index: 1;
-    text-align: center;
-    width: 100px;
-}
-
-.progress-step-circle {
-    width: 40px;
-    height: 40px;
-    background: white;
-    border: 3px solid #ddd;
-    color: #999;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    margin: 0 auto 10px;
-    transition: var(--transition);
-}
-
-.progress-step.active .progress-step-circle {
-    border-color: var(--primary-color);
-    background: var(--primary-color);
-    color: white;
-    transform: scale(1.1);
-    box-shadow: 0 0 0 5px rgba(198, 40, 40, 0.1);
-}
-
-.progress-step.completed .progress-step-circle {
-    border-color: #4CAF50;
-    background: #4CAF50;
-    color: white;
-}
-
-.progress-step-label {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: #999;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.progress-step.active .progress-step-label {
-    color: var(--primary-color);
-}
-
-/* Steps Content */
-.step-content {
-    display: none;
-    animation: fadeIn 0.4s ease;
-}
-
-.step-content.active {
-    display: block;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.step-title {
-    font-size: 1.8rem;
-    font-weight: 700;
-    color: var(--text-main);
-    margin-bottom: 25px;
-    text-align: center;
-    position: relative;
-    padding-bottom: 15px;
-}
-
-.step-title::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 60px;
-    height: 3px;
-    background: var(--primary-color);
-    border-radius: 3px;
-}
-
-/* Product Grid */
-#productList {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 20px;
-    margin-bottom: 20px;
-}
-
-/* Category Navigation (Same as menu.php) */
-.category-nav {
-    background-color: rgba(255, 255, 255, 0.95);
-    padding: 15px 20px;
-    border-radius: 100px;
-    box-shadow: var(--shadow-md);
-    margin: 0 auto 30px;
-    max-width: 100%;
-    position: sticky;
-    top: 90px;
-    z-index: 99;
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.2);
-}
-
-.category-list {
-    display: flex;
-    justify-content: center; /* Center items */
-    overflow-x: auto;
-    gap: 10px;
-    padding: 10px 0;
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
-}
-
-.category-list::-webkit-scrollbar {
-    display: none;
-}
-
-.category-link {
-    white-space: nowrap;
-    padding: 10px 25px;
-    background-color: transparent;
-    color: var(--text-light);
-    text-decoration: none;
-    border-radius: 50px;
-    font-weight: 500;
-    transition: var(--transition);
-    border: 1px solid transparent;
-    font-size: 0.95rem;
-    cursor: pointer;
-}
-
-.category-link:hover,
-.category-link.active {
-    background: var(--primary-color);
-    color: white;
-    box-shadow: 0 4px 10px rgba(198, 40, 40, 0.3);
-}
-
-.preorder-cart-section {
-    background: #f8f9fa;
-    border: 1px solid #e0e0e0;
-    border-radius: 12px;
-    padding: 20px;
-    margin-top: 20px;
-}
-
-.cart-items-container {
-    max-height: 200px;
-    overflow-y: auto;
-    margin: 15px 0;
-}
-
-/* Enhanced Cart Section */
-.cart-item-row {
-    display: flex;
-    align-items: center;
-    padding: 10px;
-    border-bottom: 1px solid #eee;
-    background: white;
-    border-radius: 8px;
-    margin-bottom: 8px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-}
-
-.cart-item-image-col {
-    width: 50px;
-    height: 50px;
-    margin-right: 10px;
-    flex-shrink: 0;
-}
-
-.cart-item-thumb {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 4px;
-}
-
-.cart-item-thumb-placeholder {
-    width: 100%;
-    height: 100%;
-    background: #f0f0f0;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #ccc;
-}
-
-.cart-item-details-col {
-    flex-grow: 1;
-}
-
-.cart-item-name {
-    font-weight: 600;
-    font-size: 0.95rem;
-    color: var(--text-main);
-    margin-bottom: 2px;
-}
-
-.cart-item-price-single {
-    font-size: 0.8rem;
-    color: #888;
-    margin-bottom: 5px;
-}
-
-.cart-item-controls {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.tiny-btn {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    border: 1px solid #ddd;
-    background: white;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-main);
-    font-size: 0.7rem;
-    transition: all 0.2s;
-}
-
-.tiny-btn:hover {
-    background: #f0f0f0;
-    color: var(--primary-color);
-    border-color: var(--primary-color);
-}
-
-.qty-display {
-    font-weight: 600;
-    font-size: 0.9rem;
-    min-width: 20px;
-    text-align: center;
-}
-
-.cart-item-total-col {
-    text-align: right;
-    margin-left: 10px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    justify-content: space-between;
-    height: 50px;
-}
-
-.cart-item-price {
-    font-weight: 700;
-    color: var(--primary-color);
-    font-size: 0.95rem;
-}
-
-.remove-item-btn {
-    background: none;
-    border: none;
-    color: #ff5252;
-    cursor: pointer;
-    font-size: 0.9rem;
-    padding: 4px;
-    opacity: 0.7;
-    transition: opacity 0.2s;
-}
-
-.remove-item-btn:hover {
-    opacity: 1;
-}
-
-.product-card {
-    border: 2px solid #eee;
-    border-radius: 12px;
-    padding: 0;
-    transition: var(--transition);
-    position: relative;
-    overflow: hidden;
-    background: white;
-}
-
-.product-card:hover {
-    transform: translateY(-5px);
-    box-shadow: var(--shadow-md);
-    border-color: #ddd;
-}
-
-.btn-sm {
-    padding: 8px 16px;
-    font-size: 0.85rem;
-    min-width: auto;
-}
-
-.product-image {
-    height: 160px;
-    background: #f8f9fa;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-}
-
-.product-image img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transition: transform 0.5s;
-}
-
-.product-card:hover .product-image img {
-    transform: scale(1.05);
-}
-
-.product-image i {
-    font-size: 3rem;
-    color: #ddd;
-}
-
-.product-info {
-    padding: 15px;
-    text-align: center;
-}
-
-.product-info h4 {
-    margin: 0 0 5px;
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--text-main);
-}
-
-.product-price {
-    color: var(--primary-color);
-    font-weight: 700;
-    font-size: 1.1rem;
-    margin-bottom: 5px;
-}
-
-.check-icon {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 25px;
-    height: 25px;
-    background: var(--primary-color);
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.8rem;
-    opacity: 0;
-    transform: scale(0);
-    transition: var(--transition);
-}
-
-.product-card.selected .check-icon {
-    opacity: 1;
-    transform: scale(1);
-}
-
-input:focus, select:focus {
-    outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.1);
-    background: white;
-}
-
-.form-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-}
-
-.form-row.full {
-    grid-template-columns: 1fr;
-}
-
-/* Quantity Selector */
-.quantity-selector {
-    display: flex;
-    align-items: center;
-    max-width: 160px;
-    border: 1px solid #ddd;
-    border-radius: 50px;
-    overflow: hidden;
-}
-
-.qty-btn {
-    width: 40px;
-    height: 40px;
-    background: #f8f9fa;
-    border: none;
-    cursor: pointer;
-    font-size: 1.2rem;
-    color: var(--text-main);
-    transition: background 0.2s;
-}
-
-.qty-btn:hover {
-    background: #eee;
-}
-
-.quantity-selector input {
-    width: 100%;
-    text-align: center;
-    border: none;
-    font-weight: 700;
-    font-size: 1.1rem;
-    padding: 0;
-}
-
-/* Summary Box */
-.summary-box {
-    background: #f8f9fa;
-    border-radius: 12px;
-    padding: 25px;
-    margin: 30px 0;
-    border: 1px solid #eee;
-}
-
-.summary-row {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 10px;
-    font-size: 1rem;
-    color: var(--text-light);
-}
-
-.summary-row.total {
-    margin-top: 15px;
-    padding-top: 15px;
-    border-top: 2px dashed #ddd;
-    font-weight: 800;
-    color: var(--text-main);
-    font-size: 1.3rem;
-}
-
-#summaryTotal, #payTotal {
-    color: var(--primary-color);
-}
-
-/* Payment Option Cards */
-.payment-options-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-    margin-bottom: 30px;
-}
-
-.payment-option-card {
-    border: 2px solid #eee;
-    border-radius: 12px;
-    padding: 20px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    position: relative;
-    display: block;
-}
-
-.payment-option-card:hover {
-    border-color: #ddd;
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-sm);
-}
-
-.payment-option-card.selected {
-    border-color: var(--primary-color);
-    background-color: #fff9f9;
-}
-
-.payment-option-card input {
-    display: none;
-}
-
-.option-content {
-    text-align: center;
-}
-
-.option-content i {
-    font-size: 2rem;
-    color: var(--primary-color);
-    margin-bottom: 10px;
-}
-
-.option-content h4 {
-    margin: 0 0 5px;
-    color: var(--text-main);
-}
-
-.option-content p {
-    margin: 0;
-    font-size: 0.85rem;
-    color: var(--text-light);
-}
-
-/* Buttons */
-.button-group {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 30px;
-    gap: 15px;
-}
-
-.btn {
-    padding: 14px 30px;
-    border-radius: 50px;
-    font-weight: 600;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: var(--transition);
-    border: none;
-    min-width: 140px;
-}
-
-.btn-primary {
-    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-    color: white;
-    box-shadow: 0 4px 15px rgba(198, 40, 40, 0.3);
-}
-
-.btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(198, 40, 40, 0.4);
-}
-
-.btn-secondary {
-    background: #e9ecef;
-    color: var(--text-main);
-}
-
-.btn-secondary:hover {
-    background: #dee2e6;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .page-header h1 { font-size: 2.2rem; }
-    .preorder-container { padding: 25px; }
-    .form-row { grid-template-columns: 1fr; gap: 0; }
-    .progress-step-label { font-size: 0.7rem; }
-    .button-group { flex-direction: column-reverse; }
-    .btn { width: 100%; }
-    .payment-options-grid { grid-template-columns: 1fr; }
-}
-
-/* Modern Food Preorder Refresh */
-:root {
-    --pre-red: #b3261e;
-    --pre-orange: #ef6b2e;
-    --pre-cream: #fff8ef;
-    --pre-ink: #2a211d;
-    --pre-muted: #7b6d64;
-    --pre-border: #efdcca;
-    --pre-shadow: 0 18px 36px rgba(74, 32, 20, 0.12);
-}
-
-body {
-    background:
-        radial-gradient(circle at 0% 0%, rgba(239, 107, 46, 0.1), transparent 32%),
-        radial-gradient(circle at 100% 12%, rgba(179, 38, 30, 0.12), transparent 30%),
-        var(--pre-cream);
-}
-
-.page-header {
-    padding: 128px 20px 84px;
-    margin-bottom: 0;
-    background:
-        linear-gradient(130deg, rgba(17, 11, 8, 0.86), rgba(45, 22, 14, 0.73)),
-        url('images/stores-bg.jpg') center/cover no-repeat;
-}
-
-.page-header h1 {
-    letter-spacing: -0.03em;
-}
-
-.page-header p {
-    color: #f8e6d7;
-}
-
-.preorder-section {
-    padding-top: 42px;
-    background: linear-gradient(180deg, #fffaf4 0%, #fff 100%);
-}
-
-.preorder-container {
-    border: 1px solid var(--pre-border);
-    border-radius: 24px;
-    box-shadow: var(--pre-shadow);
-    background: #fffefc;
-}
-
-.checkout-type-switch {
-    border: 1px solid #efdbc9;
-    border-radius: 16px;
-    padding: 14px;
-    background: #fff7ee;
-    margin-bottom: 18px;
-}
-
-.checkout-type-title {
-    margin: 0 0 8px;
-    color: #3d2b22;
-    font-weight: 700;
-    font-size: 0.95rem;
-}
-
-.checkout-type-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.checkout-type-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    text-decoration: none;
-    padding: 9px 12px;
-    border-radius: 999px;
-    border: 1px solid #d9b79c;
-    background: #fff;
-    color: #7a2e21;
-    font-weight: 700;
-    transition: all 0.2s ease;
-}
-
-.checkout-type-chip:hover {
-    background: #fff2e6;
-    border-color: #c98f65;
-}
-
-.checkout-type-chip.is-active {
-    background: #c62828;
-    border-color: #c62828;
-    color: #fff;
-    cursor: default;
-    pointer-events: none;
-}
-
-.checkout-type-note {
-    margin: 10px 0 0;
-    color: #6f5f53;
-    font-size: 0.85rem;
-}
-
-.progress-bar-container {
-    border: 1px solid #efdbc9;
-    border-radius: 18px;
-    background: #fff6ec;
-    padding: 18px 18px 12px;
-}
-
-.progress-step-circle {
-    border: 2px solid #e9c9b2;
-    color: #8f2f20;
-    background: #fff;
-}
-
-.progress-step.active .progress-step-circle,
-.progress-step.completed .progress-step-circle {
-    border-color: transparent;
-    background: linear-gradient(135deg, var(--pre-red), var(--pre-orange));
-    color: #fff;
-}
-
-.step-content {
-    border: 1px solid #f2e4d6;
-    border-radius: 18px;
-    background: #fff;
-    padding: 24px;
-}
-
-.step-title {
-    color: var(--pre-ink);
-    letter-spacing: -0.01em;
-}
-
-.tenant-scope-note {
-    margin: -6px 0 16px;
-    padding: 10px 12px;
-    border: 1px solid #eed8c7;
-    border-radius: 10px;
-    background: #fff8ef;
-    color: #5f4b40;
-    font-size: 0.9rem;
-}
-
-.autofill-note {
-    margin: -4px 0 14px;
-    color: #6b5a4f;
-    font-size: 0.88rem;
-}
-
-.autofill-note i {
-    color: #b35b2f;
-    margin-right: 6px;
-}
-
-.empty-product-note {
-    margin: 0;
-    padding: 14px;
-    border: 1px dashed #e5cdb7;
-    border-radius: 12px;
-    background: #fff9f1;
-    color: #6f5d52;
-}
-
-.category-nav {
-    border: 1px solid #ecd6c2;
-    border-radius: 14px;
-    background: #fff8ef;
-}
-
-.category-link {
-    border: 1px solid #e7ceba;
-    border-radius: 999px;
-    background: #fff;
-    color: #7f3829;
-}
-
-.category-link.active,
-.category-link:hover {
-    background: linear-gradient(135deg, var(--pre-red), var(--pre-orange));
-    color: #fff;
-    border-color: transparent;
-}
-
-.product-card {
-    border: 1px solid var(--pre-border);
-    border-radius: 16px;
-    box-shadow: 0 10px 24px rgba(74, 32, 20, 0.08);
-}
-
-.product-card:hover {
-    box-shadow: 0 16px 30px rgba(74, 32, 20, 0.13);
-}
-
-.product-image {
-    background: linear-gradient(135deg, #fff3e4, #ffe8d3);
-}
-
-.product-price {
-    color: #9f3322;
-}
-
-.preorder-cart-section,
-.summary-box {
-    background: #fff8ef;
-    border: 1px solid var(--pre-border);
-    border-radius: 16px;
-}
-
-.cart-item-row {
-    background: #fff;
-    border: 1px solid #efddcc;
-    border-radius: 10px;
-    padding: 10px;
-}
-
-.payment-option-card {
-    border: 1px solid var(--pre-border);
-    border-radius: 14px;
-    background: #fff;
-}
-
-.payment-option-card.selected {
-    background: #fff4e7;
-    border-color: #d79f79;
-}
-
-input,
-select,
-textarea {
-    border: 1px solid #e8d4c2;
-    border-radius: 10px;
-    background: #fffefc;
-}
-
-input:focus,
-select:focus,
-textarea:focus {
-    box-shadow: 0 0 0 3px rgba(239, 107, 46, 0.15);
-}
-
-.btn-primary {
-    background: linear-gradient(135deg, var(--pre-red), var(--pre-orange));
-    box-shadow: 0 12px 25px rgba(179, 38, 30, 0.26);
-}
-
-.btn-primary:hover {
-    box-shadow: 0 15px 30px rgba(179, 38, 30, 0.34);
-}
-
-.btn-secondary {
-    border: 1px solid #dbc6b5;
-    background: #fff;
-    color: #4a3a32;
-}
-
-.btn-secondary:hover {
-    background: #f7ede4;
-}
-
-@media (max-width: 768px) {
-    .checkout-type-actions {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .checkout-type-chip {
-        justify-content: center;
-    }
-}
-</style>
 <?php include 'includes/footer.php'; ?>
-

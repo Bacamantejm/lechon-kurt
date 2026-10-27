@@ -264,7 +264,83 @@ function clearRateLimit($action) {
 // =====================================================
 
 /**
- * Sanitize string input (remove HTML tags, trim)
+ * Clean and normalize UTF-8 mojibake / encoding corruptions (e.g. Dasmari├▒as -> Dasmariñas).
+ * Handles CP437, Windows-1252, and double UTF-8 decoding anomalies.
+ *
+ * @param string|null $text
+ * @return string
+ */
+function fixMojibakeUtf8($text) {
+    if ($text === null || $text === '') {
+        return '';
+    }
+
+    $text = (string)$text;
+
+    // Decode HTML entities if entity-encoded (e.g. &ntilde;, &#241;, &#9500;&#9618;)
+    if (strpos($text, '&') !== false) {
+        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    }
+
+    // Decode JSON unicode escapes if present
+    if (strpos($text, '\u') !== false) {
+        $text = str_replace(
+            ['\u251c\u2592', '\u251c\u00e6', '\u00f1', '\u00d1', '\u251C\u2592', '\u251C\u00E6', '\u00F1', '\u00D1'],
+            ['ñ', 'Ñ', 'ñ', 'Ñ', 'ñ', 'Ñ', 'ñ', 'Ñ'],
+            $text
+        );
+    }
+
+    // If input is not valid UTF-8 (e.g. single-byte Latin1/Windows-1252/CP437), convert to UTF-8
+    if (function_exists('mb_check_encoding') && !mb_check_encoding($text, 'UTF-8')) {
+        $text = mb_convert_encoding($text, 'UTF-8', 'Windows-1252');
+    }
+
+    static $replacements = [
+        'Dasmari├▒as' => 'Dasmariñas',
+        'Dasmari├æas' => 'Dasmariñas',
+        'DasmariÃ±as' => 'Dasmariñas',
+        'DasmariÃ‘as' => 'Dasmariñas',
+        'DasmariÃƒÂ±as' => 'Dasmariñas',
+        'DasmariΓö£ΓûÆas' => 'Dasmariñas',
+        'Dasmari├â╞Æ├é┬▒as' => 'Dasmariñas',
+        'Dasmari├â┬▒as' => 'Dasmariñas',
+        'City of Dasmarinas' => 'City of Dasmariñas',
+        'City of Dasmari├▒as' => 'City of Dasmariñas',
+
+        // General Mojibake ñ/Ñ
+        '├▒' => 'ñ',
+        '├æ' => 'Ñ',
+        'Ã±' => 'ñ',
+        'Ã‘' => 'Ñ',
+        'ÃƒÂ±' => 'ñ',
+        'ÃƒÂ‘' => 'Ñ',
+        'Γö£ΓûÆ' => 'ñ',
+        '├â╞Æ├é┬▒' => 'ñ',
+        '├â┬▒' => 'ñ',
+
+        // Typography mojibake
+        'ΓÇô' => '–',
+        'ΓÇö' => '—',
+        'ΓÇÿ' => '‘',
+        'ΓÇÖ' => '’',
+        'â€™' => '’',
+        'â€œ' => '“',
+        'â€' => '”',
+        'â€“' => '–',
+        'â€”' => '—',
+        'Cavite╬ô├ç├┤Laguna' => 'Cavite–Laguna',
+        'CaviteΓÇôLaguna' => 'Cavite–Laguna'
+    ];
+
+    $cleaned = str_replace(array_keys($replacements), array_values($replacements), $text);
+    $cleaned = preg_replace('/Dasmari(?:[^a-zA-Z0-9\s]{1,6}|n)as/ui', 'Dasmariñas', $cleaned);
+
+    return $cleaned;
+}
+
+/**
+ * Sanitize string input (remove HTML tags, trim, fix mojibake)
  */
 function sanitizeString($input) {
     if ($input === null) {
@@ -272,9 +348,17 @@ function sanitizeString($input) {
     }
 
     $input = trim((string)$input);
+    $input = fixMojibakeUtf8($input);
     $input = strip_tags($input);
     $input = htmlspecialchars($input, ENT_QUOTES, 'UTF-8');
     return $input;
+}
+
+/**
+ * Sanitize generic input string (alias for sanitizeString)
+ */
+function sanitizeInput($input) {
+    return sanitizeString($input);
 }
 
 /**

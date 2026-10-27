@@ -4,9 +4,28 @@ class PayMongoIntegration {
     private $publicKey;
     private $baseUrl = 'https://api.paymongo.com/v1';
     
-    public function __construct($secretKey, $publicKey) {
-        $this->secretKey = $secretKey;
-        $this->publicKey = $publicKey;
+    public function __construct($secretKey = null, $publicKey = null) {
+        $secret = trim((string)($secretKey ?: ''));
+        $public = trim((string)($publicKey ?: ''));
+
+        if ($secret === '' || strpos($secret, 'YOUR_PAYMONGO') !== false) {
+            if (function_exists('appConfigValue')) {
+                $secret = appConfigValue('PAYMONGO_SECRET_KEY', $secret);
+            } elseif (getenv('PAYMONGO_SECRET_KEY')) {
+                $secret = getenv('PAYMONGO_SECRET_KEY');
+            }
+        }
+
+        if ($public === '' || strpos($public, 'YOUR_PAYMONGO') !== false) {
+            if (function_exists('appConfigValue')) {
+                $public = appConfigValue('PAYMONGO_PUBLIC_KEY', $public);
+            } elseif (getenv('PAYMONGO_PUBLIC_KEY')) {
+                $public = getenv('PAYMONGO_PUBLIC_KEY');
+            }
+        }
+
+        $this->secretKey = $secret;
+        $this->publicKey = $public;
     }
     
     private function makeRequest($endpoint, $data = null, $method = 'POST') {
@@ -51,6 +70,13 @@ class PayMongoIntegration {
     }
     
     public function createCheckoutSession($orderData) {
+        if (empty($this->secretKey) || strpos($this->secretKey, 'YOUR_PAYMONGO') !== false || $this->secretKey === 'sk_test_YOUR_PAYMONGO_SECRET_KEY_HERE') {
+            return [
+                'success' => false,
+                'error' => 'PayMongo API keys are not configured yet. Please update PAYMONGO_SECRET_KEY and PAYMONGO_PUBLIC_KEY in includes/local_credentials.php with your actual PayMongo keys.'
+            ];
+        }
+
         $payload = [
             'data' => [
                 'attributes' => [
@@ -93,11 +119,14 @@ class PayMongoIntegration {
                 'session_id' => $result['data']['data']['id']
             ];
         } else {
-            $errorMsg = 'Unknown error';
-            if (isset($result['data']['errors']) && is_array($result['data']['errors'])) {
-                $errorMsg = $result['data']['errors'][0]['detail'] ?? 'API Error';
-            } elseif ($result['error']) {
+            $errorMsg = 'Received non-200 response: ' . $result['status'];
+            if (isset($result['data']['errors']) && is_array($result['data']['errors']) && !empty($result['data']['errors'])) {
+                $errorMsg = $result['data']['errors'][0]['detail'] ?? ($result['data']['errors'][0]['code'] ?? $errorMsg);
+            } elseif (!empty($result['error'])) {
                 $errorMsg = $result['error'];
+            }
+            if ($result['status'] === 401 || $result['status'] === 404) {
+                $errorMsg .= ' (Verify your PAYMONGO_SECRET_KEY in includes/local_credentials.php starts with sk_test_ or sk_live_)';
             }
             error_log("PayMongo Error: " . $errorMsg);
             return [

@@ -1,4 +1,5 @@
 <?php
+ob_start();
 session_start();
 require_once 'includes/config.php';
 require_once 'paymongo_integration.php';
@@ -6,6 +7,7 @@ require_once 'email_service.php';
 require_once 'includes/partner_voucher_helper.php';
 require_once 'includes/checkout_address_helper.php';
 require_once 'includes/delivery_pricing_helper.php';
+require_once 'includes/transaction_fee_helper.php';
 
 $is_ajax_request =
     (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
@@ -14,25 +16,60 @@ $is_ajax_request =
 
 function checkoutJsonResponse(array $payload, int $statusCode = 200): void
 {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
     http_response_code($statusCode);
-    header('Content-Type: application/json');
+    header('Content-Type: application/json; charset=utf-8');
     echo json_encode($payload);
     exit;
 }
 
 function checkoutRenderErrorScript(string $title, string $message): void
 {
-    echo '<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>';
-    echo '<script>
-        Swal.fire({
-            title: "' . addslashes($title) . '",
-            text: "' . addslashes($message) . '",
-            icon: "error",
-            confirmButtonText: "Go Back"
-        }).then(() => {
-            window.location.href = "checkout.php";
-        });
-    </script>';
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    http_response_code(400);
+    echo '<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . ' - Lechon Delights</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        body { background-color: #f8f9fa; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .error-card { background: #ffffff; border: 1px solid #eaecf0; border-radius: 12px; max-width: 480px; width: 100%; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); text-align: center; }
+        .error-icon { width: 56px; height: 56px; line-height: 56px; border-radius: 50%; background: #fee4e2; color: #b3261e; font-size: 24px; margin: 0 auto 16px; }
+        .btn-brand { background: #b3261e; color: #ffffff; border: none; font-weight: 600; padding: 10px 24px; border-radius: 8px; text-decoration: none; display: inline-block; }
+        .btn-brand:hover { background: #981b15; color: #ffffff; }
+    </style>
+</head>
+<body>
+    <div class="error-card">
+        <div class="error-icon"><i class="fas fa-exclamation-triangle"></i></div>
+        <h4 style="color:#101828; font-weight:700; margin-bottom:8px;">' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</h4>
+        <p style="color:#475467; font-size:0.95rem; margin-bottom:20px;">' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</p>
+        <a href="checkout.php" class="btn-brand"><i class="fas fa-arrow-left me-2"></i> Return to Checkout</a>
+    </div>
+    <script>
+        if (typeof Swal !== "undefined") {
+            Swal.fire({
+                title: ' . json_encode($title) . ',
+                text: ' . json_encode($message) . ',
+                icon: "error",
+                confirmButtonColor: "#b3261e",
+                confirmButtonText: "Return to Checkout"
+            }).then(() => {
+                window.location.href = "checkout.php";
+            });
+        }
+    </script>
+</body>
+</html>';
     exit;
 }
 
@@ -61,7 +98,38 @@ function checkoutRedirectTo(string $url, array $extra = []): void
         ], $extra));
     }
 
-    header('Location: ' . $url);
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+
+    if (!headers_sent()) {
+        header('Location: ' . $url);
+    }
+    echo '<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="refresh" content="0;url=' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">
+    <title>Redirecting to Payment Gateway - Lechon Delights</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8f9fa; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .redirect-box { background: #fff; border: 1px solid #eaecf0; border-radius: 12px; padding: 32px; text-align: center; max-width: 440px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .spinner { width: 40px; height: 40px; border: 3px solid #f3f4f6; border-top: 3px solid #b3261e; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+    <script>
+        window.location.href = ' . json_encode($url) . ';
+    </script>
+</head>
+<body>
+    <div class="redirect-box">
+        <div class="spinner"></div>
+        <h4 style="color:#101828; margin-bottom:8px;">Connecting to Secure Payment</h4>
+        <p style="color:#667085; font-size:0.9rem; margin-bottom:16px;">Please wait while we redirect you to the payment gateway...</p>
+        <p style="font-size:0.85rem;"><a href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '" style="color:#b3261e; text-decoration:none; font-weight:600;">Click here if not redirected automatically</a></p>
+    </div>
+</body>
+</html>';
     exit;
 }
 
@@ -74,7 +142,7 @@ if (empty($_SESSION['cart'])) {
             'redirect_url' => 'menu.php'
         ], 400);
     }
-    header('Location: menu.php');
+    checkoutRedirectTo('menu.php');
     exit;
 }
 
@@ -87,13 +155,14 @@ if (!isset($_SESSION['user_id'])) {
             'redirect_url' => 'login.php'
         ], 401);
     }
-    header('Location: login.php');
+    checkoutRedirectTo('login.php');
     exit;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     pvEnsureVoucherSchema($conn);
     caEnsureUserSavedAddressSchema($conn);
+    tfEnsureOrderTransactionFeeSchema($conn);
 
     $cart_tenant_scope = function_exists('pvGetCheckoutTenantScope')
         ? pvGetCheckoutTenantScope($conn, $_SESSION['cart'])
@@ -143,8 +212,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $delivery_date = mysqli_real_escape_string($conn, $_POST['delivery_date']);
     $delivery_time = mysqli_real_escape_string($conn, $_POST['delivery_time']);
-    $payment_method = mysqli_real_escape_string($conn, $_POST['payment_method']);
-    $payment_type = mysqli_real_escape_string($conn, $_POST['payment_type']);
+    $raw_payment_method = strtolower(trim((string)($_POST['payment_method'] ?? 'paymongo')));
+    $payment_method = in_array($raw_payment_method, ['cod', 'paymongo'], true) ? $raw_payment_method : 'paymongo';
+    $payment_type = mysqli_real_escape_string($conn, $_POST['payment_type'] ?? 'full');
+    if ($payment_method === 'cod') {
+        $payment_type = 'full';
+    }
     $delivery_option = mysqli_real_escape_string($conn, $_POST['delivery_option']);
     $order_notes = isset($_POST['order_notes']) ? mysqli_real_escape_string($conn, $_POST['order_notes']) : '';
     $total_amount = floatval($_POST['total_amount'] ?? 0);
@@ -163,12 +236,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Handle delivery/pickup specific data
     if ($delivery_option === 'delivery') {
-        $delivery_address = isset($_POST['delivery_address']) ? mysqli_real_escape_string($conn, $_POST['delivery_address']) : '';
-        $delivery_instructions = isset($_POST['delivery_instructions']) ? mysqli_real_escape_string($conn, $_POST['delivery_instructions']) : '';
-        $latitude = isset($_POST['latitude']) ? floatval($_POST['latitude']) : NULL;
-        $longitude = isset($_POST['longitude']) ? floatval($_POST['longitude']) : NULL;
-        $delivery_location = isset($_POST['delivery_location']) ? mysqli_real_escape_string($conn, $_POST['delivery_location']) : 'metro_manila';
-        $pickup_location = NULL;
+        $delivery_address = trim((string)($_POST['delivery_address'] ?? ''));
+        $delivery_instructions = trim((string)($_POST['delivery_instructions'] ?? ''));
+        $coords = dpSanitizeCoordinates($_POST['latitude'] ?? null, $_POST['longitude'] ?? null);
+        if ($coords === null && $delivery_address !== '') {
+            $coords = dpResolveCoordinatesFromAddress($delivery_address);
+        }
+        $latitude = $coords ? (float)($coords['lat'] ?? $coords['latitude'] ?? 0) : null;
+        $longitude = $coords ? (float)($coords['lng'] ?? $coords['longitude'] ?? 0) : null;
+
+        $delivery_location = isset($_POST['delivery_location']) ? trim((string)$_POST['delivery_location']) : 'metro_manila';
+        $pickup_location = !empty($_POST['pickup_location']) ? intval($_POST['pickup_location']) : (!empty($_SESSION['pickup_location']) ? intval($_SESSION['pickup_location']) : null);
         
         // Validate delivery address
         if (empty($delivery_address)) {
@@ -182,9 +260,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         // Pickup option
         $pickup_location = isset($_POST['pickup_location']) ? intval($_POST['pickup_location']) : 1;
-        $delivery_location = NULL;
-        $latitude = NULL;
-        $longitude = NULL;
+        $delivery_location = null;
+        $latitude = null;
+        $longitude = null;
         $delivery_instructions = '';
         
         // Get store address for pickup
@@ -220,18 +298,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $delivery_pricing_note = '';
     $delivery_quote = null;
     $deliveryPricingConfig = dpGetDeliveryPricingConfig();
+    $estimated_delivery_time = null;
+
     // Get delivery fee
     $delivery_fee = 0;
     if ($delivery_option === 'delivery') {
+        $active_stores = !empty($_SESSION['store_locations'])
+            ? $_SESSION['store_locations']
+            : dpFetchActiveStoresFromDb($conn);
+
         if ($latitude !== null && $longitude !== null) {
+            $seller_owner_id = $checkout_seller_owner_id > 0
+                ? $checkout_seller_owner_id
+                : (int)($_SESSION['storefront_seller_id'] ?? 0);
+
             $delivery_quote = dpBuildDeliveryQuote(
-                $_SESSION['store_locations'] ?? [],
+                $active_stores,
                 (float)$latitude,
                 (float)$longitude,
-                $checkout_seller_owner_id > 0
-                    ? $checkout_seller_owner_id
-                    : (int)($_SESSION['storefront_seller_id'] ?? 0),
-                $deliveryPricingConfig
+                $seller_owner_id,
+                $deliveryPricingConfig,
+                $delivery_address
             );
         }
 
@@ -244,6 +331,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             if (!empty($delivery_quote['estimated_delivery_text'])) {
                 $delivery_pricing_note .= ' | ' . (string)$delivery_quote['estimated_delivery_text'];
+            }
+            if (!empty($delivery_quote['eta_max_minutes'])) {
+                $estimated_delivery_time = date('Y-m-d H:i:s', strtotime('+' . (int)$delivery_quote['eta_max_minutes'] . ' minutes'));
             }
             $_SESSION['current_delivery_quote'] = $delivery_quote;
         } elseif ($calculated_delivery_fee > 0) {
@@ -261,12 +351,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    // Determine and validate fulfillment branch and shop owner ID
+    if ($delivery_option === 'delivery') {
+        if (!empty($delivery_quote['nearest_store_id'])) {
+            $pickup_location = (int)$delivery_quote['nearest_store_id'];
+        } elseif (empty($pickup_location)) {
+            $pickup_location = 1;
+        }
+    } else {
+        if (empty($pickup_location)) {
+            $pickup_location = 1;
+        }
+    }
+
+    if ($checkout_seller_owner_id <= 1 && !empty($pickup_location)) {
+        $sStmt = mysqli_prepare($conn, "SELECT owner_user_id FROM store_locations WHERE store_id = ? LIMIT 1");
+        if ($sStmt) {
+            mysqli_stmt_bind_param($sStmt, "i", $pickup_location);
+            mysqli_stmt_execute($sStmt);
+            $sRes = mysqli_stmt_get_result($sStmt);
+            if ($sRow = mysqli_fetch_assoc($sRes)) {
+                $branch_owner = (int)($sRow['owner_user_id'] ?? 0);
+                if ($branch_owner > 0) {
+                    $checkout_seller_owner_id = $branch_owner;
+                }
+            }
+            mysqli_stmt_close($sStmt);
+        }
+    } elseif ($checkout_seller_owner_id > 1 && empty($pickup_location)) {
+        $pStmt = mysqli_prepare($conn, "SELECT store_id FROM store_locations WHERE owner_user_id = ? LIMIT 1");
+        if ($pStmt) {
+            mysqli_stmt_bind_param($pStmt, "i", $checkout_seller_owner_id);
+            mysqli_stmt_execute($pStmt);
+            $pRes = mysqli_stmt_get_result($pStmt);
+            if ($pRow = mysqli_fetch_assoc($pRes)) {
+                $pickup_location = (int)$pRow['store_id'];
+            }
+            mysqli_stmt_close($pStmt);
+        }
+    }
+
+    // Calculate monetization transaction fee based on shop owner subscription
+    $tf_calc = tfCalculateTransactionFee($conn, $checkout_seller_owner_id, $subtotal);
+    $platform_fee_rate_percent = (float)($tf_calc['fee_percent'] ?? 0.0);
+    $platform_fee_flat = (float)($tf_calc['fee_flat'] ?? 0.0);
+    $platform_fee_amount = (float)($tf_calc['fee_amount'] ?? 0.0);
+    $platform_fee_plan_name = (string)($tf_calc['plan_name'] ?? '');
+    $net_seller_payout = (float)($tf_calc['net_payout'] ?? $subtotal);
+    $seller_id_for_order = $checkout_seller_owner_id > 0 ? $checkout_seller_owner_id : null;
+
     if ($delivery_pricing_note !== '') {
         $order_notes .= ($order_notes ? "\n" : '') . $delivery_pricing_note;
     }
     
     $vat_rate = 0.12;
     $vat_amount = round($subtotal * $vat_rate, 2);
+
+    if (empty($_SESSION['applied_voucher']) && !empty($_SESSION['pending_welcome_voucher']) && $user_id > 0 && !empty($_SESSION['cart'])) {
+        $auto_pre = pvApplyVoucherCodeForSession($conn, (int)$user_id, (string)$_SESSION['pending_welcome_voucher'], $_SESSION['cart']);
+        if (!empty($auto_pre['success'])) {
+            unset($_SESSION['pending_welcome_voucher']);
+        }
+    }
 
     $voucher_state = pvResolveAppliedVoucherState($conn, (int)$user_id, $_SESSION['cart']);
     $voucher_discount = 0.0;
@@ -281,25 +427,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $total_amount = max(0, $subtotal + $vat_amount + $delivery_fee - $voucher_discount);
     
     // Calculate payment amounts
-    if ($payment_type === 'downpayment') {
+    if ($payment_method === 'cod') {
+        $payment_type = 'full';
+        $downpayment_amount = 0.00;
+        $remaining_balance = $total_amount;
+        $payment_status = 'pending';
+        $status = 'confirmed'; // Cash orders are confirmed immediately for kitchen and delivery dispatch
+    } elseif ($payment_type === 'downpayment') {
         $downpayment_amount = $total_amount * 0.30;
         $remaining_balance = $total_amount - $downpayment_amount;
         $payment_status = 'partial';
+        $status = 'pending';
     } else {
         $downpayment_amount = 0;
         $remaining_balance = 0;
         $payment_status = 'pending'; // Will be updated after payment
+        $status = 'pending';
     }
     
-    // Generate order number
-    $order_number = 'ORD-' . date('Ymd') . '-' . strtoupper(uniqid());
+    ensureOrdersTableSchema($conn);
+
+    // Generate order number (19 chars: ORD-YYYYMMDD-XXXXXX)
+    $order_number = 'ORD-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -6));
+
     
     // Start transaction
+
     mysqli_begin_transaction($conn);
     
     try {
-        // Set status variable
-        $status = 'pending';
+        // Status variable (retains 'confirmed' for COD, 'pending' for PayMongo)
+        if ($payment_method !== 'cod') {
+            $status = 'pending';
+        }
         
         // Debug: Check what data we have
         error_log("Creating order with data:");
@@ -343,10 +503,84 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             && in_array('voucher_discount', $columns, true);
         
         // Insert order based on actual database structure
-        if (in_array('delivery_option', $columns) && 
-            in_array('pickup_location', $columns) && 
-            in_array('delivery_location', $columns)) {
-            // Database has new columns
+        $has_modern_schema = in_array('delivery_option', $columns, true)
+            && in_array('latitude', $columns, true)
+            && in_array('platform_fee_amount', $columns, true);
+
+        if ($has_modern_schema) {
+            $query = "INSERT INTO orders (
+                order_number, user_id, seller_id, customer_name, customer_email, customer_phone,
+                delivery_address, delivery_date, delivery_time, estimated_delivery_time, payment_method,
+                delivery_option, pickup_location, delivery_location, latitude, longitude,
+                delivery_instructions, subtotal, delivery_fee, voucher_id, voucher_code,
+                voucher_discount, total_amount, platform_fee_rate_percent, platform_fee_flat,
+                platform_fee_amount, platform_fee_plan_name, net_seller_payout, special_instructions,
+                status, payment_status, downpayment_amount, remaining_balance
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, ?, ?
+            )";
+
+            $stmt = mysqli_prepare($conn, $query);
+            if (!$stmt) {
+                throw new Exception("Prepare failed: " . mysqli_error($conn));
+            }
+
+            $pickup_location_param = ($pickup_location > 0) ? (int)$pickup_location : null;
+            $delivery_location_param = !empty($delivery_location) ? (string)$delivery_location : null;
+            $latitude_param = ($latitude !== null && $latitude !== '') ? number_format((float)$latitude, 8, '.', '') : null;
+            $longitude_param = ($longitude !== null && $longitude !== '') ? number_format((float)$longitude, 8, '.', '') : null;
+            $estimated_delivery_time_param = !empty($estimated_delivery_time) ? (string)$estimated_delivery_time : null;
+            $voucher_id_param = ($voucher_id > 0) ? (int)$voucher_id : null;
+            $voucher_code_param = !empty($voucher_code) ? (string)$voucher_code : null;
+            $platform_plan_param = !empty($platform_fee_plan_name) ? (string)$platform_fee_plan_name : null;
+            $seller_id_param = ($seller_id_for_order > 0) ? (int)$seller_id_for_order : null;
+            $delivery_instructions_param = (string)($delivery_instructions ?? '');
+
+            mysqli_stmt_bind_param($stmt, "siisssssssssissssddisdddddsdsssdd",
+                $order_number,                  // s (1)
+                $user_id,                       // i (2)
+                $seller_id_param,               // i (3)
+                $full_name,                     // s (4)
+                $email,                         // s (5)
+                $phone,                         // s (6)
+                $delivery_address,              // s (7)
+                $delivery_date,                 // s (8)
+                $delivery_time,                 // s (9)
+                $estimated_delivery_time_param, // s (10)
+                $payment_method,                // s (11)
+                $delivery_option,               // s (12)
+                $pickup_location_param,         // i (13)
+                $delivery_location_param,       // s (14)
+                $latitude_param,                // s (15)
+                $longitude_param,               // s (16)
+                $delivery_instructions_param,   // s (17)
+                $subtotal,                      // d (18)
+                $delivery_fee,                  // d (19)
+                $voucher_id_param,              // i (20)
+                $voucher_code_param,            // s (21)
+                $voucher_discount,              // d (22)
+                $total_amount,                  // d (23)
+                $platform_fee_rate_percent,     // d (24)
+                $platform_fee_flat,             // d (25)
+                $platform_fee_amount,           // d (26)
+                $platform_plan_param,           // s (27)
+                $net_seller_payout,             // d (28)
+                $order_notes,                   // s (29)
+                $status,                        // s (30)
+                $payment_status,                // s (31)
+                $downpayment_amount,            // d (32)
+                $remaining_balance              // d (33)
+            );
+        } elseif (in_array('delivery_option', $columns, true) && 
+            in_array('pickup_location', $columns, true) && 
+            in_array('delivery_location', $columns, true)) {
+            // Database has intermediate columns
             $query = "INSERT INTO orders (
                 order_number, user_id, customer_name, customer_email, customer_phone, 
                 delivery_address, delivery_date, delivery_time, payment_method,
@@ -424,7 +658,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $order_id = mysqli_insert_id($conn);
         mysqli_stmt_close($stmt);
 
-        if ($has_voucher_columns) {
+        // Multi-tenant Store Scoping: Ensure store_id column is populated on orders
+        if (in_array('store_id', $columns, true) && !empty($pickup_location)) {
+            $store_sync_stmt = mysqli_prepare($conn, "UPDATE orders SET store_id = ? WHERE id = ?");
+            if ($store_sync_stmt) {
+                $pickup_store_val = (int)$pickup_location;
+                mysqli_stmt_bind_param($store_sync_stmt, "ii", $pickup_store_val, $order_id);
+                mysqli_stmt_execute($store_sync_stmt);
+                mysqli_stmt_close($store_sync_stmt);
+            }
+        }
+
+        if (!$has_modern_schema && $has_voucher_columns) {
             $voucher_update_sql = "UPDATE orders
                                    SET voucher_id = NULLIF(?, 0),
                                        voucher_code = NULLIF(?, ''),
@@ -441,18 +686,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             mysqli_stmt_close($voucher_update_stmt);
         }
 
-        if ($delivery_option === 'delivery' && in_array('customer_coordinates', $columns, true) && $latitude !== null && $longitude !== null) {
-            $customer_coordinates = json_encode([
-                'latitude' => (float)$latitude,
-                'longitude' => (float)$longitude,
-            ]);
-            $coords_stmt = mysqli_prepare($conn, "UPDATE orders SET customer_coordinates = ? WHERE id = ?");
+        if (!$has_modern_schema && $delivery_option === 'delivery' && in_array('latitude', $columns, true) && $latitude !== null && $longitude !== null) {
+            $lat_save = number_format((float)$latitude, 8, '.', '');
+            $lng_save = number_format((float)$longitude, 8, '.', '');
+            $coords_stmt = mysqli_prepare($conn, "UPDATE orders SET latitude = ?, longitude = ? WHERE id = ?");
             if ($coords_stmt) {
-                mysqli_stmt_bind_param($coords_stmt, "si", $customer_coordinates, $order_id);
+                mysqli_stmt_bind_param($coords_stmt, "ssi", $lat_save, $lng_save, $order_id);
                 mysqli_stmt_execute($coords_stmt);
                 mysqli_stmt_close($coords_stmt);
             }
         }
+
         
         // Insert order items
         foreach ($_SESSION['cart'] as $item) {
@@ -622,72 +866,240 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         
-        // Commit transaction
         mysqli_commit($conn);
         pvClearAppliedVoucherSession();
+        unset($_SESSION['pending_welcome_voucher']);
+
+        // Automated multi-tenant revenue splitting record
+        try {
+            require_once __DIR__ . '/includes/CommissionAndWalletService.php';
+            $wallet_svc = new CommissionAndWalletService($conn);
+            $wallet_svc->recordOrUpdateSplit((int)$order_id, false);
+        } catch (\Throwable $split_ex) {
+            error_log('Initial split tracking warning: ' . $split_ex->getMessage());
+        }
         
-        // All payments go through PayMongo
-        $payment_amount = ($payment_type === 'downpayment') ? $downpayment_amount : $total_amount;
+        // -------------------------------------------------------------
+        // CASH ON DELIVERY (COD) / CASH ON PICKUP FULFILLMENT
+        // -------------------------------------------------------------
+        if ($payment_method === 'cod') {
+            // 1. Deduct Inventory for confirmed cash order
+            $items_query = "SELECT product_id, quantity FROM order_items WHERE order_id = ?";
+            if ($items_stmt = mysqli_prepare($conn, $items_query)) {
+                mysqli_stmt_bind_param($items_stmt, "i", $order_id);
+                mysqli_stmt_execute($items_stmt);
+                $items_result = mysqli_stmt_get_result($items_stmt);
+                $inventory_date = date('Y-m-d');
 
-        // Initialize PayMongo
-        $paymongo = new PayMongoIntegration(
-            'sk_test_YOUR_PAYMONGO_SECRET_KEY_HERE',
-            'pk_test_YOUR_PAYMONGO_PUBLIC_KEY_HERE'
-        );
+                while ($item = mysqli_fetch_assoc($items_result)) {
+                    $string_product_id = $item['product_id'];
+                    $int_product_id = 0;
 
-        // Prepare checkout session data
-        $checkoutData = [
-            'amount' => $payment_amount,
-            'description' => 'Order #' . $order_number . ' - Lechon Delights',
-            'order_id' => $order_id,
-            'customer_name' => $full_name,
-            'customer_email' => $email,
-            'customer_phone' => $phone,
-            'success_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/payment_success.php?order_id=' . $order_id,
-            'cancel_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/payment_cancel.php?order_id=' . $order_id,
-            'payment_method' => $payment_method
-        ];
+                    $get_id_query = "SELECT id FROM products WHERE id = ? OR product_id = ? LIMIT 1";
+                    $get_id_stmt = mysqli_prepare($conn, $get_id_query);
+                    if ($get_id_stmt) {
+                        mysqli_stmt_bind_param($get_id_stmt, "ss", $string_product_id, $string_product_id);
+                        mysqli_stmt_execute($get_id_stmt);
+                        $id_result = mysqli_stmt_get_result($get_id_stmt);
+                        if ($id_row = mysqli_fetch_assoc($id_result)) {
+                            $int_product_id = (int)$id_row['id'];
+                        }
+                        mysqli_stmt_close($get_id_stmt);
+                    }
 
-        $result = $paymongo->createCheckoutSession($checkoutData);
+                    if ($int_product_id > 0) {
+                        $check_inv_query = "SELECT id, current_stock FROM inventory WHERE product_id = ? AND inventory_date = ?";
+                        $check_inv_stmt = mysqli_prepare($conn, $check_inv_query);
+                        if ($check_inv_stmt) {
+                            mysqli_stmt_bind_param($check_inv_stmt, "is", $int_product_id, $inventory_date);
+                            mysqli_stmt_execute($check_inv_stmt);
+                            $check_inv_res = mysqli_stmt_get_result($check_inv_stmt);
+                            $inv_data = mysqli_fetch_assoc($check_inv_res);
+                            mysqli_stmt_close($check_inv_stmt);
 
-        if ($result['success']) {
-            // Save checkout session ID to database
-            if (!empty($payments_table_exists)) {
-                $query = "UPDATE payments SET checkout_session_id = ? WHERE order_id = ? ORDER BY id DESC LIMIT 1";
-                $stmt = mysqli_prepare($conn, $query);
-                if ($stmt) {
-                    mysqli_stmt_bind_param($stmt, "si", $result['session_id'], $order_id);
-                    mysqli_stmt_execute($stmt);
-                    mysqli_stmt_close($stmt);
-                } else {
-                    error_log("Unable to update checkout session ID: " . mysqli_error($conn));
+                            if (!$inv_data) {
+                                $init_inv_sql = "INSERT INTO inventory (product_id, inventory_date, current_stock, min_stock_level, last_updated)
+                                                 SELECT id, ?, stock, 5, NOW() FROM products WHERE id = ?";
+                                $init_inv_stmt = mysqli_prepare($conn, $init_inv_sql);
+                                if ($init_inv_stmt) {
+                                    mysqli_stmt_bind_param($init_inv_stmt, "si", $inventory_date, $int_product_id);
+                                    mysqli_stmt_execute($init_inv_stmt);
+                                    mysqli_stmt_close($init_inv_stmt);
+                                }
+
+                                $check_inv_stmt2 = mysqli_prepare($conn, $check_inv_query);
+                                if ($check_inv_stmt2) {
+                                    mysqli_stmt_bind_param($check_inv_stmt2, "is", $int_product_id, $inventory_date);
+                                    mysqli_stmt_execute($check_inv_stmt2);
+                                    $check_inv_res2 = mysqli_stmt_get_result($check_inv_stmt2);
+                                    $inv_data = mysqli_fetch_assoc($check_inv_res2);
+                                    mysqli_stmt_close($check_inv_stmt2);
+                                }
+                            }
+
+                            if ($inv_data) {
+                                $current_stock = (int)$inv_data['current_stock'];
+                                $quantity = (int)$item['quantity'];
+                                $new_stock = max(0, $current_stock - $quantity);
+
+                                $update_inv_sql = "UPDATE inventory SET current_stock = ?, last_updated = NOW() WHERE id = ?";
+                                $update_inv_stmt = mysqli_prepare($conn, $update_inv_sql);
+                                if ($update_inv_stmt) {
+                                    mysqli_stmt_bind_param($update_inv_stmt, "ii", $new_stock, $inv_data['id']);
+                                    mysqli_stmt_execute($update_inv_stmt);
+                                    mysqli_stmt_close($update_inv_stmt);
+                                }
+
+                                $history_query = "INSERT INTO inventory_history (product_id, adjustment_type, quantity_changed, previous_stock, new_stock, notes, created_at) VALUES (?, 'reduce', ?, ?, ?, ?, NOW())";
+                                $history_stmt = mysqli_prepare($conn, $history_query);
+                                if ($history_stmt) {
+                                    $h_notes = "COD Order #" . $order_number;
+                                    mysqli_stmt_bind_param($history_stmt, "iiiis", $int_product_id, $quantity, $current_stock, $new_stock, $h_notes);
+                                    mysqli_stmt_execute($history_stmt);
+                                    mysqli_stmt_close($history_stmt);
+                                }
+                            }
+                        }
+                    }
+                }
+                mysqli_stmt_close($items_stmt);
+            }
+
+            // 2. Initialize Logistics Tracking for Home Delivery (so rider sees request)
+            if (($delivery_option ?? 'pickup') === 'delivery') {
+                try {
+                    require_once 'logistics_service.php';
+                    $logisticsService = new LogisticsService($conn);
+                    $trackingResult = $logisticsService->createTrackingForOrder(
+                        $order_id, 1, 1,
+                        $order_notes,
+                        $latitude,
+                        $longitude
+                    );
+                    if (!empty($trackingResult['success'])) {
+                        error_log("COD delivery tracking #{$trackingResult['tracking_id']} created for order #{$order_id}");
+                    }
+                } catch (Throwable $e) {
+                    error_log("COD delivery tracking initialization error: " . $e->getMessage());
                 }
             }
 
-            // Send order confirmation email
+            // 3. Notify Admins and Delivery Riders
+            if (function_exists('getAdminUserIds') && function_exists('createNotification')) {
+                $admin_ids = getAdminUserIds($conn);
+                $is_pickup = ($delivery_option === 'pickup');
+                $notif_title = $is_pickup ? "New Cash on Pickup Order" : "New COD Delivery Order Waiting for Rider";
+                $notif_message = "Order #{$order_number} placed via " . ($is_pickup ? "Cash on Pickup" : "Cash on Delivery") . " (PHP " . number_format($total_amount, 2) . ") is confirmed.";
+                foreach ($admin_ids as $admin_id) {
+                    createNotification($conn, (int)$admin_id, 'new_order', $notif_title, $notif_message, (int)$order_id, 'order');
+                }
+            }
+
+            // 4. Send Order Confirmation Email
             try {
                 $emailService = new EmailService($conn);
                 $emailService->sendOrderConfirmation($order_id);
-            } catch (Exception $e) {
-                error_log("Email sending error: " . $e->getMessage());
+            } catch (Throwable $e) {
+                error_log("COD order confirmation email error: " . $e->getMessage());
             }
 
-            // Redirect to PayMongo checkout
-            checkoutRedirectTo($result['checkout_url'], [
-                'order_id' => (int)$order_id
-            ]);
-        } else {
-            // Handle error
-            $errorMessage = $result['error'] ?? 'Unknown error occurred';
-            error_log("PayMongo checkout creation failed: " . $errorMessage);
+            // 5. Populate Session Order Success Data
+            $_SESSION['order_success'] = [
+                'order_id' => (int)$order_id,
+                'order_number' => $order_number,
+                'amount_paid' => 0.00,
+                'total_amount' => $total_amount,
+                'payment_method' => 'cod',
+                'payment_type' => 'full',
+                'downpayment_amount' => 0.00,
+                'remaining_balance' => $total_amount
+            ];
 
-            checkoutFail(
-                'Payment Error',
-                'Could not create payment session: ' . $errorMessage,
-                502,
-                ['order_id' => (int)$order_id]
-            );
+            // Clear session cart and checkout states
+            unset($_SESSION['cart']);
+            unset($_SESSION['pending_order']);
+            unset($_SESSION['delivery_option']);
+            unset($_SESSION['pickup_location']);
+            unset($_SESSION['delivery_location']);
+
+            // 6. Direct user to order confirmation / success screen
+            checkoutRedirectTo('order_success.php?order_id=' . $order_id, [
+                'order_id' => (int)$order_id,
+                'order_number' => $order_number,
+                'payment_method' => 'cod'
+            ]);
+            exit;
         }
+
+        // Online Payments via PayMongo
+        $payment_amount = ($payment_type === 'downpayment') ? $downpayment_amount : $total_amount;
+
+        // Resolve PayMongo API keys from config/env
+        $paymongo_secret = getPayMongoSecretKey();
+        $paymongo_public = getPayMongoPublicKey();
+        $has_valid_paymongo_keys = ($paymongo_secret !== '' && strpos($paymongo_secret, 'YOUR_PAYMONGO') === false && (strpos($paymongo_secret, 'sk_test_') === 0 || strpos($paymongo_secret, 'sk_live_') === 0) && strlen($paymongo_secret) > 15);
+
+        if ($has_valid_paymongo_keys) {
+            try {
+                $paymongo = new PayMongoIntegration($paymongo_secret, $paymongo_public);
+                $checkoutData = [
+                    'amount' => $payment_amount,
+                    'description' => 'Order #' . $order_number . ' - Lechon Delights',
+                    'order_id' => $order_id,
+                    'customer_name' => $full_name,
+                    'customer_email' => $email,
+                    'customer_phone' => $phone,
+                    'success_url' => appBaseUrl('payment_success.php?order_id=' . $order_id),
+                    'cancel_url' => appBaseUrl('payment_cancel.php?order_id=' . $order_id),
+                    'payment_method' => $payment_method
+                ];
+
+                $result = $paymongo->createCheckoutSession($checkoutData);
+
+                if (!empty($result['success']) && !empty($result['checkout_url'])) {
+                    if (!empty($payments_table_exists)) {
+                        $query = "UPDATE payments SET checkout_session_id = ? WHERE order_id = ? ORDER BY id DESC LIMIT 1";
+                        $stmt = mysqli_prepare($conn, $query);
+                        if ($stmt) {
+                            mysqli_stmt_bind_param($stmt, "si", $result['session_id'], $order_id);
+                            mysqli_stmt_execute($stmt);
+                            mysqli_stmt_close($stmt);
+                        }
+                    }
+
+                    try {
+                        $emailService = new EmailService($conn);
+                        $emailService->sendOrderConfirmation($order_id);
+                    } catch (Exception $e) {
+                        error_log("Email sending error: " . $e->getMessage());
+                    }
+
+                    checkoutRedirectTo($result['checkout_url'], [
+                        'order_id' => (int)$order_id
+                    ]);
+                    exit;
+                } else {
+                    error_log("PayMongo API session creation notice: " . ($result['error'] ?? 'Unconfigured API keys'));
+                }
+            } catch (Throwable $pe) {
+                error_log("PayMongo integration exception: " . $pe->getMessage());
+            }
+        }
+
+        // Send order confirmation email before redirecting to simulator
+        try {
+            $emailService = new EmailService($conn);
+            $emailService->sendOrderConfirmation($order_id);
+        } catch (Exception $e) {
+            error_log("Email sending error: " . $e->getMessage());
+        }
+
+        // Redirect to PayMongo Gateway Simulator for local / sandbox mode when live API keys are not defined
+        checkoutRedirectTo('paymongo_checkout.php?order_id=' . $order_id, [
+            'order_id' => (int)$order_id
+        ]);
+        exit;
+
         
     } catch (Throwable $e) {
         // Rollback transaction

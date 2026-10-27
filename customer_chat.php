@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Customer Chat Support Page
  */
@@ -1155,6 +1155,63 @@ include 'includes/header.php';
                 align-items: center;
                 justify-content: center;
             }
+        }
+
+        /* ==========================================================================
+           CUSTOMER CHAT DARK THEME ENGINE
+           ========================================================================== */
+        body.dark-mode .chat-section {
+            background: #0f172a !important;
+        }
+
+        body.dark-mode .chat-container,
+        body.dark-mode .chat-sidebar,
+        body.dark-mode .thread-pane {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+
+        body.dark-mode .chat-header,
+        body.dark-mode .chat-sidebar-header,
+        body.dark-mode .thread-header,
+        body.dark-mode .chat-input-area {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+        }
+
+        body.dark-mode .chat-header h2,
+        body.dark-mode .chat-sidebar-header h3,
+        body.dark-mode .thread-title,
+        body.dark-mode .chat-user-info h4 {
+            color: #f8fafc !important;
+        }
+
+        body.dark-mode .chat-messages {
+            background: #0f172a !important;
+        }
+
+        body.dark-mode .message.agent .message-content {
+            background: #1e293b !important;
+            border: 1px solid #334155 !important;
+            color: #f8fafc !important;
+        }
+
+        body.dark-mode .chat-user-item {
+            border-color: #334155 !important;
+            color: #cbd5e1 !important;
+        }
+
+        body.dark-mode .chat-user-item:hover,
+        body.dark-mode .chat-user-item.active {
+            background: #111827 !important;
+            border-color: #ef4444 !important;
+        }
+
+        body.dark-mode .chat-input-area textarea {
+            background: #0f172a !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
         }
     </style>
 

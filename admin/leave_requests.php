@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 session_start();
 include 'auth.php';
 include '../includes/config.php';
@@ -147,6 +147,7 @@ if ($departments_query) {
         <div class="admin-content">
             <div class="admin-topbar">
                 <div class="topbar-content">
+                    <button class="sidebar-toggler" id="sidebarToggler"><i class="fas fa-bars"></i></button>
                     <h1>Leave Requests</h1>
                     <div class="admin-profile">
                         <span><?php echo htmlspecialchars($admin_info['full_name']); ?></span>
@@ -287,15 +288,24 @@ if ($departments_query) {
     </div>
     
     <!-- Leave Details Modal -->
-    <div class="modal fade" id="leaveModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade modern-form-modal" id="leaveModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Leave Request Details</h5>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-calendar-minus"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Leave Request Details</h5>
+                        <p class="modal-subtitle">Review employee request reason, dates, and administrative actions.</p>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" id="leaveDetails">
                     <!-- Loaded via JS -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>

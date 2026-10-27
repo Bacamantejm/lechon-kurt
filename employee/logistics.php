@@ -126,6 +126,10 @@ $employee_user = $result_user->fetch_assoc();
 $stmt_user->close();
 ?>
 
+<!-- Leaflet Mapping Library CDN -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
 <style>
     .delivery-chat-modal-messages {
         max-height: 360px;
@@ -213,40 +217,103 @@ $stmt_user->close();
     }
     .live-nav-map {
         width: 100%;
-        height: 420px;
-        border-radius: 12px;
+        height: 440px;
+        border-radius: 14px;
         border: 1px solid #dbe3ec;
         background: #f8fafc;
+        z-index: 1;
+    }
+    body.dark-mode .live-nav-map {
+        border-color: #334155 !important;
+        background: #0f172a !important;
+    }
+    .driver-leaflet-marker {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        background: #b3261e;
+        color: #ffffff;
+        border-radius: 50%;
+        border: 3px solid #ffffff;
+        box-shadow: 0 4px 14px rgba(179,38,30,0.45);
+        font-size: 1.05rem;
+        position: relative;
+    }
+    .driver-leaflet-marker::after {
+        content: '';
+        position: absolute;
+        inset: -6px;
+        border-radius: 50%;
+        border: 2px solid #b3261e;
+        animation: driverPulse 1.8s infinite;
+    }
+    @keyframes driverPulse {
+        0% { transform: scale(0.9); opacity: 0.9; }
+        100% { transform: scale(1.45); opacity: 0; }
+    }
+    .customer-leaflet-marker {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        background: #1e293b;
+        color: #38bdf8;
+        border-radius: 12px;
+        border: 2px solid #ffffff;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        font-size: 1.05rem;
     }
     .live-nav-metrics {
         background: #f8fafc;
         border: 1px solid #e5e7eb;
         border-radius: 12px;
-        padding: 12px;
+        padding: 14px;
+    }
+    body.dark-mode .live-nav-metrics {
+        background: #1e293b !important;
+        border-color: #334155 !important;
+        color: #f8fafc !important;
     }
     .live-nav-metric-row {
         display: flex;
         justify-content: space-between;
         gap: 12px;
-        padding: 5px 0;
+        padding: 6px 0;
         font-size: 0.92rem;
         color: #334155;
     }
+    body.dark-mode .live-nav-metric-row {
+        color: #cbd5e1 !important;
+    }
     .live-nav-metric-row strong {
         color: #111827;
+    }
+    body.dark-mode .live-nav-metric-row strong {
+        color: #f8fafc !important;
     }
     .live-nav-target {
         margin-top: 12px;
         background: #fff;
         border: 1px solid #e5e7eb;
         border-radius: 10px;
-        padding: 10px;
+        padding: 12px;
         font-size: 0.9rem;
         color: #334155;
     }
+    body.dark-mode .live-nav-target {
+        background: #0f172a !important;
+        border-color: #334155 !important;
+        color: #f8fafc !important;
+    }
     .live-nav-target h6 {
-        margin-bottom: 8px;
+        margin-bottom: 6px;
         color: #0f172a;
+    }
+    body.dark-mode .live-nav-target h6 {
+        color: #f8fafc !important;
     }
 </style>
 
@@ -504,9 +571,17 @@ $stmt_user->close();
                             <h6>Customer Drop-off</h6>
                             <div id="liveNavAddress">-</div>
                         </div>
-                        <a id="liveNavExternalLink" href="#" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm mt-3 w-100">
-                            <i class="fas fa-route"></i> Open Route in Google Maps
-                        </a>
+                        <div class="d-flex flex-wrap gap-2 mt-3">
+                            <a id="liveNavGoogleLink" href="#" target="_blank" rel="noopener" class="btn btn-outline-danger btn-sm flex-fill">
+                                <i class="fab fa-google"></i> Google Maps
+                            </a>
+                            <a id="liveNavWazeLink" href="#" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm flex-fill">
+                                <i class="fas fa-location-arrow"></i> Waze
+                            </a>
+                            <a id="liveNavOsmLink" href="#" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm flex-fill">
+                                <i class="fas fa-map"></i> OpenStreetMap
+                            </a>
+                        </div>
                         <div id="liveNavStatusMsg" class="small text-muted mt-2"></div>
                     </div>
                 </div>
@@ -560,27 +635,15 @@ $stmt_user->close();
     let activeChatAvailable = false;
     let liveNavigationModal = null;
     let liveNavMap = null;
-    let liveNavDirectionsService = null;
-    let liveNavDirectionsRenderer = null;
+    let liveNavTileLayer = null;
     let liveNavDriverMarker = null;
     let liveNavCustomerMarker = null;
+    let liveNavRoutePolyline = null;
     let liveNavWatchId = null;
     let liveNavIsOpen = false;
     let liveNavLastRouteAt = 0;
     let liveNavLastDriverPosition = null;
     let liveNavTarget = null;
-    let liveNavGoogleReady = false;
-    let liveNavGoogleGeocodingAvailable = <?php echo $google_geocoding_enabled ? 'true' : 'false'; ?>;
-
-    window.initDriverNavigationMap = function() {
-        liveNavGoogleReady = true;
-        if (liveNavIsOpen && liveNavTarget) {
-            ensureLiveNavigationMap();
-            refreshCustomerDestination().catch((error) => {
-                console.error('Failed to load customer destination:', error);
-            });
-        }
-    };
 
     document.addEventListener('DOMContentLoaded', function() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -598,9 +661,7 @@ $stmt_user->close();
 
     function initThemeToggler() {
         const themeToggler = document.getElementById('themeToggler');
-        if (!themeToggler) {
-            return;
-        }
+        if (!themeToggler) return;
 
         const body = document.body;
         const icon = themeToggler.querySelector('i');
@@ -628,14 +689,13 @@ $stmt_user->close();
             if (icon) {
                 icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
             }
+            window.dispatchEvent(new CustomEvent('themeChanged', { detail: { isDark: isDark } }));
         });
     }
 
     function initLiveNavigationModal() {
         const modalEl = document.getElementById('liveNavigationModal');
-        if (!modalEl) {
-            return;
-        }
+        if (!modalEl) return;
 
         liveNavigationModal = new bootstrap.Modal(modalEl);
 
@@ -645,9 +705,7 @@ $stmt_user->close();
 
         modalEl.addEventListener('shown.bs.modal', () => {
             liveNavIsOpen = true;
-            if (liveNavMap && window.google && google.maps) {
-                google.maps.event.trigger(liveNavMap, 'resize');
-            }
+            ensureLiveNavigationMap();
         });
 
         modalEl.addEventListener('hidden.bs.modal', () => {
@@ -657,15 +715,16 @@ $stmt_user->close();
             liveNavLastRouteAt = 0;
             clearLiveNavMetrics();
 
-            if (liveNavDirectionsRenderer) {
-                liveNavDirectionsRenderer.set('directions', null);
+            if (liveNavRoutePolyline && liveNavMap) {
+                liveNavMap.removeLayer(liveNavRoutePolyline);
+                liveNavRoutePolyline = null;
             }
-            if (liveNavDriverMarker) {
-                liveNavDriverMarker.setMap(null);
+            if (liveNavDriverMarker && liveNavMap) {
+                liveNavMap.removeLayer(liveNavDriverMarker);
                 liveNavDriverMarker = null;
             }
-            if (liveNavCustomerMarker) {
-                liveNavCustomerMarker.setMap(null);
+            if (liveNavCustomerMarker && liveNavMap) {
+                liveNavMap.removeLayer(liveNavCustomerMarker);
                 liveNavCustomerMarker = null;
             }
             liveNavTarget = null;
@@ -674,9 +733,7 @@ $stmt_user->close();
     }
 
     function openLiveNavigation(button) {
-        if (!button || !liveNavigationModal) {
-            return;
-        }
+        if (!button || !liveNavigationModal) return;
 
         const parsedLat = parseFloat(button.dataset.customerLat || '');
         const parsedLng = parseFloat(button.dataset.customerLng || '');
@@ -698,12 +755,11 @@ $stmt_user->close();
         clearLiveNavMetrics();
         setLiveNavStatus('Starting live navigation...');
 
-        setLiveNavExternalLink(null, null, liveNavTarget.deliveryAddress);
+        setLiveNavExternalLinks(null, null, liveNavTarget.deliveryAddress);
         liveNavigationModal.show();
 
         if (!ensureLiveNavigationMap()) {
-            setLiveNavStatus('Map is still loading. You can open route externally for now.');
-            return;
+            setLiveNavStatus('Map is initializing. Route preview will load shortly.');
         }
 
         refreshCustomerDestination()
@@ -712,98 +768,46 @@ $stmt_user->close();
             })
             .catch((error) => {
                 console.error('Customer location setup failed:', error);
-                setLiveNavStatus('Unable to resolve customer map location. Route preview may be limited.');
+                setLiveNavStatus('Unable to resolve customer map location.');
                 startLiveDriverWatch();
             });
     }
 
     function ensureLiveNavigationMap() {
-        if (!(window.google && google.maps)) {
-            return false;
-        }
-
         const mapEl = document.getElementById('liveNavigationMap');
-        if (!mapEl) {
-            return false;
-        }
+        if (!mapEl || typeof L === 'undefined') return false;
 
         if (!liveNavMap) {
-            liveNavMap = new google.maps.Map(mapEl, {
-                zoom: 13,
-                center: { lat: 14.5995, lng: 120.9842 },
-                mapTypeId: 'roadmap',
-                mapTypeControl: false,
-                streetViewControl: false,
-                fullscreenControl: false
-            });
+            liveNavMap = L.map(mapEl, {
+                zoomControl: true,
+                attributionControl: false
+            }).setView([14.5995, 120.9842], 13);
 
-            liveNavDirectionsService = new google.maps.DirectionsService();
-            liveNavDirectionsRenderer = new google.maps.DirectionsRenderer({
-                map: liveNavMap,
-                suppressMarkers: true,
-                preserveViewport: false,
-                polylineOptions: {
-                    strokeColor: '#2563eb',
-                    strokeOpacity: 0.9,
-                    strokeWeight: 5
+            const isDark = document.body.classList.contains('dark-mode');
+            const tileUrl = isDark 
+                ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+            liveNavTileLayer = L.tileLayer(tileUrl, {
+                maxZoom: 19
+            }).addTo(liveNavMap);
+
+            window.addEventListener('themeChanged', function(e) {
+                if (liveNavMap && liveNavTileLayer) {
+                    const darkNow = e.detail && e.detail.isDark;
+                    const newTileUrl = darkNow 
+                        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                        : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+                    liveNavTileLayer.setUrl(newTileUrl);
                 }
             });
         }
+
+        setTimeout(() => {
+            if (liveNavMap) liveNavMap.invalidateSize();
+        }, 250);
 
         return true;
-    }
-
-    async function refreshCustomerDestination() {
-        if (!liveNavTarget) {
-            return;
-        }
-        if (!ensureLiveNavigationMap()) {
-            return;
-        }
-
-        let destination = null;
-        if (Number.isFinite(liveNavTarget.customerLat) && Number.isFinite(liveNavTarget.customerLng)) {
-            destination = {
-                lat: liveNavTarget.customerLat,
-                lng: liveNavTarget.customerLng
-            };
-        } else if (liveNavTarget.deliveryAddress) {
-            destination = await geocodeAddressToLatLng(liveNavTarget.deliveryAddress);
-        }
-
-        if (!destination) {
-            setLiveNavStatus('Customer location coordinates unavailable. Please verify address.');
-            return;
-        }
-
-        liveNavTarget.customerLatLng = destination;
-
-        if (!liveNavCustomerMarker) {
-            liveNavCustomerMarker = new google.maps.Marker({
-                map: liveNavMap,
-                position: destination,
-                title: 'Customer Location',
-                icon: {
-                    url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png'
-                }
-            });
-        } else {
-            liveNavCustomerMarker.setPosition(destination);
-        }
-
-        setLiveNavExternalLink(null, destination, liveNavTarget.deliveryAddress);
-        if (!liveNavDriverMarker) {
-            liveNavMap.setCenter(destination);
-            liveNavMap.setZoom(15);
-        }
-    }
-
-    function isGoogleGeocodingUnavailableStatus(status) {
-        const normalized = String(status || '').trim().toUpperCase();
-        return normalized === 'REQUEST_DENIED'
-            || normalized === 'OVER_QUERY_LIMIT'
-            || normalized === 'OVER_DAILY_LIMIT'
-            || normalized === 'INVALID_REQUEST';
     }
 
     async function forwardGeocodeFromNominatim(addressText) {
@@ -832,35 +836,45 @@ $stmt_user->close();
         }
     }
 
-    function geocodeAddressToLatLng(address) {
-        return new Promise((resolve) => {
-            if (!address) {
-                resolve(null);
-                return;
-            }
+    async function refreshCustomerDestination() {
+        if (!liveNavTarget) return;
+        if (!ensureLiveNavigationMap()) return;
 
-            const resolveWithFallback = async () => {
-                resolve(await forwardGeocodeFromNominatim(address));
+        let destination = null;
+        if (Number.isFinite(liveNavTarget.customerLat) && Number.isFinite(liveNavTarget.customerLng)) {
+            destination = {
+                lat: liveNavTarget.customerLat,
+                lng: liveNavTarget.customerLng
             };
+        } else if (liveNavTarget.deliveryAddress) {
+            destination = await forwardGeocodeFromNominatim(liveNavTarget.deliveryAddress);
+        }
 
-            if (!liveNavGoogleGeocodingAvailable || !(window.google && google.maps)) {
-                resolveWithFallback();
-                return;
-            }
+        if (!destination) {
+            setLiveNavStatus('Customer location coordinates unavailable.');
+            return;
+        }
 
-            const geocoder = new google.maps.Geocoder();
-            geocoder.geocode({ address: address }, async (results, status) => {
-                if (status === 'OK' && results && results[0] && results[0].geometry && results[0].geometry.location) {
-                    const loc = results[0].geometry.location;
-                    resolve({ lat: loc.lat(), lng: loc.lng() });
-                    return;
-                }
-                if (isGoogleGeocodingUnavailableStatus(status)) {
-                    liveNavGoogleGeocodingAvailable = false;
-                }
-                resolve(await forwardGeocodeFromNominatim(address));
-            });
+        liveNavTarget.customerLatLng = destination;
+
+        const customerIcon = L.divIcon({
+            className: 'custom-leaflet-pin',
+            html: `<div class="customer-leaflet-marker" title="Customer Drop-off"><i class="fas fa-user"></i></div>`,
+            iconSize: [36, 36],
+            iconAnchor: [18, 18]
         });
+
+        if (!liveNavCustomerMarker) {
+            liveNavCustomerMarker = L.marker([destination.lat, destination.lng], { icon: customerIcon }).addTo(liveNavMap);
+            liveNavCustomerMarker.bindPopup(`<b>Customer: ${escapeHtml(liveNavTarget.customerName)}</b><br>${escapeHtml(liveNavTarget.deliveryAddress)}`);
+        } else {
+            liveNavCustomerMarker.setLatLng([destination.lat, destination.lng]);
+        }
+
+        setLiveNavExternalLinks(null, destination, liveNavTarget.deliveryAddress);
+        if (!liveNavDriverMarker) {
+            liveNavMap.setView([destination.lat, destination.lng], 15);
+        }
     }
 
     function startLiveDriverWatch() {
@@ -879,13 +893,13 @@ $stmt_user->close();
 
         navigator.geolocation.getCurrentPosition(
             (position) => handleLiveDriverPosition(position, true),
-            () => setLiveNavStatus('Unable to get your current GPS position.'),
+            () => setLiveNavStatus('Unable to get current GPS position.'),
             options
         );
 
         liveNavWatchId = navigator.geolocation.watchPosition(
             (position) => handleLiveDriverPosition(position, false),
-            () => setLiveNavStatus('GPS update failed. Please keep location permission enabled.'),
+            () => setLiveNavStatus('GPS update failed. Keep location permissions enabled.'),
             options
         );
     }
@@ -898,107 +912,105 @@ $stmt_user->close();
     }
 
     function handleLiveDriverPosition(position, forceRouteRefresh) {
-        if (!liveNavIsOpen || !position || !position.coords) {
-            return;
-        }
-        if (!ensureLiveNavigationMap()) {
-            return;
-        }
+        if (!liveNavIsOpen || !position || !position.coords) return;
+        if (!ensureLiveNavigationMap()) return;
 
         const lat = Number(position.coords.latitude);
         const lng = Number(position.coords.longitude);
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-            return;
-        }
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
-        const driverLatLng = new google.maps.LatLng(lat, lng);
-        let heading = 0;
-        if (liveNavLastDriverPosition && google.maps.geometry && google.maps.geometry.spherical) {
-            heading = google.maps.geometry.spherical.computeHeading(liveNavLastDriverPosition, driverLatLng) || 0;
-        }
+        const driverIcon = L.divIcon({
+            className: 'custom-leaflet-driver',
+            html: `<div class="driver-leaflet-marker" title="Your Location"><i class="fas fa-motorcycle"></i></div>`,
+            iconSize: [38, 38],
+            iconAnchor: [19, 19]
+        });
 
         if (!liveNavDriverMarker) {
-            liveNavDriverMarker = new google.maps.Marker({
-                map: liveNavMap,
-                position: driverLatLng,
-                title: 'Your Location',
-                icon: {
-                    path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-                    scale: 7,
-                    rotation: heading,
-                    fillColor: '#dc2626',
-                    fillOpacity: 1,
-                    strokeColor: '#ffffff',
-                    strokeWeight: 2
-                }
-            });
+            liveNavDriverMarker = L.marker([lat, lng], { icon: driverIcon }).addTo(liveNavMap);
+            liveNavDriverMarker.bindPopup('<b>Your Location</b>');
         } else {
-            liveNavDriverMarker.setPosition(driverLatLng);
-            const markerIcon = liveNavDriverMarker.getIcon() || {};
-            liveNavDriverMarker.setIcon({
-                path: markerIcon.path || google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-                scale: markerIcon.scale || 7,
-                rotation: heading,
-                fillColor: markerIcon.fillColor || '#dc2626',
-                fillOpacity: markerIcon.fillOpacity || 1,
-                strokeColor: markerIcon.strokeColor || '#ffffff',
-                strokeWeight: markerIcon.strokeWeight || 2
-            });
+            liveNavDriverMarker.setLatLng([lat, lng]);
         }
 
-        liveNavLastDriverPosition = driverLatLng;
+        liveNavLastDriverPosition = { lat: lat, lng: lng };
         document.getElementById('liveNavLastUpdate').textContent = formatLiveNavTime(new Date(position.timestamp || Date.now()));
 
         recalculateLiveRoute(forceRouteRefresh === true);
     }
 
-    function recalculateLiveRoute(forceRefresh = false) {
-        if (!liveNavDirectionsService || !liveNavDriverMarker || !liveNavTarget || !liveNavTarget.customerLatLng) {
-            return;
-        }
+    async function recalculateLiveRoute(forceRefresh = false) {
+        if (!liveNavDriverMarker || !liveNavTarget || !liveNavTarget.customerLatLng) return;
 
         const now = Date.now();
-        if (!forceRefresh && (now - liveNavLastRouteAt) < 5000) {
-            return;
-        }
+        if (!forceRefresh && (now - liveNavLastRouteAt) < 4000) return;
         liveNavLastRouteAt = now;
 
-        const origin = liveNavDriverMarker.getPosition();
-        const destination = liveNavTarget.customerLatLng;
+        const driverLat = liveNavDriverMarker.getLatLng().lat;
+        const driverLng = liveNavDriverMarker.getLatLng().lng;
+        const destLat = liveNavTarget.customerLatLng.lat;
+        const destLng = liveNavTarget.customerLatLng.lng;
 
-        liveNavDirectionsService.route({
-            origin: origin,
-            destination: destination,
-            travelMode: google.maps.TravelMode.DRIVING
-        }, (response, status) => {
-            if (status !== 'OK' || !response || !response.routes || !response.routes[0] || !response.routes[0].legs || !response.routes[0].legs[0]) {
-                clearLiveNavMetrics();
-                setLiveNavStatus('Unable to calculate route right now.');
-                return;
+        try {
+            const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${driverLng},${driverLat};${destLng},${destLat}?overview=full&geometries=geojson`;
+            const response = await fetch(osrmUrl);
+            if (response.ok) {
+                const data = await response.json();
+                if (data && data.code === 'Ok' && data.routes && data.routes.length > 0) {
+                    const route = data.routes[0];
+                    const coords = route.geometry.coordinates.map(pt => [pt[1], pt[0]]);
+
+                    if (liveNavRoutePolyline && liveNavMap) {
+                        liveNavMap.removeLayer(liveNavRoutePolyline);
+                    }
+
+                    liveNavRoutePolyline = L.polyline(coords, {
+                        color: '#b3261e',
+                        weight: 5,
+                        opacity: 0.85,
+                        lineJoin: 'round'
+                    }).addTo(liveNavMap);
+
+                    const bounds = L.latLngBounds([
+                        [driverLat, driverLng],
+                        [destLat, destLng]
+                    ]);
+                    liveNavMap.fitBounds(bounds, { padding: [40, 40] });
+
+                    const distanceKm = (route.distance / 1000).toFixed(1) + ' km';
+                    const durationMins = Math.max(1, Math.round(route.duration / 60)) + ' mins';
+                    const dropOffTime = formatLiveNavTime(new Date(Date.now() + route.duration * 1000));
+
+                    document.getElementById('liveNavDistance').textContent = distanceKm;
+                    document.getElementById('liveNavEta').textContent = durationMins;
+                    document.getElementById('liveNavDropoff').textContent = dropOffTime;
+
+                    setLiveNavExternalLinks({ lat: driverLat, lng: driverLng }, { lat: destLat, lng: destLng }, liveNavTarget.deliveryAddress);
+                    setLiveNavStatus('Live OSRM driving route active.');
+                    return;
+                }
             }
+        } catch (e) {
+            console.warn('OSRM routing fetch error:', e);
+        }
 
-            if (liveNavDirectionsRenderer) {
-                liveNavDirectionsRenderer.setDirections(response);
-            }
+        // Fallback straight line polyline if OSRM endpoint is down
+        if (liveNavRoutePolyline && liveNavMap) {
+            liveNavMap.removeLayer(liveNavRoutePolyline);
+        }
 
-            const leg = response.routes[0].legs[0];
-            updateLiveNavMetrics(leg);
-            setLiveNavExternalLink(origin, destination, liveNavTarget.deliveryAddress);
-            setLiveNavStatus('Live route updated.');
-        });
-    }
+        liveNavRoutePolyline = L.polyline([[driverLat, driverLng], [destLat, destLng]], {
+            color: '#b3261e',
+            weight: 4,
+            dashArray: '8, 8',
+            opacity: 0.75
+        }).addTo(liveNavMap);
 
-    function updateLiveNavMetrics(leg) {
-        const distanceText = (leg.distance && leg.distance.text) ? leg.distance.text : '--';
-        const etaText = (leg.duration && leg.duration.text) ? leg.duration.text : '--';
-        const durationSeconds = Number((leg.duration && leg.duration.value) ? leg.duration.value : 0);
-        const dropOffText = durationSeconds > 0
-            ? formatLiveNavTime(new Date(Date.now() + (durationSeconds * 1000)))
-            : '--';
+        const bounds = L.latLngBounds([[driverLat, driverLng], [destLat, destLng]]);
+        liveNavMap.fitBounds(bounds, { padding: [40, 40] });
 
-        document.getElementById('liveNavDistance').textContent = distanceText;
-        document.getElementById('liveNavEta').textContent = etaText;
-        document.getElementById('liveNavDropoff').textContent = dropOffText;
+        setLiveNavExternalLinks({ lat: driverLat, lng: driverLng }, { lat: destLat, lng: destLng }, liveNavTarget.deliveryAddress);
+        setLiveNavStatus('Direct route line active.');
     }
 
     function clearLiveNavMetrics() {
@@ -1016,34 +1028,34 @@ $stmt_user->close();
 
     function setLiveNavStatus(message) {
         const statusEl = document.getElementById('liveNavStatusMsg');
-        if (!statusEl) {
-            return;
-        }
+        if (!statusEl) return;
         statusEl.textContent = message || '';
     }
 
-    function setLiveNavExternalLink(origin, destination, fallbackAddress) {
-        const linkEl = document.getElementById('liveNavExternalLink');
-        if (!linkEl) {
-            return;
-        }
+    function setLiveNavExternalLinks(origin, destination, fallbackAddress) {
+        const googleBtn = document.getElementById('liveNavGoogleLink');
+        const wazeBtn = document.getElementById('liveNavWazeLink');
+        const osmBtn = document.getElementById('liveNavOsmLink');
 
-        if (destination && typeof destination.lat !== 'undefined' && typeof destination.lng !== 'undefined') {
-            const destinationLat = typeof destination.lat === 'function' ? destination.lat() : destination.lat;
-            const destinationLng = typeof destination.lng === 'function' ? destination.lng() : destination.lng;
-            let url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destinationLat + ',' + destinationLng)}&travelmode=driving`;
-
-            if (origin && typeof origin.lat !== 'undefined' && typeof origin.lng !== 'undefined') {
-                const originLat = typeof origin.lat === 'function' ? origin.lat() : origin.lat;
-                const originLng = typeof origin.lng === 'function' ? origin.lng() : origin.lng;
-                url += `&origin=${encodeURIComponent(originLat + ',' + originLng)}`;
+        if (destination && destination.lat && destination.lng) {
+            let gUrl = `https://www.google.com/maps/dir/?api=1&destination=${destination.lat},${destination.lng}&travelmode=driving`;
+            if (origin && origin.lat && origin.lng) {
+                gUrl += `&origin=${origin.lat},${origin.lng}`;
             }
+            if (googleBtn) googleBtn.href = gUrl;
 
-            linkEl.href = url;
+            let wUrl = `https://waze.com/ul?ll=${destination.lat},${destination.lng}&navigate=yes`;
+            if (wazeBtn) wazeBtn.href = wUrl;
+
+            let oUrl = `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${origin ? origin.lat + ',' + origin.lng : ''};${destination.lat},${destination.lng}`;
+            if (osmBtn) osmBtn.href = oUrl;
             return;
         }
 
-        linkEl.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fallbackAddress || '')}`;
+        const encodedAddr = encodeURIComponent(fallbackAddress || '');
+        if (googleBtn) googleBtn.href = `https://www.google.com/maps/search/?api=1&query=${encodedAddr}`;
+        if (wazeBtn) wazeBtn.href = `https://waze.com/ul?q=${encodedAddr}`;
+        if (osmBtn) osmBtn.href = `https://www.openstreetmap.org/search?query=${encodedAddr}`;
     }
 
     function initDeliveryChatModal() {
@@ -1374,6 +1386,5 @@ $stmt_user->close();
         });
     }
 </script>
-<script src="https://maps.googleapis.com/maps/api/js?key=<?php echo rawurlencode($google_maps_api_key); ?>&libraries=geometry,places&loading=async&callback=initDriverNavigationMap" async defer></script>
 
 <?php require_once 'footer.php'; ?>

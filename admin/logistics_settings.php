@@ -38,7 +38,7 @@ function ensureFoodDeliveryIntegrationsTable($conn, &$error_message = '') {
 
     $seed_sql = "
         INSERT INTO food_delivery_integrations (platform_name, is_active, sandbox_mode)
-        VALUES ('FoodPanda', 0, 1), ('GrabFood', 0, 1)
+        VALUES ('FoodPanda', 0, 1), ('GrabFood', 0, 1), ('Lalamove', 0, 1)
         ON DUPLICATE KEY UPDATE platform_name = VALUES(platform_name)
     ";
     if (!mysqli_query($conn, $seed_sql)) {
@@ -58,6 +58,34 @@ if (!$settings_bootstrap_ok) {
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && $settings_bootstrap_ok) {
     $action = $_POST['action'] ?? '';
+
+    if ($action == 'update_lalamove') {
+        $api_key = trim($_POST['lalamove_api_key'] ?? '');
+        $api_secret = trim($_POST['lalamove_api_secret'] ?? '');
+        $service_type = trim($_POST['lalamove_service_type'] ?? 'MOTORCYCLE');
+        $is_active = isset($_POST['lalamove_active']) ? 1 : 0;
+        $sandbox = isset($_POST['lalamove_sandbox']) ? 1 : 0;
+        
+        $query = "INSERT INTO food_delivery_integrations (platform_name, api_key, api_secret, partner_id, is_active, sandbox_mode)
+                  VALUES ('Lalamove', ?, ?, ?, ?, ?)
+                  ON DUPLICATE KEY UPDATE
+                      api_key = VALUES(api_key),
+                      api_secret = VALUES(api_secret),
+                      partner_id = VALUES(partner_id),
+                      is_active = VALUES(is_active),
+                      sandbox_mode = VALUES(sandbox_mode),
+                      updated_at = CURRENT_TIMESTAMP";
+        
+        if ($stmt = mysqli_prepare($conn, $query)) {
+            mysqli_stmt_bind_param($stmt, "sssii", $api_key, $api_secret, $service_type, $is_active, $sandbox);
+            if (mysqli_stmt_execute($stmt)) {
+                $success = 'Lalamove API settings updated successfully';
+            } else {
+                $error = 'Failed to update Lalamove settings';
+            }
+            mysqli_stmt_close($stmt);
+        }
+    }
     
     if ($action == 'update_foodpanda') {
         $api_key = trim($_POST['foodpanda_api_key'] ?? '');
@@ -117,10 +145,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && $settings_bootstrap_ok) {
 }
 
 // Get current settings
+$lalamove_settings = null;
 $foodpanda_settings = null;
 $grabfood_settings = null;
 
 if ($settings_bootstrap_ok) {
+    $lm_query = "SELECT * FROM food_delivery_integrations WHERE platform_name = 'Lalamove'";
+    if ($lm_stmt = mysqli_prepare($conn, $lm_query)) {
+        mysqli_stmt_execute($lm_stmt);
+        $lm_result = mysqli_stmt_get_result($lm_stmt);
+        $lalamove_settings = mysqli_fetch_assoc($lm_result);
+        mysqli_stmt_close($lm_stmt);
+    }
+
     $fp_query = "SELECT * FROM food_delivery_integrations WHERE platform_name = 'FoodPanda'";
     if ($fp_stmt = mysqli_prepare($conn, $fp_query)) {
         mysqli_stmt_execute($fp_stmt);
@@ -326,129 +363,266 @@ include '../includes/header.php';
 }
 </style>
 
-<div class="settings-container">
-    <div class="settings-header">
-        <h1>Logistics Settings</h1>
-        <a href="logistics.php" class="btn" style="background: #c62828; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none;">← Back</a>
+<div class="container-fluid py-4 px-md-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+        <div>
+            <h1 class="h3 fw-bold text-dark mb-1">Logistics & Delivery Integrations</h1>
+            <p class="text-muted mb-0" style="font-size:0.92rem;">Configure third-party delivery service providers, API keys, and sandbox modes.</p>
+        </div>
+        <a href="logistics.php" class="btn btn-outline-secondary px-3 py-2 fw-semibold" style="border-radius:10px;">
+            <i class="fas fa-arrow-left me-1"></i> Back to Logistics
+        </a>
     </div>
     
     <?php if ($success): ?>
-    <div class="alert alert-success">✓ <?php echo htmlspecialchars($success); ?></div>
+    <div class="alert alert-success d-flex align-items-center mb-4" style="background:#ecfdf3; color:#027a48; border:1px solid #abefc6; border-radius:12px;">
+        <i class="fas fa-check-circle me-2"></i> <?php echo htmlspecialchars($success); ?>
+    </div>
     <?php endif; ?>
     
     <?php if ($error): ?>
-    <div class="alert alert-error">✗ <?php echo htmlspecialchars($error); ?></div>
+    <div class="alert alert-danger d-flex align-items-center mb-4" style="background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; border-radius:12px;">
+        <i class="fas fa-exclamation-circle me-2"></i> <?php echo htmlspecialchars($error); ?>
+    </div>
     <?php endif; ?>
     
-    <div class="settings-grid">
+    <div class="row g-4">
+        <!-- Lalamove Real-Time Delivery Fee API Settings -->
+        <div class="col-lg-6">
+            <div class="form-section-card h-100">
+                <div class="form-section-head">
+                    <div class="form-section-title">
+                        <i class="fas fa-truck-fast"></i>
+                        Lalamove API Integration
+                    </div>
+                    <span class="badge" style="background:<?php echo (($lalamove_settings['is_active'] ?? 0) ? '#ecfdf3' : '#f2f4f7'); ?>; color:<?php echo (($lalamove_settings['is_active'] ?? 0) ? '#027a48' : '#475467'); ?>; border:1px solid <?php echo (($lalamove_settings['is_active'] ?? 0) ? '#abefc6' : '#d0d5dd'); ?>;">
+                        <?php echo (($lalamove_settings['is_active'] ?? 0) ? 'Active' : 'Disabled'); ?>
+                    </span>
+                </div>
+                
+                <div class="p-3">
+                    <form method="POST" action="">
+                        <input type="hidden" name="action" value="update_lalamove">
+                        
+                        <div class="alert alert-info py-2 px-3 mb-3" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; border-radius:10px; font-size:0.86rem;">
+                            <i class="fas fa-info-circle me-1"></i> Obtain your Lalamove REST API v3 key & secret from the <strong>Lalamove Partner Portal</strong>.
+                        </div>
+                        
+                        <div class="form-group-modern mb-3">
+                            <label class="form-label-modern">API Key</label>
+                            <div class="form-input-wrap">
+                                <i class="fas fa-key form-input-icon"></i>
+                                <input type="password" name="lalamove_api_key" class="form-control" value="<?php echo htmlspecialchars($lalamove_settings['api_key'] ?? ''); ?>" placeholder="Enter Lalamove API Key">
+                            </div>
+                            <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Your Lalamove API Key (v3 HMAC)</small>
+                        </div>
+                        
+                        <div class="form-group-modern mb-3">
+                            <label class="form-label-modern">API Secret</label>
+                            <div class="form-input-wrap">
+                                <i class="fas fa-lock form-input-icon"></i>
+                                <input type="password" name="lalamove_api_secret" class="form-control" value="<?php echo htmlspecialchars($lalamove_settings['api_secret'] ?? ''); ?>" placeholder="Enter Lalamove API Secret">
+                            </div>
+                            <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Your Lalamove Secret Key</small>
+                        </div>
+
+                        <div class="form-group-modern mb-3">
+                            <label class="form-label-modern">Default Vehicle Service Type</label>
+                            <div class="form-input-wrap">
+                                <i class="fas fa-motorcycle form-input-icon"></i>
+                                <select name="lalamove_service_type" class="form-control">
+                                    <?php $current_service = $lalamove_settings['partner_id'] ?? 'MOTORCYCLE'; ?>
+                                    <option value="MOTORCYCLE" <?php echo ($current_service === 'MOTORCYCLE' ? 'selected' : ''); ?>>Motorcycle (Default / Fast Delivery)</option>
+                                    <option value="SEDAN" <?php echo ($current_service === 'SEDAN' ? 'selected' : ''); ?>>Sedan / 4-Wheeler Car</option>
+                                    <option value="MPV" <?php echo ($current_service === 'MPV' ? 'selected' : ''); ?>>MPV (300kg Large Orders)</option>
+                                    <option value="VAN" <?php echo ($current_service === 'VAN' ? 'selected' : ''); ?>>Van / L300 (Whole Roasted Pig)</option>
+                                </select>
+                            </div>
+                            <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Vehicle fleet category used for real-time quotation queries</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="lm_active" name="lalamove_active" value="1" <?php echo (($lalamove_settings['is_active'] ?? 0) ? 'checked' : ''); ?>>
+                                <label class="form-check-label fw-semibold text-dark" for="lm_active">Enable Lalamove Real-Time Delivery Pricing</label>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="lm_sandbox" name="lalamove_sandbox" value="1" <?php echo (($lalamove_settings['sandbox_mode'] ?? 0) ? 'checked' : ''); ?>>
+                                <label class="form-check-label text-muted" for="lm_sandbox">Use Sandbox Mode (Testing)</label>
+                            </div>
+                        </div>
+                        
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-modal-primary px-4 py-2">
+                                <i class="fas fa-save me-1"></i> Save Lalamove Settings
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
         <!-- FoodPanda Settings -->
-        <div class="settings-card">
-            <h2>🍽️ FoodPanda Integration</h2>
-            
-            <form method="POST" action="">
-                <input type="hidden" name="action" value="update_foodpanda">
-                
-                <div class="config-info">
-                    📋 Get your FoodPanda API credentials from: 
-                    <strong>FoodPanda Partner Portal</strong>
-                </div>
-                
-                <div class="form-group">
-                    <label>API Key</label>
-                    <input type="password" name="foodpanda_api_key" value="<?php echo htmlspecialchars($foodpanda_settings['api_key'] ?? ''); ?>" placeholder="Enter FoodPanda API Key">
-                    <div class="help-text">Your FoodPanda Partner API Key</div>
-                </div>
-                
-                <div class="form-group">
-                    <label>API Secret</label>
-                    <input type="password" name="foodpanda_api_secret" value="<?php echo htmlspecialchars($foodpanda_settings['api_secret'] ?? ''); ?>" placeholder="Enter FoodPanda API Secret">
-                    <div class="help-text">Your FoodPanda Partner API Secret</div>
-                </div>
-                
-                <div class="form-group">
-                    <label>Restaurant ID</label>
-                    <input type="text" name="foodpanda_restaurant_id" value="<?php echo htmlspecialchars($foodpanda_settings['restaurant_id'] ?? ''); ?>" placeholder="Enter Restaurant ID">
-                    <div class="help-text">Your FoodPanda assigned Restaurant ID</div>
-                </div>
-                
-                <div class="form-group">
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="fp_active" name="foodpanda_active" value="1" <?php echo (($foodpanda_settings['is_active'] ?? 0) ? 'checked' : ''); ?>>
-                        <label for="fp_active">Enable FoodPanda Integration</label>
+        <div class="col-lg-6">
+            <div class="form-section-card h-100">
+                <div class="form-section-head">
+                    <div class="form-section-title">
+                        <i class="fas fa-utensils"></i>
+                        FoodPanda Integration
                     </div>
+                    <span class="badge" style="background:<?php echo (($foodpanda_settings['is_active'] ?? 0) ? '#ecfdf3' : '#f2f4f7'); ?>; color:<?php echo (($foodpanda_settings['is_active'] ?? 0) ? '#027a48' : '#475467'); ?>; border:1px solid <?php echo (($foodpanda_settings['is_active'] ?? 0) ? '#abefc6' : '#d0d5dd'); ?>;">
+                        <?php echo (($foodpanda_settings['is_active'] ?? 0) ? 'Active' : 'Disabled'); ?>
+                    </span>
                 </div>
                 
-                <div class="form-group">
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="fp_sandbox" name="foodpanda_sandbox" value="1" <?php echo (($foodpanda_settings['sandbox_mode'] ?? 0) ? 'checked' : ''); ?>>
-                        <label for="fp_sandbox">Use Sandbox Mode (Testing)</label>
-                    </div>
+                <div class="p-3">
+                    <form method="POST" action="">
+                        <input type="hidden" name="action" value="update_foodpanda">
+                        
+                        <div class="alert alert-info py-2 px-3 mb-3" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; border-radius:10px; font-size:0.86rem;">
+                            <i class="fas fa-info-circle me-1"></i> Get your FoodPanda API credentials from the <strong>FoodPanda Partner Portal</strong>.
+                        </div>
+                        
+                        <div class="form-group-modern mb-3">
+                            <label class="form-label-modern">API Key</label>
+                            <div class="form-input-wrap">
+                                <i class="fas fa-key form-input-icon"></i>
+                                <input type="password" name="foodpanda_api_key" class="form-control" value="<?php echo htmlspecialchars($foodpanda_settings['api_key'] ?? ''); ?>" placeholder="Enter FoodPanda API Key">
+                            </div>
+                            <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Your FoodPanda Partner API Key</small>
+                        </div>
+                        
+                        <div class="form-group-modern mb-3">
+                            <label class="form-label-modern">API Secret</label>
+                            <div class="form-input-wrap">
+                                <i class="fas fa-lock form-input-icon"></i>
+                                <input type="password" name="foodpanda_api_secret" class="form-control" value="<?php echo htmlspecialchars($foodpanda_settings['api_secret'] ?? ''); ?>" placeholder="Enter FoodPanda API Secret">
+                            </div>
+                            <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Your FoodPanda Partner API Secret</small>
+                        </div>
+                        
+                        <div class="form-group-modern mb-3">
+                            <label class="form-label-modern">Restaurant ID</label>
+                            <div class="form-input-wrap">
+                                <i class="fas fa-store form-input-icon"></i>
+                                <input type="text" name="foodpanda_restaurant_id" class="form-control" value="<?php echo htmlspecialchars($foodpanda_settings['restaurant_id'] ?? ''); ?>" placeholder="Enter Restaurant ID">
+                            </div>
+                            <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Your FoodPanda assigned Restaurant ID</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="fp_active" name="foodpanda_active" value="1" <?php echo (($foodpanda_settings['is_active'] ?? 0) ? 'checked' : ''); ?>>
+                                <label class="form-check-label fw-semibold text-dark" for="fp_active">Enable FoodPanda Integration</label>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="fp_sandbox" name="foodpanda_sandbox" value="1" <?php echo (($foodpanda_settings['sandbox_mode'] ?? 0) ? 'checked' : ''); ?>>
+                                <label class="form-check-label text-muted" for="fp_sandbox">Use Sandbox Mode (Testing)</label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group-modern mb-4">
+                            <label class="form-label-modern">Webhook URL</label>
+                            <div class="form-input-wrap">
+                                <i class="fas fa-link form-input-icon"></i>
+                                <input type="text" class="form-control text-muted" readonly value="<?php echo 'https://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/webhooks/foodpanda_webhook.php'; ?>">
+                            </div>
+                        </div>
+                        
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-modal-primary px-4 py-2">
+                                <i class="fas fa-save me-1"></i> Save FoodPanda Settings
+                            </button>
+                        </div>
+                    </form>
                 </div>
-                
-                <div class="config-info">
-                    🔗 Webhook URL: 
-                    <div class="webhook-url"><?php echo 'https://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/webhooks/foodpanda_webhook.php'; ?></div>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="submit" class="btn-submit">Save Settings</button>
-                </div>
-            </form>
+            </div>
         </div>
         
         <!-- GrabFood Settings -->
-        <div class="settings-card">
-            <h2>🚗 GrabFood Integration</h2>
-            
-            <form method="POST" action="">
-                <input type="hidden" name="action" value="update_grabfood">
-                
-                <div class="config-info">
-                    📋 Get your GrabFood API credentials from: 
-                    <strong>Grab Merchant Console</strong>
-                </div>
-                
-                <div class="form-group">
-                    <label>API Key</label>
-                    <input type="password" name="grabfood_api_key" value="<?php echo htmlspecialchars($grabfood_settings['api_key'] ?? ''); ?>" placeholder="Enter GrabFood API Key">
-                    <div class="help-text">Your GrabFood Merchant API Key</div>
-                </div>
-                
-                <div class="form-group">
-                    <label>Partner ID</label>
-                    <input type="text" name="grabfood_partner_id" value="<?php echo htmlspecialchars($grabfood_settings['partner_id'] ?? ''); ?>" placeholder="Enter Partner ID">
-                    <div class="help-text">Your GrabFood assigned Partner ID</div>
-                </div>
-                
-                <div class="form-group">
-                    <label>Restaurant ID</label>
-                    <input type="text" name="grabfood_restaurant_id" value="<?php echo htmlspecialchars($grabfood_settings['restaurant_id'] ?? ''); ?>" placeholder="Enter Restaurant ID">
-                    <div class="help-text">Your GrabFood Restaurant ID</div>
-                </div>
-                
-                <div class="form-group">
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="gf_active" name="grabfood_active" value="1" <?php echo (($grabfood_settings['is_active'] ?? 0) ? 'checked' : ''); ?>>
-                        <label for="gf_active">Enable GrabFood Integration</label>
+        <div class="col-lg-6">
+            <div class="form-section-card h-100">
+                <div class="form-section-head">
+                    <div class="form-section-title">
+                        <i class="fas fa-car-side"></i>
+                        GrabFood Integration
                     </div>
+                    <span class="badge" style="background:<?php echo (($grabfood_settings['is_active'] ?? 0) ? '#ecfdf3' : '#f2f4f7'); ?>; color:<?php echo (($grabfood_settings['is_active'] ?? 0) ? '#027a48' : '#475467'); ?>; border:1px solid <?php echo (($grabfood_settings['is_active'] ?? 0) ? '#abefc6' : '#d0d5dd'); ?>;">
+                        <?php echo (($grabfood_settings['is_active'] ?? 0) ? 'Active' : 'Disabled'); ?>
+                    </span>
                 </div>
                 
-                <div class="form-group">
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="gf_sandbox" name="grabfood_sandbox" value="1" <?php echo (($grabfood_settings['sandbox_mode'] ?? 0) ? 'checked' : ''); ?>>
-                        <label for="gf_sandbox">Use Sandbox Mode (Testing)</label>
-                    </div>
+                <div class="p-3">
+                    <form method="POST" action="">
+                        <input type="hidden" name="action" value="update_grabfood">
+                        
+                        <div class="alert alert-info py-2 px-3 mb-3" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; border-radius:10px; font-size:0.86rem;">
+                            <i class="fas fa-info-circle me-1"></i> Get your GrabFood API credentials from the <strong>Grab Merchant Console</strong>.
+                        </div>
+                        
+                        <div class="form-group-modern mb-3">
+                            <label class="form-label-modern">API Key</label>
+                            <div class="form-input-wrap">
+                                <i class="fas fa-key form-input-icon"></i>
+                                <input type="password" name="grabfood_api_key" class="form-control" value="<?php echo htmlspecialchars($grabfood_settings['api_key'] ?? ''); ?>" placeholder="Enter GrabFood API Key">
+                            </div>
+                            <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Your GrabFood Merchant API Key</small>
+                        </div>
+                        
+                        <div class="form-group-modern mb-3">
+                            <label class="form-label-modern">Partner ID</label>
+                            <div class="form-input-wrap">
+                                <i class="fas fa-handshake form-input-icon"></i>
+                                <input type="text" name="grabfood_partner_id" class="form-control" value="<?php echo htmlspecialchars($grabfood_settings['partner_id'] ?? ''); ?>" placeholder="Enter Partner ID">
+                            </div>
+                            <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Your GrabFood assigned Partner ID</small>
+                        </div>
+                        
+                        <div class="form-group-modern mb-3">
+                            <label class="form-label-modern">Restaurant ID</label>
+                            <div class="form-input-wrap">
+                                <i class="fas fa-store form-input-icon"></i>
+                                <input type="text" name="grabfood_restaurant_id" class="form-control" value="<?php echo htmlspecialchars($grabfood_settings['restaurant_id'] ?? ''); ?>" placeholder="Enter Restaurant ID">
+                            </div>
+                            <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Your GrabFood Restaurant ID</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="gf_active" name="grabfood_active" value="1" <?php echo (($grabfood_settings['is_active'] ?? 0) ? 'checked' : ''); ?>>
+                                <label class="form-check-label fw-semibold text-dark" for="gf_active">Enable GrabFood Integration</label>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="gf_sandbox" name="grabfood_sandbox" value="1" <?php echo (($grabfood_settings['sandbox_mode'] ?? 0) ? 'checked' : ''); ?>>
+                                <label class="form-check-label text-muted" for="gf_sandbox">Use Sandbox Mode (Testing)</label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group-modern mb-4">
+                            <label class="form-label-modern">Webhook URL</label>
+                            <div class="form-input-wrap">
+                                <i class="fas fa-link form-input-icon"></i>
+                                <input type="text" class="form-control text-muted" readonly value="<?php echo 'https://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/webhooks/grabfood_webhook.php'; ?>">
+                            </div>
+                        </div>
+                        
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-modal-primary px-4 py-2">
+                                <i class="fas fa-save me-1"></i> Save GrabFood Settings
+                            </button>
+                        </div>
+                    </form>
                 </div>
-                
-                <div class="config-info">
-                    🔗 Webhook URL: 
-                    <div class="webhook-url"><?php echo 'https://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/webhooks/grabfood_webhook.php'; ?></div>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="submit" class="btn-submit">Save Settings</button>
-                </div>
-            </form>
+            </div>
         </div>
     </div>
 </div>

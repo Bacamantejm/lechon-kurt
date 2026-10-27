@@ -17,7 +17,7 @@ if ($seller_scope_id !== null) {
         SELECT 1
         FROM order_items oi_scope
         INNER JOIN products p_scope
-            ON (oi_scope.product_id = p_scope.product_id OR oi_scope.product_id = CAST(p_scope.id AS CHAR))
+            ON (oi_scope.product_id COLLATE utf8mb4_general_ci = p_scope.product_id COLLATE utf8mb4_general_ci OR oi_scope.product_id COLLATE utf8mb4_general_ci = CAST(p_scope.id AS CHAR) COLLATE utf8mb4_general_ci)
         WHERE oi_scope.order_id = c.order_id
           AND p_scope.seller_id = " . (int)$seller_scope_id . "
     )";
@@ -35,7 +35,7 @@ $pending_refunds_query = "SELECT COUNT(*) as count
                           INNER JOIN cancellations c ON c.id = r.cancellation_id
                           WHERE r.refund_status = 'Refund Pending'" . ($seller_scope_id !== null ? " AND {$partner_cancellation_scope_sql}" : "");
 $pending_refunds_result = mysqli_query($conn, $pending_refunds_query);
-$pending_refunds_count = mysqli_fetch_assoc($pending_refunds_result)['count'] ?? 0;
+$pending_refunds_count = ($pending_refunds_result instanceof mysqli_result) ? (mysqli_fetch_assoc($pending_refunds_result)['count'] ?? 0) : 0;
 
 // 2. Total Refunded this Month
 $refunded_month_query = "SELECT SUM(r.refund_amount) as total
@@ -45,7 +45,7 @@ $refunded_month_query = "SELECT SUM(r.refund_amount) as total
                            AND MONTH(r.processed_date) = $current_month
                            AND YEAR(r.processed_date) = $current_year" . ($seller_scope_id !== null ? " AND {$partner_cancellation_scope_sql}" : "");
 $refunded_month_result = mysqli_query($conn, $refunded_month_query);
-$refunded_this_month = mysqli_fetch_assoc($refunded_month_result)['total'] ?? 0;
+$refunded_this_month = ($refunded_month_result instanceof mysqli_result) ? (mysqli_fetch_assoc($refunded_month_result)['total'] ?? 0) : 0;
 
 // 3. Total Cancellations This Month
 $cancellations_month_query = "SELECT COUNT(*) as count
@@ -53,7 +53,7 @@ $cancellations_month_query = "SELECT COUNT(*) as count
                               WHERE MONTH(c.cancellation_date) = $current_month
                                 AND YEAR(c.cancellation_date) = $current_year" . ($seller_scope_id !== null ? " AND {$partner_cancellation_scope_sql}" : "");
 $cancellations_month_result = mysqli_query($conn, $cancellations_month_query);
-$cancellations_this_month = mysqli_fetch_assoc($cancellations_month_result)['count'] ?? 0;
+$cancellations_this_month = ($cancellations_month_result instanceof mysqli_result) ? (mysqli_fetch_assoc($cancellations_month_result)['count'] ?? 0) : 0;
 
 // 4. Total Refunded (All Time) - Approved refunds only
 $total_refunded_query = "SELECT SUM(r.refund_amount) as total
@@ -61,7 +61,7 @@ $total_refunded_query = "SELECT SUM(r.refund_amount) as total
                          INNER JOIN cancellations c ON c.id = r.cancellation_id
                          WHERE r.refund_status = 'Refund Approved'" . ($seller_scope_id !== null ? " AND {$partner_cancellation_scope_sql}" : "");
 $total_refunded_result = mysqli_query($conn, $total_refunded_query);
-$total_refunded = mysqli_fetch_assoc($total_refunded_result)['total'] ?? 0;
+$total_refunded = ($total_refunded_result instanceof mysqli_result) ? (mysqli_fetch_assoc($total_refunded_result)['total'] ?? 0) : 0;
 
 // Pagination settings
 $records_per_page = 15;
@@ -92,8 +92,8 @@ $where_sql = !empty($where_clauses) ? 'WHERE ' . implode(' AND ', $where_clauses
 // Count total records for pagination
 $count_query = "SELECT COUNT(*) as total FROM cancellations c LEFT JOIN refunds r ON c.id = r.cancellation_id LEFT JOIN users u ON c.user_id = u.id $where_sql";
 $count_result = mysqli_query($conn, $count_query);
-$total_records = mysqli_fetch_assoc($count_result)['total'];
-$total_pages = ceil($total_records / $records_per_page);
+$total_records = ($count_result instanceof mysqli_result) ? ((int)(mysqli_fetch_assoc($count_result)['total'] ?? 0)) : 0;
+$total_pages = max(1, ceil($total_records / $records_per_page));
 
 // Fetch Cancellations & Refunds
 $query = "
@@ -272,7 +272,7 @@ $result = mysqli_query($conn, $query);
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php while($row = mysqli_fetch_assoc($result)): 
+                                <?php while($result instanceof mysqli_result && ($row = mysqli_fetch_assoc($result))): 
                                     $refund_status_class = '';
                                     if ($row['refund_status'] == 'Refund Approved') $refund_status_class = 'badge-success';
                                     elseif ($row['refund_status'] == 'Refund Rejected') $refund_status_class = 'badge-danger';

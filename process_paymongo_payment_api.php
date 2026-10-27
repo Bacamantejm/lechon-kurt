@@ -31,8 +31,8 @@ try {
     
     // Initialize PayMongo with your API keys
     $paymongo = new PayMongoIntegration(
-        'sk_test_YOUR_PAYMONGO_SECRET_KEY_HERE',  // Secret key
-        'pk_test_YOUR_PAYMONGO_PUBLIC_KEY_HERE'   // Public key
+        appConfigValue('PAYMONGO_SECRET_KEY'),
+        appConfigValue('PAYMONGO_PUBLIC_KEY')
     );
     
     // Prepare checkout session data
@@ -43,8 +43,8 @@ try {
         'customer_name' => $order['customer_name'],
         'customer_email' => $order['customer_email'],
         'customer_phone' => $order['customer_phone'],
-        'success_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/payment_success.php?order_id=' . intval($order['order_id']),
-        'cancel_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/payment_cancel.php?order_id=' . intval($order['order_id']),
+        'success_url' => appBaseUrl('payment_success.php?order_id=' . intval($order['order_id'])),
+        'cancel_url' => appBaseUrl('payment_cancel.php?order_id=' . intval($order['order_id'])),
         'payment_method' => $order['payment_method']
     ];
     

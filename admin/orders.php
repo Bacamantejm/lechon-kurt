@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 session_start();
 include '../includes/config.php';
 include '../includes/security.php';
@@ -6,7 +6,10 @@ include 'auth.php';
 
 checkAdminAccess();
 requirePermission('orders.view');
-$admin_info = getAdminInfo($conn);
+if (function_exists('ensureOrdersTableSchema')) {
+    ensureOrdersTableSchema($conn);
+}
+$admin_info = getAdminInfo($conn) ?: [];
 $csrf_token = generateCSRFToken();
 $current_user_id = (int)($_SESSION['user_id'] ?? 0);
 $is_partner_scoped_admin = isApprovedFranchiseSellerAccount($conn, $current_user_id);
@@ -22,8 +25,8 @@ if ($seller_scope_id !== null) {
             FROM order_items oi_scope
             INNER JOIN products p_scope
                 ON (
-                    oi_scope.product_id = p_scope.product_id
-                    OR oi_scope.product_id = CAST(p_scope.id AS CHAR)
+                    oi_scope.product_id COLLATE utf8mb4_general_ci = p_scope.product_id COLLATE utf8mb4_general_ci
+                    OR oi_scope.product_id COLLATE utf8mb4_general_ci = CAST(p_scope.id AS CHAR) COLLATE utf8mb4_general_ci
                     OR CAST(oi_scope.product_id AS UNSIGNED) = p_scope.id
                 )
             WHERE oi_scope.order_id = o.id
@@ -49,6 +52,9 @@ if ($current_page_number < 1) {
 }
 $offset = ($current_page_number - 1) * $records_per_page;
 
+$has_archived_col = function_exists('appColumnExists') ? appColumnExists($conn, 'orders', 'is_archived') : adminAuthColumnExists($conn, 'orders', 'is_archived');
+$archived_clause = $has_archived_col ? "o.is_archived = 0" : "1=1";
+
 // Get statistics for orders
 $stats_query = "SELECT 
     COUNT(*) as total,
@@ -56,10 +62,19 @@ $stats_query = "SELECT
     SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) as confirmed,
     SUM(CASE WHEN status = 'preparing' THEN 1 ELSE 0 END) as preparing,
     SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) as delivered,
+    SUM(CASE WHEN status = 'cancellation_requested' THEN 1 ELSE 0 END) as cancellation_requested,
     SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled
-    FROM orders o WHERE o.is_archived = 0" . ($seller_scope_id !== null ? " AND {$seller_scoped_orders_exists}" : "");
+    FROM orders o WHERE {$archived_clause}" . ($seller_scope_id !== null ? " AND {$seller_scoped_orders_exists}" : "");
 $stats_result = mysqli_query($conn, $stats_query);
-$order_stats = mysqli_fetch_assoc($stats_result);
+$order_stats = ($stats_result instanceof mysqli_result) ? (mysqli_fetch_assoc($stats_result) ?: []) : [
+    'total' => 0,
+    'pending' => 0,
+    'confirmed' => 0,
+    'preparing' => 0,
+    'delivered' => 0,
+    'cancellation_requested' => 0,
+    'cancelled' => 0
+];
 
 // Handle status update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
@@ -164,6 +179,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
                         mysqli_stmt_close($sync_stmt);
                     }
 
+                    // Auto-settle commission and wallet ledger on delivered
+                    if ($new_status === 'delivered') {
+                        require_once dirname(__DIR__) . '/includes/CommissionAndWalletService.php';
+                        $walletService = CommissionAndWalletService::getInstance($conn);
+                        $walletService->recordOrUpdateSplit((int)$order_id, true);
+                    }
+
                     mysqli_commit($conn);
                     $status_updated = true;
                 } catch (Throwable $e) {
@@ -205,48 +227,151 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
         $_SESSION['error'] = 'Invalid status selected.';
     }
 
-    $redirect_query = !empty($_SERVER['QUERY_STRING']) ? ('?' . $_SERVER['QUERY_STRING']) : '';
-    header('Location: orders.php' . $redirect_query);
+    $return_query = !empty($_POST['return_query']) ? trim($_POST['return_query']) : (!empty($_SERVER['QUERY_STRING']) ? ('?' . $_SERVER['QUERY_STRING']) : '');
+    $redirect_url = 'orders.php' . ($return_query ? ('?' . ltrim($return_query, '?')) : '');
+    header('Location: ' . $redirect_url);
     exit;
 }
 
-// Get filter
+// Helper to generate preserved filter URLs
+function getOrdersFilterUrl($new_params = []) {
+    $params = array_merge($_GET, $new_params);
+    if (!isset($new_params['page'])) {
+        unset($params['page']);
+    }
+    $filtered = [];
+    foreach ($params as $k => $v) {
+        if ($v !== '' && $v !== null) {
+            $filtered[$k] = $v;
+        }
+    }
+    return 'orders.php' . (!empty($filtered) ? ('?' . http_build_query($filtered)) : '');
+}
+
+// Get filter inputs
 $status_filter = isset($_GET['status']) ? trim($_GET['status']) : '';
-$search = isset($_GET['search']) ? $_GET['search'] : '';
-$date_from = isset($_GET['date_from']) ? $_GET['date_from'] : '';
-$date_to = isset($_GET['date_to']) ? $_GET['date_to'] : '';
+$search = isset($_GET['search']) ? trim($_GET['search']) : '';
+$date_from = isset($_GET['date_from']) ? trim($_GET['date_from']) : '';
+$date_to = isset($_GET['date_to']) ? trim($_GET['date_to']) : '';
+$delivery_filter = isset($_GET['delivery_option']) ? trim($_GET['delivery_option']) : '';
+$payment_filter = isset($_GET['payment_status']) ? trim($_GET['payment_status']) : '';
+
 $allowed_filter_statuses = ['pending', 'confirmed', 'preparing', 'delivered', 'cancelled', 'cancellation_requested'];
 if ($status_filter !== '' && !in_array($status_filter, $allowed_filter_statuses, true)) {
     $status_filter = '';
 }
 
+if ($delivery_filter !== '' && !in_array($delivery_filter, ['delivery', 'pickup'], true)) {
+    $delivery_filter = '';
+}
+
+if ($payment_filter !== '' && !in_array($payment_filter, ['pending', 'paid', 'failed'], true)) {
+    $payment_filter = '';
+}
+
+// Swap dates if date_from is greater than date_to
+if ($date_from !== '' && $date_to !== '' && $date_from > $date_to) {
+    $tmp_date = $date_from;
+    $date_from = $date_to;
+    $date_to = $tmp_date;
+}
+
 // Build query
-$where_clauses = ["o.is_archived = 0"];
+$where_clauses = [$archived_clause];
 if ($seller_scope_id !== null) {
     $where_clauses[] = $seller_scoped_orders_exists;
 }
-if ($status_filter) {
+if ($status_filter !== '') {
     $where_clauses[] = "o.status = '" . mysqli_real_escape_string($conn, $status_filter) . "'";
 }
-if ($search) {
-    $where_clauses[] = "(o.order_number LIKE '%" . mysqli_real_escape_string($conn, $search) . "%' OR o.customer_name LIKE '%" . mysqli_real_escape_string($conn, $search) . "%' OR o.customer_email LIKE '%" . mysqli_real_escape_string($conn, $search) . "%')";
+if ($delivery_filter !== '') {
+    $where_clauses[] = "o.delivery_option = '" . mysqli_real_escape_string($conn, $delivery_filter) . "'";
 }
-if ($date_from) {
+if ($payment_filter !== '') {
+    $where_clauses[] = "o.payment_status = '" . mysqli_real_escape_string($conn, $payment_filter) . "'";
+}
+if ($search !== '') {
+    $clean_search = mysqli_real_escape_string($conn, $search);
+    $clean_num = mysqli_real_escape_string($conn, ltrim($search, '#'));
+    $id_search = preg_replace('/[^0-9]/', '', $search);
+    $id_clause = ($id_search !== '') ? " OR o.id = " . intval($id_search) : "";
+    $where_clauses[] = "(o.order_number LIKE '%{$clean_search}%' 
+        OR o.order_number LIKE '%{$clean_num}%'
+        OR o.customer_name LIKE '%{$clean_search}%' 
+        OR o.customer_email LIKE '%{$clean_search}%' 
+        OR o.customer_phone LIKE '%{$clean_search}%' 
+        OR o.delivery_address LIKE '%{$clean_search}%'
+        {$id_clause})";
+}
+if ($date_from !== '') {
     $where_clauses[] = "DATE(o.created_at) >= '" . mysqli_real_escape_string($conn, $date_from) . "'";
 }
-if ($date_to) {
+if ($date_to !== '') {
     $where_clauses[] = "DATE(o.created_at) <= '" . mysqli_real_escape_string($conn, $date_to) . "'";
 }
 
 $where_clause = implode(" AND ", $where_clauses);
+$is_filtered = ($status_filter !== '' || $search !== '' || $date_from !== '' || $date_to !== '' || $delivery_filter !== '' || $payment_filter !== '');
+$current_query_string = $_SERVER['QUERY_STRING'] ?? '';
 
 // Count total records for pagination
 $count_query = "SELECT COUNT(*) as total FROM orders o WHERE $where_clause";
 $count_result = mysqli_query($conn, $count_query);
-$total_records = mysqli_fetch_assoc($count_result)['total'];
-$total_pages = ceil($total_records / $records_per_page);
+$total_records = 0;
+if ($count_result instanceof mysqli_result) {
+    $c_row = mysqli_fetch_assoc($count_result);
+    $total_records = (int)($c_row['total'] ?? 0);
+}
+$total_pages = ceil(max(1, $total_records) / $records_per_page);
 
-$orders_query = "SELECT o.*{$partner_order_amount_sql} FROM orders o WHERE $where_clause ORDER BY o.created_at DESC LIMIT $records_per_page OFFSET $offset";
+$has_admin_pod_table = adminAuthTableExists($conn, 'proof_of_delivery');
+$proof_photo_expr = $has_admin_pod_table
+    ? "COALESCE(lt.proof_of_delivery_path, (SELECT photo_path FROM proof_of_delivery WHERE order_id = o.id ORDER BY id DESC LIMIT 1), '')"
+    : "COALESCE(lt.proof_of_delivery_path, '')";
+
+$has_lt = adminAuthTableExists($conn, 'logistics_tracking');
+$has_riders = adminAuthTableExists($conn, 'riders');
+$has_users = adminAuthTableExists($conn, 'users');
+$has_employees = adminAuthTableExists($conn, 'employees');
+
+$join_sql = "";
+if ($has_lt) {
+    $join_sql .= " LEFT JOIN logistics_tracking lt ON lt.order_id = o.id";
+    if ($has_riders) {
+        $join_sql .= " LEFT JOIN riders r ON lt.driver_id = r.id";
+        if ($has_users) {
+            $join_sql .= " LEFT JOIN users u_rdr ON r.user_id = u_rdr.id";
+        }
+        if ($has_employees) {
+            $join_sql .= " LEFT JOIN employees e_rdr ON r.employee_id = e_rdr.id";
+        }
+    }
+}
+
+$driver_name_expr = "''";
+if ($has_lt && $has_riders && $has_users && $has_employees) {
+    $driver_name_expr = "COALESCE(NULLIF(lt.driver_name, ''), u_rdr.full_name, CONCAT(e_rdr.first_name, ' ', e_rdr.last_name), '')";
+} elseif ($has_lt && $has_riders && $has_users) {
+    $driver_name_expr = "COALESCE(NULLIF(lt.driver_name, ''), u_rdr.full_name, '')";
+} elseif ($has_lt) {
+    $driver_name_expr = "COALESCE(NULLIF(lt.driver_name, ''), '')";
+}
+
+$tracking_id_expr = $has_lt ? "lt.id" : "NULL";
+$tracking_status_expr = $has_lt ? "lt.current_status" : "''";
+$rider_code_expr = ($has_lt && $has_riders) ? "r.rider_code" : "''";
+
+$orders_query = "SELECT o.*{$partner_order_amount_sql},
+    {$tracking_id_expr} AS tracking_id,
+    {$tracking_status_expr} AS tracking_status,
+    {$proof_photo_expr} AS proof_photo,
+    {$driver_name_expr} AS driver_name,
+    {$rider_code_expr} AS rider_code
+FROM orders o
+{$join_sql}
+WHERE $where_clause
+ORDER BY o.created_at DESC
+LIMIT $records_per_page OFFSET $offset";
 $orders_result = mysqli_query($conn, $orders_query);
 ?>
 <!DOCTYPE html>
@@ -348,6 +473,303 @@ $orders_result = mysqli_query($conn, $orders_query);
             --bs-pagination-border-color: var(--border-color-dark);
             --bs-pagination-hover-bg: #3d3d3d;
         }
+
+        /* Clickable Stat Cards */
+        .stat-card-link {
+            text-decoration: none !important;
+            color: inherit !important;
+            display: block;
+        }
+        .stat-card-link:hover .stat-card {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(16, 24, 40, 0.08);
+        }
+        .stat-card.active-stat {
+            border: 2px solid #b3261e !important;
+            background: #fff8f8 !important;
+        }
+        body.dark-mode .stat-card.active-stat {
+            border-color: #e53935 !important;
+            background: #332222 !important;
+        }
+
+        /* Order Filter Panel */
+        .order-filter-panel {
+            background: #ffffff;
+            border: 1px solid #eaecf0;
+            border-radius: 14px;
+            padding: 18px 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+        }
+        body.dark-mode .order-filter-panel {
+            background: var(--card-bg-dark);
+            border-color: var(--border-color-dark);
+        }
+
+        /* Status Pills Navigation */
+        .status-pill-nav {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #f2f4f7;
+            scrollbar-width: thin;
+        }
+        body.dark-mode .status-pill-nav {
+            border-bottom-color: var(--border-color-dark);
+        }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #475467;
+            background: #f8f9fa;
+            border: 1px solid #eaecf0;
+            text-decoration: none !important;
+            white-space: nowrap;
+            transition: all 0.15s ease-in-out;
+        }
+        .status-pill:hover {
+            color: #101828;
+            background: #f2f4f7;
+            border-color: #d0d5dd;
+        }
+        .status-pill.active {
+            background: #b3261e;
+            color: #ffffff !important;
+            border-color: #b3261e;
+            font-weight: 600;
+        }
+        .status-pill-count {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 1px 7px;
+            border-radius: 10px;
+            background: #eaecf0;
+            color: #344054;
+        }
+        .status-pill.active .status-pill-count {
+            background: rgba(255, 255, 255, 0.25);
+            color: #ffffff;
+        }
+        body.dark-mode .status-pill {
+            background: #252525;
+            border-color: var(--border-color-dark);
+            color: #b0b0b0;
+        }
+        body.dark-mode .status-pill:hover {
+            background: #333333;
+            color: #ffffff;
+        }
+        body.dark-mode .status-pill.active {
+            background: #b3261e;
+            color: #ffffff !important;
+            border-color: #b3261e;
+        }
+        body.dark-mode .status-pill-count {
+            background: #3a3a3a;
+            color: #e0e0e0;
+        }
+
+        /* Filter Controls Row */
+        .filter-controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+        }
+        .filter-search-wrap {
+            position: relative;
+            flex: 1 1 240px;
+            min-width: 200px;
+        }
+        .filter-search-wrap .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #98a2b3;
+            font-size: 13px;
+            pointer-events: none;
+        }
+        .filter-search-wrap .filter-control {
+            padding-left: 34px !important;
+        }
+        .filter-control {
+            width: 100%;
+            height: 38px;
+            padding: 6px 12px;
+            border: 1px solid #d0d5dd;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #101828;
+            background: #ffffff;
+            outline: none;
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+        .filter-control:focus {
+            border-color: #b3261e;
+            box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.1);
+        }
+        body.dark-mode .filter-control {
+            background: var(--card-bg-dark);
+            border-color: var(--border-color-dark);
+            color: var(--text-color-dark);
+        }
+        .filter-date-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .filter-label {
+            font-size: 12px;
+            font-weight: 500;
+            color: #475467;
+            white-space: nowrap;
+            margin: 0;
+        }
+        body.dark-mode .filter-label {
+            color: #b0b0b0;
+        }
+        .filter-date-group .filter-control {
+            width: 135px;
+        }
+        .filter-select-group .filter-control {
+            width: 145px;
+            cursor: pointer;
+        }
+        .filter-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: auto;
+        }
+        .btn-filter-apply {
+            height: 38px;
+            padding: 0 16px;
+            background: #b3261e;
+            color: #ffffff;
+            border: 1px solid #b3261e;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.15s ease-in-out;
+        }
+        .btn-filter-apply:hover {
+            background: #981b15;
+            border-color: #981b15;
+            color: #ffffff;
+        }
+        .btn-filter-reset {
+            height: 38px;
+            padding: 0 14px;
+            background: #ffffff;
+            color: #344054;
+            border: 1px solid #d0d5dd;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none !important;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease-in-out;
+        }
+        .btn-filter-reset:hover {
+            background: #f8f9fa;
+            border-color: #98a2b3;
+            color: #101828;
+        }
+        body.dark-mode .btn-filter-reset {
+            background: #252525;
+            border-color: var(--border-color-dark);
+            color: #e0e0e0;
+        }
+        body.dark-mode .btn-filter-reset:hover {
+            background: #333333;
+        }
+
+        /* Active Filter Chips */
+        .active-filter-tags {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px dashed #eaecf0;
+        }
+        body.dark-mode .active-filter-tags {
+            border-top-color: var(--border-color-dark);
+        }
+        .active-filters-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #667085;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        body.dark-mode .active-filters-label {
+            color: #98a2b3;
+        }
+        .filter-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 10px;
+            border-radius: 14px;
+            font-size: 12px;
+            background: #fff1f0;
+            color: #b3261e;
+            border: 1px solid #fee4e2;
+        }
+        body.dark-mode .filter-tag {
+            background: #352323;
+            border-color: #552727;
+            color: #ff8a80;
+        }
+        .filter-tag-remove {
+            color: #b3261e;
+            text-decoration: none !important;
+            font-size: 15px;
+            line-height: 1;
+            font-weight: bold;
+            opacity: 0.7;
+            transition: opacity 0.15s;
+        }
+        .filter-tag-remove:hover {
+            opacity: 1;
+            color: #7f1d1d;
+        }
+        body.dark-mode .filter-tag-remove {
+            color: #ff8a80;
+        }
+        .filter-tag-clear-all {
+            font-size: 12px;
+            color: #667085;
+            text-decoration: underline;
+            margin-left: 4px;
+            cursor: pointer;
+        }
+        .filter-tag-clear-all:hover {
+            color: #b3261e;
+        }
+        body.dark-mode .filter-tag-clear-all {
+            color: #98a2b3;
+        }
     </style>
 </head>
 <body class="admin-polish orders-page">
@@ -368,7 +790,7 @@ $orders_result = mysqli_query($conn, $orders_query);
                     <div class="topbar-right">
                         <div class="date-display" id="currentDate"></div>
                         <div class="admin-profile">
-                            <span><?php echo htmlspecialchars($admin_info['full_name']); ?></span>
+                            <span><?php echo htmlspecialchars($admin_info['full_name'] ?? ($_SESSION['full_name'] ?? 'Administrator')); ?></span>
                             <i class="fas fa-user-circle"></i>
                         </div>
                     </div>
@@ -379,60 +801,168 @@ $orders_result = mysqli_query($conn, $orders_query);
                 
                 <!-- Statistics Cards -->
                 <div class="stats-grid">
-                    <div class="stat-card fade-in-up">
-                        <div class="stat-icon blue">
-                            <i class="fas fa-shopping-cart"></i>
+                    <a href="<?php echo htmlspecialchars(getOrdersFilterUrl(['status' => ''])); ?>" class="stat-card-link" title="Filter by All Orders">
+                        <div class="stat-card fade-in-up <?php echo ($status_filter === '') ? 'active-stat' : ''; ?>">
+                            <div class="stat-icon blue">
+                                <i class="fas fa-shopping-cart"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 data-count="<?php echo $order_stats['total'] ?? 0; ?>">0</h3>
+                                <p>Total Orders</p>
+                            </div>
                         </div>
-                        <div class="stat-content">
-                            <h3 data-count="<?php echo $order_stats['total'] ?? 0; ?>">0</h3>
-                            <p>Total Orders</p>
+                    </a>
+                    <a href="<?php echo htmlspecialchars(getOrdersFilterUrl(['status' => 'pending'])); ?>" class="stat-card-link" title="Filter by Pending Orders">
+                        <div class="stat-card fade-in-up <?php echo ($status_filter === 'pending') ? 'active-stat' : ''; ?>">
+                            <div class="stat-icon orange">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 data-count="<?php echo $order_stats['pending'] ?? 0; ?>">0</h3>
+                                <p>Pending</p>
+                            </div>
                         </div>
-                    </div>
-                    <div class="stat-card fade-in-up">
-                        <div class="stat-icon orange">
-                            <i class="fas fa-clock"></i>
+                    </a>
+                    <a href="<?php echo htmlspecialchars(getOrdersFilterUrl(['status' => 'preparing'])); ?>" class="stat-card-link" title="Filter by Preparing Orders">
+                        <div class="stat-card fade-in-up <?php echo ($status_filter === 'preparing') ? 'active-stat' : ''; ?>">
+                            <div class="stat-icon cyan">
+                                <i class="fas fa-cogs"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 data-count="<?php echo $order_stats['preparing'] ?? 0; ?>">0</h3>
+                                <p>Preparing</p>
+                            </div>
                         </div>
-                        <div class="stat-content">
-                            <h3 data-count="<?php echo $order_stats['pending'] ?? 0; ?>">0</h3>
-                            <p>Pending</p>
+                    </a>
+                    <a href="<?php echo htmlspecialchars(getOrdersFilterUrl(['status' => 'delivered'])); ?>" class="stat-card-link" title="Filter by Delivered Orders">
+                        <div class="stat-card fade-in-up <?php echo ($status_filter === 'delivered') ? 'active-stat' : ''; ?>">
+                            <div class="stat-icon green">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 data-count="<?php echo $order_stats['delivered'] ?? 0; ?>">0</h3>
+                                <p>Delivered</p>
+                            </div>
                         </div>
-                    </div>
-                    <div class="stat-card fade-in-up">
-                        <div class="stat-icon cyan">
-                            <i class="fas fa-cogs"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3 data-count="<?php echo $order_stats['preparing'] ?? 0; ?>">0</h3>
-                            <p>Preparing</p>
-                        </div>
-                    </div>
-                    <div class="stat-card fade-in-up">
-                        <div class="stat-icon green">
-                            <i class="fas fa-check-circle"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3 data-count="<?php echo $order_stats['delivered'] ?? 0; ?>">0</h3>
-                            <p>Delivered</p>
-                        </div>
-                    </div>
+                    </a>
                 </div>
 
-                <div class="section-header">
-                    <h2>All Orders</h2>
-                    <form method="GET" class="filter-form">
-                        <input type="text" name="search" placeholder="Search orders..." value="<?php echo htmlspecialchars($search); ?>" class="form-control">
-                        <input type="date" name="date_from" class="form-control" value="<?php echo htmlspecialchars($date_from); ?>" title="From Date">
-                        <input type="date" name="date_to" class="form-control" value="<?php echo htmlspecialchars($date_to); ?>" title="To Date">
-                        <select name="status" class="form-select" onchange="this.form.submit()">
-                            <option value="">All Status</option>
-                            <option value="pending" <?php echo $status_filter === 'pending' ? 'selected' : ''; ?>>Pending</option>
-                            <option value="confirmed" <?php echo $status_filter === 'confirmed' ? 'selected' : ''; ?>>Confirmed</option>
-                            <option value="preparing" <?php echo $status_filter === 'preparing' ? 'selected' : ''; ?>>Preparing</option>
-                            <option value="delivered" <?php echo $status_filter === 'delivered' ? 'selected' : ''; ?>>Delivered</option>
-                            <option value="cancellation_requested" <?php echo $status_filter === 'cancellation_requested' ? 'selected' : ''; ?>>Cancellation Requested</option>
-                            <option value="cancelled" <?php echo $status_filter === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
-                        </select>
-                        <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
+                <div class="order-filter-panel fade-in-up">
+                    <!-- Status Pills Navigation -->
+                    <div class="status-pill-nav">
+                        <a href="<?php echo htmlspecialchars(getOrdersFilterUrl(['status' => ''])); ?>" class="status-pill <?php echo ($status_filter === '') ? 'active' : ''; ?>">
+                            <span>All Orders</span>
+                            <span class="status-pill-count"><?php echo (int)($order_stats['total'] ?? 0); ?></span>
+                        </a>
+                        <a href="<?php echo htmlspecialchars(getOrdersFilterUrl(['status' => 'pending'])); ?>" class="status-pill <?php echo ($status_filter === 'pending') ? 'active' : ''; ?>">
+                            <span>Pending</span>
+                            <span class="status-pill-count"><?php echo (int)($order_stats['pending'] ?? 0); ?></span>
+                        </a>
+                        <a href="<?php echo htmlspecialchars(getOrdersFilterUrl(['status' => 'confirmed'])); ?>" class="status-pill <?php echo ($status_filter === 'confirmed') ? 'active' : ''; ?>">
+                            <span>Confirmed</span>
+                            <span class="status-pill-count"><?php echo (int)($order_stats['confirmed'] ?? 0); ?></span>
+                        </a>
+                        <a href="<?php echo htmlspecialchars(getOrdersFilterUrl(['status' => 'preparing'])); ?>" class="status-pill <?php echo ($status_filter === 'preparing') ? 'active' : ''; ?>">
+                            <span>Preparing</span>
+                            <span class="status-pill-count"><?php echo (int)($order_stats['preparing'] ?? 0); ?></span>
+                        </a>
+                        <a href="<?php echo htmlspecialchars(getOrdersFilterUrl(['status' => 'delivered'])); ?>" class="status-pill <?php echo ($status_filter === 'delivered') ? 'active' : ''; ?>">
+                            <span>Delivered</span>
+                            <span class="status-pill-count"><?php echo (int)($order_stats['delivered'] ?? 0); ?></span>
+                        </a>
+                        <a href="<?php echo htmlspecialchars(getOrdersFilterUrl(['status' => 'cancellation_requested'])); ?>" class="status-pill <?php echo ($status_filter === 'cancellation_requested') ? 'active' : ''; ?>">
+                            <span>Cancellation Requested</span>
+                            <span class="status-pill-count"><?php echo (int)($order_stats['cancellation_requested'] ?? 0); ?></span>
+                        </a>
+                        <a href="<?php echo htmlspecialchars(getOrdersFilterUrl(['status' => 'cancelled'])); ?>" class="status-pill <?php echo ($status_filter === 'cancelled') ? 'active' : ''; ?>">
+                            <span>Cancelled</span>
+                            <span class="status-pill-count"><?php echo (int)($order_stats['cancelled'] ?? 0); ?></span>
+                        </a>
+                    </div>
+
+                    <!-- Filter Form -->
+                    <form method="GET" action="orders.php" class="order-filter-form">
+                        <?php if ($status_filter !== ''): ?>
+                            <input type="hidden" name="status" value="<?php echo htmlspecialchars($status_filter); ?>">
+                        <?php endif; ?>
+
+                        <div class="filter-controls-row">
+                            <div class="filter-search-wrap">
+                                <i class="fas fa-search search-icon"></i>
+                                <input type="text" name="search" placeholder="Search order #, customer, phone, address..." value="<?php echo htmlspecialchars($search); ?>" class="filter-control search-input">
+                            </div>
+
+                            <div class="filter-date-group">
+                                <label class="filter-label">From:</label>
+                                <input type="date" name="date_from" value="<?php echo htmlspecialchars($date_from); ?>" class="filter-control date-input" title="From Date">
+                            </div>
+
+                            <div class="filter-date-group">
+                                <label class="filter-label">To:</label>
+                                <input type="date" name="date_to" value="<?php echo htmlspecialchars($date_to); ?>" class="filter-control date-input" title="To Date">
+                            </div>
+
+                            <div class="filter-select-group">
+                                <select name="delivery_option" class="filter-control filter-select">
+                                    <option value="">All Delivery</option>
+                                    <option value="delivery" <?php echo ($delivery_filter === 'delivery') ? 'selected' : ''; ?>>Delivery</option>
+                                    <option value="pickup" <?php echo ($delivery_filter === 'pickup') ? 'selected' : ''; ?>>Pickup</option>
+                                </select>
+                            </div>
+
+                            <div class="filter-select-group">
+                                <select name="payment_status" class="filter-control filter-select">
+                                    <option value="">All Payments</option>
+                                    <option value="paid" <?php echo ($payment_filter === 'paid') ? 'selected' : ''; ?>>Paid</option>
+                                    <option value="pending" <?php echo ($payment_filter === 'pending') ? 'selected' : ''; ?>>Pending Payment</option>
+                                    <option value="failed" <?php echo ($payment_filter === 'failed') ? 'selected' : ''; ?>>Failed</option>
+                                </select>
+                            </div>
+
+                            <div class="filter-actions">
+                                <button type="submit" class="btn-filter-apply"><i class="fas fa-filter"></i> Apply</button>
+                                <?php if ($is_filtered): ?>
+                                    <a href="orders.php" class="btn-filter-reset" title="Clear all filters"><i class="fas fa-times-circle"></i> Clear</a>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <?php if ($is_filtered): ?>
+                            <div class="active-filter-tags">
+                                <span class="active-filters-label"><i class="fas fa-sliders-h"></i> Active Filters:</span>
+                                <?php if ($status_filter !== ''): ?>
+                                    <span class="filter-tag">
+                                        Status: <strong><?php echo ucwords(str_replace('_', ' ', $status_filter)); ?></strong>
+                                        <a href="<?php echo htmlspecialchars(getOrdersFilterUrl(['status' => ''])); ?>" class="filter-tag-remove" title="Remove status filter">&times;</a>
+                                    </span>
+                                <?php endif; ?>
+                                <?php if ($search !== ''): ?>
+                                    <span class="filter-tag">
+                                        Search: <strong>"<?php echo htmlspecialchars($search); ?>"</strong>
+                                        <a href="<?php echo htmlspecialchars(getOrdersFilterUrl(['search' => ''])); ?>" class="filter-tag-remove" title="Remove search filter">&times;</a>
+                                    </span>
+                                <?php endif; ?>
+                                <?php if ($date_from !== '' || $date_to !== ''): ?>
+                                    <span class="filter-tag">
+                                        Date: <strong><?php echo htmlspecialchars($date_from ?: 'Any'); ?> &rarr; <?php echo htmlspecialchars($date_to ?: 'Present'); ?></strong>
+                                        <a href="<?php echo htmlspecialchars(getOrdersFilterUrl(['date_from' => '', 'date_to' => ''])); ?>" class="filter-tag-remove" title="Remove date filter">&times;</a>
+                                    </span>
+                                <?php endif; ?>
+                                <?php if ($delivery_filter !== ''): ?>
+                                    <span class="filter-tag">
+                                        Delivery: <strong><?php echo ucfirst($delivery_filter); ?></strong>
+                                        <a href="<?php echo htmlspecialchars(getOrdersFilterUrl(['delivery_option' => ''])); ?>" class="filter-tag-remove" title="Remove delivery filter">&times;</a>
+                                    </span>
+                                <?php endif; ?>
+                                <?php if ($payment_filter !== ''): ?>
+                                    <span class="filter-tag">
+                                        Payment: <strong><?php echo ucfirst($payment_filter); ?></strong>
+                                        <a href="<?php echo htmlspecialchars(getOrdersFilterUrl(['payment_status' => ''])); ?>" class="filter-tag-remove" title="Remove payment filter">&times;</a>
+                                    </span>
+                                <?php endif; ?>
+                                <a href="orders.php" class="filter-tag-clear-all">Reset All</a>
+                            </div>
+                        <?php endif; ?>
                     </form>
                 </div>
                 
@@ -452,7 +982,7 @@ $orders_result = mysqli_query($conn, $orders_query);
                         </thead>
                         <tbody>
                             <?php
-                            if (mysqli_num_rows($orders_result) > 0) {
+                            if ($orders_result instanceof mysqli_result && mysqli_num_rows($orders_result) > 0) {
                                 while ($order = mysqli_fetch_assoc($orders_result)) { 
                                     $status_class = match($order['status']) {
                                         'pending' => 'badge-warning',
@@ -466,12 +996,44 @@ $orders_result = mysqli_query($conn, $orders_query);
                                     $status_options_html = "<option value=''>Change Status</option>";
                                     $next_statuses = $allowed_order_transitions[$order['status']] ?? [];
                                     $status_select_disabled = empty($next_statuses) ? "disabled" : "";
-                                    $display_amount = ($seller_scope_id !== null)
-                                        ? (float)($order['scoped_total_amount'] ?? 0)
-                                        : (float)($order['total_amount'] ?? 0);
+                                    $scoped_amt = ($seller_scope_id !== null) ? (float)($order['scoped_total_amount'] ?? 0) : 0;
+                                    $display_amount = ($scoped_amt > 0) ? $scoped_amt : (float)($order['total_amount'] ?? 0);
                                     foreach ($next_statuses as $next_status) {
                                         $status_options_html .= "<option value='{$next_status}'>" . ucwords(str_replace('_', ' ', $next_status)) . "</option>";
                                     }
+
+                                    $is_delivery = ($order['delivery_option'] === 'delivery');
+                                    $tracking_status = $order['tracking_status'] ?? '';
+                                    $handover_btn = '';
+                                    if ($is_delivery) {
+                                        if (in_array($tracking_status, ['picked_up', 'on_the_way', 'arriving', 'delivered'])) {
+                                            $handover_btn = "<span class='badge' style='background:#ecfdf3; color:#027a48; border:1px solid #abefc6; font-size:11px; margin-right:4px;' title='Food handed over to rider'><i class='fas fa-check'></i> Handed Over</span>";
+                                        } elseif ($tracking_status === 'arrived_at_restaurant') {
+                                            $handover_btn = "<button class='btn btn-sm btn-success fw-bold' type='button' style='font-size:11.5px; padding:3px 8px; margin-right:4px; border-radius:6px;' onclick=\"approveRiderHandover({$order['id']})\" title='Rider is at store! Approve handover now'>
+                                                <i class='fas fa-check'></i> Approve
+                                            </button>
+                                            <button class='btn btn-sm btn-outline-danger fw-bold' type='button' style='font-size:11.5px; padding:3px 8px; margin-right:4px; border-radius:6px;' onclick=\"rejectRiderHandover({$order['id']})\" title='Reject or pause handover'>
+                                                <i class='fas fa-times'></i> Reject
+                                            </button>";
+                                        } elseif (!in_array($order['status'], ['delivered', 'cancelled', 'failed'])) {
+                                            $safe_ord_num = htmlspecialchars(addslashes($order['order_number']));
+                                            $safe_pin = htmlspecialchars(addslashes($order['delivery_pin'] ?? ''));
+                                            $safe_driver = htmlspecialchars(addslashes(!empty($order['driver_name']) ? $order['driver_name'] : 'Assigned Rider'));
+                                            $safe_rider_code = htmlspecialchars(addslashes($order['rider_code'] ?? ''));
+                                            $handover_btn = "<button class='btn btn-sm btn-outline-success' type='button' style='font-size:11.5px; padding:3px 8px; margin-right:4px; border-radius:6px; font-weight:600;' onclick=\"openHandoverModal({$order['id']}, '{$safe_ord_num}', '{$safe_pin}', '{$safe_driver}', '{$safe_rider_code}')\" title='Enter Handover Confirmation Code'>
+                                                <i class='fas fa-handshake'></i> Handover Code
+                                            </button>";
+                                        }
+                                    }
+
+                                    $proof_btn = '';
+                                    if (!empty($order['proof_photo'])) {
+                                        $safe_proof = htmlspecialchars(addslashes($order['proof_photo']));
+                                        $proof_btn = "<button class='btn-icon' type='button' style='color:#027a48; margin-right:4px;' onclick=\"viewProofModal('{$safe_proof}')\" title='View Proof of Delivery Photo'>
+                                            <i class='fas fa-camera'></i>
+                                        </button>";
+                                    }
+
                                     echo "
                                     <tr>
                                         <td><strong>{$order['order_number']}</strong></td>
@@ -482,6 +1044,8 @@ $orders_result = mysqli_query($conn, $orders_query);
                                         <td>" . ucfirst($order['delivery_option']) . "</td>
                                         <td>" . date('M d, Y', strtotime($order['created_at'])) . "</td>
                                         <td>
+                                            {$handover_btn}
+                                            {$proof_btn}
                                             <button class='btn-icon' data-bs-toggle='modal' data-bs-target='#orderModal' onclick='loadOrderDetails({$order['id']})' title='View Details'>
                                                 <i class='fas fa-eye'></i>
                                             </button>
@@ -491,6 +1055,7 @@ $orders_result = mysqli_query($conn, $orders_query);
                                             <form method='POST' id='statusForm{$order['id']}' style='display:inline;'>
                                                 <input type='hidden' name='order_id' value='{$order['id']}'>
                                                 <input type='hidden' name='csrf_token' value='{$csrf_token}'>
+                                                <input type='hidden' name='return_query' value='" . htmlspecialchars($current_query_string, ENT_QUOTES) . "'>
                                                 <select name='new_status' class='form-select-sm' {$status_select_disabled} onchange='confirmStatusChange(this, {$order['id']})'>
                                                     {$status_options_html}
                                                 </select>
@@ -508,44 +1073,107 @@ $orders_result = mysqli_query($conn, $orders_query);
                     </table>
 
                     <!-- Pagination -->
+                    <?php if ($total_pages > 1): ?>
                     <div class="pagination-container">
                         <nav aria-label="Page navigation">
                             <ul class="pagination">
                                 <?php if ($current_page_number > 1): ?>
                                     <li class="page-item">
-                                        <a class="page-link" href="?page=<?php echo $current_page_number - 1; ?>&status=<?php echo urlencode($status_filter); ?>&search=<?php echo urlencode($search); ?>&date_from=<?php echo urlencode($date_from); ?>&date_to=<?php echo urlencode($date_to); ?>">Previous</a>
+                                        <a class="page-link" href="<?php echo htmlspecialchars(getOrdersFilterUrl(['page' => $current_page_number - 1])); ?>">&laquo; Previous</a>
                                     </li>
                                 <?php endif; ?>
 
                                 <?php for ($i = 1; $i <= $total_pages; $i++): ?>
                                     <li class="page-item <?php echo ($i == $current_page_number) ? 'active' : ''; ?>">
-                                        <a class="page-link" href="?page=<?php echo $i; ?>&status=<?php echo urlencode($status_filter); ?>&search=<?php echo urlencode($search); ?>&date_from=<?php echo urlencode($date_from); ?>&date_to=<?php echo urlencode($date_to); ?>"><?php echo $i; ?></a>
+                                        <a class="page-link" href="<?php echo htmlspecialchars(getOrdersFilterUrl(['page' => $i])); ?>"><?php echo $i; ?></a>
                                     </li>
                                 <?php endfor; ?>
 
                                 <?php if ($current_page_number < $total_pages): ?>
                                     <li class="page-item">
-                                        <a class="page-link" href="?page=<?php echo $current_page_number + 1; ?>&status=<?php echo urlencode($status_filter); ?>&search=<?php echo urlencode($search); ?>&date_from=<?php echo urlencode($date_from); ?>&date_to=<?php echo urlencode($date_to); ?>">Next</a>
+                                        <a class="page-link" href="<?php echo htmlspecialchars(getOrdersFilterUrl(['page' => $current_page_number + 1])); ?>">Next &raquo;</a>
                                     </li>
                                 <?php endif; ?>
                             </ul>
                         </nav>
                     </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
     </div>
     
     <!-- Order Details Modal -->
-    <div class="modal fade" id="orderModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+    <div class="modal fade modern-form-modal" id="orderModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Order Details</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-receipt"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Order Details</h5>
+                        <p class="modal-subtitle">Customer information, dispatch status, line items, and totals.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" id="orderDetails">
                     <!-- Loaded via JS -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pickup Handover Verification Modal -->
+    <div class="modal fade" id="pickupHandoverModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 16px; border: 1px solid #eaecf0; box-shadow: 0 10px 25px rgba(0,0,0,0.08); overflow: hidden;">
+                <div class="modal-header border-bottom py-3" style="background: #ffffff;">
+                    <h5 class="modal-title fw-bold mb-0" style="color: #101828; font-size: 1.05rem;">
+                        <i class="fas fa-handshake text-success me-2"></i> Confirm Rider Pickup Handover
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" id="handoverOrderId" value="">
+
+                    <div class="p-3 rounded mb-3" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small">Order Number:</span>
+                            <strong class="text-dark" id="modalHandoverOrderNum"></strong>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small">Assigned Rider:</span>
+                            <span class="fw-semibold text-dark" id="modalHandoverRiderName">Assigned Rider</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted small">Order Delivery PIN:</span>
+                            <span class="badge" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; font-size: 13px;" id="modalHandoverPinBadge">----</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-dark mb-1">
+                            Enter Confirmation Code or Delivery PIN
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white"><i class="fas fa-shield-alt text-muted"></i></span>
+                            <input type="text" id="handoverCodeInput" class="form-control form-control-lg fw-bold text-center" placeholder="e.g. 7794 or RDR-0011" style="letter-spacing: 2px;">
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <small class="text-muted" style="font-size: 11.5px;">Ask the rider for their PIN or Rider ID code.</small>
+                            <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" style="font-size: 11.5px; color: #b3261e;" onclick="autofillExpectedPin()">
+                                <i class="fas fa-magic me-1"></i> Auto-fill PIN
+                            </button>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn w-100 py-2 fw-bold text-white" id="confirmHandoverBtn" style="background: #027a48; border-color: #027a48; border-radius: 8px;" onclick="submitPickupHandover()">
+                        <i class="fas fa-check-circle me-1"></i> Confirm Handover & Dispatch Rider
+                    </button>
                 </div>
             </div>
         </div>
@@ -605,6 +1233,142 @@ $orders_result = mysqli_query($conn, $orders_query);
             });
         }
 
+        let currentExpectedPin = '';
+
+        function openHandoverModal(orderId, orderNum, pin, riderName, riderCode) {
+            document.getElementById('handoverOrderId').value = orderId;
+            document.getElementById('modalHandoverOrderNum').textContent = '#' + orderNum;
+            
+            let riderLabel = riderName || 'Assigned Rider';
+            if (riderCode) {
+                riderLabel += ' (' + riderCode + ')';
+            }
+            document.getElementById('modalHandoverRiderName').textContent = riderLabel;
+            
+            currentExpectedPin = pin || '';
+            document.getElementById('modalHandoverPinBadge').textContent = pin ? pin : 'None';
+            
+            const input = document.getElementById('handoverCodeInput');
+            input.value = '';
+            
+            const modal = new bootstrap.Modal(document.getElementById('pickupHandoverModal'));
+            modal.show();
+            setTimeout(() => input.focus(), 400);
+        }
+
+        function autofillExpectedPin() {
+            if (currentExpectedPin) {
+                document.getElementById('handoverCodeInput').value = currentExpectedPin;
+            }
+        }
+
+        function submitPickupHandover() {
+            const orderId = document.getElementById('handoverOrderId').value;
+            const code = document.getElementById('handoverCodeInput').value.trim();
+            const btn = document.getElementById('confirmHandoverBtn');
+            
+            if (!code) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Code Required',
+                    text: 'Please enter the delivery PIN, rider code, or order number to verify handover.'
+                });
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Verifying...';
+            
+            const formData = new FormData();
+            formData.append('order_id', orderId);
+            formData.append('verification_code', code);
+            formData.append('csrf_token', '<?php echo $csrf_token; ?>');
+            
+            fetch('ajax_confirm_pickup.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check-circle me-1"></i> Confirm Handover & Dispatch Rider';
+                
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('pickupHandoverModal')).hide();
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Pickup Confirmed!',
+                        text: data.message,
+                        confirmButtonColor: '#027a48'
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Verification Failed',
+                        text: data.message || 'Invalid verification code.'
+                    });
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check-circle me-1"></i> Confirm Handover & Dispatch Rider';
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Network Error',
+                    text: 'Unable to communicate with the server. Please try again.'
+                });
+            });
+        }
+
+        function submitDetailHandover(orderId) {
+            const input = document.getElementById('detailHandoverCode');
+            const code = input ? input.value.trim() : '';
+            if (!code) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Code Required',
+                    text: 'Please enter the verification code or delivery PIN.'
+                });
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('order_id', orderId);
+            formData.append('verification_code', code);
+            formData.append('csrf_token', '<?php echo $csrf_token; ?>');
+            
+            fetch('ajax_confirm_pickup.php', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const modalEl = document.getElementById('orderModal');
+                        const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                        if (modalInstance) modalInstance.hide();
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Pickup Confirmed!',
+                            text: data.message,
+                            confirmButtonColor: '#027a48'
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Verification Failed',
+                            text: data.message || 'Invalid verification code.'
+                        });
+                    }
+                })
+                .catch(() => {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Network Error',
+                        text: 'Failed to connect to server.'
+                    });
+                });
+        }
+
         function confirmStatusChange(selectElement, orderId) {
             if (!selectElement.value) return;
             
@@ -624,6 +1388,183 @@ $orders_result = mysqli_query($conn, $orders_query);
                 }
             })
         }
+
+        function approveRiderHandover(orderId) {
+            Swal.fire({
+                title: 'Approve Rider Handover?',
+                text: 'Confirm that you are handing over the package to the arrived rider. The rider will be cleared to proceed to the customer.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#027a48',
+                cancelButtonColor: '#667085',
+                confirmButtonText: '<i class="fas fa-check"></i> Yes, Approve & Dispatch',
+                cancelButtonText: 'Cancel'
+            }).then((res) => {
+                if (!res.isConfirmed) return;
+
+                const formData = new FormData();
+                formData.append('order_id', orderId);
+                formData.append('csrf_token', '<?php echo $csrf_token; ?>');
+
+                fetch('ajax_handover_action.php?action=approve', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Handover Approved!',
+                            text: data.message,
+                            confirmButtonColor: '#027a48'
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Action Failed',
+                            text: data.message || 'Failed to approve handover.'
+                        });
+                    }
+                })
+                .catch(() => {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Network Error',
+                        text: 'Could not connect to server.'
+                    });
+                });
+            });
+        }
+
+        function rejectRiderHandover(orderId) {
+            Swal.fire({
+                title: 'Reject / Pause Handover?',
+                text: 'Provide a reason for the rider (e.g. food still cooking, missing item):',
+                input: 'text',
+                inputPlaceholder: 'e.g. Order still cooking, please wait 5-10 minutes',
+                inputValue: 'Order is still being prepared. Please wait 5-10 minutes.',
+                showCancelButton: true,
+                confirmButtonColor: '#b3261e',
+                cancelButtonColor: '#667085',
+                confirmButtonText: 'Submit Rejection / Note',
+                cancelButtonText: 'Cancel',
+                inputValidator: (value) => {
+                    if (!value || !value.trim()) {
+                        return 'Please enter a brief note for the rider.';
+                    }
+                }
+            }).then((res) => {
+                if (!res.isConfirmed) return;
+
+                const formData = new FormData();
+                formData.append('order_id', orderId);
+                formData.append('reason', res.value.trim());
+                formData.append('csrf_token', '<?php echo $csrf_token; ?>');
+
+                fetch('ajax_handover_action.php?action=reject', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'info',
+                            title: 'Rider Notified',
+                            text: data.message,
+                            confirmButtonColor: '#b3261e'
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Action Failed',
+                            text: data.message || 'Failed to submit rejection.'
+                        });
+                    }
+                })
+                .catch(() => {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Network Error',
+                        text: 'Could not connect to server.'
+                    });
+                });
+            });
+        }
+
+        function viewProofModal(imageUrl) {
+            if (!imageUrl) return;
+            let cleanUrl = imageUrl;
+            if (!cleanUrl.startsWith('http') && !cleanUrl.startsWith('/')) {
+                const fname = cleanUrl.split('/').pop();
+                cleanUrl = '../uploads/proof_of_delivery/' + fname;
+            }
+            Swal.fire({
+                title: 'Proof of Delivery Photo',
+                html: `<div style="text-align:center;">
+                    <img src="${cleanUrl}" alt="Proof of Delivery" style="max-height: 400px; max-width: 100%; border-radius: 8px; border: 1px solid #eaecf0; margin-bottom: 8px;" class="img-fluid" onerror="this.onerror=null;this.src='../assets/images/promo_lechon.jpg';">
+                    <div style="font-size: 12px; color: #667085;"><i class="fas fa-camera me-1"></i> Captured by rider upon delivery to customer.</div>
+                </div>`,
+                showCloseButton: true,
+                showConfirmButton: true,
+                confirmButtonText: '<i class="fas fa-external-link-alt me-1"></i> Open Original',
+                confirmButtonColor: '#b3261e',
+                showCancelButton: true,
+                cancelButtonText: 'Close'
+            }).then((res) => {
+                if (res.isConfirmed) {
+                    window.open(cleanUrl, '_blank');
+                }
+            });
+        }
+
+        // Real-time polling for riders arriving at store
+        let lastPromptedArrivalOrder = null;
+        function checkRiderArrivals() {
+            fetch('ajax_handover_action.php?action=check_arrivals')
+                .then(r => r.json())
+                .then(data => {
+                    if (data && data.success && data.has_arrivals && data.arrivals.length > 0) {
+                        const firstArrival = data.arrivals[0];
+                        if (lastPromptedArrivalOrder !== firstArrival.order_id && !Swal.isVisible()) {
+                            lastPromptedArrivalOrder = firstArrival.order_id;
+                            Swal.fire({
+                                title: 'Rider Arrived at Store!',
+                                html: `<div style="text-align:left; font-size:14px; line-height:1.6;">
+                                    <div><strong>Order:</strong> #${escapeHtmlAdmin(firstArrival.order_number)}</div>
+                                    <div><strong>Rider:</strong> ${escapeHtmlAdmin(firstArrival.driver_name)}</div>
+                                    <div><strong>Phone:</strong> ${escapeHtmlAdmin(firstArrival.driver_phone || 'N/A')}</div>
+                                    <div class="mt-2 text-muted">The rider is at your branch waiting for the food package. Ready for handover?</div>
+                                </div>`,
+                                icon: 'info',
+                                showCancelButton: true,
+                                confirmButtonColor: '#027a48',
+                                cancelButtonColor: '#b3261e',
+                                confirmButtonText: '<i class="fas fa-check-circle me-1"></i> Approve Handover',
+                                cancelButtonText: '<i class="fas fa-times-circle me-1"></i> Reject / Wait',
+                                allowOutsideClick: false
+                            }).then((result) => {
+                                if (result.isConfirmed) {
+                                    approveRiderHandover(firstArrival.order_id);
+                                } else if (result.dismiss === Swal.DismissReason.cancel) {
+                                    rejectRiderHandover(firstArrival.order_id);
+                                }
+                            });
+                        }
+                    }
+                })
+                .catch(() => {});
+        }
+
+        function escapeHtmlAdmin(str) {
+            return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        setInterval(checkRiderArrivals, 6000);
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(checkRiderArrivals, 2000);
+        });
     </script>
 </body>
 </html>

@@ -3,6 +3,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once 'includes/config.php';
+require_once __DIR__ . '/includes/rider_helper.php';
 
 function loginSessionUserExists($conn, $user_id) {
     $user_id = (int)$user_id;
@@ -55,6 +56,10 @@ function sanitizeRelativePhpRedirect($target) {
 if (isset($_SESSION['user_id'])) {
     $session_user_id = (int)$_SESSION['user_id'];
     if (loginSessionUserExists($conn, $session_user_id)) {
+        if (isDeliveryDriverUser($conn, $session_user_id)) {
+            header("Location: rider/index.php");
+            exit;
+        }
         $redirect = getUserDashboardRoute($conn, $session_user_id, $_SESSION['user_type'] ?? '');
         $custom_redirect = sanitizeRelativePhpRedirect($_GET['redirect'] ?? '');
         if ($custom_redirect !== null) {
@@ -112,7 +117,7 @@ if (isset($_SESSION['email_verification_error'])) {
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
-    $remember = isset($_POST['remember']);
+    $remember = !empty($_POST['remember']) && in_array(strtolower(trim((string)$_POST['remember'])), ['1', 'true', 'on', 'yes'], true);
     
     if (empty($email) || empty($password)) {
         $error = 'Please enter both email and password';
@@ -137,6 +142,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
             $_SESSION['has_backoffice_access'] = hasBackofficeAccess($conn, $result['user_id']);
             $_SESSION['permissions'] = getUserPermissions($conn, $result['user_id']);
             
+            // Flag first-time customer for mobile get-started splash
+            if (!empty($result['show_mobile_splash'])) {
+                $_SESSION['show_mobile_get_started'] = true;
+                $_SESSION['is_first_login'] = true;
+            } else {
+                $_SESSION['show_mobile_get_started'] = false;
+            }
+            
             $user_type = strtolower(trim($result['user_type']));
 
             // Check if user is an employee (exists in employees table)
@@ -153,14 +166,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
             }
             $check_emp->close();
             
-            // Determine default redirect from RBAC role permissions first, then legacy fallback
-            $redirect = getUserDashboardRoute($conn, $result['user_id'], $result['user_type']);
-            if ($redirect === 'index.php' && ($user_type === 'employee' || $is_employee_record)) {
-                $redirect = 'employee/dashboard.php';
-            }
-            
-            
             // Handle remember me
+            $is_secure_conn = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
             if ($remember) {
                 $token = bin2hex(random_bytes(32));
                 $expires = time() + (30 * 24 * 60 * 60);
@@ -169,9 +176,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
                     'expires' => $expires,
                     'path' => '/',
                     'domain' => '',
-                    'secure' => isset($_SERVER['HTTPS']),
+                    'secure' => $is_secure_conn,
                     'httponly' => true,
-                    'samesite' => 'Strict'
+                    'samesite' => 'Lax'
+                ]);
+
+                setcookie('remember_email', $result['email'], [
+                    'expires' => $expires,
+                    'path' => '/',
+                    'domain' => '',
+                    'secure' => $is_secure_conn,
+                    'httponly' => false,
+                    'samesite' => 'Lax'
                 ]);
                 
                 // Store in database
@@ -184,28 +200,58 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
                     mysqli_stmt_execute($token_stmt);
                     mysqli_stmt_close($token_stmt);
                 }
+            } else {
+                // User chose not to be remembered: clear cookies and stored token
+                setcookie('remember_token', '', time() - 3600, '/');
+                setcookie('remember_email', '', time() - 3600, '/');
+                $clear_token_query = "UPDATE users SET remember_token = NULL, remember_expires = NULL WHERE id = ?";
+                if ($clear_token_stmt = mysqli_prepare($conn, $clear_token_query)) {
+                    mysqli_stmt_bind_param($clear_token_stmt, "i", $result['user_id']);
+                    mysqli_stmt_execute($clear_token_stmt);
+                    mysqli_stmt_close($clear_token_stmt);
+                }
             }
-            
-            // Check for redirect URL (override role-based default if specific page requested)
-            if (isset($_GET['redirect']) && !empty($_GET['redirect'])) {
-                $custom_redirect = sanitizeRelativePhpRedirect($_GET['redirect']);
-                if ($custom_redirect !== null) {
-                    $custom_redirect_path = parse_url($custom_redirect, PHP_URL_PATH) ?: $custom_redirect;
-                    $is_admin_redirect = strpos($custom_redirect_path, 'admin/') === 0;
-                    $is_employee_redirect = strpos($custom_redirect_path, 'employee/') === 0;
-                    $can_access_admin = hasBackofficeAccess($conn, $result['user_id']);
-                    $can_access_employee = ($user_type === 'employee' || $is_employee_record);
-                    $target_exists = file_exists(__DIR__ . '/' . ltrim($custom_redirect_path, '/'));
 
-                    if (($is_admin_redirect && $can_access_admin) ||
-                        ($is_employee_redirect && $can_access_employee) ||
-                        (!$is_admin_redirect && !$is_employee_redirect)) {
-                        if ($target_exists) {
-                            $redirect = $custom_redirect;
+            // Strict check: if user is a delivery rider, direct ONLY to rider portal
+            $is_rider_account = isDeliveryDriverUser($conn, $result['user_id']);
+            if ($is_rider_account) {
+                $_SESSION['is_driver'] = true;
+                $r_fetch = mysqli_query($conn, "SELECT id, rider_code FROM riders WHERE user_id = " . (int)$result['user_id'] . " LIMIT 1");
+                if ($r_fetch && ($r_row = mysqli_fetch_assoc($r_fetch))) {
+                    $_SESSION['rider_id'] = (int)$r_row['id'];
+                    $_SESSION['rider_code'] = $r_row['rider_code'];
+                }
+                $redirect = 'rider/index.php';
+            } else {
+                // Determine default redirect from RBAC role permissions first, then legacy fallback
+                $redirect = getUserDashboardRoute($conn, $result['user_id'], $result['user_type']);
+                if ($redirect === 'index.php' && ($user_type === 'employee' || $is_employee_record)) {
+                    $redirect = 'employee/dashboard.php';
+                }
+                
+                // Check for redirect URL (override role-based default if specific page requested)
+                if (isset($_GET['redirect']) && !empty($_GET['redirect'])) {
+                    $custom_redirect = sanitizeRelativePhpRedirect($_GET['redirect']);
+                    if ($custom_redirect !== null) {
+                        $custom_redirect_path = parse_url($custom_redirect, PHP_URL_PATH) ?: $custom_redirect;
+                        $is_admin_redirect = strpos($custom_redirect_path, 'admin/') === 0;
+                        $is_employee_redirect = strpos($custom_redirect_path, 'employee/') === 0;
+                        $can_access_admin = hasBackofficeAccess($conn, $result['user_id']);
+                        $can_access_employee = ($user_type === 'employee' || $is_employee_record);
+                        $target_exists = file_exists(__DIR__ . '/' . ltrim($custom_redirect_path, '/'));
+
+                        if (($is_admin_redirect && $can_access_admin) ||
+                            ($is_employee_redirect && $can_access_employee) ||
+                            (!$is_admin_redirect && !$is_employee_redirect)) {
+                            if ($target_exists) {
+                                $redirect = $custom_redirect;
+                            }
                         }
                     }
                 }
             }
+            
+            $_SESSION['login_success_flash'] = 'Welcome back, ' . htmlspecialchars($result['full_name'], ENT_QUOTES, 'UTF-8') . '!';
             
             // Check if this is an AJAX request
             $is_ajax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
@@ -217,7 +263,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
                 echo json_encode([
                     'success' => true,
                     'redirect' => $redirect,
-                    'user_type' => $user_type
+                    'user_type' => $user_type,
+                    'full_name' => $result['full_name']
                 ]);
                 exit();
             } else {
@@ -228,8 +275,37 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
         } else {
             $error = $result['message'];
             $form_data['email'] = $email;
+            
+            $is_ajax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
+            $is_ajax = $is_ajax || (isset($_POST['ajax']) && $_POST['ajax'] == 'true');
+            if ($is_ajax) {
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => false,
+                    'message' => $error
+                ]);
+                exit();
+            }
         }
     }
+
+    $is_ajax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
+    $is_ajax = $is_ajax || (isset($_POST['ajax']) && $_POST['ajax'] == 'true');
+    if ($is_ajax && !empty($error)) {
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => false,
+            'message' => $error
+        ]);
+        exit();
+    }
+}
+
+// Redirect standard GET visits to the sliding auth layout in login mode
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $queryString = !empty($_SERVER['QUERY_STRING']) ? ('?' . $_SERVER['QUERY_STRING'] . '&mode=login#login') : '?mode=login#login';
+    header("Location: register.php" . $queryString);
+    exit();
 }
 
 $page_title = "Login to Your Account | Lechon Delights";
@@ -242,23 +318,30 @@ include 'includes/header.php';
 <style>
 /* Main Layout Styles */
 .login-page-container {
-    min-height: calc(100vh - 70px);
+    background: #ffffff !important;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 40px 20px;
-    background: linear-gradient(135deg, #fff9f2 0%, #fff 100%);
+    align-items: stretch;
+    justify-content: stretch;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    overflow: hidden !important;
+    padding: 0 !important;
 }
 
 .login-wrapper {
-    background-color: white;
-    border-radius: 16px;
-    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.1);
-    overflow: hidden;
-    max-width: 500px;
+    max-width: 100% !important;
     width: 100%;
-    min-height: 650px;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    background-color: white;
+    border-radius: 0 !important;
+    border: none;
+    box-shadow: none !important;
+    display: flex;
+    flex-direction: row; /* Image left, form right */
+    margin: 0 !important;
     animation: fadeIn 0.6s ease-out;
+    overflow: hidden;
 }
 
 @keyframes fadeIn {
@@ -268,15 +351,80 @@ include 'includes/header.php';
 
 /* Left Side - Brand/Info */
 .login-left {
-    background: linear-gradient(135deg, #8f261a 0%, #b3261e 100%);
-    padding: 50px 40px;
-    color: white;
+    width: 50%;
+    background: linear-gradient(145deg, #fff7f2 0%, #ffede5 45%, #fedecf 100%) !important;
+    border-right: 1px solid #efddcd;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px !important;
+    text-align: center;
     position: relative;
     overflow: hidden;
-    text-align: center;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
 }
 
 .login-left::before {
+    display: none !important;
+}
+
+.brand-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 3.4rem;
+    font-weight: 900;
+    letter-spacing: -1.5px;
+    margin: 0;
+    color: #b3261e !important;
+    text-shadow: 0 2px 10px rgba(179, 38, 30, 0.12);
+}
+
+.brand-subtitle {
+    font-size: 1.2rem;
+    color: #564840 !important;
+    margin-top: 14px;
+    max-width: 340px;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.floating-pigs-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.floating-pig {
+    position: absolute;
+    font-size: 3.5rem;
+    opacity: 0.16;
+    animation: floatPig 8s ease-in-out infinite alternate;
+}
+
+.pig-1 { top: 10%; left: 15%; animation-duration: 9s; font-size: 4rem; }
+.pig-2 { top: 25%; right: 15%; animation-duration: 11s; animation-delay: 1s; font-size: 3.5rem; }
+.pig-3 { bottom: 20%; left: 20%; animation-duration: 10s; animation-delay: 2s; font-size: 4.5rem; }
+.pig-4 { bottom: 15%; right: 25%; animation-duration: 8s; animation-delay: 0.5s; font-size: 3rem; }
+.pig-5 { top: 50%; left: 40%; animation-duration: 12s; animation-delay: 1.5s; font-size: 3.8rem; }
+
+@keyframes floatPig {
+    0% {
+        transform: translateY(0) rotate(0deg) scale(1);
+    }
+    50% {
+        transform: translateY(-20px) rotate(8deg) scale(1.05);
+    }
+    100% {
+        transform: translateY(10px) rotate(-8deg) scale(0.95);
+    }
+}
+
+.dummy-placeholder {
     content: '';
     position: absolute;
     top: 0;
@@ -380,10 +528,17 @@ include 'includes/header.php';
 
 /* Right Side - Forms */
 .login-right {
-    padding: 50px 40px;
+    width: 50%;
+    background: #ffffff;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 44px 24px 36px !important;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    overflow-y: auto !important;
+    box-sizing: border-box;
 }
 
 .login-header {
@@ -780,98 +935,85 @@ include 'includes/header.php';
 }
 
 /* Responsive Design */
-@media (max-width: 576px) {
-    .login-page-container {
-        padding: 20px;
-    }
-    
+@media (max-width: 850px) {
     .login-wrapper {
-        min-height: auto;
-    }
-    
-    .login-left, .login-right {
-        padding: 40px 25px;
-    }
-    
-    .brand-logo h1 {
-        font-size: 1.6rem;
-    }
-    
-    .login-left h2 {
-        font-size: 1.6rem;
-    }
-    
-    .login-header h2 {
-        font-size: 1.5rem;
-    }
-    
-    .remember-forgot {
         flex-direction: column;
-        align-items: flex-start;
-        gap: 15px;
+    }
+    .login-right {
+        width: 100%;
+        height: auto;
+        min-height: calc(100vh - 64px);
+        padding: 40px 20px;
+    }
+    .login-left {
+        display: none !important;
+    }
+    /* Prevent automatic zoom-in on focus on mobile devices */
+    input, select, textarea, .form-control {
+        font-size: 16px !important;
     }
 }
 
 /* Modern Food Auth Refresh */
 :root {
     --auth-red: #b3261e;
+    --auth-hover: #981b15;
     --auth-orange: #ef6b2e;
-    --auth-cream: #fff8ef;
-    --auth-ink: #2a211d;
-    --auth-muted: #7b6d64;
-    --auth-border: #efddcc;
+    --auth-cream: #fff9f6;
+    --auth-ink: #1e293b;
+    --auth-muted: #64748b;
+    --auth-border: #eaecf0;
 }
 
 body {
-    background:
-        radial-gradient(circle at 0% 0%, rgba(239, 107, 46, 0.12), transparent 34%),
-        radial-gradient(circle at 100% 12%, rgba(179, 38, 30, 0.1), transparent 30%),
-        var(--auth-cream);
+    background: #ffffff;
 }
 
 .login-page-container {
-    background: transparent;
+    background: #ffffff !important;
 }
 
 .login-wrapper {
-    border: 1px solid var(--auth-border);
-    border-radius: 22px;
-    box-shadow: 0 20px 40px rgba(74, 32, 20, 0.14);
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
 }
 
 .login-left {
-    background:
-        linear-gradient(130deg, rgba(22, 14, 10, 0.9), rgba(65, 30, 20, 0.78)),
-        url('images/about-us-bg.jpg') center/cover no-repeat;
+    background: linear-gradient(145deg, #fff7f2 0%, #ffede5 45%, #fedecf 100%) !important;
 }
 
-.login-header h2,
-.login-header p,
-.form-group label {
-    color: var(--auth-ink);
+.login-header h2 {
+    color: #1e293b;
+}
+
+.login-header p {
+    color: #64748b;
 }
 
 .form-group label {
+    color: #334155;
     font-weight: 700;
 }
 
 .form-control {
-    border: 1px solid #e8d4c3;
-    background: #fffdfb;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
 }
 
 .form-control:focus {
-    border-color: #d06d44;
-    box-shadow: 0 0 0 3px rgba(239, 107, 46, 0.15);
+    border-color: var(--auth-red);
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.1);
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, var(--auth-red), var(--auth-orange));
-    box-shadow: 0 12px 28px rgba(179, 38, 30, 0.26);
+    background: var(--auth-red);
+    box-shadow: 0 4px 14px rgba(179, 38, 30, 0.2);
 }
 
 .btn-primary:hover:not(:disabled) {
-    box-shadow: 0 15px 34px rgba(179, 38, 30, 0.34);
+    background: var(--auth-hover);
+    box-shadow: 0 6px 18px rgba(179, 38, 30, 0.28);
 }
 
 .remember-checkbox span,
@@ -883,34 +1025,195 @@ body {
 
 .forgot-link:hover,
 .auth-link a:hover {
-    color: #8f2f1f;
+    color: var(--auth-red);
 }
 
 .social-divider span {
-    color: #8a7a70;
+    color: #94a3b8;
 }
 
 .social-btn {
-    border: 1px solid #ecd8c7;
-    background: #fffaf5;
+    border: 1px solid #eaecf0;
+    background: #ffffff;
 }
 
 .social-btn:hover {
-    border-color: #d7a37f;
-    background: #fff2e6;
+    border-color: #d0d5dd;
+    background: #f8fafc;
+}
+.footer {
+    margin-top: 0 !important;
+}
+.auth-link a {
+    color: #b3261e !important;
+    font-weight: 700 !important;
+    text-decoration: none !important;
+}
+.auth-link a:hover {
+    text-decoration: underline !important;
+}
+
+/* ==========================================================================
+   LOGIN PAGE DARK MODE THEME
+   ========================================================================== */
+body.dark-mode,
+html.dark-mode,
+body.dark-mode .login-page-container {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-wrapper {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .login-left {
+    background: linear-gradient(145deg, #182234 0%, #1e293b 60%, #0f172a 100%) !important;
+    border-right: 1px solid #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-left h2,
+body.dark-mode .brand-logo h1 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-left p,
+body.dark-mode .features-list li {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .login-right {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-header h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-header p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .form-group label {
+    color: #e2e8f0 !important;
+}
+
+body.dark-mode .form-control {
+    background: #1e293b !important;
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-control:focus {
+    background: #0b1120 !important;
+    border-color: #b3261e !important;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+}
+
+body.dark-mode input:-webkit-autofill,
+body.dark-mode input:-webkit-autofill:hover, 
+body.dark-mode input:-webkit-autofill:focus, 
+body.dark-mode input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px #1e293b inset !important;
+    box-shadow: 0 0 0 1000px #1e293b inset !important;
+    -webkit-text-fill-color: #f8fafc !important;
+    color: #f8fafc !important;
+    transition: background-color 5000s ease-in-out 0s !important;
+    caret-color: #f8fafc !important;
+}
+
+body.dark-mode input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px #0b1120 inset, 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+    box-shadow: 0 0 0 1000px #0b1120 inset, 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+    -webkit-text-fill-color: #ffffff !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .input-with-icon i,
+body.dark-mode #togglePassword {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .remember-checkbox span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .forgot-link {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .auth-link {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .btn-secondary {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .btn-secondary:hover {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .social-divider span {
+    background: #0f172a !important;
+    color: #64748b !important;
+}
+
+body.dark-mode .social-btn {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .social-btn:hover {
+    background: #334155 !important;
+}
+
+body.dark-mode .floating-pig {
+    opacity: 0.25 !important;
 }
 </style>
 
 <div class="login-page-container">
     <div class="login-wrapper">
+        <!-- Left Side: Branding Panel with Floating Mascot Pigs -->
+        <div class="login-left">
+            <div class="floating-pigs-container">
+                <div class="floating-pig pig-1">🐷</div>
+                <div class="floating-pig pig-2">🐷</div>
+                <div class="floating-pig pig-3">🐷</div>
+                <div class="floating-pig pig-4">🐷</div>
+                <div class="floating-pig pig-5">🐷</div>
+            </div>
+            <div class="brand-content" style="position: relative; z-index: 10;">
+                <h1 class="brand-title">Lechon Delights</h1>
+                <p class="brand-subtitle">Cavite's Finest Lechon at Your Doorsteps</p>
+            </div>
+        </div>
+
         <!-- Login Form Section -->
         <div class="login-right">
-            <!-- Login View -->
-            <div id="loginViewContainer" class="auth-panel-view">
-                <div class="login-header">
-                    <h2>Welcome Back!</h2>
-                    <p>Sign in to continue your delicious journey with Lechon Delights</p>
-                </div>
+            <div style="max-width: 440px; width: 100%; margin: auto 0; display: flex; flex-direction: column;">
+                <!-- Login View -->
+                <div id="loginViewContainer" class="auth-panel-view">
+                    <div class="login-header" style="text-align: center; margin-bottom: 24px;">
+                        <div style="display: inline-flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px;">
+                            <img src="assets/images/logo.png?v=lechon2" alt="Lechon Delight Logo" style="width: 48px; height: 48px; object-fit: contain; display: block; border: none; box-shadow: none;">
+                            <span style="font-size: 1.6rem; font-weight: 800; color: #171922; font-family: 'Outfit', sans-serif;">Lechon Delights</span>
+                        </div>
+                        <h2>Welcome Back!</h2>
+                        <p>Sign in to continue your delicious journey with Lechon Delights</p>
+                    </div>
                 
                 <?php if ($error): ?>
                 <div class="alert alert-error" id="errorAlert">
@@ -927,14 +1230,14 @@ body {
                 <?php endif; ?>
 
                 <!-- Login Form -->
-                <form method="POST" action="" class="login-form" id="loginForm">
+                <form method="POST" action="" class="login-form" id="loginForm" data-swal-validate="off">
                     <div class="form-group">
                         <label for="email">Email Address</label>
                         <div class="input-with-icon">
                             <i class="fas fa-envelope"></i>
                             <input type="email" id="email" name="email" class="form-control" required 
                                 placeholder="Enter your email address" 
-                                value="<?php echo htmlspecialchars($form_data['email'] ?? ''); ?>"
+                                value="<?php echo htmlspecialchars($form_data['email'] ?? ($_COOKIE['remember_email'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
                                 autocomplete="email">
                         </div>
                     </div>
@@ -954,7 +1257,7 @@ body {
                     
                     <div class="remember-forgot">
                         <label class="remember-checkbox">
-                            <input type="checkbox" name="remember" id="rememberMe" value="1">
+                            <input type="checkbox" name="remember" id="rememberMe" value="1" <?php echo (!empty($remember) || !empty($_COOKIE['remember_email'])) ? 'checked' : ''; ?>>
                             <span>Remember me</span>
                         </label>
                         <a href="reset_password_request.php" class="forgot-link" id="switchToForgotView">Forgot password?</a>
@@ -965,30 +1268,7 @@ body {
                         <span>Sign In</span>
                     </button>
                     
-                    <!-- Social Login Divider -->
-                    <div class="social-divider">
-                        <span>Or continue with</span>
-                    </div>
-                    
-                    <!-- Social Login Buttons -->
-                    <div class="social-login-buttons">
-                        <button type="button" class="social-btn google-btn" id="googleLoginBtn" title="Login with Google">
-                            <i class="fab fa-google"></i>
-                            <span>Google</span>
-                        </button>
-                        <button type="button" class="social-btn facebook-btn" id="facebookLoginBtn" title="Login with Facebook">
-                            <i class="fab fa-facebook-f"></i>
-                            <span>Facebook</span>
-                        </button>
-                        <button type="button" class="social-btn twitter-btn" id="twitterLoginBtn" title="Login with X">
-                            <i class="fab fa-x-twitter"></i>
-                            <span>X</span>
-                        </button>
-                        <button type="button" class="social-btn instagram-btn" id="instagramLoginBtn" title="Login with Instagram">
-                            <i class="fab fa-instagram"></i>
-                            <span>Instagram</span>
-                        </button>
-                    </div>
+
                     
                     <div class="auth-link">
                         Don't have an account? 
@@ -1030,6 +1310,7 @@ body {
             </div>
         </div>
     </div>
+</div>
 </div>
 
 <!-- SweetAlert2 JS -->
@@ -1141,6 +1422,22 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Login successful, use server-provided redirect URL
                         window.location.href = jsonData.redirect;
                         return;
+                    } else if (jsonData.message) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Login Failed',
+                            text: jsonData.message,
+                            confirmButtonColor: '#b3261e'
+                        });
+                        if (btn) {
+                            btn.classList.remove('loading');
+                            btn.disabled = false;
+                            const span = btn.querySelector('span');
+                            if (span) {
+                                span.textContent = 'Sign In';
+                            }
+                        }
+                        return;
                     }
                 } catch (e) {
                     // Not JSON, check for HTML error messages
@@ -1225,6 +1522,20 @@ document.addEventListener('DOMContentLoaded', function() {
             emailInput.focus();
         }
     }, 300);
+
+    // Password Visibility Toggle for Login
+    const togglePasswordBtn = document.getElementById('togglePassword');
+    const passwordInput = document.getElementById('password');
+    if (togglePasswordBtn && passwordInput) {
+        togglePasswordBtn.addEventListener('click', function() {
+            const isPass = passwordInput.type === 'password';
+            passwordInput.type = isPass ? 'text' : 'password';
+            const icon = this.querySelector('i');
+            if (icon) {
+                icon.className = isPass ? 'fas fa-eye-slash' : 'fas fa-eye';
+            }
+        });
+    }
     
     // In-Place View Switcher between Login and Forgot Password
     const loginView = document.getElementById('loginViewContainer');
@@ -1287,13 +1598,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         forgotViewAlert.innerHTML = '<i class="fas fa-check-circle"></i> <div>' + (data.message || 'Password reset link sent! Check your inbox.') + '</div>';
                         forgotViewAlert.style.display = 'flex';
                     }
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Reset Link Sent',
-                            text: data.message || 'Check your email inbox for password reset instructions.',
-                            confirmButtonColor: '#b3261e'
-                        });
+                    if (window.showPopupAlert) {
+                        window.showPopupAlert(data.message || 'Check your email inbox for password reset instructions.', 'success', 5000);
                     }
                 } else {
                     if (forgotViewAlert) {
@@ -1301,12 +1607,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         forgotViewAlert.innerHTML = '<i class="fas fa-exclamation-circle"></i> <div>' + (data.message || 'Error processing request.') + '</div>';
                         forgotViewAlert.style.display = 'flex';
                     }
+                    if (window.showPopupAlert) {
+                        window.showPopupAlert(data.message || 'Failed to process password reset request.', 'error', 5000);
+                    }
                 }
             } catch (err) {
                 if (forgotViewAlert) {
                     forgotViewAlert.className = 'alert alert-error';
                     forgotViewAlert.innerHTML = '<i class="fas fa-exclamation-circle"></i> <div>An unexpected error occurred. Please try again.</div>';
                     forgotViewAlert.style.display = 'flex';
+                }
+                if (window.showPopupAlert) {
+                    window.showPopupAlert('An unexpected error occurred. Please try again.', 'error', 5000);
                 }
             } finally {
                 if (forgotViewSubmitBtn) {
@@ -1318,21 +1630,29 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     <?php if ($error): ?>
-    Swal.fire({
-        icon: 'error',
-        title: 'Login Error',
-        text: '<?php echo addslashes($error); ?>',
-        confirmButtonColor: '#b3261e'
-    });
+    if (window.showPopupAlert) {
+        window.showPopupAlert(<?php echo json_encode($error); ?>, 'error', 5000);
+    } else if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'error',
+            title: 'Login Error',
+            text: <?php echo json_encode($error); ?>,
+            confirmButtonColor: '#b3261e'
+        });
+    }
     <?php endif; ?>
     
     <?php if ($success): ?>
-    Swal.fire({
-        icon: 'success',
-        title: 'Success!',
-        html: '<?php echo addslashes($success); ?>',
-        confirmButtonColor: '#b3261e'
-    });
+    if (window.showPopupAlert) {
+        window.showPopupAlert(<?php echo json_encode($success); ?>, 'success', 4000);
+    } else if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'success',
+            title: 'Success!',
+            html: <?php echo json_encode($success); ?>,
+            confirmButtonColor: '#b3261e'
+        });
+    }
     <?php endif; ?>
 });
 </script>

@@ -1,151 +1,178 @@
 <?php
 session_start();
 require_once 'includes/config.php';
+require_once __DIR__ . '/includes/rider_helper.php';
+if (!empty($_SESSION['user_id']) && isDeliveryDriverUser($conn, (int)$_SESSION['user_id'])) {
+    header("Location: rider/index.php");
+    exit();
+}
 require_once __DIR__ . '/includes/favorites_helper.php';
 require_once __DIR__ . '/includes/store_availability_helper.php';
+require_once __DIR__ . '/includes/partner_advertisement_helper.php';
 
-$current_page = 'home';
-$page_title = 'Marketplace Home';
+$is_pickup_mode = isset($_GET['type']) && strtolower(trim((string)$_GET['type'])) === 'pickup';
+$current_page = $is_pickup_mode ? 'pickup' : 'home';
+$page_title = $is_pickup_mode ? 'Pick-up Stores & Branches' : 'Marketplace Home';
 $show_welcome = !empty($_SESSION['register_success']);
 $user_email = $_SESSION['register_email'] ?? '';
 unset($_SESSION['register_success'], $_SESSION['register_email']);
 
-function asset_path($path, $fallback = 'images/store-bg.jpg') {
-    $path = trim((string)$path);
-    if ($path !== '' && (stripos($path, 'http://') === 0 || stripos($path, 'https://') === 0)) return $path;
-    $candidates = [];
-    if ($path !== '') {
-        $path = ltrim(str_replace('\\', '/', $path), '/');
-        $candidates[] = $path;
-        if (strpos($path, '/') === false) {
-            $candidates[] = 'uploads/products/' . $path;
-            $candidates[] = 'images/menu/' . $path;
-            $candidates[] = 'images/' . $path;
-        }
-    }
-    $candidates[] = ltrim(str_replace('\\', '/', $fallback), '/');
-    foreach ($candidates as $candidate) {
-        if ($candidate !== '' && is_file(__DIR__ . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $candidate))) return $candidate;
-    }
-    return $fallback;
-}
-
-function normalize_store_media_path($value) {
-    if (function_exists('normalizeUserAvatarPath')) {
-        return normalizeUserAvatarPath($value);
-    }
-    $path = str_replace('\\', '/', trim((string)$value));
-    if ($path === '') return '';
-    if (!preg_match('#^uploads/(profile_pictures|business_logos)/[A-Za-z0-9._-]+$#', $path)) return '';
-    return $path;
-}
-
-function user_storefront_image(array $user_row, $fallback = '') {
-    $business_logo = normalize_store_media_path($user_row['business_logo'] ?? '');
-    if ($business_logo !== '') {
-        return asset_path($business_logo, $fallback !== '' ? $fallback : 'images/store-bg.jpg');
-    }
-
-    $profile_image = normalize_store_media_path($user_row['profile_image'] ?? '');
-    if ($profile_image !== '') {
-        return asset_path($profile_image, $fallback !== '' ? $fallback : 'images/store-bg.jpg');
-    }
-
-    return $fallback !== '' ? asset_path('', $fallback) : '';
-}
-
-function norm_key($value) {
-    $value = strtolower(trim((string)$value));
-    $value = preg_replace('/\b(branch|store|lechon|delights)\b/', ' ', $value);
-    $value = preg_replace('/[^a-z0-9]+/', ' ', $value);
-    return trim(preg_replace('/\s+/', ' ', $value));
-}
-
-function add_unique_limited(array &$items, $value, $limit = 3) {
-    $value = trim((string)$value);
-    if ($value === '' || in_array($value, $items, true) || count($items) >= $limit) return;
-    $items[] = $value;
-}
-
-function location_label($address, $city = '', $province = '') {
-    $parts = [];
-    $address = trim((string)$address);
-    $city = trim((string)$city);
-    $province = trim((string)$province);
-    if ($address !== '') {
-        $chunks = array_values(array_filter(array_map('trim', explode(',', $address))));
-        if (!empty($chunks)) $parts[] = $chunks[0];
-    }
-    if ($city !== '') $parts[] = $city;
-    if ($province !== '' && strcasecmp($province, $city) !== 0) $parts[] = $province;
-    return !empty($parts) ? implode(', ', array_unique($parts)) : 'Cavite';
-}
-
-function business_type_label($type) {
-    $type = trim((string)$type);
-    return $type === '' ? 'Partner store' : ucwords(str_replace('_', ' ', $type));
-}
-
-function is_cavite_scope($address = '', $city = '', $province = '') {
-    $normalize = static function ($value) {
-        $value = strtolower(trim((string)$value));
-        if ($value === '') {
-            return '';
-        }
-        if (function_exists('iconv')) {
-            $converted = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
-            if (is_string($converted) && $converted !== '') {
-                $value = strtolower($converted);
+if (!function_exists('asset_path')) {
+    function asset_path($path, $fallback = 'images/store-bg.jpg') {
+        $path = trim((string)$path);
+        if ($path !== '' && (stripos($path, 'http://') === 0 || stripos($path, 'https://') === 0)) return $path;
+        $candidates = [];
+        if ($path !== '') {
+            $path = ltrim(str_replace('\\', '/', $path), '/');
+            $candidates[] = $path;
+            if (strpos($path, '/') === false) {
+                $candidates[] = 'uploads/products/' . $path;
+                $candidates[] = 'images/menu/' . $path;
+                $candidates[] = 'images/' . $path;
             }
         }
-        $value = str_replace(['Ã±', 'ñ'], 'n', $value);
-        $value = preg_replace('/[^a-z0-9\.\s]+/', ' ', $value);
+        $candidates[] = ltrim(str_replace('\\', '/', $fallback), '/');
+        foreach ($candidates as $candidate) {
+            if ($candidate !== '' && is_file(__DIR__ . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $candidate))) return $candidate;
+        }
+        return $fallback;
+    }
+}
+
+if (!function_exists('normalize_store_media_path')) {
+    function normalize_store_media_path($value) {
+        if (function_exists('normalizeUserAvatarPath')) {
+            return normalizeUserAvatarPath($value);
+        }
+        $path = str_replace('\\', '/', trim((string)$value));
+        if ($path === '') return '';
+        if (!preg_match('#^uploads/(profile_pictures|business_logos)/[A-Za-z0-9._-]+$#', $path)) return '';
+        return $path;
+    }
+}
+
+if (!function_exists('user_storefront_image')) {
+    function user_storefront_image(array $user_row, $fallback = '') {
+        $business_logo = normalize_store_media_path($user_row['business_logo'] ?? '');
+        if ($business_logo !== '') {
+            return asset_path($business_logo, $fallback !== '' ? $fallback : 'images/store-bg.jpg');
+        }
+
+        $profile_image = normalize_store_media_path($user_row['profile_image'] ?? '');
+        if ($profile_image !== '') {
+            return asset_path($profile_image, $fallback !== '' ? $fallback : 'images/store-bg.jpg');
+        }
+
+        return $fallback !== '' ? asset_path('', $fallback) : '';
+    }
+}
+
+if (!function_exists('norm_key')) {
+    function norm_key($value) {
+        $value = strtolower(trim((string)$value));
+        $value = preg_replace('/\b(branch|store|lechon|delights)\b/', ' ', $value);
+        $value = preg_replace('/[^a-z0-9]+/', ' ', $value);
         return trim(preg_replace('/\s+/', ' ', $value));
-    };
-
-    $haystack = trim(implode(' ', array_filter([
-        $normalize($address),
-        $normalize($city),
-        $normalize($province)
-    ])));
-    if ($haystack === '') return false;
-
-    return strpos($haystack, 'cavite') !== false
-        || strpos($haystack, 'general trias') !== false
-        || strpos($haystack, 'gentri') !== false
-        || strpos($haystack, 'imus') !== false
-        || strpos($haystack, 'bacoor') !== false
-        || strpos($haystack, 'dasmarinas') !== false
-        || strpos($haystack, 'tagaytay') !== false
-        || strpos($haystack, 'trece martires') !== false
-        || strpos($haystack, 'kawit') !== false
-        || strpos($haystack, 'noveleta') !== false
-        || strpos($haystack, 'rosario') !== false
-        || strpos($haystack, 'tanza') !== false
-        || strpos($haystack, 'naic') !== false
-        || strpos($haystack, 'ternate') !== false
-        || strpos($haystack, 'maragondon') !== false
-        || strpos($haystack, 'indang') !== false
-        || strpos($haystack, 'alfonso') !== false
-        || strpos($haystack, 'mendez') !== false
-        || strpos($haystack, 'silang') !== false
-        || strpos($haystack, 'carmona') !== false
-        || strpos($haystack, 'gen. trias') !== false;
+    }
 }
 
-function store_menu_link(array $store) {
-    $params = [];
-    $seller_id = isset($store['seller_id']) ? (int)$store['seller_id'] : 0;
-    $branch_id = isset($store['branch_id']) ? (int)$store['branch_id'] : 0;
-
-    if ($seller_id > 0) $params['seller_id'] = $seller_id;
-    if ($branch_id > 0) $params['branch_id'] = $branch_id;
-
-    return empty($params) ? 'menu.php' : 'menu.php?' . http_build_query($params);
+if (!function_exists('add_unique_limited')) {
+    function add_unique_limited(array &$items, $value, $limit = 3) {
+        $value = trim((string)$value);
+        if ($value === '' || in_array($value, $items, true) || count($items) >= $limit) return;
+        $items[] = $value;
+    }
 }
 
-function branch_fallbacks() {
-    return [];
+if (!function_exists('location_label')) {
+    function location_label($address, $city = '', $province = '') {
+        $parts = [];
+        $address = trim((string)$address);
+        $city = trim((string)$city);
+        $province = trim((string)$province);
+        if ($address !== '') {
+            $chunks = array_values(array_filter(array_map('trim', explode(',', $address))));
+            if (!empty($chunks)) $parts[] = $chunks[0];
+        }
+        if ($city !== '') $parts[] = $city;
+        if ($province !== '' && strcasecmp($province, $city) !== 0) $parts[] = $province;
+        return !empty($parts) ? implode(', ', array_unique($parts)) : 'Cavite';
+    }
+}
+
+if (!function_exists('business_type_label')) {
+    function business_type_label($type) {
+        $type = trim((string)$type);
+        return $type === '' ? 'Partner store' : ucwords(str_replace('_', ' ', $type));
+    }
+}
+
+if (!function_exists('is_cavite_scope')) {
+    function is_cavite_scope($address = '', $city = '', $province = '') {
+        $normalize = static function ($value) {
+            $value = strtolower(trim((string)$value));
+            if ($value === '') {
+                return '';
+            }
+            if (function_exists('iconv')) {
+                $converted = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
+                if (is_string($converted) && $converted !== '') {
+                    $value = strtolower($converted);
+                }
+            }
+            $value = str_replace(['Ã±', 'ñ'], 'n', $value);
+            $value = preg_replace('/[^a-z0-9\.\s]+/', ' ', $value);
+            return trim(preg_replace('/\s+/', ' ', $value));
+        };
+
+        $haystack = trim(implode(' ', array_filter([
+            $normalize($address),
+            $normalize($city),
+            $normalize($province)
+        ])));
+        if ($haystack === '') return false;
+
+        return strpos($haystack, 'cavite') !== false
+            || strpos($haystack, 'general trias') !== false
+            || strpos($haystack, 'gentri') !== false
+            || strpos($haystack, 'imus') !== false
+            || strpos($haystack, 'bacoor') !== false
+            || strpos($haystack, 'dasmarinas') !== false
+            || strpos($haystack, 'tagaytay') !== false
+            || strpos($haystack, 'trece martires') !== false
+            || strpos($haystack, 'kawit') !== false
+            || strpos($haystack, 'noveleta') !== false
+            || strpos($haystack, 'rosario') !== false
+            || strpos($haystack, 'tanza') !== false
+            || strpos($haystack, 'naic') !== false
+            || strpos($haystack, 'ternate') !== false
+            || strpos($haystack, 'maragondon') !== false
+            || strpos($haystack, 'indang') !== false
+            || strpos($haystack, 'alfonso') !== false
+            || strpos($haystack, 'mendez') !== false
+            || strpos($haystack, 'silang') !== false
+            || strpos($haystack, 'carmona') !== false
+            || strpos($haystack, 'gen. trias') !== false;
+    }
+}
+
+if (!function_exists('store_menu_link')) {
+    function store_menu_link(array $store) {
+        $params = [];
+        $seller_id = isset($store['seller_id']) ? (int)$store['seller_id'] : 0;
+        $branch_id = isset($store['branch_id']) ? (int)$store['branch_id'] : 0;
+
+        if ($seller_id > 0) $params['seller_id'] = $seller_id;
+        if ($branch_id > 0) $params['branch_id'] = $branch_id;
+
+        return empty($params) ? 'menu.php' : 'menu.php?' . http_build_query($params);
+    }
+}
+
+if (!function_exists('branch_fallbacks')) {
+    function branch_fallbacks() {
+        return [];
+    }
 }
 
 $current_user_address = '';
@@ -163,8 +190,10 @@ if (!empty($_SESSION['user_id'])) {
 }
 
 $favorite_store_keys = [];
+$favorite_product_ids = [];
 if (favoritesIsCustomerUserSession()) {
     $favorite_store_keys = favoritesFetchUserFavoriteStoreKeyMap($conn, (int)$_SESSION['user_id']);
+    $favorite_product_ids = favoritesFetchUserFavoriteProductIdMap($conn, (int)$_SESSION['user_id']);
 }
 
 $sales_map = [];
@@ -199,10 +228,10 @@ if ($branch_result) {
         $branch = [
             'id' => (int)$row['store_id'],
             'owner_user_id' => (int)($row['owner_user_id'] ?? 0),
-            'name' => trim((string)$row['store_name']),
-            'address' => trim((string)$row['address']),
-            'city' => trim((string)$row['city']),
-            'province' => trim((string)$row['province']),
+            'name' => fixMojibakeText(trim((string)$row['store_name'])),
+            'address' => fixMojibakeText(trim((string)$row['address'])),
+            'city' => fixMojibakeText(trim((string)$row['city'])),
+            'province' => fixMojibakeText(trim((string)$row['province'])),
             'phone' => trim((string)$row['phone']),
             'email' => strtolower(trim((string)$row['email'])),
             'hours' => trim((string)($availability['schedule'] ?? $row['opening_hours'])),
@@ -289,21 +318,52 @@ if (!empty($branch_owner_ids)) {
         }
     }
 }
+$scoped_partner_seller_id = 0;
+if (!empty($_SESSION['user_id']) && isset($conn) && $conn) {
+    $logged_user_id = (int)$_SESSION['user_id'];
+    $is_super_admin = (strtolower(trim((string)($_SESSION['role_name'] ?? ''))) === 'super_admin' || strtolower(trim((string)($_SESSION['user_type'] ?? ''))) === 'super_admin');
+    if (!$is_super_admin) {
+        $check_scope_stmt = mysqli_prepare($conn, "SELECT u.id FROM users u WHERE u.id = ? AND (u.account_type = 'organization' OR EXISTS (SELECT 1 FROM franchise_applications fa WHERE fa.user_id = u.id AND fa.status = 'approved')) LIMIT 1");
+        if ($check_scope_stmt) {
+            mysqli_stmt_bind_param($check_scope_stmt, "i", $logged_user_id);
+            mysqli_stmt_execute($check_scope_stmt);
+            $check_scope_res = mysqli_stmt_get_result($check_scope_stmt);
+            if ($check_scope_row = mysqli_fetch_assoc($check_scope_res)) {
+                $scoped_partner_seller_id = (int)$check_scope_row['id'];
+            }
+            mysqli_stmt_close($check_scope_stmt);
+        }
+        if ($scoped_partner_seller_id <= 0) {
+            $staff_scope_stmt = mysqli_prepare($conn, "SELECT pmu.partner_user_id FROM partner_managed_users pmu WHERE pmu.managed_user_id = ? LIMIT 1");
+            if ($staff_scope_stmt) {
+                mysqli_stmt_bind_param($staff_scope_stmt, "i", $logged_user_id);
+                mysqli_stmt_execute($staff_scope_stmt);
+                $staff_scope_res = mysqli_stmt_get_result($staff_scope_stmt);
+                if ($staff_scope_row = mysqli_fetch_assoc($staff_scope_res)) {
+                    $scoped_partner_seller_id = (int)$staff_scope_row['partner_user_id'];
+                }
+                mysqli_stmt_close($staff_scope_stmt);
+            }
+        }
+    }
+}
 
 $stores = [];
 $latest_approved_partner_sql = "SELECT fa1.* FROM franchise_applications fa1 INNER JOIN (SELECT user_id, MAX(id) AS latest_id FROM franchise_applications WHERE status = 'approved' GROUP BY user_id) latest ON latest.latest_id = fa1.id";
 $seller_media_fields = '';
 $seller_media_fields .= $has_business_logo_column ? ", u.business_logo" : ", NULL AS business_logo";
 $seller_media_fields .= $has_profile_image_column ? ", u.profile_image" : ", NULL AS profile_image";
+$seller_scope_filter = ($scoped_partner_seller_id > 0) ? " AND u.id = " . (int)$scoped_partner_seller_id : "";
 $seller_result = mysqli_query($conn, "SELECT u.id, u.full_name, u.email, u.phone, u.address, u.business_name, u.business_type, u.created_at{$seller_media_fields}, fa.business_address, fa.city_name, fa.province_name, fa.barangay_name
                                       FROM users u
                                       INNER JOIN ({$latest_approved_partner_sql}) fa ON fa.user_id = u.id
                                       WHERE u.account_type = 'organization'
                                         AND u.is_active = 1
+                                        {$seller_scope_filter}
                                       ORDER BY COALESCE(NULLIF(TRIM(u.business_name), ''), u.full_name)");
 if ($seller_result) {
     while ($row = mysqli_fetch_assoc($seller_result)) {
-        $name = trim((string)$row['business_name']) !== '' ? trim((string)$row['business_name']) : trim((string)$row['full_name']) . ' Store';
+        $name = fixMojibakeText(trim((string)$row['business_name']) !== '' ? trim((string)$row['business_name']) : trim((string)$row['full_name']) . ' Store');
         $email = strtolower(trim((string)$row['email']));
         $seller_id = (int)$row['id'];
         $match = $branch_by_owner[$seller_id] ?? ($branch_by_email[$email] ?? ($branch_by_name[norm_key($name)] ?? null));
@@ -390,9 +450,10 @@ $global_min = null;
 $global_rating_sum = 0;
 $global_rating_count = 0;
 $global_reviews = 0;
+$product_scope_filter = ($scoped_partner_seller_id > 0) ? " AND p.seller_id = " . (int)$scoped_partner_seller_id : "";
 $product_sql = "SELECT p.id, p.seller_id, p.name, p.category, p.price, p.image, p.avg_rating, p.review_count, COALESCE(NULLIF(TRIM(u.business_name), ''), 'Lechon Delights Kitchen') seller_name
                 FROM products p LEFT JOIN users u ON p.seller_id = u.id
-                WHERE p.is_archived = 0 AND p.is_active = 1
+                WHERE p.is_archived = 0 AND p.is_active = 1 {$product_scope_filter}
                 ORDER BY p.created_at DESC, p.id DESC";
 $product_result = mysqli_query($conn, $product_sql);
 if ($product_result) {
@@ -441,7 +502,7 @@ if ($product_result) {
 
 arsort($categories);
 usort($products, static function ($a, $b) { return [$b['sold'], $b['reviews'], $b['rating']] <=> [$a['sold'], $a['reviews'], $a['rating']]; });
-$featured_products = array_slice($products, 0, 8);
+$featured_products = array_slice($products, 0, 12);
 $global_rating = $global_rating_count > 0 ? $global_rating_sum / $global_rating_count : 0;
 $branch_tags = array_slice(array_keys($categories), 0, 3);
 $branch_items = array_slice(array_column($featured_products, 'name'), 0, 3);
@@ -460,7 +521,7 @@ foreach ($branches as $branch) {
         : sahResolveStoreAvailability($branch);
     $stores['branch-' . $branch['id']] = [
         'key' => 'branch-' . $branch['id'],
-        'name' => $branch['name'],
+        'name' => fixMojibakeText($branch['name']),
         'type' => 'branch',
         'seller_id' => 0,
         'branch_id' => (int)$branch['id'],
@@ -564,8 +625,16 @@ foreach ($stores as &$store) {
 }
 unset($store);
 
-$stores = array_values(array_filter($stores, static function ($store) {
-    return !empty($store['is_cavite']);
+$has_any_cavite_stores = false;
+foreach ($stores as $s) {
+    if (!empty($s['is_cavite'])) {
+        $has_any_cavite_stores = true;
+        break;
+    }
+}
+
+$stores = array_values(array_filter($stores, static function ($store) use ($has_any_cavite_stores) {
+    return $has_any_cavite_stores ? !empty($store['is_cavite']) : true;
 }));
 usort($stores, static function ($a, $b) {
     return [$b['is_open'] ? 1 : 0, $b['live'] ? 1 : 0, $b['count'], $b['type'] === 'platform' ? 1 : 0, $a['name']]
@@ -641,42 +710,331 @@ include 'includes/header.php';
     --transition-fast: all var(--motion-fast) var(--motion-ease);
     --transition-lift: transform var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
     position: relative;
-    overflow: visible;
-    background:
-        radial-gradient(circle at 8% -5%, rgba(239, 107, 46, 0.14), transparent 36%),
-        radial-gradient(circle at 90% 12%, rgba(179, 38, 30, 0.12), transparent 32%),
-        linear-gradient(180deg, #fff8ef 0%, #fff9f2 34%, #ffffff 100%);
+    overflow-x: clip;
+    background: #f8f9fa;
     color: var(--ink);
     padding: 20px 0 56px;
 }
 
+/* ==========================================================================
+   LANDING PAGE DARK MODE THEME ENGINE
+   ========================================================================== */
+body.dark-mode .market-home,
+html.dark-mode .market-home {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .market-home::before,
+body.dark-mode .market-home::after {
+    display: none !important;
+}
+
+/* Sidebar & Filters in Dark Mode */
+body.dark-mode .market-sidebar {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4) !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .market-sidebar-section {
+    border-color: #334155 !important;
+}
+
+body.dark-mode .market-sidebar-title,
+body.dark-mode .market-filter-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .market-radio span,
+body.dark-mode .market-check span {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .market-radio:hover span,
+body.dark-mode .market-check:hover span {
+    color: #ffffff !important;
+}
+
+body.dark-mode .market-helper {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .market-detect-btn {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .market-detect-btn:hover {
+    background: #475569 !important;
+    color: #ffffff !important;
+}
+
+/* Hero & Promo Cards */
+body.dark-mode .panda-card-pink {
+    background: linear-gradient(135deg, #1e293b 0%, #293548 100%) !important;
+    border-color: #334155 !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-mode .panda-card-soft {
+    background: linear-gradient(135deg, #1e293b 0%, #293548 100%) !important;
+    border-color: #334155 !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-mode .panda-card-arch,
+body.dark-mode .panda-card-heart-bg {
+    background: rgba(255, 255, 255, 0.04) !important;
+}
+
+body.dark-mode .panda-card-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .panda-card-desc {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .user-promo-row > div {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .user-promo-row h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .user-promo-row p {
+    color: #94a3b8 !important;
+}
+
+/* Foodpanda Brand Slider / Hub Carousel */
+body.dark-mode .panda-brand-item {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2) !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .panda-brand-item:hover {
+    border-color: #b3261e !important;
+    background: #283347 !important;
+}
+
+body.dark-mode .panda-brand-name {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .panda-brand-meta {
+    color: #94a3b8 !important;
+}
+
+/* Best Sellers & Partner Deals Section */
+.bestsellers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+    gap: 14px;
+}
+.top-shops-swipe-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+}
+
+body.dark-mode .bestsellers-section {
+    background: linear-gradient(135deg, #1e293b 0%, #171f2c 100%) !important;
+    border-color: #334155 !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-mode .bestseller-card,
+body.dark-mode .market-store-row,
+body.dark-mode .panda-card-link {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .bestseller-card:hover,
+body.dark-mode .market-store-row:hover {
+    border-color: #b3261e !important;
+    transform: translateY(-3px) !important;
+}
+
+body.dark-mode .market-store-row-title,
+body.dark-mode .market-store-name,
+body.dark-mode .product-title,
+body.dark-mode .bestseller-card h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .market-store-row-meta,
+body.dark-mode .market-store-distance,
+body.dark-mode .market-store-time,
+body.dark-mode .product-desc,
+body.dark-mode .market-store-row-desc {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .market-head h2,
+body.dark-mode .market-head h3,
+body.dark-mode .market-head h1 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .market-head p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .foodpanda-pickup-banner {
+    background: linear-gradient(135deg, #1e293b 0%, #172030 100%) !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .foodpanda-pickup-banner h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .market-btn-soft {
+    background: #334155 !important;
+    color: #f8fafc !important;
+    border: 1px solid #475569 !important;
+}
+
+body.dark-mode .market-btn-soft:hover {
+    background: #475569 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .market-pagination-note {
+    color: #94a3b8 !important;
+}
+
+/* Auth Popup in Dark Mode */
+body.dark-mode .auth-popup-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .auth-popup-tabs {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .auth-popup-tab {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .auth-popup-tab.active {
+    color: #ef4444 !important;
+    border-bottom-color: #ef4444 !important;
+}
+
+body.dark-mode .auth-popup-form label {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .auth-popup-form .form-control {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .auth-popup-form .form-control:focus {
+    background: #020617 !important;
+    border-color: #b3261e !important;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+}
+
+body.dark-mode .auth-popup-form .remember-label,
+body.dark-mode .auth-popup-form .auth-link {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .auth-popup-close {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .auth-popup-close:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .reg-choice-card {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .reg-choice-card:hover {
+    background: #1e293b !important;
+    border-color: #b3261e !important;
+}
+
+body.dark-mode .reg-choice-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .reg-choice-desc {
+    color: #94a3b8 !important;
+}
+
+.partner-ad-card {
+    border-radius: 20px;
+    padding: 22px 24px;
+    color: #ffffff;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 10px 28px rgba(23, 25, 34, 0.08);
+    transition: transform 0.25s cubic-bezier(.22,1,.36,1), box-shadow 0.25s ease;
+}
+.partner-ad-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 36px rgba(179, 38, 30, 0.18);
+}
+.partner-ad-card.gradient-red { background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%); }
+.partner-ad-card.gradient-orange { background: linear-gradient(135deg, #ef6b2e 0%, #ff9e43 100%); }
+.partner-ad-card.gradient-dark { background: linear-gradient(135deg, #171922 0%, #343a40 100%); }
+
+.partner-ad-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.partner-ad-store { font-size: 0.78rem; font-weight: 700; opacity: 0.95; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px; }
+.partner-ad-badge { background: rgba(255, 255, 255, 0.25); backdrop-filter: blur(4px); color: #ffffff; font-weight: 800; font-size: 0.72rem; padding: 4px 10px; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+.partner-ad-title { font-size: 1.25rem; font-weight: 800; margin: 0 0 6px 0; color: #ffffff; line-height: 1.25; }
+.partner-ad-desc { font-size: 0.88rem; opacity: 0.92; margin: 0 0 16px 0; line-height: 1.4; color: #ffffff; }
+.partner-ad-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.2); }
+.partner-ad-code { background: #ffffff; color: #171922; font-weight: 800; font-size: 0.82rem; padding: 6px 12px; border-radius: 8px; font-family: monospace; display: flex; align-items: center; gap: 6px; }
+.partner-ad-code i { color: #b3261e; }
+.partner-ad-btn { background: #ffffff; color: #b3261e; text-decoration: none; font-weight: 800; font-size: 0.82rem; padding: 8px 16px; border-radius: 10px; transition: background 0.2s ease, transform 0.2s ease; display: inline-flex; align-items: center; gap: 6px; }
+.partner-ad-btn:hover { background: #171922; color: #ffffff; transform: translateX(2px); }
+
 .market-home::before,
 .market-home::after {
-    content: "";
-    position: absolute;
-    border-radius: 999px;
-    pointer-events: none;
-    z-index: 0;
+    display: none !important;
 }
 
-.market-home::before {
-    width: 260px;
-    height: 260px;
-    right: -80px;
-    top: 160px;
-    background: radial-gradient(circle, rgba(239, 107, 46, 0.2), rgba(239, 107, 46, 0));
+html, body {
+    overflow-x: clip !important;
+    max-width: 100vw !important;
 }
 
-.market-home::after {
-    width: 220px;
-    height: 220px;
-    left: -70px;
-    top: 520px;
-    background: radial-gradient(circle, rgba(179, 38, 30, 0.2), rgba(179, 38, 30, 0));
+.market-home {
+    overflow-x: clip !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    padding-bottom: 120px !important;
 }
 
 .market-home .container {
     max-width: 1280px;
+    width: 100%;
     margin: 0 auto;
     padding: 0 24px;
     position: relative;
@@ -686,13 +1044,13 @@ include 'includes/header.php';
 
 @media (max-width: 768px) {
     .market-home .container {
-        padding: 0 16px;
+        padding: 0 14px;
     }
 }
 
 @media (max-width: 480px) {
     .market-home .container {
-        padding: 0 12px;
+        padding: 0 10px;
     }
 }
 
@@ -971,16 +1329,594 @@ include 'includes/header.php';
     100% { transform: translateY(-10px) scale(1.1); }
 }
 
-@media (max-width: 640px) {
-    .panda-hero-card {
-        padding: 20px;
+/* ==========================================================================
+   Food Delivery Mobile Reference UI/UX Engine (Screens 1 to 5)
+   ========================================================================== */
+
+/* Screen 1: Mobile Full-Bleed Welcome Splash */
+.ref-splash-screen {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    flex-direction: column;
+    justify-content: flex-end;
+    background: #000000;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    overflow: hidden;
+    touch-action: none;
+    transition: opacity 0.38s cubic-bezier(0.16, 1, 0.3, 1), transform 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ref-splash-screen.ref-splash-closing {
+    opacity: 0 !important;
+    transform: translateY(24px) scale(0.98) !important;
+    pointer-events: none !important;
+}
+
+.ref-splash-bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    transform: scale(1.05);
+    animation: splashZoom 8s ease-out infinite alternate;
+}
+
+@keyframes splashZoom {
+    0% { transform: scale(1.04); }
+    100% { transform: scale(1.12); }
+}
+
+.ref-splash-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.2) 0%, rgba(16, 24, 40, 0.5) 45%, rgba(16, 24, 40, 0.96) 85%, #101828 100%);
+}
+
+.ref-splash-top {
+    position: absolute;
+    top: max(20px, env(safe-area-inset-top));
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 3;
+}
+
+.ref-splash-stepper {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.ref-splash-dot {
+    width: 28px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.35);
+    transition: all 0.3s ease;
+}
+
+.ref-splash-dot.active {
+    background: #b3261e;
+    box-shadow: 0 0 10px rgba(179, 38, 30, 0.8);
+    width: 38px;
+}
+
+.ref-splash-skip {
+    background: rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.ref-splash-card {
+    position: relative;
+    z-index: 3;
+    padding: 28px 24px max(34px, env(safe-area-inset-bottom)) 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ref-splash-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 2.1rem;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.15;
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+
+.ref-splash-desc {
+    font-size: 0.92rem;
+    color: rgba(255, 255, 255, 0.82);
+    line-height: 1.5;
+    margin: 0 0 10px 0;
+}
+
+.ref-splash-btn {
+    width: 100%;
+    min-height: 52px;
+    border-radius: 999px;
+    background: #b3261e;
+    color: #ffffff;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1rem;
+    font-weight: 800;
+    border: none;
+    box-shadow: 0 8px 24px rgba(179, 38, 30, 0.45);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ref-splash-btn:active {
+    transform: scale(0.97);
+}
+
+/* Screen 2: Promo Banner & Categories Carousel */
+.m-ref-home-container {
+    display: none;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+}
+
+.m-ref-promo-banner {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(234, 236, 240, 0.85);
+    border-radius: 18px;
+    padding: 14px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    box-shadow: 0 4px 16px -2px rgba(16, 24, 40, 0.05);
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+}
+
+.m-ref-promo-left {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.m-ref-promo-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    background: #fff1f0;
+    color: #b3261e;
+    font-size: 0.68rem;
+    font-weight: 800;
+    border-radius: 999px;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.m-ref-promo-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.98rem;
+    font-weight: 800;
+    color: #101828;
+    line-height: 1.25;
+    margin: 0 0 10px 0;
+}
+
+.m-ref-promo-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 14px;
+    background: #b3261e;
+    color: #ffffff !important;
+    font-size: 0.76rem;
+    font-weight: 800;
+    border-radius: 999px;
+    text-decoration: none;
+    box-shadow: 0 3px 10px rgba(179, 38, 30, 0.3);
+}
+
+.m-ref-promo-right {
+    flex: 0 0 74px;
+    width: 74px;
+    flex-shrink: 0;
+}
+
+.m-ref-promo-img-wrap {
+    width: 74px;
+    height: 74px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #f4f5f7;
+    box-shadow: 0 3px 10px rgba(16, 24, 40, 0.08);
+}
+
+.m-ref-promo-img-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Categories Row (Reference Screen 2 & 5) */
+.m-ref-section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 18px 0 10px 0;
+}
+
+.m-ref-section-head h3 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #101828;
+    margin: 0;
+}
+
+.m-ref-see-all {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #b3261e;
+    text-decoration: none;
+}
+
+.m-ref-categories-row {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 4px 2px 14px 2px;
+}
+
+.m-ref-categories-row::-webkit-scrollbar {
+    display: none;
+}
+
+.m-ref-cat-card {
+    flex: 0 0 74px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    color: #344054;
+    transition: transform 0.18s ease;
+}
+
+.m-ref-cat-card:active {
+    transform: scale(0.92);
+}
+
+.m-ref-cat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50% !important;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(234, 236, 240, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    color: #b3261e;
+    box-shadow: 0 4px 14px rgba(16, 24, 40, 0.05);
+}
+
+.m-ref-cat-card span {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* Popular Searches Horizontal Chips (Reference Screen 1) */
+.m-ref-popular-searches {
+    margin-top: 6px;
+    margin-bottom: 16px;
+}
+.m-ref-popular-chips-row {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 2px 2px 8px 2px;
+}
+.m-ref-popular-chips-row::-webkit-scrollbar {
+    display: none;
+}
+.m-pop-chip {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    background: #ffffff;
+    border: 1px solid #e4e7ec;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #344054;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
+}
+.m-pop-chip i {
+    font-size: 0.72rem;
+    color: #027a48;
+}
+.m-pop-chip.active {
+    background: #fff1f0;
+    border-color: #fee4e2;
+    color: #b3261e;
+}
+.m-pop-chip.active i {
+    color: #b3261e;
+}
+.m-pop-chip:hover {
+    border-color: #d0d5dd;
+    background: #f8fafc;
+}
+
+/* Dark Mode Overrides for Mobile Reference UI */
+body.dark-mode .m-ref-promo-banner,
+body.dark-mode .m-ref-cat-icon,
+body.dark-mode .m-pop-chip {
+    background: rgba(30, 41, 59, 0.9) !important;
+    border-color: rgba(51, 65, 85, 0.85) !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .m-ref-promo-title,
+body.dark-mode .m-ref-section-head h3,
+body.dark-mode .m-ref-cat-card span {
+    color: #f8fafc !important;
+}
+
+/* Comprehensive Responsive System for Viewports <= 768px */
+@media (max-width: 768px) {
+    .market-home {
+        padding-bottom: 200px !important;
     }
-    .panda-card-graphic {
-        flex: 0 0 120px;
-        height: 110px;
+
+    .m-ref-home-container {
+        display: block !important;
+        margin-bottom: 12px;
     }
-    .panda-card-graphic img.panda-mascot-img {
-        height: 110px;
+
+    /* Hide redundant desktop promo banners on mobile */
+    .panda-welcome-banner,
+    .panda-hero-banners,
+    .user-promo-row {
+        display: none !important;
+    }
+
+    /* Filters & Sort as clean rounded pill */
+    .market-sidebar-toggle-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        border-radius: 999px !important;
+        padding: 8px 18px !important;
+        background: rgba(255, 255, 255, 0.88) !important;
+        backdrop-filter: blur(14px) !important;
+        -webkit-backdrop-filter: blur(14px) !important;
+        border: 1px solid rgba(234, 236, 240, 0.85) !important;
+        color: #344054 !important;
+        font-size: 0.82rem !important;
+        font-weight: 700 !important;
+        box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04) !important;
+        margin-bottom: 16px !important;
+        cursor: pointer;
+        width: auto !important;
+    }
+
+    .market-explorer > div {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Universal Horizontal Swipe Tracks for Menu, Top Store, Store, and Deals */
+    .bestsellers-grid,
+    .top-shops-swipe-grid,
+    .partner-store-deals-grid,
+    .first-user-deals-grid,
+    .market-store-list.store-list-grid {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x pan-y !important;
+        scroll-snap-type: x mandatory !important;
+        scroll-behavior: smooth !important;
+        gap: 12px !important;
+        padding: 4px 4px 14px 4px !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .bestsellers-grid::-webkit-scrollbar,
+    .top-shops-swipe-grid::-webkit-scrollbar,
+    .partner-store-deals-grid::-webkit-scrollbar,
+    .first-user-deals-grid::-webkit-scrollbar,
+    .market-store-list.store-list-grid::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    /* Menu Bestseller Swipe Cards */
+    .bestsellers-grid .bestseller-card {
+        flex: 0 0 clamp(190px, 64vw, 235px) !important;
+        width: clamp(190px, 64vw, 235px) !important;
+        min-width: clamp(190px, 64vw, 235px) !important;
+        max-width: clamp(190px, 64vw, 235px) !important;
+        scroll-snap-align: start !important;
+        scroll-snap-stop: normal !important;
+        touch-action: pan-x pan-y !important;
+        border-radius: 16px !important;
+        background: #ffffff !important;
+        border: 1px solid #eaecf0 !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Top Store (Top Restaurants) Swipe Cards */
+    .top-shops-swipe-grid .market-store-row {
+        flex: 0 0 clamp(200px, 68vw, 250px) !important;
+        width: clamp(200px, 68vw, 250px) !important;
+        min-width: clamp(200px, 68vw, 250px) !important;
+        max-width: clamp(200px, 68vw, 250px) !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        scroll-snap-align: start !important;
+        scroll-snap-stop: normal !important;
+        touch-action: pan-x pan-y !important;
+        border-radius: 16px !important;
+        background: #ffffff !important;
+        border: 1px solid #eaecf0 !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+        padding: 0 !important;
+        gap: 0 !important;
+    }
+
+    .top-shops-swipe-grid .store-card-image-wrap {
+        height: 115px !important;
+        width: calc(100% - 12px) !important;
+        margin: 6px !important;
+        border-radius: 12px !important;
+        overflow: hidden !important;
+        position: relative !important;
+        flex: 0 0 115px !important;
+    }
+
+    .top-shops-swipe-grid .store-card-details {
+        padding: 6px 10px 10px 10px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 1 auto !important;
+        justify-content: space-between !important;
+        gap: 4px !important;
+    }
+
+    /* All Stores Mobile Swipe Cards */
+    .market-store-list.store-list-grid .market-store-row {
+        flex: 0 0 clamp(200px, 68vw, 250px) !important;
+        width: clamp(200px, 68vw, 250px) !important;
+        min-width: clamp(200px, 68vw, 250px) !important;
+        max-width: clamp(200px, 68vw, 250px) !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        scroll-snap-align: start !important;
+        scroll-snap-stop: normal !important;
+        touch-action: pan-x pan-y !important;
+        border-radius: 16px !important;
+        background: #ffffff !important;
+        border: 1px solid #eaecf0 !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+        padding: 0 !important;
+        gap: 0 !important;
+    }
+
+    .market-store-list.store-list-grid .store-card-image-wrap {
+        height: 115px !important;
+        width: calc(100% - 12px) !important;
+        margin: 6px !important;
+        border-radius: 12px !important;
+        overflow: hidden !important;
+        position: relative !important;
+        flex: 0 0 115px !important;
+    }
+
+    .market-store-list.store-list-grid .store-card-details {
+        padding: 6px 10px 10px 10px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 1 auto !important;
+        justify-content: space-between !important;
+        gap: 4px !important;
+    }
+
+    /* Store Deals & Welcome Deals Swipe Cards */
+    .partner-store-deals-grid .deal-card,
+    .first-user-deals-grid .deal-card {
+        flex: 0 0 clamp(220px, 72vw, 260px) !important;
+        width: clamp(220px, 72vw, 260px) !important;
+        min-width: clamp(220px, 72vw, 260px) !important;
+        max-width: clamp(220px, 72vw, 260px) !important;
+        scroll-snap-align: start !important;
+        border-radius: 16px !important;
+        background: #ffffff !important;
+        border: 1px solid #eaecf0 !important;
+        box-sizing: border-box !important;
+        padding: 14px !important;
+    }
+
+    .store-card-row-head h3 {
+        font-size: 0.88rem !important;
+        font-weight: 800 !important;
+        line-height: 1.25 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    .store-card-summary,
+    .panda-card-footer-line .panda-card-city {
+        font-size: 0.72rem !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    .panda-card-price-text {
+        font-size: 0.86rem !important;
+        color: #b3261e !important;
+        font-weight: 800 !important;
+    }
+
+    .panda-card-dss-info {
+        display: flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        font-size: 0.7rem !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    body.dark-mode .bestseller-card,
+    body.dark-mode .market-store-row {
+        background: rgba(30, 41, 59, 0.88) !important;
+        border-color: rgba(51, 65, 85, 0.85) !important;
+        color: #f8fafc !important;
     }
 }
 
@@ -1969,22 +2905,36 @@ include 'includes/header.php';
     }
 }
 
-/* Foodpanda Brands Carousel UI */
+/* Foodpanda Brands Carousel UI - Smooth Touch & Mouse Swipeable */
 .panda-brand-slider {
-    display: flex;
-    gap: 12px;
-    overflow-x: auto;
-    padding: 6px 2px 14px;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 12px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-x !important;
+    scroll-snap-type: x proximity !important;
+    padding: 6px 4px 14px !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    cursor: grab;
+    user-select: none;
+}
+
+.panda-brand-slider:active,
+.panda-brand-slider.is-dragging {
+    cursor: grabbing !important;
 }
 
 .panda-brand-slider::-webkit-scrollbar {
-    display: none;
+    display: none !important;
 }
 
 .panda-brand-item {
-    flex: 0 0 115px;
+    flex: 0 0 120px !important;
+    min-width: 120px !important;
+    max-width: 120px !important;
     background: #ffffff;
     border: 1px solid #f0e2d5;
     border-radius: 16px;
@@ -1997,6 +2947,8 @@ include 'includes/header.php';
     color: #2a211d;
     box-shadow: 0 4px 10px rgba(74, 32, 20, 0.04);
     transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    scroll-snap-align: start !important;
+    user-select: none;
 }
 
 .panda-brand-item:hover {
@@ -2406,11 +3358,10 @@ include 'includes/header.php';
     gap: 6px !important;
 }
 
-<?php if (!empty($_SESSION['user_id'])): ?>
-/* Logged-in Customer Dashboard Layout Theme */
-body {
-    background: #ffffff !important;
-    --bg: #ffffff !important;
+/* Marketplace Layout Theme */
+body:not(.dark-mode) {
+    background: #ffffff;
+    --bg: #ffffff;
 }
 
 .market-explorer {
@@ -2419,8 +3370,8 @@ body {
 }
 
 .market-sidebar {
-    background: #ffffff !important;
-    border: 1px solid #e2e8f0 !important;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
     border-radius: 16px !important;
     padding: 20px !important;
     box-shadow: 0 4px 16px rgba(15, 23, 42, 0.02) !important;
@@ -2428,10 +3379,30 @@ body {
     width: 100% !important;
 }
 
+.market-sidebar-header {
+    margin-bottom: 8px !important;
+    padding-bottom: 0 !important;
+    border-bottom: none !important;
+}
+
+.market-sidebar-header h3 {
+    margin: 0 !important;
+    font-size: 1.15rem !important;
+    font-weight: 800 !important;
+    color: #1e293b !important;
+}
+
 .market-sidebar-section {
     border-bottom: 1px solid #f1f5f9 !important;
     padding-bottom: 16px !important;
     margin-bottom: 16px !important;
+}
+
+.market-sidebar-header + .market-sidebar-section,
+.market-sidebar-section.market-sort-section {
+    border-top: none !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
 }
 
 .market-sidebar-section:last-child {
@@ -2465,50 +3436,586 @@ body {
     background: #f1f5f9 !important;
     color: #171922 !important;
 }
-<?php endif; ?>
+.bestseller-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 28px rgba(179, 38, 30, 0.12) !important;
+    border-color: #b3261e !important;
+}
+.bestseller-card:hover .market-store-row-thumb {
+    transform: scale(1.06);
+}
+@media (max-width: 768px) {
+    .market-sidebar {
+        border-radius: 14px !important;
+        padding: 12px 16px !important;
+        margin-bottom: 14px !important;
+        max-width: 100% !important;
+        border: 1px solid #eaecf0 !important;
+        background: #ffffff !important;
+    }
+    .market-sidebar-toggle-btn {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 800;
+        font-size: 0.92rem;
+        color: #1e293b;
+        cursor: pointer;
+        padding: 4px 0;
+        user-select: none;
+    }
+    .market-sidebar-toggle-btn i.fa-sliders {
+        color: #b3261e;
+        margin-right: 6px;
+    }
+    .market-sidebar.is-collapsed-mobile .market-sidebar-section,
+    .market-sidebar.is-collapsed-mobile .market-sidebar-header {
+        display: none !important;
+    }
+    .market-sidebar.is-collapsed-mobile .toggle-icon {
+        transform: rotate(-90deg);
+        transition: transform 0.2s ease;
+    }
+    .market-sidebar:not(.is-collapsed-mobile) .toggle-icon {
+        transform: rotate(0deg);
+        transition: transform 0.2s ease;
+    }
+}
+@media (min-width: 769px) {
+    .market-sidebar-toggle-btn {
+        display: none !important;
+    }
+}
+
+/* First User Welcome Deals Section */
+.first-user-deals-section {
+    margin-bottom: 32px;
+}
+.first-user-deals-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+}
+/* Minimized Voucher Ticket Cards (Matching compact coupon stub UI) */
+.voucher-deal-ticket {
+    background: #ffffff;
+    border: 1px solid #e0e2ec;
+    border-radius: 14px;
+    display: flex !important;
+    flex-direction: row !important;
+    position: relative;
+    overflow: hidden;
+    min-height: 124px;
+    padding: 0 !important;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.voucher-deal-ticket:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(16, 24, 40, 0.08);
+    border-color: #cbd5e1;
+}
+
+.voucher-deal-ticket .voucher-ticket-stub {
+    width: 36px;
+    min-width: 36px;
+    background: linear-gradient(180deg, #5c35cc 0%, #4a28a8 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.voucher-deal-ticket .voucher-ticket-stub::before {
+    content: "";
+    position: absolute;
+    left: -7px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: inset -1px 0 1px rgba(0, 0, 0, 0.08);
+    z-index: 2;
+}
+
+.voucher-deal-ticket .voucher-ticket-stub-text {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    color: #ffffff;
+    text-transform: uppercase;
+    font-family: 'Outfit', -apple-system, sans-serif;
+    line-height: 1;
+}
+
+.voucher-deal-ticket .voucher-ticket-body {
+    flex: 1;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-width: 0;
+}
+
+.voucher-deal-ticket .voucher-ticket-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 2px;
+}
+
+.voucher-deal-ticket .voucher-ticket-discount {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #475467;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.voucher-deal-ticket .voucher-ticket-icon-wrap {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #f8f9fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    flex-shrink: 0;
+    border: 1px solid #f2f4f7;
+}
+
+.voucher-deal-ticket .voucher-ticket-dots {
+    display: flex;
+    align-items: center;
+    position: relative;
+    width: 16px;
+    height: 10px;
+}
+
+.voucher-deal-ticket .voucher-ticket-dots .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    position: absolute;
+    top: 0;
+}
+
+.voucher-deal-ticket .voucher-ticket-dots .dot-1 {
+    left: 0;
+    background: #991b1b;
+}
+
+.voucher-deal-ticket .voucher-ticket-dots .dot-2 {
+    left: 6px;
+    background: #ea580c;
+    opacity: 0.9;
+}
+
+.voucher-deal-ticket .voucher-ticket-code {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #101828;
+    letter-spacing: 0.4px;
+    line-height: 1.2;
+    margin: 1px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.voucher-deal-ticket .voucher-ticket-desc {
+    font-size: 0.72rem;
+    color: #667085;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.voucher-deal-ticket .voucher-ticket-terms {
+    font-size: 0.67rem;
+    color: #5c35cc;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 6px;
+}
+
+.voucher-deal-ticket .voucher-pill-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    border: 1px solid #d0d5dd;
+    background: #ffffff;
+    color: #1d2939;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.18s ease;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.voucher-deal-ticket .voucher-pill-btn:hover {
+    background: #f8f9fa;
+    border-color: #5c35cc;
+    color: #5c35cc;
+}
+
+.deal-card {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.deal-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(16, 24, 40, 0.08);
+    border-color: #d0d5dd;
+}
+.deal-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.deal-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.deal-badge-primary {
+    background: #fff1f0;
+    color: #b3261e;
+    border: 1px solid #fee4e2;
+}
+.deal-badge-success {
+    background: #ecfdf3;
+    color: #027a48;
+    border: 1px solid #abefc6;
+}
+.deal-badge-warning {
+    background: #fffaeb;
+    color: #b54708;
+    border: 1px solid #fedf89;
+}
+.deal-badge-info {
+    background: #eff8ff;
+    color: #175cd3;
+    border: 1px solid #b2ddff;
+}
+.deal-discount-val {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #101828;
+    line-height: 1.15;
+    margin-bottom: 4px;
+}
+.deal-desc {
+    font-size: 0.82rem;
+    color: #475467;
+    margin: 0 0 14px 0;
+    line-height: 1.4;
+}
+.deal-code-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f8f9fa;
+    border: 1px dashed #d0d5dd;
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+}
+.deal-code-text {
+    font-family: monospace;
+    font-size: 0.96rem;
+    font-weight: 800;
+    color: #b3261e;
+    letter-spacing: 0.06em;
+}
+.deal-copy-btn {
+    background: #ffffff;
+    border: 1px solid #d0d5dd;
+    color: #344054;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+}
+.deal-copy-btn:hover {
+    background: #f2f4f7;
+    border-color: #98a2b3;
+}
+.deal-copy-btn.copied {
+    background: #ecfdf3 !important;
+    color: #027a48 !important;
+    border-color: #abefc6 !important;
+}
+.deal-action-btn {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: #b3261e;
+    color: #ffffff;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 9px 14px;
+    border-radius: 10px;
+    text-decoration: none;
+    transition: background 0.15s ease;
+}
+.deal-action-btn:hover {
+    background: #981b15;
+    color: #ffffff;
+}
+
+/* ==========================================================================
+   LANDING / STORE LISTING DARK MODE THEME REINFORCEMENTS
+   ========================================================================== */
+body.dark-mode,
+html.dark-mode,
+body.dark-mode .market-home,
+html.dark-mode .market-home {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .market-sidebar {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35) !important;
+}
+
+body.dark-mode .market-sidebar-section {
+    border-color: #334155 !important;
+}
+
+body.dark-mode .market-sidebar h3,
+body.dark-mode .market-sidebar h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .market-radio span,
+body.dark-mode .market-check span {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .market-sidebar-toggle-btn {
+    color: #f8fafc !important;
+}
+
+/* Pick-up Map Banner in Dark Mode */
+body.dark-mode .foodpanda-pickup-banner {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.dark-mode .foodpanda-pickup-banner h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .foodpanda-pickup-banner [style*="background: #ffffff"],
+body.dark-mode .foodpanda-pickup-banner [style*="background:#ffffff"] {
+    background: #0f172a !important;
+    color: #ef4444 !important;
+    border: 1px solid #334155 !important;
+}
+
+body.dark-mode .foodpanda-pickup-banner span {
+    color: #94a3b8 !important;
+}
+
+/* User Promo Cards in Dark Mode */
+body.dark-mode .user-promo-row > div {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .user-promo-row h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .user-promo-row p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .deal-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .deal-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .deal-desc {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .deal-code-row {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .deal-copy-btn {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
 </style>
+
+<!-- Mobile Welcome Splash Screen (First Customer Only, First Time Login Only) -->
+<?php
+$is_customer_user = !empty($_SESSION['user_id']) && in_array(strtolower(trim((string)($_SESSION['user_type'] ?? ''))), ['', 'customer', 'user'], true);
+$show_mobile_splash = false;
+
+if ($is_customer_user && !empty($_SESSION['show_mobile_get_started'])) {
+    $splash_user_id = (int)$_SESSION['user_id'];
+    $stmt_splash = mysqli_prepare($conn, "SELECT COALESCE(mobile_splash_seen, 0) FROM users WHERE id = ? LIMIT 1");
+    if ($stmt_splash) {
+        mysqli_stmt_bind_param($stmt_splash, "i", $splash_user_id);
+        mysqli_stmt_execute($stmt_splash);
+        mysqli_stmt_bind_result($stmt_splash, $db_seen_val);
+        mysqli_stmt_fetch($stmt_splash);
+        mysqli_stmt_close($stmt_splash);
+
+        if ((int)$db_seen_val === 0) {
+            $show_mobile_splash = true;
+            // Clear session flag immediately so subsequent reloads won't trigger it again
+            unset($_SESSION['show_mobile_get_started']);
+        }
+    }
+}
+?>
+<?php if ($show_mobile_splash): ?>
+<div id="mobileGetStartedSplash" class="ref-splash-screen" style="display: none;">
+    <div class="ref-splash-bg" style="background-image: url('assets/images/promo_lechon.jpg');"></div>
+    <div class="ref-splash-overlay"></div>
+    <div class="ref-splash-top">
+        <div class="ref-splash-stepper">
+            <span class="ref-splash-dot active"></span>
+            <span class="ref-splash-dot"></span>
+            <span class="ref-splash-dot"></span>
+        </div>
+        <button type="button" class="ref-splash-skip" onclick="dismissMobileSplash()">Skip</button>
+    </div>
+    <div class="ref-splash-card">
+        <h1 class="ref-splash-title">Delight in Every Bite, Delivered Fast</h1>
+        <p class="ref-splash-desc">Fast delivery, fresh flavors—every bite is a delight at your doorstep. Enjoy your delicious meal.</p>
+        <button type="button" class="ref-splash-btn" onclick="dismissMobileSplash()">Get Started</button>
+    </div>
+</div>
+
+<script>
+function dismissMobileSplash() {
+    var splash = document.getElementById('mobileGetStartedSplash');
+    if (!splash) return;
+    splash.classList.add('ref-splash-closing');
+    var uid = <?php echo (int)($_SESSION['user_id'] ?? 0); ?>;
+    try {
+        localStorage.setItem('lechon_mobile_splash_seen_' + uid, '1');
+        localStorage.setItem('lechon_mobile_splash_seen', '1');
+    } catch(e) {}
+
+    // Persist to database so it never shows again on any device or session
+    try {
+        fetch('api/dismiss_mobile_splash.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'dismiss' })
+        }).catch(function() {});
+    } catch(err) {}
+
+    setTimeout(function() {
+        splash.style.display = 'none';
+        if (splash.parentNode) splash.parentNode.removeChild(splash);
+    }, 380);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.innerWidth <= 768) {
+        var uid = <?php echo (int)($_SESSION['user_id'] ?? 0); ?>;
+        var seenLocal = false;
+        try {
+            seenLocal = (localStorage.getItem('lechon_mobile_splash_seen_' + uid) === '1');
+        } catch(e) {}
+
+        var splash = document.getElementById('mobileGetStartedSplash');
+        if (splash && !seenLocal) {
+            splash.style.display = 'flex';
+            // Mark as seen in DB immediately upon showing so it shows only once
+            try {
+                fetch('api/dismiss_mobile_splash.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'shown' })
+                }).catch(function() {});
+            } catch(err) {}
+        }
+    }
+});
+</script>
+<?php endif; ?>
 
 <div class="market-home">
     <section class="market-section" id="marketplaceStores">
         <div class="container">
             <div class="market-explorer">
-                <aside class="market-sidebar">
-                    <?php if (!empty($_SESSION['user_id'])): ?>
-                        <!-- App Promo Card -->
-                        <div class="sidebar-app-promo" style="background:#2a211d; color:#ffffff; padding:20px; border-radius:20px; position:relative; margin-bottom:24px; box-shadow:0 8px 24px rgba(0,0,0,0.12); display:flex; flex-direction:column; align-items:center; text-align:center;">
-                            <button type="button" onclick="this.parentElement.style.display='none';" style="position:absolute; top:12px; right:12px; background:transparent; border:none; color:#a1a1a1; cursor:pointer; font-size:1rem; padding:0; line-height:1;"><i class="fas fa-xmark"></i></button>
-                            <div style="background:#ffffff; padding:12px; border-radius:16px; margin-bottom:12px; display:inline-block; border:1px solid #efddcd; line-height:0;">
-                                <svg width="90" height="90" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                                    <rect width="100" height="100" fill="#fff"/>
-                                    <rect x="10" y="10" width="25" height="25" fill="#2a211d"/>
-                                    <rect x="15" y="15" width="15" height="15" fill="#fff"/>
-                                    <rect x="18" y="18" width="9" height="9" fill="#2a211d"/>
-                                    <rect x="65" y="10" width="25" height="25" fill="#2a211d"/>
-                                    <rect x="70" y="15" width="15" height="15" fill="#fff"/>
-                                    <rect x="73" y="18" width="9" height="9" fill="#2a211d"/>
-                                    <rect x="10" y="65" width="25" height="25" fill="#2a211d"/>
-                                    <rect x="15" y="70" width="15" height="15" fill="#fff"/>
-                                    <rect x="18" y="73" width="9" height="9" fill="#2a211d"/>
-                                    <rect x="45" y="15" width="8" height="8" fill="#b3261e"/>
-                                    <rect x="53" y="30" width="8" height="8" fill="#2a211d"/>
-                                    <rect x="40" y="45" width="20" height="20" fill="#b3261e" rx="4"/>
-                                    <circle cx="50" cy="55" r="6" fill="#fff"/>
-                                    <path d="M48 55 C48 53, 52 53, 52 55 C52 57, 48 57, 48 55" fill="#b3261e"/>
-                                    <rect x="70" y="45" width="12" height="12" fill="#2a211d"/>
-                                    <rect x="75" y="70" width="15" height="15" fill="#2a211d"/>
-                                </svg>
-                            </div>
-                            <h4 style="margin:0 0 6px 0; font-family:'Outfit', sans-serif; font-size:0.92rem; font-weight:800; line-height:1.3; color:#ffffff;">Unlock more app-only deals. Download now.</h4>
-                            <div style="display:flex; gap:8px; width:100%; justify-content:center; margin-top:8px;">
-                                <a href="#" style="background:#111; color:#fff; border:1px solid #444; border-radius:8px; padding:6px 10px; font-size:0.68rem; display:inline-flex; align-items:center; gap:6px; text-decoration:none; font-weight:700;"><i class="fab fa-apple" style="font-size:0.9rem;"></i> App Store</a>
-                                <a href="#" style="background:#111; color:#fff; border:1px solid #444; border-radius:8px; padding:6px 10px; font-size:0.68rem; display:inline-flex; align-items:center; gap:6px; text-decoration:none; font-weight:700;"><i class="fab fa-google-play" style="font-size:0.8rem;"></i> Play Store</a>
-                            </div>
-                        </div>
-                    <?php endif; ?>
-                    <div class="market-sidebar-section">
+                <aside class="market-sidebar is-collapsed-mobile" id="marketSidebar">
+                    <div class="market-sidebar-toggle-btn" id="marketSidebarToggleBtn" onclick="document.getElementById('marketSidebar').classList.toggle('is-collapsed-mobile')">
+                        <span><i class="fas fa-sliders"></i> Filters & Sort</span>
+                        <i class="fas fa-chevron-down toggle-icon"></i>
+                    </div>
+
+                    <div class="market-sidebar-header">
                         <h3>Filters</h3>
                     </div>
-                    <div class="market-sidebar-section">
+                    <div class="market-sidebar-section market-sort-section">
                         <h4>Sort by</h4>
                         <div class="market-radio-list">
                             <label class="market-radio"><input type="radio" name="storeSort" value="relevance" checked> <span>Relevance</span></label>
@@ -2527,7 +4034,7 @@ body {
                             <label class="market-check"><input type="checkbox" id="filterNearbyOnly"> <span>Nearby only</span></label>
                         </div>
                     </div>
-                    <div class="market-sidebar-section">
+                    <div class="market-sidebar-section" id="nearestShopsSidebarSection">
                         <h4>Nearest Cavite lechon shops</h4>
                         <p class="market-helper">Allow location access and the page will rank the closest saved Cavite branches first using your browser position and store coordinates.</p>
                         <button type="button" class="market-btn market-detect-btn" id="detectNearestStores"><i class="fas fa-location-crosshairs"></i> Detect nearest shops</button>
@@ -2536,7 +4043,75 @@ body {
                 </aside>
 
                 <div>
-                    <?php if (!empty($_SESSION['user_id'])): 
+
+                    <!-- Mobile-Only Hero Promo & Categories Carousel (Reference Screen 2) -->
+                    <div class="m-ref-home-container">
+                        <!-- Screen 2 Promo Banner -->
+                        <div class="m-ref-promo-banner">
+                            <div class="m-ref-promo-left">
+                                <span class="m-ref-promo-badge">Up to 35% offer</span>
+                                <h2 class="m-ref-promo-title">Enjoy our dinner offer of every day.</h2>
+                                <a href="shops.php" class="m-ref-promo-btn">Shop Now</a>
+                            </div>
+                            <div class="m-ref-promo-right">
+                                <div class="m-ref-promo-img-wrap">
+                                    <img src="assets/images/promo_lechon.jpg" alt="Special Lechon Offer" onerror="this.onerror=null;this.src='images/menu/lechon.jpg';">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Screen 2 Categories Horizontal Row -->
+                        <div class="m-ref-categories-section">
+                            <div class="m-ref-section-head">
+                                <h3>What Service Do You Want?</h3>
+                                <a href="menu.php" class="m-ref-see-all">See all</a>
+                            </div>
+                            <div class="m-ref-categories-row">
+                                <a href="menu.php?category=whole" class="m-ref-cat-card">
+                                    <div class="m-ref-cat-icon"><i class="fas fa-piggy-bank"></i></div>
+                                    <span>Whole Lechon</span>
+                                </a>
+                                <a href="menu.php?category=belly" class="m-ref-cat-card">
+                                    <div class="m-ref-cat-icon"><i class="fas fa-bacon"></i></div>
+                                    <span>Lechon Belly</span>
+                                </a>
+                                <a href="menu.php?category=sisig" class="m-ref-cat-card">
+                                    <div class="m-ref-cat-icon"><i class="fas fa-bowl-rice"></i></div>
+                                    <span>Sisig &amp; Rice</span>
+                                </a>
+                                <a href="menu.php?category=crispy" class="m-ref-cat-card">
+                                    <div class="m-ref-cat-icon"><i class="fas fa-fire-burner"></i></div>
+                                    <span>Crispy Fry</span>
+                                </a>
+                                <a href="preorder.php" class="m-ref-cat-card">
+                                    <div class="m-ref-cat-icon"><i class="fas fa-calendar-check"></i></div>
+                                    <span>Celebrations</span>
+                                </a>
+                                <a href="shops.php" class="m-ref-cat-card">
+                                    <div class="m-ref-cat-icon"><i class="fas fa-store"></i></div>
+                                    <span>All Stores</span>
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Popular Searches Section (Reference Screen 1) -->
+                        <div class="m-ref-popular-searches">
+                            <div class="m-ref-section-head" style="margin-top: 10px;">
+                                <h3>Popular Searches</h3>
+                            </div>
+                            <div class="m-ref-popular-chips-row">
+                                <a href="menu.php?search=belly" class="m-pop-chip active"><i class="fas fa-check"></i> Crispy Belly</a>
+                                <a href="menu.php?search=whole" class="m-pop-chip active"><i class="fas fa-check"></i> Whole Roast</a>
+                                <a href="menu.php?search=sisig" class="m-pop-chip">Sisig Pack</a>
+                                <a href="menu.php?search=lechon" class="m-pop-chip">Lechon Kilo</a>
+                                <a href="shops.php" class="m-pop-chip">Cavite Hubs</a>
+                                <a href="preorder.php" class="m-pop-chip">Celebrations</a>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <?php if (empty($is_pickup_mode) && !empty($_SESSION['user_id'])): 
                         $first_name = explode(' ', $_SESSION['full_name'] ?? 'Guest')[0];
                     ?>
                         <div class="panda-welcome-banner" style="background: linear-gradient(135deg, #b3261e 0%, #8f261a 100%); color: #fff; padding: 28px 24px; border-radius: 24px; margin-bottom: 24px; box-shadow: 0 12px 28px rgba(179, 38, 30, 0.15); display: flex; justify-content: space-between; align-items: center; overflow: hidden; position: relative;">
@@ -2554,7 +4129,7 @@ body {
                                 <div class="panda-card-content">
                                     <h2 class="panda-card-title">Order Fresh Lechon</h2>
                                     <p class="panda-card-desc">Enjoy crispy skin and juicy meat, roasted fresh for every order.</p>
-                                    <a href="#marketplaceStores" class="panda-card-btn">Order Now</a>
+                                    <a href="shops.php" class="panda-card-btn">Order Now</a>
                                 </div>
                                 <div class="panda-card-graphic">
                                     <img src="assets/images/lechon_mascot_user.png" alt="Lechon Delights Mascot" class="panda-mascot-img" loading="lazy">
@@ -2591,7 +4166,7 @@ body {
                                 <div style="flex: 1;">
                                     <h4 style="margin: 0 0 4px 0; font-family: 'Outfit', sans-serif; font-size: 0.98rem; font-weight: 800; color: #1e293b;">Order Fresh Lechon</h4>
                                     <p style="margin: 0 0 10px 0; font-size: 0.8rem; color: #64748b; line-height: 1.4;">Crispy skin and juicy meat roasted fresh for your feast.</p>
-                                    <a href="#marketplaceStores" class="market-btn" style="min-height: 32px; padding: 0 14px; font-size: 0.78rem; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Order Now</a>
+                                    <a href="shops.php" class="market-btn" style="min-height: 32px; padding: 0 14px; font-size: 0.78rem; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Order Now</a>
                                 </div>
                             </div>
                             
@@ -2609,6 +4184,273 @@ body {
                         </div>
                     <?php endif; ?>
 
+                    <?php if (!empty($_SESSION['user_id'])): ?>
+                    <!-- New Customer Exclusive Welcome Deals (Logged-in Welcome Offer) -->
+                    <section class="first-user-deals-section" id="welcomeDealsSection">
+                        <div class="market-head" style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <div style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; background:#fff1f0; border:1px solid #fee4e2; border-radius:999px; color:#b3261e; font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:6px;">
+                                    <i class="fas fa-gift"></i> Customer Welcome Perks
+                                </div>
+                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.45rem; font-weight:800; color:#101828; margin:0 0 4px 0;">Your Exclusive Welcome Deals</h2>
+                                <p style="font-size:0.86rem; color:#475467; margin:0;">Thanks for logging in! Claim or copy any voucher code below to enjoy instant savings on your next order.</p>
+                            </div>
+                        </div>
+
+                        <div class="first-user-deals-grid">
+                            <!-- Deal 1 -->
+                            <article class="deal-card voucher-deal-ticket">
+                                <div class="voucher-ticket-stub">
+                                    <span class="voucher-ticket-stub-text">DISCOUNT</span>
+                                </div>
+                                <div class="voucher-ticket-body">
+                                    <div class="voucher-ticket-top">
+                                        <span class="voucher-ticket-discount">Flat ₱100 off*</span>
+                                        <div class="voucher-ticket-icon-wrap" title="Welcome Gift - 1st Order Only">
+                                            <div class="voucher-ticket-dots">
+                                                <span class="dot dot-1"></span>
+                                                <span class="dot dot-2"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="voucher-ticket-code">WELCOME100</div>
+                                    <div class="voucher-ticket-desc" title="Get ₱100 flat discount on your very first roasted lechon order.">₱100 off on first lechon order</div>
+                                    <div class="voucher-ticket-terms">*Min. spend ₱200</div>
+                                    <div style="display:flex; gap:6px;">
+                                        <button type="button" class="voucher-pill-btn" onclick="copyWelcomePromoCode('WELCOME100', this)" title="Copy promo code" style="flex:0 0 auto; width:auto; padding:5px 9px;">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                        <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('WELCOME100', 'shops.php')" class="voucher-pill-btn" style="flex:1;">
+                                            Apply Code
+                                        </a>
+                                    </div>
+                                </div>
+                            </article>
+
+                            <!-- Deal 2 -->
+                            <article class="deal-card voucher-deal-ticket">
+                                <div class="voucher-ticket-stub" style="background: linear-gradient(180deg, #027a48 0%, #05603a 100%);">
+                                    <span class="voucher-ticket-stub-text">FREE SHIP</span>
+                                </div>
+                                <div class="voucher-ticket-body">
+                                    <div class="voucher-ticket-top">
+                                        <span class="voucher-ticket-discount">Free Shipping*</span>
+                                        <div class="voucher-ticket-icon-wrap" title="Free Delivery - Whole & Half Lechon">
+                                            <div class="voucher-ticket-dots">
+                                                <span class="dot" style="background:#027a48;"></span>
+                                                <span class="dot" style="left:6px; background:#10b981; opacity:0.9;"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="voucher-ticket-code">FREESHIP</div>
+                                    <div class="voucher-ticket-desc" title="Zero delivery fee on party celebrations or whole lechon.">Zero delivery fee on whole/half lechon</div>
+                                    <div class="voucher-ticket-terms" style="color:#027a48;">*Min. spend ₱600</div>
+                                    <div style="display:flex; gap:6px;">
+                                        <button type="button" class="voucher-pill-btn" onclick="copyWelcomePromoCode('FREESHIP', this)" title="Copy promo code" style="flex:0 0 auto; width:auto; padding:5px 9px;">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                        <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('FREESHIP', 'preorder.php')" class="voucher-pill-btn" style="flex:1;">
+                                            Apply Code
+                                        </a>
+                                    </div>
+                                </div>
+                            </article>
+
+                            <!-- Deal 3 -->
+                            <article class="deal-card voucher-deal-ticket">
+                                <div class="voucher-ticket-stub" style="background: linear-gradient(180deg, #b45309 0%, #92400e 100%);">
+                                    <span class="voucher-ticket-stub-text">DISCOUNT</span>
+                                </div>
+                                <div class="voucher-ticket-body">
+                                    <div class="voucher-ticket-top">
+                                        <span class="voucher-ticket-discount">15% off*</span>
+                                        <div class="voucher-ticket-icon-wrap" title="Advance Booking - Save 15%">
+                                            <div class="voucher-ticket-dots">
+                                                <span class="dot" style="background:#b45309;"></span>
+                                                <span class="dot" style="left:6px; background:#f59e0b; opacity:0.9;"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="voucher-ticket-code">LECHON15</div>
+                                    <div class="voucher-ticket-desc" title="Save 15% (up to ₱300) when booking feasts in advance.">15% off weekend family feasts</div>
+                                    <div class="voucher-ticket-terms" style="color:#b45309;">*Min. spend ₱400</div>
+                                    <div style="display:flex; gap:6px;">
+                                        <button type="button" class="voucher-pill-btn" onclick="copyWelcomePromoCode('LECHON15', this)" title="Copy promo code" style="flex:0 0 auto; width:auto; padding:5px 9px;">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                        <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('LECHON15', 'preorder.php')" class="voucher-pill-btn" style="flex:1;">
+                                            Apply Code
+                                        </a>
+                                    </div>
+                                </div>
+                            </article>
+
+                            <!-- Deal 4 -->
+                            <article class="deal-card voucher-deal-ticket">
+                                <div class="voucher-ticket-stub" style="background: linear-gradient(180deg, #1d4ed8 0%, #1e40af 100%);">
+                                    <span class="voucher-ticket-stub-text">DISCOUNT</span>
+                                </div>
+                                <div class="voucher-ticket-body">
+                                    <div class="voucher-ticket-top">
+                                        <span class="voucher-ticket-discount">Flat ₱50 off*</span>
+                                        <div class="voucher-ticket-icon-wrap" title="Snack & Meal - Belly & Meals">
+                                            <div class="voucher-ticket-dots">
+                                                <span class="dot" style="background:#1d4ed8;"></span>
+                                                <span class="dot" style="left:6px; background:#3b82f6; opacity:0.9;"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="voucher-ticket-code">BELLY50</div>
+                                    <div class="voucher-ticket-desc" title="Discount on crispy lechon belly rolls or kilo boxes.">₱50 off crispy belly rolls &amp; packs</div>
+                                    <div class="voucher-ticket-terms" style="color:#1d4ed8;">*Min. spend ₱150</div>
+                                    <div style="display:flex; gap:6px;">
+                                        <button type="button" class="voucher-pill-btn" onclick="copyWelcomePromoCode('BELLY50', this)" title="Copy promo code" style="flex:0 0 auto; width:auto; padding:5px 9px;">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                        <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('BELLY50', 'shops.php')" class="voucher-pill-btn" style="flex:1;">
+                                            Apply Code
+                                        </a>
+                                    </div>
+                                </div>
+                            </article>
+                        </div>
+                    </section>
+                    <?php endif; ?>
+
+                    <?php
+                    $featured_store_promos = [];
+                    if (isset($conn) && $conn instanceof mysqli) {
+                        $sp_sql = "
+                            SELECT pv.*, 
+                                   COALESCE(NULLIF(TRIM(u.business_name), ''), u.full_name, 'Partner Shop') AS shop_name,
+                                   u.id AS seller_user_id
+                            FROM partner_vouchers pv
+                            JOIN users u ON pv.seller_id = u.id
+                            WHERE pv.is_active = 1
+                              AND pv.seller_id > 0
+                              AND (pv.start_at IS NULL OR pv.start_at <= NOW())
+                              AND (pv.end_at IS NULL OR pv.end_at >= NOW())
+                            ORDER BY pv.id DESC
+                            LIMIT 6
+                        ";
+                        $sp_res = @mysqli_query($conn, $sp_sql);
+                        if ($sp_res) {
+                            while ($sp_r = mysqli_fetch_assoc($sp_res)) {
+                                $featured_store_promos[] = $sp_r;
+                            }
+                            @mysqli_free_result($sp_res);
+                        }
+                    }
+                    ?>
+                    <?php if (!empty($featured_store_promos)): ?>
+                    <!-- Shop Owner Vouchers & Promotions Section -->
+                    <section class="store-promos-section" style="margin-bottom: 32px;">
+                        <div class="market-head" style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <div style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; background:#eff8ff; border:1px solid #b2ddff; border-radius:999px; color:#175cd3; font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:6px;">
+                                    <i class="fas fa-store"></i> Verified Partner Store Offers
+                                </div>
+                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.45rem; font-weight:800; color:#101828; margin:0 0 4px 0;">Partner Store Deals &amp; Vouchers</h2>
+                                <p style="font-size:0.84rem; color:#475467; margin:0;">Special discounts and vouchers from our verified partners. Swipe to see more deals.</p>
+                            </div>
+                        </div>
+                        <div class="partner-store-deals-grid" id="partnerStoreDealsGrid">
+                            <?php foreach ($featured_store_promos as $sp): ?>
+                                <?php
+                                    $is_pct = ($sp['discount_type'] === 'percent');
+                                    $sp_disc = $is_pct ? (rtrim(rtrim(number_format((float)$sp['discount_value'], 2), '0'), '.') . '% off*') : ('Flat ₱' . number_format((float)$sp['discount_value'], 0) . ' off*');
+                                    $sp_min = (float)$sp['min_order_amount'];
+                                    $sp_min_label = $sp_min > 0 ? ('*Min. spend ₱' . number_format($sp_min, 2)) : '*Terms & conditions apply';
+                                    $sp_code = htmlspecialchars((string)$sp['code']);
+                                    $sp_seller_id = (int)$sp['seller_id'];
+                                    $sp_shop_name = htmlspecialchars((string)$sp['shop_name']);
+                                    $sp_target_url = 'menu.php?seller_id=' . $sp_seller_id;
+                                ?>
+                                <article class="deal-card voucher-deal-ticket">
+                                    <div class="voucher-ticket-stub" style="background: linear-gradient(180deg, #175cd3 0%, #1e40af 100%);">
+                                        <span class="voucher-ticket-stub-text">PROMO</span>
+                                    </div>
+                                    <div class="voucher-ticket-body">
+                                        <div class="voucher-ticket-top">
+                                            <span class="voucher-ticket-discount"><?php echo htmlspecialchars($sp_disc); ?></span>
+                                            <div class="voucher-ticket-icon-wrap" title="<?php echo $sp_shop_name; ?>">
+                                                <div class="voucher-ticket-dots">
+                                                    <span class="dot" style="background:#175cd3;"></span>
+                                                    <span class="dot" style="left:6px; background:#60a5fa; opacity:0.9;"></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="voucher-ticket-code"><?php echo $sp_code; ?></div>
+                                        <div class="voucher-ticket-desc" title="<?php echo htmlspecialchars((string)$sp['name']); ?>"><?php echo htmlspecialchars((string)$sp['name']); ?></div>
+                                        <div class="voucher-ticket-terms" style="color:#175cd3;"><?php echo htmlspecialchars($sp_min_label); ?></div>
+                                        <div style="display:flex; gap:6px;">
+                                            <button type="button" class="voucher-pill-btn" onclick="copyWelcomePromoCode('<?php echo $sp_code; ?>', this)" title="Copy promo code" style="flex:0 0 auto; width:auto; padding:5px 9px;">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                            <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('<?php echo $sp_code; ?>', '<?php echo $sp_target_url; ?>')" class="voucher-pill-btn" style="flex:1;">
+                                                Apply Code
+                                            </a>
+                                        </div>
+                                    </div>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+                    <?php endif; ?>
+
+                    <?php 
+                    $featured_ads = paGetActiveAdvertisements($conn, 6);
+                    if ($scoped_partner_seller_id > 0 && !empty($featured_ads)) {
+                        $featured_ads = array_values(array_filter($featured_ads, function($ad) use ($scoped_partner_seller_id) {
+                            return (int)($ad['seller_id'] ?? 0) === (int)$scoped_partner_seller_id;
+                        }));
+                    }
+                    if (!empty($featured_ads)): 
+                    ?>
+                    <!-- Partner Promos & Advertisements Section -->
+                    <section class="partner-ads-section" style="margin-bottom: 32px;">
+                        <div class="market-head" style="margin-bottom: 14px;">
+                            <div>
+                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.45rem; font-weight:800; color:#171922; display:flex; align-items:center; gap:8px;">
+                                    <i class="fas fa-bullhorn" style="color:#ef6b2e;"></i> Featured Promos & Partner Deals
+                                </h2>
+                                <p style="font-size:0.88rem; color:#7b6d64; margin:0;">Exclusive discounts, voucher codes, and special offers from store owners and partner sellers.</p>
+                            </div>
+                        </div>
+
+                        <div class="partner-ads-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 18px;">
+                            <?php foreach ($featured_ads as $ad): 
+                                $theme_class = htmlspecialchars($ad['bg_theme'] ?: 'gradient-red');
+                                $seller_name = htmlspecialchars($ad['business_name'] ?: 'Partner Store');
+                                $target_url = htmlspecialchars($ad['target_url'] ?: 'menu.php?seller_id=' . $ad['seller_id']);
+                            ?>
+                                <article class="partner-ad-card <?php echo $theme_class; ?>">
+                                    <div class="partner-ad-header">
+                                        <div class="partner-ad-store">
+                                            <i class="fas fa-store"></i> <?php echo $seller_name; ?>
+                                        </div>
+                                        <?php if (!empty($ad['discount_tag'])): ?>
+                                            <span class="partner-ad-badge"><?php echo htmlspecialchars($ad['discount_tag']); ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <h3 class="partner-ad-title"><?php echo htmlspecialchars($ad['title']); ?></h3>
+                                    <p class="partner-ad-desc"><?php echo htmlspecialchars($ad['subtitle'] ?: 'Special promotional offer for customers.'); ?></p>
+                                    
+                                    <div class="partner-ad-footer">
+                                        <?php if (!empty($ad['promo_code'])): ?>
+                                            <div class="partner-ad-code" title="Use voucher code at checkout">
+                                                <i class="fas fa-ticket-alt"></i> <span><?php echo htmlspecialchars($ad['promo_code']); ?></span>
+                                            </div>
+                                        <?php endif; ?>
+                                        <a href="<?php echo $target_url; ?>" class="partner-ad-btn">
+                                            Claim Deal <i class="fas fa-arrow-right"></i>
+                                        </a>
+                                    </div>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+                    <?php endif; ?>
 
                     <?php if (!empty($top_rated_stores)): ?>
                     <!-- Foodpanda Brands Carousel: Top Lechon Houses -->
@@ -2623,10 +4465,151 @@ body {
                             <?php foreach ($top_rated_stores as $top_store): ?>
                                 <a href="<?php echo htmlspecialchars($top_store['menu_link']); ?>" class="panda-brand-item">
                                     <div class="panda-brand-avatar" style="background-image:url('<?php echo htmlspecialchars($top_store['image']); ?>');"></div>
-                                    <div class="panda-brand-name"><?php echo htmlspecialchars($top_store['name']); ?></div>
+                                    <div class="panda-brand-name"><?php echo htmlspecialchars(fixMojibakeText($top_store['name'])); ?></div>
                                     <div class="panda-brand-meta">
                                         <i class="fas fa-star" style="color:#ef6b2e;"></i> <?php echo $top_store['rating'] > 0 ? number_format((float)$top_store['rating'], 1) : '4.9'; ?>
                                         • 25-35m
+                                    </div>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+                    <?php endif; ?>
+
+                    <?php if (!empty($featured_products)): ?>
+                    <!-- Prominent Best Sellers & Top Rated Dishes Section -->
+                    <section class="bestsellers-section" style="margin-bottom: 24px; padding: 18px 20px; background: linear-gradient(135deg, #fff9f2 0%, #ffffff 100%); border: 1px solid #efddcd; border-radius: 16px; box-shadow: 0 6px 18px rgba(42,33,29,0.04);">
+                        <div class="market-head" style="margin-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <div style="display:inline-flex; align-items:center; gap:5px; padding:3px 10px; background:#fff1f2; border:1px solid #ffe4e6; border-radius:999px; color:#b3261e; font-size:0.72rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">
+                                    <i class="fas fa-fire" style="color:#ef6b2e;"></i> Top Customer Choices
+                                </div>
+                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.3rem; font-weight:800; color:#171922; margin:0 0 3px 0;">Best Sellers & Top Rated Dishes</h2>
+                                <p style="font-size:0.82rem; color:#7b6d64; margin:0;">Hand-picked customer favorites with high sales volume and top customer ratings across Cavite.</p>
+                            </div>
+                            <a href="menu.php" class="btn-outline btn-sm" style="border-radius:999px; font-weight:700; text-decoration:none; padding:6px 14px; font-size:0.78rem;">
+                                Explore Full Menu <i class="fas fa-arrow-right" style="margin-left:4px;"></i>
+                            </a>
+                        </div>
+
+                        <div class="bestsellers-grid">
+                            <?php foreach ($featured_products as $idx => $product): ?>
+                                <?php
+                                $prod_id_val = (string)($product['id'] ?? '');
+                                $is_prod_fav = !empty($favorite_product_ids[(int)$prod_id_val]);
+                                $rank_num = $idx + 1;
+                                ?>
+                                <a href="<?php echo htmlspecialchars($product['menu_link'] ?? 'menu.php'); ?>" class="bestseller-card panda-card-link" style="background:#ffffff; border:1px solid #efddcd; border-radius:14px; overflow:hidden; display:flex; flex-direction:column; transition:transform 0.25s ease, box-shadow 0.25s ease; text-decoration:none; position:relative;">
+                                    <div class="store-card-image-wrap" style="height: 115px; position:relative; overflow:hidden;">
+                                        <div class="market-store-row-thumb" style="background-image: url('<?php echo htmlspecialchars($product['image']); ?>'); width:100%; height:100%; background-size:cover; background-position:center; transition:transform 0.4s ease;"></div>
+                                        <span class="bestseller-rank-badge" style="position:absolute; top:8px; left:8px; background:linear-gradient(135deg, #b3261e, #ef6b2e); color:#ffffff; font-weight:800; font-size:0.68rem; padding:3px 8px; border-radius:999px; box-shadow:0 3px 8px rgba(179,38,30,0.25); display:inline-flex; align-items:center; gap:3px; z-index:2;">
+                                            <i class="fas fa-fire"></i> #<?php echo $rank_num; ?> Best Seller
+                                        </span>
+                                        <button
+                                            type="button"
+                                            class="market-store-favorite-btn<?php echo $is_prod_fav ? ' is-active' : ''; ?>"
+                                            data-favorite-toggle="1"
+                                            data-favorite-type="product"
+                                            data-favorite-product-id="<?php echo htmlspecialchars($prod_id_val); ?>"
+                                            data-favorite-active="<?php echo $is_prod_fav ? '1' : '0'; ?>"
+                                            aria-pressed="<?php echo $is_prod_fav ? 'true' : 'false'; ?>"
+                                            title="<?php echo $is_prod_fav ? 'Remove from favorites' : 'Save to favorites'; ?>"
+                                            style="position:absolute; top:8px; right:8px; z-index:2; width:28px; height:28px; font-size:0.75rem;">
+                                            <i class="<?php echo $is_prod_fav ? 'fas' : 'far'; ?> fa-heart"></i>
+                                        </button>
+                                    </div>
+
+                                    <div class="store-card-details" style="padding: 10px 12px; display:flex; flex-direction:column; flex:1;">
+                                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:3px;">
+                                            <h3 style="font-family:'Outfit',sans-serif; font-size:0.88rem; font-weight:800; color:#171922; margin:0; line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; flex:1;"><?php echo htmlspecialchars($product['name']); ?></h3>
+                                            <?php if ($product['rating'] > 0): ?>
+                                            <span style="font-size:0.78rem; font-weight:800; color:#171922; display:inline-flex; align-items:center; gap:2px; white-space:nowrap;">
+                                                <i class="fas fa-star" style="color:#ef6b2e;"></i><?php echo number_format((float)$product['rating'], 1); ?>
+                                            </span>
+                                            <?php endif; ?>
+                                        </div>
+                                        
+                                        <div style="font-size:0.75rem; color:#7b6d64; margin-bottom:8px; display:flex; align-items:center; gap:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                            <i class="fas fa-store" style="color:#ef6b2e;"></i> <span><?php echo htmlspecialchars($product['store']); ?></span>
+                                        </div>
+
+                                        <div style="margin-top:auto; padding-top:8px; border-top:1px dashed #efddcd; display:flex; justify-content:space-between; align-items:center;">
+                                            <div>
+                                                <strong style="font-size:0.92rem; color:#b3261e; font-weight:800; display:block;">PHP <?php echo number_format((float)$product['price'], 2); ?></strong>
+                                                <span style="font-size:0.7rem; color:#7b6d64; font-weight:600;"><?php echo number_format((int)$product['sold']); ?> sold</span>
+                                            </div>
+                                            <span class="btn-primary btn-sm" style="padding:5px 10px; font-size:0.72rem; border-radius:6px; pointer-events:none; background:linear-gradient(135deg, #b3261e, #ef6b2e); color:#fff; font-weight:700;">
+                                                Order Now <i class="fas fa-arrow-right" style="font-size:0.7rem;"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+                    <?php endif; ?>
+
+                    <?php if (!empty($stores)): 
+                        $top_stores_swipe = array_slice($stores, 0, 8);
+                    ?>
+                    <!-- Top Restaurants Horizontal Swipe Track (Reference Screen 2 & 5) -->
+                    <section class="m-ref-top-shops-section" style="margin-bottom: 24px;">
+                        <div class="market-head" style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 8px;">
+                            <div>
+                                <div style="display:inline-flex; align-items:center; gap:5px; padding:3px 10px; background:#eff8ff; border:1px solid #b2ddff; border-radius:999px; color:#175cd3; font-size:0.72rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">
+                                    <i class="fas fa-award"></i> Verified Partners
+                                </div>
+                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.25rem; font-weight:800; color:#171922; margin:0 0 3px 0;">Top Restaurants</h2>
+                                <p style="font-size:0.8rem; color:#7b6d64; margin:0;">Swipe to explore top rated lechon shops and pickup branches.</p>
+                            </div>
+                            <a href="shops.php" class="btn-outline btn-sm" style="border-radius:999px; font-weight:700; text-decoration:none; padding:5px 12px; font-size:0.78rem;">
+                                See all <i class="fas fa-arrow-right" style="margin-left:4px;"></i>
+                            </a>
+                        </div>
+
+                        <div class="top-shops-swipe-grid">
+                            <?php foreach ($top_stores_swipe as $s_idx => $s_item): ?>
+                                <?php
+                                $s_price = $s_item['start'] !== null ? 'PHP ' . number_format((float)$s_item['start'], 2) : 'Starts at PHP 450.00';
+                                $s_type_label = $s_item['type'] === 'branch' ? 'Pickup branch' : ($s_item['type'] === 'partner' ? 'Partner store' : 'Seller');
+                                $s_key_val = (string)($s_item['key'] ?? '');
+                                $s_is_fav = !empty($favorite_store_keys[$s_key_val]);
+                                $s_city_lbl = !empty($s_item['city']) ? $s_item['city'] . ', Cavite' : $s_item['location'];
+                                ?>
+                                <a href="<?php echo htmlspecialchars($s_item['menu_link']); ?>" class="market-store-row panda-card-link" style="background:#ffffff; border:1px solid #efddcd; border-radius:18px; overflow:hidden; display:flex; flex-direction:column; text-decoration:none; position:relative; box-shadow:0 4px 14px -2px rgba(16,24,40,0.04);">
+                                    <div class="store-card-image-wrap" style="height:120px; position:relative; overflow:hidden; border-radius:14px; margin:6px;">
+                                        <div class="market-store-row-thumb" style="background-image:url('<?php echo htmlspecialchars($s_item['image']); ?>'); width:100%; height:100%; background-size:cover; background-position:center;"></div>
+                                        <span class="market-type-pill"><?php echo htmlspecialchars($s_type_label); ?></span>
+                                        <span class="market-time-pill"><?php echo !empty($s_item['is_open']) ? 'Open now' : 'Closed now'; ?></span>
+                                        <button
+                                            type="button"
+                                            class="market-store-favorite-btn<?php echo $s_is_fav ? ' is-active' : ''; ?>"
+                                            data-favorite-toggle="1"
+                                            data-favorite-type="store"
+                                            data-favorite-store-key="<?php echo htmlspecialchars($s_key_val); ?>"
+                                            data-favorite-active="<?php echo $s_is_fav ? '1' : '0'; ?>"
+                                            aria-pressed="<?php echo $s_is_fav ? 'true' : 'false'; ?>"
+                                            title="<?php echo $s_is_fav ? 'Remove from favorites' : 'Save to favorites'; ?>"
+                                            style="position:absolute; top:8px; right:8px; z-index:2; width:28px; height:28px; font-size:0.75rem;">
+                                            <i class="<?php echo $s_is_fav ? 'fas' : 'far'; ?> fa-heart"></i>
+                                        </button>
+                                    </div>
+                                    <div class="store-card-details" style="padding:8px 10px 10px 10px; display:flex; flex-direction:column; flex:1; justify-content:space-between;">
+                                        <div>
+                                            <div class="store-card-row-head" style="display:flex; justify-content:space-between; align-items:flex-start; gap:4px; margin-bottom:2px;">
+                                                <h3 style="font-size:0.86rem; font-weight:800; line-height:1.25; margin:0; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical;"><?php echo htmlspecialchars($s_item['name']); ?></h3>
+                                                <span style="font-size:0.75rem; font-weight:800; color:#171922; display:inline-flex; align-items:center; gap:2px; white-space:nowrap;">
+                                                    <i class="fas fa-star" style="color:#ef6b2e;"></i><?php echo $s_item['rating'] > 0 ? number_format((float)$s_item['rating'], 1) : 'New'; ?>
+                                                </span>
+                                            </div>
+                                            <div style="font-size:0.72rem; color:#667085; display:flex; align-items:center; gap:4px; margin-bottom:4px;">
+                                                <i class="fas fa-location-dot" style="color:#b3261e; font-size:0.68rem;"></i> <?php echo htmlspecialchars($s_city_lbl); ?>
+                                            </div>
+                                        </div>
+                                        <div class="panda-card-footer-line" style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #efddcd; padding-top:6px; margin-top:6px;">
+                                            <span style="font-size:0.72rem; color:#475467; font-weight:600;"><i class="fas fa-truck-fast" style="color:#175cd3;"></i> 20-30 min</span>
+                                            <strong class="panda-card-price-text" style="font-size:0.85rem; color:#b3261e; font-weight:800;"><?php echo htmlspecialchars($s_price); ?></strong>
+                                        </div>
                                     </div>
                                 </a>
                             <?php endforeach; ?>
@@ -2638,12 +4621,7 @@ body {
                         <div class="panda-store-header-bar">
                             <div class="panda-store-header-title">
                                 <h2 class="panda-main-heading">All Cavite stores</h2>
-                            </div>
-                            <div class="panda-search-bar-wrap">
-                                <label class="panda-search-bar" for="gridStoreSearch">
-                                    <i class="fas fa-magnifying-glass search-icon"></i>
-                                    <input type="text" id="gridStoreSearch" placeholder="Search stores, whole lechon, belly, cities...">
-                                </label>
+                                <p style="font-size: 0.8rem; color: #7b6d64; margin: 2px 0 0;">Swipe to explore verified stores and branches across Cavite.</p>
                             </div>
                         </div>
 
@@ -2685,8 +4663,7 @@ body {
                                             data-favorite-store-key="<?php echo htmlspecialchars($store_key_value); ?>"
                                             data-favorite-active="<?php echo $is_store_favorite ? '1' : '0'; ?>"
                                             aria-pressed="<?php echo $is_store_favorite ? 'true' : 'false'; ?>"
-                                            title="<?php echo $is_store_favorite ? 'Remove from favorites' : 'Save to favorites'; ?>"
-                                            onclick="event.preventDefault(); event.stopPropagation();">
+                                            title="<?php echo $is_store_favorite ? 'Remove from favorites' : 'Save to favorites'; ?>">
                                             <i class="<?php echo $is_store_favorite ? 'fas' : 'far'; ?> fa-heart"></i>
                                         </button>
                                     </div>
@@ -2705,8 +4682,14 @@ body {
                                             <?php echo htmlspecialchars($store['summary']); ?>
                                         </div>
                                         
+                                        <!-- DSS Distance & Delivery ETA Badges -->
+                                        <div class="panda-card-dss-info" style="display:flex; align-items:center; gap:8px; margin:6px 0; font-size:0.75rem; font-weight:700;">
+                                            <span style="display:inline-flex; align-items:center; gap:4px; background:#fff1f0; color:#b3261e; padding:3px 8px; border-radius:6px; border:1px solid #fee4e2;" data-role="dss-eta"><i class="fas fa-truck-fast"></i> <span data-role="eta-text">20-30 min</span></span>
+                                            <span style="display:inline-flex; align-items:center; gap:4px; background:#eff8ff; color:#175cd3; padding:3px 8px; border-radius:6px; border:1px solid #b2ddff;" data-role="dss-distance"><i class="fas fa-location-dot"></i> <span data-role="distance-text">Near Cavite</span></span>
+                                        </div>
+
                                         <div class="panda-card-footer-line">
-                                            <span class="panda-card-city"><i class="fas fa-location-dot"></i> <?php echo htmlspecialchars($city_label); ?></span>
+                                            <span class="panda-card-city"><i class="fas fa-store"></i> <?php echo htmlspecialchars($city_label); ?></span>
                                             <strong class="panda-card-price-text"><?php echo htmlspecialchars($price); ?></strong>
                                         </div>
                                     </div>
@@ -2718,74 +4701,68 @@ body {
                             <button type="button" class="market-btn-soft" id="marketLoadMoreBtn">Show more stores</button>
                         </div>
                     </section>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <?php if (!empty($featured_products)): ?>
-    <section class="market-section" style="padding-top: 10px;">
-        <div class="container">
-            <div class="panda-store-header-bar" style="margin-bottom: 20px;">
-                <div class="panda-store-header-title">
-                    <h2 class="panda-main-heading">Popular picks right now</h2>
-                    <p style="margin: 4px 0 0 0; font-size: 0.88rem; color: #667085;">These featured dishes are pulled from your live catalog and surfaced using product activity, reviews, and ratings.</p>
-                </div>
-            </div>
-            <div class="market-store-list store-list-grid" style="grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)) !important;">
-                <?php foreach ($featured_products as $product): ?>
-                    <?php
-                    $prod_id_val = (string)($product['id'] ?? '');
-                    $is_prod_fav = !empty($favorite_store_keys['product_' . $prod_id_val]);
-                    ?>
-                    <a href="<?php echo htmlspecialchars($product['menu_link'] ?? 'menu.php'); ?>" class="market-product-card panda-card-link">
-                        <div class="store-card-image-wrap" style="height: 140px;">
-                            <div class="market-store-row-thumb" style="background-image: url('<?php echo htmlspecialchars($product['image']); ?>');"></div>
-                            <span class="market-type-pill" style="background: rgba(179,38,30,0.88);"><?php echo htmlspecialchars($product['category']); ?></span>
-                            <button
-                                type="button"
-                                class="market-store-favorite-btn<?php echo $is_prod_fav ? ' is-active' : ''; ?>"
-                                data-favorite-toggle="1"
-                                data-favorite-type="product"
-                                data-favorite-product-id="<?php echo htmlspecialchars($prod_id_val); ?>"
-                                data-favorite-active="<?php echo $is_prod_fav ? '1' : '0'; ?>"
-                                aria-pressed="<?php echo $is_prod_fav ? 'true' : 'false'; ?>"
-                                title="<?php echo $is_prod_fav ? 'Remove from favorites' : 'Save to favorites'; ?>"
-                                onclick="event.preventDefault(); event.stopPropagation();">
-                                <i class="<?php echo $is_prod_fav ? 'fas' : 'far'; ?> fa-heart"></i>
-                            </button>
-                        </div>
-                        <div class="store-card-details">
-                            <div class="store-card-row-head">
-                                <h3><?php echo htmlspecialchars($product['name']); ?></h3>
-                                <?php if ($product['rating'] > 0): ?>
-                                <span class="store-card-rating">
-                                    <i class="fas fa-star" style="color: #ef6b2e; margin-right: 3px;"></i><?php echo number_format((float)$product['rating'], 1); ?>
-                                </span>
-                                <?php endif; ?>
-                            </div>
-                            
-                            <div class="store-card-summary" style="height: auto; font-size: 0.8rem; color: #64748b; margin-bottom: 8px;">
-                                <i class="fas fa-shop" style="color: #ef6b2e; margin-right: 4px;"></i><?php echo htmlspecialchars($product['store']); ?>
-                            </div>
-                            
-                            <div class="panda-card-footer-line">
-                                <strong class="panda-card-price-text">PHP <?php echo number_format((float)$product['price'], 2); ?></strong>
-                                <span style="font-size: 0.76rem; color: #64748b; font-weight: 600;"><?php echo number_format((int)$product['sold']); ?> sold</span>
-                            </div>
-                        </div>
-                    </a>
-                <?php endforeach; ?>
-            </div>
-        </div>
-    </section>
-    <?php endif; ?>
 
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // Auto-initialize Foodpanda Leaflet Pick-up Map for Nearby Stores
+    const pickupMapElement = document.getElementById('pickupLeafletMap');
+    let pickupLeafletMap = null;
+
+    if (pickupMapElement && typeof L !== 'undefined') {
+        setTimeout(function() {
+            pickupLeafletMap = L.map('pickupLeafletMap').setView([14.3294, 120.9367], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(pickupLeafletMap);
+
+            const storeIcon = L.divIcon({
+                className: 'pickup-leaflet-marker',
+                html: '<div style="background:#b3261e; color:#fff; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid #fff; box-shadow:0 4px 12px rgba(0,0,0,0.3); font-size:15px;"><i class="fas fa-location-dot"></i></div>',
+                iconSize: [34, 34],
+                iconAnchor: [17, 34],
+                popupAnchor: [0, -34]
+            });
+
+            const rowsList = Array.from(document.querySelectorAll('.market-store-row'));
+            const bounds = [];
+
+            rowsList.forEach(row => {
+                const lat = parseFloat(row.dataset.lat || '');
+                const lng = parseFloat(row.dataset.lng || '');
+                const storeTitle = row.querySelector('.market-store-row-title')?.textContent.trim() || 'Lechon Branch';
+                const storeLink = row.dataset.href || 'menu.php';
+
+                if (Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0) {
+                    bounds.push([lat, lng]);
+                    const marker = L.marker([lat, lng], { icon: storeIcon }).addTo(pickupLeafletMap);
+                    marker.bindPopup(`
+                        <div style="font-family:'Outfit',sans-serif; padding:4px;">
+                            <strong style="font-size:14px; color:#2a211d;">${storeTitle}</strong>
+                            <div style="font-size:12px; color:#667085; margin:4px 0 8px 0;">Pickup Branch Available</div>
+                            <a href="${storeLink}" style="background:#b3261e; color:#fff; padding:6px 12px; border-radius:6px; font-size:12px; font-weight:700; text-decoration:none; display:inline-block;">View Menu & Order</a>
+                        </div>
+                    `);
+                }
+            });
+
+            if (bounds.length > 0) {
+                pickupLeafletMap.fitBounds(bounds, { padding: [40, 40] });
+            }
+            pickupLeafletMap.invalidateSize();
+        }, 150);
+    }
+
+    if (window.location.search.includes('type=pickup')) {
+        const filterBranchOnly = document.getElementById('filterBranchOnly');
+        if (filterBranchOnly && !filterBranchOnly.checked) {
+            filterBranchOnly.checked = true;
+        }
+    }
+
     const heroSearch = document.getElementById('heroStoreSearch');
     const gridSearch = document.getElementById('gridStoreSearch');
     const headerSearch = document.getElementById('marketHeaderSearch');
@@ -3048,22 +5025,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function sortRows() {
         if (!storeGrid) return;
-        if ((currentSort === 'distance' || currentSort === 'fastest') && !locationReady) {
-            if (detectNearestStatus) detectNearestStatus.textContent = 'Enable location first to sort by distance or fastest delivery.';
-        }
         const sorted = [...rows].sort(function (left, right) {
             if (currentSort === 'top_rated') {
                 return getSortValue(left, 'top_rated') - getSortValue(right, 'top_rated');
             }
             if (currentSort === 'fastest') {
-                const leftMinutes = parseFloat(left.dataset.minutes || '');
-                const rightMinutes = parseFloat(right.dataset.minutes || '');
-                const leftValue = Number.isFinite(leftMinutes) ? leftMinutes : getSortValue(left, 'distance');
-                const rightValue = Number.isFinite(rightMinutes) ? rightMinutes : getSortValue(right, 'distance');
-                return leftValue - rightValue;
+                const leftMinutes = parseFloat(left.dataset.minutes || '999');
+                const rightMinutes = parseFloat(right.dataset.minutes || '999');
+                return leftMinutes - rightMinutes;
             }
             if (currentSort === 'distance') {
-                return getSortValue(left, 'distance') - getSortValue(right, 'distance');
+                const leftDist = parseFloat(left.dataset.distance || '999');
+                const rightDist = parseFloat(right.dataset.distance || '999');
+                return leftDist - rightDist;
             }
             return getSortValue(left, 'relevance') - getSortValue(right, 'relevance');
         });
@@ -3138,7 +5112,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const matchLive = useServerMatches ? true : (!filterLiveOnly || !filterLiveOnly.checked || isOpen);
             const matchPartner = useServerMatches ? true : (!filterPartnerOnly || !filterPartnerOnly.checked || isPartner);
             const matchBranch = useServerMatches ? true : (!filterBranchOnly || !filterBranchOnly.checked || isBranch);
-            const matchNearby = !filterNearbyOnly || !filterNearbyOnly.checked || (locationReady && Number.isFinite(distance) && distance <= 35);
+            const matchNearby = !filterNearbyOnly || !filterNearbyOnly.checked || (Number.isFinite(distance) && distance <= 15);
             if (matchQuery && matchRatings && matchLive && matchPartner && matchBranch && matchNearby) {
                 matchedRows.push(row);
             }
@@ -3157,7 +5131,7 @@ document.addEventListener('DOMContentLoaded', function () {
         updatePaginationUi(shownCount, matchedCount, shouldUseServerResults, useServerMatches);
     }
 
-    function updateNearest(lat, lng) {
+    function updateNearest(lat, lng, isUserGps) {
         let nearestName = '';
         let nearestDistance = Number.POSITIVE_INFINITY;
 
@@ -3165,21 +5139,38 @@ document.addEventListener('DOMContentLoaded', function () {
             const storeLat = parseFloat(row.dataset.lat || '');
             const storeLng = parseFloat(row.dataset.lng || '');
             const timeLabel = row.querySelector('[data-role="time-label"]');
+            const etaText = row.querySelector('[data-role="eta-text"]');
+            const distanceText = row.querySelector('[data-role="distance-text"]');
 
-            if (!Number.isFinite(storeLat) || !Number.isFinite(storeLng)) {
-                row.dataset.distance = '';
-                row.dataset.minutes = '';
+            if (!Number.isFinite(storeLat) || !Number.isFinite(storeLng) || storeLat === 0 || storeLng === 0) {
+                row.dataset.distance = '999';
+                row.dataset.minutes = '999';
                 if (timeLabel) timeLabel.textContent = row.dataset.open === '1' ? 'Open now' : 'Closed now';
+                if (etaText) etaText.textContent = '20-30 min';
+                if (distanceText) distanceText.textContent = 'Near Cavite';
                 return;
             }
 
             const distanceKm = haversineKm(lat, lng, storeLat, storeLng);
-            const minutes = Math.max(5, Math.round((distanceKm * 4.2) + 6));
+            const minTime = Math.max(15, Math.round((distanceKm * 3.5) + 15));
+            const maxTime = minTime + 10;
+            
             row.dataset.distance = distanceKm.toFixed(2);
-            row.dataset.minutes = minutes.toString();
+            row.dataset.minutes = minTime.toString();
+
+            const isOpen = row.dataset.open === '1';
+            const etaString = minTime + '-' + maxTime + ' min';
 
             if (timeLabel) {
-                timeLabel.textContent = distanceKm.toFixed(1) + ' km | ' + minutes + ' min';
+                timeLabel.innerHTML = isOpen 
+                    ? '<i class="fas fa-truck-fast"></i> ' + etaString + ' &bull; ' + distanceKm.toFixed(1) + ' km' 
+                    : '<i class="fas fa-store-slash"></i> Closed &bull; ' + distanceKm.toFixed(1) + ' km';
+            }
+            if (etaText) {
+                etaText.textContent = etaString;
+            }
+            if (distanceText) {
+                distanceText.textContent = distanceKm.toFixed(1) + ' km away';
             }
 
             if (distanceKm < nearestDistance) {
@@ -3189,17 +5180,27 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         locationReady = true;
-        if (detectNearestStatus) detectNearestStatus.textContent = 'Location detected. Stores can now be sorted by fastest delivery or distance.';
+        if (isUserGps && detectNearestStatus) {
+            detectNearestStatus.textContent = 'GPS location detected! Stores sorted by exact real-time distance and delivery ETA.';
+        } else if (detectNearestStatus) {
+            detectNearestStatus.textContent = 'Calculated distances & delivery ETAs for Cavite stores.';
+        }
         if (distanceSummary) {
             distanceSummary.textContent = nearestName !== ''
-                ? 'Nearest detected shop: ' + nearestName + ' at about ' + nearestDistance.toFixed(1) + ' km from your current location.'
-                : 'Location detected, but no stores with saved coordinates were found.';
+                ? 'Nearest Cavite store: ' + nearestName + ' (~' + nearestDistance.toFixed(1) + ' km away)'
+                : 'Store distances updated based on Cavite location.';
         }
 
-        currentSort = 'distance';
-        sortInputs.forEach(function (input) {
-            input.checked = input.value === 'distance';
-        });
+        if (isUserGps) {
+            const nearestSection = document.getElementById('nearestShopsSidebarSection');
+            if (nearestSection) {
+                nearestSection.style.display = 'none';
+            }
+            currentSort = 'distance';
+            sortInputs.forEach(function (input) {
+                input.checked = input.value === 'distance';
+            });
+        }
         sortRows();
         applyFilters(heroSearch || gridSearch, { preservePagination: true });
     }
@@ -3217,10 +5218,6 @@ document.addEventListener('DOMContentLoaded', function () {
     [filterRatings4, filterLiveOnly, filterPartnerOnly, filterBranchOnly, filterNearbyOnly].forEach(function (control) {
         if (!control) return;
         control.addEventListener('change', function () {
-            if (control === filterNearbyOnly && filterNearbyOnly.checked && !locationReady) {
-                if (detectNearestStatus) detectNearestStatus.textContent = 'Nearby filter will start working after you allow location access.';
-                if (distanceSummary) distanceSummary.textContent = 'Use "Detect nearest shops" to filter the store list by real distance.';
-            }
             applyFilters(heroSearch || gridSearch);
         });
     });
@@ -3259,16 +5256,92 @@ document.addEventListener('DOMContentLoaded', function () {
             if (detectNearestStatus) detectNearestStatus.textContent = 'Detecting your current location...';
             navigator.geolocation.getCurrentPosition(
                 function (position) {
-                    updateNearest(position.coords.latitude, position.coords.longitude);
+                    updateNearest(position.coords.latitude, position.coords.longitude, true);
                 },
                 function () {
-                    if (detectNearestStatus) detectNearestStatus.textContent = 'Location permission was denied. You can still browse and sort by rating.';
-                    if (distanceSummary) distanceSummary.textContent = 'Nearest Cavite-style sorting needs browser location access. Please allow location if you want true nearest results.';
+                    if (detectNearestStatus) detectNearestStatus.textContent = 'Location permission was denied. Default Cavite distances remain active.';
                 },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
             );
         });
     }
+
+    function checkStoredAddressOnIndex() {
+        try {
+            const raw = localStorage.getItem('market_address_payload');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && Number.isFinite(parseFloat(parsed.latitude)) && Number.isFinite(parseFloat(parsed.longitude))) {
+                    const lat = parseFloat(parsed.latitude);
+                    const lng = parseFloat(parsed.longitude);
+                    if (lat !== 0 && lng !== 0) {
+                        updateNearest(lat, lng, true);
+                        return true;
+                    }
+                }
+            }
+        } catch (e) {}
+        return false;
+    }
+
+    function resetToDefaultCaviteScope() {
+        locationReady = false;
+        rows.forEach(function (row) {
+            const timeLabel = row.querySelector('[data-role="time-label"]');
+            const etaText = row.querySelector('[data-role="eta-text"]');
+            const distanceText = row.querySelector('[data-role="distance-text"]');
+            const storeCity = row.dataset.city || 'Cavite';
+            const isOpen = row.dataset.open === '1';
+
+            row.dataset.distance = '999';
+            row.dataset.minutes = '25';
+
+            if (timeLabel) {
+                timeLabel.innerHTML = isOpen 
+                    ? '<i class="fas fa-truck-fast"></i> 20-30 min &bull; ' + storeCity 
+                    : '<i class="fas fa-store-slash"></i> Closed &bull; ' + storeCity;
+            }
+            if (etaText) {
+                etaText.textContent = '20-30 min';
+            }
+            if (distanceText) {
+                distanceText.textContent = storeCity;
+            }
+        });
+
+        if (detectNearestStatus) {
+            detectNearestStatus.textContent = 'Allow location access or set your address to calculate exact delivery distances.';
+        }
+        if (distanceSummary) {
+            distanceSummary.textContent = 'Showing Cavite stores. Set your address for exact distances and delivery times.';
+        }
+        sortRows();
+        applyFilters(heroSearch || gridSearch, { preservePagination: true });
+    }
+
+    // Immediate initial DSS calculation on load: use stored address if valid, otherwise avoid showing false location
+    if (!checkStoredAddressOnIndex()) {
+        resetToDefaultCaviteScope();
+    }
+
+    // Try auto-detecting user location silently if permission was previously granted
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            function (position) {
+                updateNearest(position.coords.latitude, position.coords.longitude, true);
+            },
+            function () { /* Keep default Cavite calculation */ },
+            { enableHighAccuracy: false, timeout: 4000, maximumAge: 300000 }
+        );
+    }
+
+    window.addEventListener('storage', function (e) {
+        if (e.key === 'market_address_payload' || e.key === 'market_address') {
+            checkStoredAddressOnIndex();
+        }
+    });
+    window.addEventListener('marketAddressChanged', checkStoredAddressOnIndex);
+    window.addEventListener('marketAddressUpdated', checkStoredAddressOnIndex);
 
     const params = new URLSearchParams(window.location.search);
     const initialSearch = params.get('search');
@@ -3303,15 +5376,9 @@ document.addEventListener('DOMContentLoaded', function () {
     applyFilters(heroSearch || gridSearch || headerSearch);
 
     <?php if ($show_welcome): ?>
-    Swal.fire({
-        icon: 'success',
-        title: 'Welcome!',
-        html: '<p style="font-size:1.05rem;margin-bottom:10px;color:#2b2f3a;">Registration successful.</p><p style="font-size:.95rem;color:#667085;">You are now signed in as <strong><?php echo htmlspecialchars($user_email, ENT_QUOTES); ?></strong>.</p><p style="font-size:.9rem;color:#7a8395;margin-top:14px;">Explore the marketplace and start browsing stores.</p>',
-        confirmButtonColor: '#d81b60',
-        confirmButtonText: 'Explore now',
-        allowOutsideClick: false,
-        allowEscapeKey: false
-    });
+    if (window.showPopupAlert) {
+        window.showPopupAlert('Welcome! You are now signed in as <?php echo htmlspecialchars($user_email, ENT_QUOTES); ?>.', 'success', 5000);
+    }
     <?php endif; ?>
 });
 </script>
@@ -3363,6 +5430,165 @@ document.addEventListener('DOMContentLoaded', function () {
 .reg-choice-info { display:grid; gap:2px; }
 .reg-choice-title { font-weight:800; font-size:1.02rem; color:#171922; }
 .reg-choice-desc { font-size:.82rem; color:#667085; line-height:1.3; }
+
+@media (max-width: 768px) {
+    .market-home,
+    .market-home .container,
+    .market-explorer,
+    .market-explorer > div,
+    .market-mini-section,
+    .first-user-deals-section,
+    .store-promos-section,
+    .partner-ads-section,
+    .bestsellers-section {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    .market-head {
+        align-items: flex-start !important;
+        gap: 8px !important;
+    }
+
+    .market-head > div {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    .market-head h2,
+    .market-head p {
+        overflow-wrap: anywhere !important;
+    }
+
+    .m-ref-categories-row {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        overscroll-behavior-x: contain !important;
+        touch-action: pan-x !important;
+    }
+
+    .first-user-deals-grid,
+    .store-promos-section > div:last-child,
+    .partner-ads-grid {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x !important;
+        scroll-snap-type: x proximity !important;
+        gap: 12px !important;
+        padding: 2px 2px 12px !important;
+        scrollbar-width: none !important;
+    }
+
+    .first-user-deals-grid::-webkit-scrollbar,
+    .store-promos-section > div:last-child::-webkit-scrollbar,
+    .partner-ads-grid::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .first-user-deals-grid > .deal-card,
+    .store-promos-section > div:last-child > .deal-card,
+    .partner-ads-grid > .partner-ad-card {
+        flex: 0 0 min(78vw, 270px) !important;
+        width: min(78vw, 270px) !important;
+        min-width: min(78vw, 270px) !important;
+        max-width: min(78vw, 270px) !important;
+        scroll-snap-align: start !important;
+        box-sizing: border-box !important;
+    }
+
+    .first-user-deals-grid .deal-card,
+    .store-promos-section .deal-card {
+        padding: 14px !important;
+    }
+
+    .partner-ads-grid .partner-ad-card {
+        min-height: 190px !important;
+    }
+
+    .panda-brand-slider,
+    .market-product-grid,
+    .market-mini-grid,
+    .market-dishes,
+    .market-branches {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x !important;
+        overscroll-behavior-x: contain !important;
+        scroll-snap-type: x proximity !important;
+        gap: 12px !important;
+        padding-bottom: 12px !important;
+        scrollbar-width: none !important;
+    }
+
+    .panda-brand-slider::-webkit-scrollbar,
+    .market-product-grid::-webkit-scrollbar,
+    .market-mini-grid::-webkit-scrollbar,
+    .market-dishes::-webkit-scrollbar,
+    .market-branches::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .market-product-grid > *,
+    .market-mini-grid > *,
+    .market-dishes > *,
+    .market-branches > * {
+        flex: 0 0 min(82vw, 260px) !important;
+        min-width: min(82vw, 260px) !important;
+        scroll-snap-align: start !important;
+    }
+
+    .panda-brand-slider > * {
+        flex: 0 0 120px !important;
+        min-width: 120px !important;
+        max-width: 120px !important;
+        scroll-snap-align: start !important;
+    }
+
+    .market-product-grid > *,
+    .market-mini-grid > *,
+    .market-dishes > *,
+    .market-branches > * {
+        box-sizing: border-box !important;
+        max-width: min(82vw, 260px) !important;
+    }
+
+    .bestsellers-grid {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x !important;
+        overscroll-behavior-x: contain !important;
+        scroll-snap-type: x mandatory !important;
+        gap: 12px !important;
+        padding-bottom: 12px !important;
+        scrollbar-width: none !important;
+        cursor: grab;
+    }
+    .bestsellers-grid::-webkit-scrollbar {
+        display: none !important;
+    }
+    .bestsellers-grid .bestseller-card {
+        flex: 0 0 180px !important;
+        width: 180px !important;
+        min-width: 180px !important;
+        max-width: 180px !important;
+        scroll-snap-align: start !important;
+    }
+}
+
 </style>
 
 <!-- Landing Page Login & Signup Popup Modal Markup -->
@@ -3385,7 +5611,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         <label for="popupEmail">Email Address</label>
                         <div class="input-wrap">
                             <i class="fas fa-envelope"></i>
-                            <input type="email" id="popupEmail" name="email" class="form-control" placeholder="Enter your email address" required autocomplete="email">
+                            <input type="email" id="popupEmail" name="email" class="form-control" placeholder="Enter your email address" required autocomplete="email" value="<?php echo htmlspecialchars($_COOKIE['remember_email'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                         </div>
                     </div>
                     
@@ -3402,7 +5628,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     
                     <div class="remember-forgot">
                         <label class="remember-label">
-                            <input type="checkbox" name="remember" id="popupRememberMe" value="1">
+                            <input type="checkbox" name="remember" id="popupRememberMe" value="1" <?php echo !empty($_COOKIE['remember_email']) ? 'checked' : ''; ?>>
                             <span>Remember me</span>
                         </label>
                         <a href="javascript:void(0);" class="forgot-link" id="popupSwitchToForgot">Forgot password?</a>
@@ -3422,7 +5648,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             <!-- Register Pane -->
             <div class="auth-popup-pane" id="authPaneRegister">
-                <div class="reg-choice-grid">
+                <div class="reg-choice-grid" style="grid-template-columns: 1fr;">
                     <a href="register.php?account_type=individual" class="reg-choice-card">
                         <div class="reg-choice-icon">
                             <i class="fas fa-user"></i>
@@ -3430,16 +5656,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         <div class="reg-choice-info">
                             <span class="reg-choice-title">Individual Customer</span>
                             <span class="reg-choice-desc">Order delicious lechon dishes, rate food, track deliveries, and manage your account.</span>
-                        </div>
-                    </a>
-                    
-                    <a href="register.php?account_type=organization" class="reg-choice-card">
-                        <div class="reg-choice-icon">
-                            <i class="fas fa-store"></i>
-                        </div>
-                        <div class="reg-choice-info">
-                            <span class="reg-choice-title">Business Partner</span>
-                            <span class="reg-choice-desc">Register your lechon business, manage your storefront menu, and sync billing invoices.</span>
                         </div>
                     </a>
                 </div>
@@ -3488,6 +5704,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const popupLoginForm = document.getElementById('popupLoginForm');
     const authTabs = document.querySelectorAll('[data-auth-tab]');
     const authPanes = document.querySelectorAll('.auth-popup-pane');
+
+    // Password Visibility Toggle for Popup Modal
+    if (togglePasswordBtn && passwordInput) {
+        togglePasswordBtn.addEventListener('click', function() {
+            const isPass = passwordInput.type === 'password';
+            passwordInput.type = isPass ? 'text' : 'password';
+            const icon = this.querySelector('i');
+            if (icon) {
+                icon.className = isPass ? 'fas fa-eye-slash' : 'fas fa-eye';
+            }
+        });
+    }
     
     function switchAuthTab(tabName) {
         authTabs.forEach(tab => {
@@ -3617,23 +5845,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Intercept clicks on the sign-in button in the header
-    document.querySelectorAll('.btn-signin').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            switchAuthTab('login');
-            if (authOverlay) authOverlay.classList.add('active');
-        });
-    });
-
-    // Intercept clicks on the register button in the header
-    document.querySelectorAll('.btn-register').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            switchAuthTab('register');
-            if (authOverlay) authOverlay.classList.add('active');
-        });
-    });
+    
     
     if (authClose) {
         authClose.addEventListener('click', function() {
@@ -3672,12 +5884,16 @@ document.addEventListener('DOMContentLoaded', function() {
             const remember = document.getElementById('popupRememberMe').checked;
             
             if (!email || !password) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Missing Information',
-                    text: 'Please enter both email and password.',
-                    confirmButtonColor: '#b3261e'
-                });
+                if (window.showPopupAlert) {
+                    window.showPopupAlert('Please enter both email and password.', 'alert');
+                } else if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Missing Information',
+                        text: 'Please enter both email and password.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                }
                 return;
             }
             
@@ -3711,19 +5927,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.includes('alert-error') || data.includes('Invalid email or password')) {
                     const errorMatch = data.match(/alert-error.*?<div>(.*?)<\/div>/s);
                     const errMsg = errorMatch ? errorMatch[1].trim() : 'Invalid email or password';
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Sign In Failed',
-                        text: errMsg,
-                        confirmButtonColor: '#b3261e'
-                    });
+                    if (window.showPopupAlert) {
+                        window.showPopupAlert(errMsg, 'error');
+                    } else if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Sign In Failed',
+                            text: errMsg,
+                            confirmButtonColor: '#b3261e'
+                        });
+                    }
                 } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: 'An unexpected error occurred. Please try again.',
-                        confirmButtonColor: '#b3261e'
-                    });
+                    if (window.showPopupAlert) {
+                        window.showPopupAlert('An unexpected error occurred. Please try again.', 'error');
+                    } else if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'An unexpected error occurred. Please try again.',
+                            confirmButtonColor: '#b3261e'
+                        });
+                    }
                 }
                 
                 if (submitBtn) {
@@ -3733,12 +5957,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(err => {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Connection Error',
-                    text: 'Could not connect to authentication server.',
-                    confirmButtonColor: '#b3261e'
-                });
+                if (window.showPopupAlert) {
+                    window.showPopupAlert('Could not connect to authentication server.', 'error');
+                } else if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Connection Error',
+                        text: 'Could not connect to authentication server.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                }
                 if (submitBtn) {
                     submitBtn.disabled = false;
                     const span = submitBtn.querySelector('span');
@@ -3748,7 +5976,141 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+function copyWelcomePromoCode(code, btn) {
+    if (!code) return;
+    const textToCopy = String(code).trim();
+    
+    const applySuccessState = () => {
+        if (btn) {
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            btn.classList.add('copied');
+            setTimeout(() => {
+                btn.innerHTML = originalHtml;
+                btn.classList.remove('copied');
+            }, 2500);
+        }
+        if (window.showPopupAlert) {
+            window.showPopupAlert('Code ' + textToCopy + ' copied! Apply at checkout.', 'success', 3000);
+        }
+    };
+
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(textToCopy).then(applySuccessState).catch(() => {
+            fallbackCopy(textToCopy);
+        });
+    } else {
+        fallbackCopy(textToCopy);
+    }
+
+    function fallbackCopy(text) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            applySuccessState();
+        } catch (err) {}
+        document.body.removeChild(textArea);
+    }
+}
+
+function claimAndUseWelcomeDeal(code, targetUrl) {
+    if (!code) return;
+    const textToCopy = String(code).trim();
+    
+    // Save to session storage so checkout.php auto-applies it automatically
+    try {
+        sessionStorage.setItem('pending_welcome_voucher', textToCopy);
+    } catch(e) {}
+
+    // Send to backend so PHP session records it immediately
+    fetch('apply_voucher.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ action: 'claim', code: textToCopy })
+    }).catch(() => {});
+
+    // Copy to clipboard
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(textToCopy).catch(() => {});
+    }
+
+    if (window.showPopupAlert) {
+        window.showPopupAlert('Deal Claimed! Voucher code ' + textToCopy + ' activated for your order.', 'success', 2500);
+    }
+
+    setTimeout(function() {
+        proceedToTarget();
+    }, 800);
+
+    function proceedToTarget() {
+        if (!targetUrl || targetUrl === '#marketplaceStores') {
+            const storesElem = document.getElementById('marketplaceStores');
+            if (storesElem) {
+                storesElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else {
+                window.location.href = 'index.php#marketplaceStores';
+            }
+        } else {
+            const separator = targetUrl.includes('?') ? '&' : '?';
+            window.location.href = targetUrl + separator + 'voucher=' + encodeURIComponent(textToCopy);
+        }
+    }
+}
+
+// Universal smooth touch & mouse swipe support for horizontal carousels
+document.addEventListener('DOMContentLoaded', function () {
+    const swipeContainers = document.querySelectorAll('.bestsellers-grid, .top-shops-swipe-grid, .m-ref-categories-row');
+    swipeContainers.forEach(function (slider) {
+        if (!slider) return;
+        let isDown = false;
+        let startX = 0;
+        let scrollLeft = 0;
+        let hasMoved = false;
+
+        slider.addEventListener('mousedown', function (e) {
+            isDown = true;
+            hasMoved = false;
+            slider.style.cursor = 'grabbing';
+            startX = e.pageX - slider.offsetLeft;
+            scrollLeft = slider.scrollLeft;
+        });
+
+        slider.addEventListener('mouseleave', function () {
+            isDown = false;
+            slider.style.cursor = '';
+        });
+
+        slider.addEventListener('mouseup', function () {
+            isDown = false;
+            slider.style.cursor = '';
+        });
+
+        slider.addEventListener('mousemove', function (e) {
+            if (!isDown) return;
+            e.preventDefault();
+            const x = e.pageX - slider.offsetLeft;
+            const walk = (x - startX) * 1.5;
+            if (Math.abs(walk) > 5) {
+                hasMoved = true;
+            }
+            slider.scrollLeft = scrollLeft - walk;
+        });
+
+        // Prevent accidental link clicks when dragging/swiping
+        slider.addEventListener('click', function (e) {
+            if (hasMoved) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }, true);
+    });
+});
 </script>
 <?php include 'includes/footer.php'; ?>
-
-

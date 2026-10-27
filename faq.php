@@ -16,7 +16,7 @@ $faqs = [
         'badge' => 'Delivery Coverage',
         'icon' => 'fa-truck-fast',
         'question' => 'Where do you deliver?',
-        'answer' => 'We deliver across Metro Manila and Cavite key cities (General Trias, Dasmariñas, Imus, Bacoor, Tagaytay). For deliveries outside these regions, please contact our hotline at 8939-1221 or 8851-2987 for special dispatch arrangements.'
+        'answer' => 'We deliver across key cities and municipalities in Cavite (Dasmariñas, Imus, General Trias, Bacoor, Tagaytay, Silang, Kawit, Trece Martires, Naic, Carmona). For special delivery arrangements within Cavite, feel free to contact our hotline.'
     ],
     [
         'category' => 'ordering',
@@ -784,6 +784,56 @@ $faqs = [
     .faq-contact-section {
         padding: 24px;
     }
+}
+
+/* ==========================================================================
+   FAQ PAGE DARK THEME ENGINE
+   ========================================================================== */
+body.dark-mode .faq-page-wrapper,
+body.dark-mode .faq-main-section {
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .faq-card,
+body.dark-mode .faq-contact-box {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25) !important;
+}
+
+body.dark-mode .faq-question-text,
+body.dark-mode .faq-category-title,
+body.dark-mode .faq-contact-box h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .faq-answer-text,
+body.dark-mode .faq-contact-box p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .faq-category-pill {
+    background-color: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .faq-category-pill:hover {
+    background-color: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .faq-category-pill.active {
+    background-color: #b3261e !important;
+    color: #ffffff !important;
+    border-color: #b3261e !important;
+}
+
+body.dark-mode .faq-search-box input {
+    background-color: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
 }
 </style>
 

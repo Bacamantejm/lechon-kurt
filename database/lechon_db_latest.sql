@@ -1,0 +1,4536 @@
+-- MySQL dump 10.13  Distrib 8.4.3, for Win64 (x86_64)
+--
+-- Host: localhost    Database: lechon_db
+-- ------------------------------------------------------
+-- Server version	8.4.3
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `activity_logs`
+--
+
+DROP TABLE IF EXISTS `activity_logs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `activity_logs` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint unsigned DEFAULT NULL,
+  `action` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `entity_type` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `entity_id` bigint unsigned DEFAULT NULL,
+  `details` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `ip_address` varchar(45) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `user_agent` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_activity_user` (`user_id`),
+  KEY `idx_activity_entity` (`entity_type`,`entity_id`),
+  KEY `idx_activity_action` (`action`),
+  CONSTRAINT `activity_logs_chk_1` CHECK (json_valid(`details`))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `activity_logs`
+--
+
+LOCK TABLES `activity_logs` WRITE;
+/*!40000 ALTER TABLE `activity_logs` DISABLE KEYS */;
+/*!40000 ALTER TABLE `activity_logs` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `anomaly_alerts`
+--
+
+DROP TABLE IF EXISTS `anomaly_alerts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `anomaly_alerts` (
+  `alert_id` int NOT NULL,
+  `alert_type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `alert_level` enum('CRITICAL','HIGH','MEDIUM','LOW') COLLATE utf8mb4_unicode_ci DEFAULT 'MEDIUM',
+  `description` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `affected_data` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `action_taken` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `resolved_by` int DEFAULT NULL,
+  `resolved_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`alert_id`),
+  KEY `idx_type` (`alert_type`),
+  KEY `idx_level` (`alert_level`),
+  KEY `idx_status` (`resolved_at`),
+  KEY `idx_date` (`created_at`),
+  CONSTRAINT `anomaly_alerts_chk_1` CHECK (json_valid(`affected_data`))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `anomaly_alerts`
+--
+
+LOCK TABLES `anomaly_alerts` WRITE;
+/*!40000 ALTER TABLE `anomaly_alerts` DISABLE KEYS */;
+/*!40000 ALTER TABLE `anomaly_alerts` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `api_tokens`
+--
+
+DROP TABLE IF EXISTS `api_tokens`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `api_tokens` (
+  `token_id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `token_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `token_name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `scopes` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `is_active` tinyint(1) DEFAULT '1',
+  `expires_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `last_used_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`token_id`),
+  UNIQUE KEY `token_hash` (`token_hash`),
+  KEY `idx_user` (`user_id`),
+  KEY `idx_expires` (`expires_at`),
+  KEY `idx_active` (`is_active`),
+  CONSTRAINT `api_tokens_chk_1` CHECK (json_valid(`scopes`))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `api_tokens`
+--
+
+LOCK TABLES `api_tokens` WRITE;
+/*!40000 ALTER TABLE `api_tokens` DISABLE KEYS */;
+/*!40000 ALTER TABLE `api_tokens` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `attendance`
+--
+
+DROP TABLE IF EXISTS `attendance`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `attendance` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `employee_id` int NOT NULL,
+  `attendance_date` date NOT NULL,
+  `check_in_time` time DEFAULT NULL,
+  `break_start` time DEFAULT NULL,
+  `break_end` time DEFAULT NULL,
+  `check_out_time` time DEFAULT NULL,
+  `status` enum('present','absent','late','half_day','on_leave') COLLATE utf8mb4_general_ci DEFAULT 'absent',
+  `notes` text COLLATE utf8mb4_general_ci,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `latitude` decimal(10,8) DEFAULT NULL,
+  `longitude` decimal(11,8) DEFAULT NULL,
+  `ip_address` varchar(45) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `late_minutes` int DEFAULT '0',
+  `overtime_hours` decimal(5,2) DEFAULT '0.00',
+  `hr_status` enum('pending','approved','rejected') COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_attendance` (`employee_id`,`attendance_date`),
+  KEY `idx_attendance_status` (`status`),
+  KEY `idx_attendance_date_status` (`attendance_date`,`hr_status`)
+) ENGINE=InnoDB AUTO_INCREMENT=28 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `attendance`
+--
+
+LOCK TABLES `attendance` WRITE;
+/*!40000 ALTER TABLE `attendance` DISABLE KEYS */;
+INSERT INTO `attendance` VALUES (2,7,'2026-02-10','00:13:00',NULL,NULL,'12:13:00','present','Manual Submission Reason: asd\nProof Path: ../uploads/attendance_proofs/proof_att_7_1770653595.png','2026-02-09 16:13:15','2026-02-10 14:41:25',NULL,NULL,NULL,0,0.00,'approved'),(8,2,'2025-02-01','09:00:00',NULL,NULL,'17:00:00','present',NULL,'2026-02-10 14:08:05','2026-02-10 14:08:05',NULL,NULL,NULL,0,0.00,'approved'),(9,2,'2025-02-02','09:00:00',NULL,NULL,'17:00:00','present',NULL,'2026-02-10 14:08:05','2026-02-10 14:08:05',NULL,NULL,NULL,0,0.00,'approved'),(10,2,'2025-02-03','09:30:00',NULL,NULL,'17:00:00','present',NULL,'2026-02-10 14:08:05','2026-02-10 14:08:05',NULL,NULL,NULL,0,0.00,'approved'),(11,2,'2025-02-04','09:00:00',NULL,NULL,'17:00:00','present',NULL,'2026-02-10 14:08:05','2026-02-10 14:08:05',NULL,NULL,NULL,0,0.00,'approved'),(12,2,'2025-02-05','09:00:00',NULL,NULL,'17:00:00','present',NULL,'2026-02-10 14:08:05','2026-02-10 14:08:05',NULL,NULL,NULL,0,0.00,'approved'),(13,3,'2025-02-01','08:00:00',NULL,NULL,'17:00:00','present',NULL,'2026-02-10 14:08:05','2026-02-10 14:08:05',NULL,NULL,NULL,0,0.00,'approved'),(14,3,'2025-02-02','07:45:00',NULL,NULL,'17:30:00','present',NULL,'2026-02-10 14:08:05','2026-02-10 14:08:05',NULL,NULL,NULL,0,0.00,'approved'),(15,3,'2025-02-03','08:30:00',NULL,NULL,'17:00:00','present',NULL,'2026-02-10 14:08:05','2026-02-10 14:08:05',NULL,NULL,NULL,0,0.00,'approved'),(16,3,'2025-02-04','08:00:00',NULL,NULL,'18:00:00','present',NULL,'2026-02-10 14:08:05','2026-02-10 14:08:05',NULL,NULL,NULL,0,0.00,'approved'),(17,3,'2025-02-05','08:15:00',NULL,NULL,'17:00:00','present',NULL,'2026-02-10 14:08:05','2026-02-10 14:08:05',NULL,NULL,NULL,0,0.00,'approved'),(18,11,'2026-02-10','10:00:00',NULL,NULL,'18:40:00','present','Manual Submission Reason: asd\nProof Path: ../uploads/attendance_proofs/proof_att_11_1770734422.png','2026-02-10 14:40:22','2026-02-10 14:40:36',NULL,NULL,NULL,0,0.00,'approved'),(19,12,'2026-02-12','10:00:00',NULL,NULL,'17:00:00','present','Manual Submission Reason: asasd\nProof Path: ../uploads/attendance_proofs/proof_att_12_1770877515.png','2026-02-12 06:25:15','2026-02-12 06:25:58',NULL,NULL,NULL,0,0.00,'approved'),(20,13,'2026-02-12','10:00:00',NULL,NULL,'17:00:00','present','Manual Submission Reason: asdasdasdasdasd\nProof Path: ../uploads/attendance_proofs/proof_att_13_1770877917.png','2026-02-12 06:31:57','2026-02-12 06:32:11',NULL,NULL,NULL,0,0.00,'approved'),(21,16,'2026-02-12','10:00:00',NULL,NULL,'19:00:00','present','Manual Submission Reason: asdasd\nProof Path: ../uploads/attendance_proofs/proof_att_16_1770879144.png','2026-02-12 06:52:24','2026-02-12 06:52:37',NULL,NULL,NULL,0,0.00,'approved'),(22,17,'2026-02-12','10:00:00',NULL,NULL,'19:00:00','present','Manual Submission Reason: asdasd\nProof Path: ../uploads/attendance_proofs/proof_att_17_1770880454.png','2026-02-12 07:14:14','2026-02-12 07:14:49',NULL,NULL,NULL,0,0.00,'approved'),(23,7,'2026-02-17','10:52:00',NULL,NULL,'19:52:00','present','Manual Submission Reason: asdasd\nProof Path: ../uploads/attendance_proofs/proof_att_7_1771329130.png','2026-02-17 11:52:10','2026-02-17 11:52:21',NULL,NULL,NULL,0,0.00,'approved'),(24,18,'2026-03-17','10:00:00',NULL,NULL,'21:30:00','present','Manual Submission Reason: asdasd\nProof Path: ../uploads/attendance_proofs/proof_att_18_1773754168.jpg','2026-03-17 13:29:28','2026-03-17 13:29:47',NULL,NULL,NULL,0,0.00,'approved'),(25,19,'2026-03-17','10:00:00',NULL,NULL,'21:00:00','present','Manual Submission Reason: asdasd\nProof Path: ../uploads/attendance_proofs/proof_att_19_1773755431.jpg','2026-03-17 13:50:31','2026-03-17 13:50:42',NULL,NULL,NULL,0,0.00,'approved'),(26,20,'2026-03-31','10:00:00',NULL,NULL,'19:42:00','present','Manual Submission Reason: asd\nProof Path: ../uploads/attendance_proofs/proof_att_20_1774946540.png','2026-03-31 08:42:20','2026-03-31 09:10:17',NULL,NULL,NULL,0,0.00,'approved'),(27,21,'2026-03-31','10:09:00',NULL,NULL,'17:09:00','present','Manual Submission Reason: asd\nProof Path: ../uploads/attendance_proofs/proof_att_21_1774948152.png','2026-03-31 09:09:12','2026-03-31 09:09:20',NULL,NULL,NULL,0,0.00,'approved');
+/*!40000 ALTER TABLE `attendance` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `audit_log`
+--
+
+DROP TABLE IF EXISTS `audit_log`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `audit_log` (
+  `log_id` int NOT NULL,
+  `user_id` int DEFAULT NULL,
+  `action` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `table_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `record_id` int DEFAULT NULL,
+  `old_value` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `new_value` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `ip_address` varchar(45) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `user_agent` text COLLATE utf8mb4_unicode_ci,
+  `status` enum('success','failure') COLLATE utf8mb4_unicode_ci DEFAULT 'success',
+  `error_message` text COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`log_id`),
+  KEY `idx_user` (`user_id`),
+  KEY `idx_action` (`action`),
+  KEY `idx_table` (`table_name`),
+  KEY `idx_date` (`created_at`),
+  KEY `idx_record` (`record_id`),
+  CONSTRAINT `audit_log_chk_1` CHECK (json_valid(`old_value`)),
+  CONSTRAINT `audit_log_chk_2` CHECK (json_valid(`new_value`))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `audit_log`
+--
+
+LOCK TABLES `audit_log` WRITE;
+/*!40000 ALTER TABLE `audit_log` DISABLE KEYS */;
+/*!40000 ALTER TABLE `audit_log` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `audit_logs`
+--
+
+DROP TABLE IF EXISTS `audit_logs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `audit_logs` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int DEFAULT NULL,
+  `action` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `module` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `description` text COLLATE utf8mb4_general_ci,
+  `ip_address` varchar(45) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `user_agent` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `audit_logs`
+--
+
+LOCK TABLES `audit_logs` WRITE;
+/*!40000 ALTER TABLE `audit_logs` DISABLE KEYS */;
+INSERT INTO `audit_logs` VALUES (1,9,'USER_ROLE_ASSIGNED','users','Assigned role to user ID 14','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36','2026-02-17 11:36:45'),(2,9,'USER_ROLE_ASSIGNED','users','Assigned role to user ID 15','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36','2026-02-17 11:37:46'),(3,9,'USER_ROLE_ASSIGNED','users','Assigned role to user ID 15','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36','2026-02-17 11:38:05'),(4,9,'ROLE_UPDATED','roles','Updated role super_admin (ID 1) with 61 permissions','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0','2026-03-25 05:59:02'),(5,31,'ROLE_CREATED','roles','Created new role: partner_31_hr_manager (Level: 60)','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36','2026-03-27 08:51:31'),(6,31,'ROLE_UPDATED','roles','Updated role partner_31_hr_manager (ID 9) with 53 permissions','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36','2026-03-27 09:29:24'),(7,9,'ROLE_UPDATED','roles','Updated role super_admin (ID 1) with 61 permissions','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0','2026-03-27 09:31:49'),(8,31,'ROLE_CREATED','roles','Created new role: partner_31_system_owner (Level: 100)','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36','2026-03-27 09:47:56'),(9,31,'ROLE_UPDATED','roles','Updated role partner_31_system_owner (ID 10) with 53 permissions','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36','2026-03-27 09:48:11'),(10,9,'COMPLAINT_RESPONDED','super_admin_complaints','Sent complaint response to conversation #7.','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36','2026-04-09 10:21:02'),(11,9,'COMPLAINT_UPDATED','super_admin_complaints','Updated complaint #7 to status in_progress / priority urgent.','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36','2026-04-09 10:21:14'),(12,9,'COMPLAINT_RESPONDED','super_admin_complaints','Sent complaint response to conversation #7.','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36','2026-04-09 10:21:18'),(13,9,'COMPLAINT_RESPONDED','super_admin_complaints','Sent complaint response to conversation #7.','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36','2026-04-09 10:21:20'),(14,9,'COMPLAINT_RESPONDED','super_admin_complaints','Sent complaint response to conversation #7.','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36','2026-04-09 10:21:26'),(15,9,'NOTIFICATION_BROADCAST','super_admin_notification_center','Sent notification \'Hello\' to 25 users using scope \'all\'.','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36','2026-04-09 15:13:53'),(16,9,'COMPLAINT_UPDATED','super_admin_complaints','Updated complaint #7 to status resolved / priority urgent.','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36','2026-04-09 15:18:24'),(17,9,'COMPLAINT_UPDATED','super_admin_complaints','Updated complaint #7 to status open / priority urgent.','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36','2026-04-09 15:18:37'),(18,9,'COMPLAINT_UPDATED','super_admin_complaints','Updated complaint #7 to status closed / priority urgent.','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36','2026-04-09 15:18:43'),(19,9,'COMPLAINT_RESPONDED','super_admin_complaints','Sent complaint response to conversation #7.','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36','2026-04-09 15:18:49'),(20,9,'USER_ROLE_UPDATED','super_admin_user_business','Super admin updated role of user #34 to 11.','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36','2026-04-09 15:19:35'),(21,31,'ROLE_UPDATED','roles','Updated role partner_31_system_owner (ID 10) with 53 permissions','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36','2026-04-10 02:36:03'),(22,31,'ROLE_CREATED','roles','Created new role: partner_31_operational_staff (Level: 20)','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36','2026-04-10 02:36:58'),(23,9,'COMPLAINT_UPDATED','super_admin_complaints','Updated complaint #7 to status resolved / priority urgent.','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36','2026-04-10 03:16:31');
+/*!40000 ALTER TABLE `audit_logs` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `bill_of_materials`
+--
+
+DROP TABLE IF EXISTS `bill_of_materials`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `bill_of_materials` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `product_id` int NOT NULL,
+  `material_id` int NOT NULL,
+  `quantity_needed` decimal(10,2) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `product_id` (`product_id`),
+  KEY `material_id` (`material_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `bill_of_materials`
+--
+
+LOCK TABLES `bill_of_materials` WRITE;
+/*!40000 ALTER TABLE `bill_of_materials` DISABLE KEYS */;
+/*!40000 ALTER TABLE `bill_of_materials` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `business_events`
+--
+
+DROP TABLE IF EXISTS `business_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `business_events` (
+  `event_id` int NOT NULL,
+  `event_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event_date` date NOT NULL,
+  `event_type` enum('holiday','promotion','special_event','maintenance','seasonal') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `impact_multiplier` decimal(3,2) DEFAULT '1.00',
+  `affected_products` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `is_active` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`event_id`),
+  KEY `idx_date` (`event_date`),
+  CONSTRAINT `business_events_chk_1` CHECK (json_valid(`affected_products`))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `business_events`
+--
+
+LOCK TABLES `business_events` WRITE;
+/*!40000 ALTER TABLE `business_events` DISABLE KEYS */;
+INSERT INTO `business_events` VALUES (1,'New Year Holiday','2026-01-01','holiday',0.50,'[\"1\",\"2\",\"3\"]','Philippine National Holiday',1,'2026-03-11 02:34:29'),(2,'Sinulog Festival','2026-01-18','seasonal',1.50,'[\"1\",\"2\"]','Visayan celebration - increased demand for lechon',1,'2026-03-11 02:34:29'),(3,'Valentines Day','2026-02-14','seasonal',1.30,'[\"1\",\"2\",\"21\"]','Special occasion, higher orders',1,'2026-03-11 02:34:29'),(4,'Holy Week','2026-04-12','holiday',0.30,'[\"1\",\"2\",\"3\"]','Extended holiday period',1,'2026-03-11 02:34:29'),(5,'Summer Season Start','2026-06-01','seasonal',1.40,'[\"1\",\"2\",\"3\"]','Increased catering events',1,'2026-03-11 02:34:29'),(6,'Christmas Season','2026-12-01','seasonal',2.00,'[\"1\",\"2\",\"3\",\"4\",\"5\"]','Highest demand period - early prep needed',1,'2026-03-11 02:34:29'),(7,'New Year Holiday','2026-01-01','holiday',0.50,'[\"1\",\"2\",\"3\"]','Philippine National Holiday',1,'2026-03-11 02:36:10'),(8,'Sinulog Festival','2026-01-18','seasonal',1.50,'[\"1\",\"2\"]','Visayan celebration - increased demand for lechon',1,'2026-03-11 02:36:10'),(9,'Valentines Day','2026-02-14','seasonal',1.30,'[\"1\",\"2\",\"21\"]','Special occasion, higher orders',1,'2026-03-11 02:36:10'),(10,'Holy Week','2026-04-12','holiday',0.30,'[\"1\",\"2\",\"3\"]','Extended holiday period',1,'2026-03-11 02:36:10'),(11,'Summer Season Start','2026-06-01','seasonal',1.40,'[\"1\",\"2\",\"3\"]','Increased catering events',1,'2026-03-11 02:36:10'),(12,'Christmas Season','2026-12-01','seasonal',2.00,'[\"1\",\"2\",\"3\",\"4\",\"5\"]','Highest demand period - early prep needed',1,'2026-03-11 02:36:10');
+/*!40000 ALTER TABLE `business_events` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `cancellations`
+--
+
+DROP TABLE IF EXISTS `cancellations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `cancellations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint unsigned NOT NULL,
+  `order_id` bigint unsigned DEFAULT NULL,
+  `reservation_id` bigint unsigned DEFAULT NULL,
+  `service_request_id` bigint unsigned DEFAULT NULL,
+  `reason` enum('Change of mind','Wrong order','Emergency','Other') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `other_reason_text` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `cancellation_date` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `status` enum('Requested','Cancelled','Rejected') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Cancelled',
+  `rejection_reason` text COLLATE utf8mb4_unicode_ci COMMENT 'Reason provided by admin for rejecting the cancellation',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_cxl_user` (`user_id`),
+  KEY `idx_cxl_order` (`order_id`),
+  KEY `idx_cxl_reservation` (`reservation_id`),
+  KEY `idx_cxl_service` (`service_request_id`),
+  KEY `idx_cxl_status_date` (`status`,`cancellation_date`)
+) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `cancellations`
+--
+
+LOCK TABLES `cancellations` WRITE;
+/*!40000 ALTER TABLE `cancellations` DISABLE KEYS */;
+INSERT INTO `cancellations` VALUES (1,9,81,NULL,NULL,'Other','asdasd','2026-02-24 21:44:59','Requested',NULL,'2026-02-24 13:44:59','2026-02-24 13:44:59'),(2,9,81,NULL,NULL,'Other','','2026-02-24 21:45:08','Requested',NULL,'2026-02-24 13:45:08','2026-02-24 13:45:08'),(3,9,81,NULL,NULL,'Other','','2026-02-24 21:45:23','Requested',NULL,'2026-02-24 13:45:23','2026-02-24 13:45:23'),(4,9,76,NULL,NULL,'Other','asd','2026-02-24 21:45:44','Cancelled',NULL,'2026-02-24 13:45:44','2026-02-24 13:45:44'),(5,9,83,NULL,NULL,'Other','asd','2026-02-24 21:48:25','Cancelled',NULL,'2026-02-24 13:48:25','2026-02-24 13:48:25'),(6,9,84,NULL,NULL,'Other','','2026-02-24 22:08:27','Cancelled',NULL,'2026-02-24 14:08:27','2026-02-24 14:08:27'),(7,9,81,NULL,NULL,'Other','asdasd','2026-02-24 22:22:21','Requested',NULL,'2026-02-24 14:22:21','2026-02-24 14:22:21'),(8,9,81,NULL,NULL,'Other','','2026-02-24 22:22:25','Requested',NULL,'2026-02-24 14:22:25','2026-02-24 14:22:25'),(9,9,81,NULL,NULL,'Other','asd','2026-02-24 22:36:40','Requested',NULL,'2026-02-24 14:36:40','2026-02-24 14:36:40'),(10,9,81,NULL,NULL,'Other','asd','2026-02-24 22:36:44','Requested',NULL,'2026-02-24 14:36:44','2026-02-24 14:36:44'),(11,9,81,NULL,NULL,'Other','asdasd','2026-02-24 22:37:12','Requested',NULL,'2026-02-24 14:37:12','2026-02-24 14:37:12'),(12,9,81,NULL,NULL,'Other','asdasd','2026-02-24 22:37:54','Requested',NULL,'2026-02-24 14:37:54','2026-02-24 14:37:54'),(13,9,77,NULL,NULL,'Other','asdasd','2026-02-24 22:39:32','Rejected','asd','2026-02-24 14:39:32','2026-03-13 05:21:12'),(14,9,NULL,34,NULL,'Other','asdasd','2026-02-24 23:59:21','Cancelled',NULL,'2026-02-24 15:59:21','2026-02-24 15:59:21'),(15,9,89,NULL,NULL,'Other','asd','2026-03-13 11:32:22','Cancelled',NULL,'2026-03-13 03:32:22','2026-03-13 03:32:22'),(16,31,115,NULL,NULL,'Other','asd','2026-03-27 20:01:46','Cancelled',NULL,'2026-03-27 12:01:46','2026-03-27 12:01:46'),(17,31,116,NULL,NULL,'',NULL,'2026-03-31 18:03:07','Cancelled',NULL,'2026-03-31 10:03:07','2026-03-31 10:03:07'),(18,9,120,NULL,NULL,'',NULL,'2026-04-10 16:01:31','Cancelled',NULL,'2026-04-10 08:01:31','2026-04-10 08:01:31'),(19,31,119,NULL,NULL,'',NULL,'2026-04-10 16:01:35','Cancelled',NULL,'2026-04-10 08:01:35','2026-04-10 08:01:35');
+/*!40000 ALTER TABLE `cancellations` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `candidates`
+--
+
+DROP TABLE IF EXISTS `candidates`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `candidates` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `application_number` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `position_id` int NOT NULL,
+  `first_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `last_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `email` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `phone` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
+  `current_company` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `current_position` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `years_experience` int DEFAULT NULL,
+  `qualifications` text COLLATE utf8mb4_general_ci,
+  `resume_path` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `cover_letter_path` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `rating` decimal(3,1) DEFAULT NULL,
+  `status` enum('new','reviewed','interviewed','offered','hired','rejected','withdrawn') COLLATE utf8mb4_general_ci DEFAULT 'new',
+  `interview_date` datetime DEFAULT NULL,
+  `interview_notes` text COLLATE utf8mb4_general_ci,
+  `offer_status` enum('pending','sent','accepted','rejected') COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `offer_details` text COLLATE utf8mb4_general_ci,
+  `source` enum('website','linkedin','job_portal','referral','walk_in') COLLATE utf8mb4_general_ci DEFAULT 'website',
+  `reviewed_by` int DEFAULT NULL,
+  `reviewed_at` timestamp NULL DEFAULT NULL,
+  `hired_date` date DEFAULT NULL,
+  `rejection_reason` text COLLATE utf8mb4_general_ci,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_application_number` (`application_number`),
+  KEY `position_id` (`position_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `candidates`
+--
+
+LOCK TABLES `candidates` WRITE;
+/*!40000 ALTER TABLE `candidates` DISABLE KEYS */;
+/*!40000 ALTER TABLE `candidates` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `cart`
+--
+
+DROP TABLE IF EXISTS `cart`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `cart` (
+  `cart_id` int NOT NULL,
+  `user_id` int DEFAULT NULL,
+  `session_id` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `product_id` int NOT NULL,
+  `quantity` int NOT NULL,
+  `size` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `addons` text COLLATE utf8mb4_general_ci,
+  `price` decimal(10,2) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`cart_id`),
+  KEY `user_id` (`user_id`),
+  KEY `session_id` (`session_id`),
+  KEY `product_id` (`product_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `cart`
+--
+
+LOCK TABLES `cart` WRITE;
+/*!40000 ALTER TABLE `cart` DISABLE KEYS */;
+/*!40000 ALTER TABLE `cart` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `chat_activity_log`
+--
+
+DROP TABLE IF EXISTS `chat_activity_log`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `chat_activity_log` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `conversation_id` bigint unsigned NOT NULL,
+  `activity_type` enum('assigned','reassigned','escalated','resolved','closed','tagged','status_changed') COLLATE utf8mb4_unicode_ci DEFAULT 'status_changed',
+  `user_id` int DEFAULT NULL,
+  `action_description` text COLLATE utf8mb4_unicode_ci,
+  `old_value` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `new_value` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  KEY `idx_conversation_id` (`conversation_id`),
+  KEY `idx_activity_type` (`activity_type`),
+  KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `chat_activity_log`
+--
+
+LOCK TABLES `chat_activity_log` WRITE;
+/*!40000 ALTER TABLE `chat_activity_log` DISABLE KEYS */;
+INSERT INTO `chat_activity_log` VALUES (1,3,'escalated',9,'Conversation escalated','false','true','2026-03-27 12:09:03'),(2,7,'escalated',4,'Conversation escalated','false','true','2026-04-09 09:57:55');
+/*!40000 ALTER TABLE `chat_activity_log` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `chat_attachments`
+--
+
+DROP TABLE IF EXISTS `chat_attachments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `chat_attachments` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `message_id` bigint unsigned NOT NULL,
+  `file_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `file_path` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `file_type` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `file_size` bigint DEFAULT NULL,
+  `mime_type` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `uploaded_by` int NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `chat_attachments`
+--
+
+LOCK TABLES `chat_attachments` WRITE;
+/*!40000 ALTER TABLE `chat_attachments` DISABLE KEYS */;
+INSERT INTO `chat_attachments` VALUES (1,6,'dwas.png','../uploads/chat_attachments/chat_1_1773895818_4.png','png',886052,'image/png',4,'2026-03-19 04:50:18'),(2,72,'651040194_935578842287200_186619882350744393_n (2).jpg','uploads/chat_attachments/chat_7_4_20260409175755_fe41e2bd652516fa.jpg','jpg',173355,'image/jpeg',4,'2026-04-09 09:57:55'),(3,73,'643799435_3399894513501431_6464971131933478899_n.jpg','uploads/chat_attachments/chat_8_4_20260409180951_20b84f98d15277e5.jpg','jpg',65639,'image/jpeg',4,'2026-04-09 10:09:51');
+/*!40000 ALTER TABLE `chat_attachments` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `chat_conversation_members`
+--
+
+DROP TABLE IF EXISTS `chat_conversation_members`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `chat_conversation_members` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `conversation_id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `participant_role` enum('customer','store','platform','rider','agent') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'customer',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `joined_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `last_read_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1415 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `chat_conversation_members`
+--
+
+LOCK TABLES `chat_conversation_members` WRITE;
+/*!40000 ALTER TABLE `chat_conversation_members` DISABLE KEYS */;
+INSERT INTO `chat_conversation_members` VALUES (1,9,18,'customer',1,'2026-08-05 14:18:49',NULL),(2,9,1,'platform',1,'2026-08-05 14:18:49',NULL),(3,9,29,'rider',1,'2026-08-05 14:18:49',NULL),(4,9,18,'customer',1,'2026-08-05 14:18:54',NULL),(5,9,1,'platform',1,'2026-08-05 14:18:54',NULL),(6,9,29,'rider',1,'2026-08-05 14:18:54',NULL),(7,9,18,'customer',1,'2026-08-05 14:18:59',NULL),(8,9,1,'platform',1,'2026-08-05 14:18:59',NULL),(9,9,29,'rider',1,'2026-08-05 14:18:59',NULL),(10,9,18,'customer',1,'2026-08-05 14:19:04',NULL),(11,9,1,'platform',1,'2026-08-05 14:19:04',NULL),(12,9,29,'rider',1,'2026-08-05 14:19:04',NULL),(13,9,18,'customer',1,'2026-08-05 14:19:09',NULL),(14,9,1,'platform',1,'2026-08-05 14:19:09',NULL),(15,9,29,'rider',1,'2026-08-05 14:19:09',NULL),(16,9,18,'customer',1,'2026-08-05 14:19:14',NULL),(17,9,1,'platform',1,'2026-08-05 14:19:14',NULL),(18,9,29,'rider',1,'2026-08-05 14:19:14',NULL),(19,9,18,'customer',1,'2026-08-05 14:19:19',NULL),(20,9,1,'platform',1,'2026-08-05 14:19:19',NULL),(21,9,29,'rider',1,'2026-08-05 14:19:19',NULL),(22,9,18,'customer',1,'2026-08-05 14:19:24',NULL),(23,9,1,'platform',1,'2026-08-05 14:19:24',NULL),(24,9,29,'rider',1,'2026-08-05 14:19:24',NULL),(25,9,18,'customer',1,'2026-08-05 14:19:29',NULL),(26,9,1,'platform',1,'2026-08-05 14:19:29',NULL),(27,9,29,'rider',1,'2026-08-05 14:19:29',NULL),(28,9,18,'customer',1,'2026-08-05 14:19:34',NULL),(29,9,1,'platform',1,'2026-08-05 14:19:34',NULL),(30,9,29,'rider',1,'2026-08-05 14:19:34',NULL),(31,9,18,'customer',1,'2026-08-05 14:19:39',NULL),(32,9,1,'platform',1,'2026-08-05 14:19:39',NULL),(33,9,29,'rider',1,'2026-08-05 14:19:39',NULL),(34,9,18,'customer',1,'2026-08-05 14:19:42',NULL),(35,9,1,'platform',1,'2026-08-05 14:19:42',NULL),(36,9,29,'rider',1,'2026-08-05 14:19:42',NULL),(37,9,18,'customer',1,'2026-08-05 14:19:42',NULL),(38,9,1,'platform',1,'2026-08-05 14:19:42',NULL),(39,9,29,'rider',1,'2026-08-05 14:19:42',NULL),(40,9,18,'customer',1,'2026-08-05 14:19:42',NULL),(41,9,1,'platform',1,'2026-08-05 14:19:42',NULL),(42,9,29,'rider',1,'2026-08-05 14:19:42',NULL),(43,9,18,'customer',1,'2026-08-05 14:19:42',NULL),(44,9,1,'platform',1,'2026-08-05 14:19:42',NULL),(45,9,29,'rider',1,'2026-08-05 14:19:42',NULL),(46,9,18,'customer',1,'2026-08-05 14:19:44',NULL),(47,9,1,'platform',1,'2026-08-05 14:19:44',NULL),(48,9,29,'rider',1,'2026-08-05 14:19:44',NULL),(49,9,18,'customer',1,'2026-08-05 14:19:49',NULL),(50,9,1,'platform',1,'2026-08-05 14:19:49',NULL),(51,9,29,'rider',1,'2026-08-05 14:19:49',NULL),(52,9,18,'customer',1,'2026-08-05 14:19:54',NULL),(53,9,1,'platform',1,'2026-08-05 14:19:54',NULL),(54,9,29,'rider',1,'2026-08-05 14:19:54',NULL),(55,9,18,'customer',1,'2026-08-05 14:19:59',NULL),(56,9,1,'platform',1,'2026-08-05 14:19:59',NULL),(57,9,29,'rider',1,'2026-08-05 14:19:59',NULL),(58,9,18,'customer',1,'2026-08-05 14:20:04',NULL),(59,9,1,'platform',1,'2026-08-05 14:20:04',NULL),(60,9,29,'rider',1,'2026-08-05 14:20:04',NULL),(61,9,18,'customer',1,'2026-08-05 14:20:09',NULL),(62,9,1,'platform',1,'2026-08-05 14:20:09',NULL),(63,9,29,'rider',1,'2026-08-05 14:20:09',NULL),(64,9,18,'customer',1,'2026-08-05 14:20:14',NULL),(65,9,1,'platform',1,'2026-08-05 14:20:14',NULL),(66,9,29,'rider',1,'2026-08-05 14:20:14',NULL),(67,9,18,'customer',1,'2026-08-05 14:20:19',NULL),(68,9,1,'platform',1,'2026-08-05 14:20:19',NULL),(69,9,29,'rider',1,'2026-08-05 14:20:19',NULL),(70,9,18,'customer',1,'2026-08-05 14:20:24',NULL),(71,9,1,'platform',1,'2026-08-05 14:20:24',NULL),(72,9,29,'rider',1,'2026-08-05 14:20:24',NULL),(73,9,18,'customer',1,'2026-08-05 14:20:29',NULL),(74,9,1,'platform',1,'2026-08-05 14:20:29',NULL),(75,9,29,'rider',1,'2026-08-05 14:20:29',NULL),(76,9,18,'customer',1,'2026-08-05 14:20:34',NULL),(77,9,1,'platform',1,'2026-08-05 14:20:34',NULL),(78,9,29,'rider',1,'2026-08-05 14:20:34',NULL),(79,9,18,'customer',1,'2026-08-05 14:20:39',NULL),(80,9,1,'platform',1,'2026-08-05 14:20:39',NULL),(81,9,29,'rider',1,'2026-08-05 14:20:39',NULL),(82,9,18,'customer',1,'2026-08-05 14:20:44',NULL),(83,9,1,'platform',1,'2026-08-05 14:20:44',NULL),(84,9,29,'rider',1,'2026-08-05 14:20:44',NULL),(85,9,18,'customer',1,'2026-08-05 14:20:49',NULL),(86,9,1,'platform',1,'2026-08-05 14:20:49',NULL),(87,9,29,'rider',1,'2026-08-05 14:20:49',NULL),(88,9,18,'customer',1,'2026-08-05 14:20:54',NULL),(89,9,1,'platform',1,'2026-08-05 14:20:54',NULL),(90,9,29,'rider',1,'2026-08-05 14:20:54',NULL),(91,9,18,'customer',1,'2026-08-05 14:20:59',NULL),(92,9,1,'platform',1,'2026-08-05 14:20:59',NULL),(93,9,29,'rider',1,'2026-08-05 14:20:59',NULL),(94,9,18,'customer',1,'2026-08-05 14:21:04',NULL),(95,9,1,'platform',1,'2026-08-05 14:21:04',NULL),(96,9,29,'rider',1,'2026-08-05 14:21:04',NULL),(97,9,18,'customer',1,'2026-08-05 14:21:09',NULL),(98,9,1,'platform',1,'2026-08-05 14:21:09',NULL),(99,9,29,'rider',1,'2026-08-05 14:21:09',NULL),(100,9,18,'customer',1,'2026-08-05 14:21:14',NULL),(101,9,1,'platform',1,'2026-08-05 14:21:14',NULL),(102,9,29,'rider',1,'2026-08-05 14:21:14',NULL),(103,9,18,'customer',1,'2026-08-05 14:21:19',NULL),(104,9,1,'platform',1,'2026-08-05 14:21:19',NULL),(105,9,29,'rider',1,'2026-08-05 14:21:19',NULL),(106,9,18,'customer',1,'2026-08-05 14:21:24',NULL),(107,9,1,'platform',1,'2026-08-05 14:21:24',NULL),(108,9,29,'rider',1,'2026-08-05 14:21:24',NULL),(109,9,18,'customer',1,'2026-08-05 14:21:29',NULL),(110,9,1,'platform',1,'2026-08-05 14:21:29',NULL),(111,9,29,'rider',1,'2026-08-05 14:21:29',NULL),(112,9,18,'customer',1,'2026-08-05 14:21:34',NULL),(113,9,1,'platform',1,'2026-08-05 14:21:34',NULL),(114,9,29,'rider',1,'2026-08-05 14:21:34',NULL),(115,9,18,'customer',1,'2026-08-05 14:21:39',NULL),(116,9,1,'platform',1,'2026-08-05 14:21:39',NULL),(117,9,29,'rider',1,'2026-08-05 14:21:39',NULL),(118,9,18,'customer',1,'2026-08-05 14:21:44',NULL),(119,9,1,'platform',1,'2026-08-05 14:21:44',NULL),(120,9,29,'rider',1,'2026-08-05 14:21:44',NULL),(121,9,18,'customer',1,'2026-08-05 14:21:49',NULL),(122,9,1,'platform',1,'2026-08-05 14:21:49',NULL),(123,9,29,'rider',1,'2026-08-05 14:21:49',NULL),(124,9,18,'customer',1,'2026-08-05 14:21:54',NULL),(125,9,1,'platform',1,'2026-08-05 14:21:54',NULL),(126,9,29,'rider',1,'2026-08-05 14:21:54',NULL),(127,9,18,'customer',1,'2026-08-05 14:23:12',NULL),(128,9,1,'platform',1,'2026-08-05 14:23:12',NULL),(129,9,29,'rider',1,'2026-08-05 14:23:12',NULL),(130,9,18,'customer',1,'2026-08-05 14:23:17',NULL),(131,9,1,'platform',1,'2026-08-05 14:23:17',NULL),(132,9,29,'rider',1,'2026-08-05 14:23:17',NULL),(133,9,18,'customer',1,'2026-08-05 14:23:22',NULL),(134,9,1,'platform',1,'2026-08-05 14:23:22',NULL),(135,9,29,'rider',1,'2026-08-05 14:23:22',NULL),(136,9,18,'customer',1,'2026-08-05 14:23:27',NULL),(137,9,1,'platform',1,'2026-08-05 14:23:27',NULL),(138,9,29,'rider',1,'2026-08-05 14:23:27',NULL),(139,9,18,'customer',1,'2026-08-05 14:23:32',NULL),(140,9,1,'platform',1,'2026-08-05 14:23:32',NULL),(141,9,29,'rider',1,'2026-08-05 14:23:32',NULL),(142,9,18,'customer',1,'2026-08-05 14:23:37',NULL),(143,9,1,'platform',1,'2026-08-05 14:23:37',NULL),(144,9,29,'rider',1,'2026-08-05 14:23:37',NULL),(145,9,18,'customer',1,'2026-08-05 14:23:42',NULL),(146,9,1,'platform',1,'2026-08-05 14:23:42',NULL),(147,9,29,'rider',1,'2026-08-05 14:23:42',NULL),(148,9,18,'customer',1,'2026-08-05 14:23:47',NULL),(149,9,1,'platform',1,'2026-08-05 14:23:47',NULL),(150,9,29,'rider',1,'2026-08-05 14:23:47',NULL),(151,9,18,'customer',1,'2026-08-05 14:23:52',NULL),(152,9,1,'platform',1,'2026-08-05 14:23:52',NULL),(153,9,29,'rider',1,'2026-08-05 14:23:52',NULL),(154,9,18,'customer',1,'2026-08-05 14:23:57',NULL),(155,9,1,'platform',1,'2026-08-05 14:23:57',NULL),(156,9,29,'rider',1,'2026-08-05 14:23:57',NULL),(157,9,18,'customer',1,'2026-08-05 14:24:02',NULL),(158,9,1,'platform',1,'2026-08-05 14:24:02',NULL),(159,9,29,'rider',1,'2026-08-05 14:24:02',NULL),(160,9,18,'customer',1,'2026-08-05 14:24:07',NULL),(161,9,1,'platform',1,'2026-08-05 14:24:07',NULL),(162,9,29,'rider',1,'2026-08-05 14:24:07',NULL),(163,9,18,'customer',1,'2026-08-05 14:24:12',NULL),(164,9,1,'platform',1,'2026-08-05 14:24:12',NULL),(165,9,29,'rider',1,'2026-08-05 14:24:12',NULL),(166,9,18,'customer',1,'2026-08-05 14:24:17',NULL),(167,9,1,'platform',1,'2026-08-05 14:24:17',NULL),(168,9,29,'rider',1,'2026-08-05 14:24:17',NULL),(169,9,18,'customer',1,'2026-08-05 14:24:22',NULL),(170,9,1,'platform',1,'2026-08-05 14:24:22',NULL),(171,9,29,'rider',1,'2026-08-05 14:24:22',NULL),(172,9,18,'customer',1,'2026-08-05 14:24:27',NULL),(173,9,1,'platform',1,'2026-08-05 14:24:27',NULL),(174,9,29,'rider',1,'2026-08-05 14:24:27',NULL),(175,9,18,'customer',1,'2026-08-05 14:24:32',NULL),(176,9,1,'platform',1,'2026-08-05 14:24:32',NULL),(177,9,29,'rider',1,'2026-08-05 14:24:32',NULL),(178,9,18,'customer',1,'2026-08-05 14:24:37',NULL),(179,9,1,'platform',1,'2026-08-05 14:24:37',NULL),(180,9,29,'rider',1,'2026-08-05 14:24:37',NULL),(181,9,18,'customer',1,'2026-08-05 14:24:42',NULL),(182,9,1,'platform',1,'2026-08-05 14:24:42',NULL),(183,9,29,'rider',1,'2026-08-05 14:24:42',NULL),(184,9,18,'customer',1,'2026-08-05 14:24:47',NULL),(185,9,1,'platform',1,'2026-08-05 14:24:47',NULL),(186,9,29,'rider',1,'2026-08-05 14:24:47',NULL),(187,9,18,'customer',1,'2026-08-05 14:24:52',NULL),(188,9,1,'platform',1,'2026-08-05 14:24:52',NULL),(189,9,29,'rider',1,'2026-08-05 14:24:52',NULL),(190,9,18,'customer',1,'2026-08-05 14:24:57',NULL),(191,9,1,'platform',1,'2026-08-05 14:24:57',NULL),(192,9,29,'rider',1,'2026-08-05 14:24:57',NULL),(193,9,18,'customer',1,'2026-08-05 14:25:02',NULL),(194,9,1,'platform',1,'2026-08-05 14:25:02',NULL),(195,9,29,'rider',1,'2026-08-05 14:25:02',NULL),(196,9,18,'customer',1,'2026-08-05 14:25:08',NULL),(197,9,1,'platform',1,'2026-08-05 14:25:08',NULL),(198,9,29,'rider',1,'2026-08-05 14:25:08',NULL),(199,9,18,'customer',1,'2026-08-05 14:25:13',NULL),(200,9,1,'platform',1,'2026-08-05 14:25:13',NULL),(201,9,29,'rider',1,'2026-08-05 14:25:13',NULL),(202,9,18,'customer',1,'2026-08-05 14:25:18',NULL),(203,9,1,'platform',1,'2026-08-05 14:25:18',NULL),(204,9,29,'rider',1,'2026-08-05 14:25:18',NULL),(205,9,18,'customer',1,'2026-08-05 14:25:23',NULL),(206,9,1,'platform',1,'2026-08-05 14:25:23',NULL),(207,9,29,'rider',1,'2026-08-05 14:25:23',NULL),(208,9,18,'customer',1,'2026-08-05 14:25:28',NULL),(209,9,1,'platform',1,'2026-08-05 14:25:28',NULL),(210,9,29,'rider',1,'2026-08-05 14:25:28',NULL),(211,9,18,'customer',1,'2026-08-05 14:25:33',NULL),(212,9,1,'platform',1,'2026-08-05 14:25:33',NULL),(213,9,29,'rider',1,'2026-08-05 14:25:33',NULL),(214,9,18,'customer',1,'2026-08-05 14:25:38',NULL),(215,9,1,'platform',1,'2026-08-05 14:25:38',NULL),(216,9,29,'rider',1,'2026-08-05 14:25:38',NULL),(217,9,18,'customer',1,'2026-08-05 14:25:43',NULL),(218,9,1,'platform',1,'2026-08-05 14:25:43',NULL),(219,9,29,'rider',1,'2026-08-05 14:25:43',NULL),(220,9,18,'customer',1,'2026-08-05 14:25:48',NULL),(221,9,1,'platform',1,'2026-08-05 14:25:48',NULL),(222,9,29,'rider',1,'2026-08-05 14:25:48',NULL),(223,9,18,'customer',1,'2026-08-05 14:25:53',NULL),(224,9,1,'platform',1,'2026-08-05 14:25:53',NULL),(225,9,29,'rider',1,'2026-08-05 14:25:53',NULL),(226,9,18,'customer',1,'2026-08-05 14:25:58',NULL),(227,9,1,'platform',1,'2026-08-05 14:25:58',NULL),(228,9,29,'rider',1,'2026-08-05 14:25:58',NULL),(229,9,18,'customer',1,'2026-08-05 14:26:43',NULL),(230,9,1,'platform',1,'2026-08-05 14:26:43',NULL),(231,9,29,'rider',1,'2026-08-05 14:26:43',NULL),(232,9,18,'customer',1,'2026-08-05 14:27:33',NULL),(233,9,1,'platform',1,'2026-08-05 14:27:33',NULL),(234,9,29,'rider',1,'2026-08-05 14:27:33',NULL),(235,9,18,'customer',1,'2026-08-05 14:27:34',NULL),(236,9,1,'platform',1,'2026-08-05 14:27:34',NULL),(237,9,29,'rider',1,'2026-08-05 14:27:34',NULL),(238,9,18,'customer',1,'2026-08-05 14:27:39',NULL),(239,9,1,'platform',1,'2026-08-05 14:27:39',NULL),(240,9,29,'rider',1,'2026-08-05 14:27:39',NULL),(241,9,18,'customer',1,'2026-08-05 14:27:44',NULL),(242,9,1,'platform',1,'2026-08-05 14:27:44',NULL),(243,9,29,'rider',1,'2026-08-05 14:27:44',NULL),(244,9,18,'customer',1,'2026-08-05 14:27:49',NULL),(245,9,1,'platform',1,'2026-08-05 14:27:49',NULL),(246,9,29,'rider',1,'2026-08-05 14:27:49',NULL),(247,9,18,'customer',1,'2026-08-05 14:27:54',NULL),(248,9,1,'platform',1,'2026-08-05 14:27:54',NULL),(249,9,29,'rider',1,'2026-08-05 14:27:54',NULL),(250,9,18,'customer',1,'2026-08-05 14:27:59',NULL),(251,9,1,'platform',1,'2026-08-05 14:27:59',NULL),(252,9,29,'rider',1,'2026-08-05 14:27:59',NULL),(253,9,18,'customer',1,'2026-08-05 14:28:04',NULL),(254,9,1,'platform',1,'2026-08-05 14:28:04',NULL),(255,9,29,'rider',1,'2026-08-05 14:28:04',NULL),(256,9,18,'customer',1,'2026-08-05 14:28:09',NULL),(257,9,1,'platform',1,'2026-08-05 14:28:09',NULL),(258,9,29,'rider',1,'2026-08-05 14:28:09',NULL),(259,9,18,'customer',1,'2026-08-05 14:28:14',NULL),(260,9,1,'platform',1,'2026-08-05 14:28:14',NULL),(261,9,29,'rider',1,'2026-08-05 14:28:14',NULL),(262,9,18,'customer',1,'2026-08-05 14:28:19',NULL),(263,9,1,'platform',1,'2026-08-05 14:28:19',NULL),(264,9,29,'rider',1,'2026-08-05 14:28:19',NULL),(265,9,18,'customer',1,'2026-08-05 14:28:24',NULL),(266,9,1,'platform',1,'2026-08-05 14:28:24',NULL),(267,9,29,'rider',1,'2026-08-05 14:28:24',NULL),(268,9,18,'customer',1,'2026-08-05 14:28:29',NULL),(269,9,1,'platform',1,'2026-08-05 14:28:29',NULL),(270,9,29,'rider',1,'2026-08-05 14:28:29',NULL),(271,9,18,'customer',1,'2026-08-05 14:28:34',NULL),(272,9,1,'platform',1,'2026-08-05 14:28:34',NULL),(273,9,29,'rider',1,'2026-08-05 14:28:34',NULL),(274,9,18,'customer',1,'2026-08-05 14:28:39',NULL),(275,9,1,'platform',1,'2026-08-05 14:28:39',NULL),(276,9,29,'rider',1,'2026-08-05 14:28:39',NULL),(277,9,18,'customer',1,'2026-08-05 14:28:44',NULL),(278,9,1,'platform',1,'2026-08-05 14:28:44',NULL),(279,9,29,'rider',1,'2026-08-05 14:28:44',NULL),(280,9,18,'customer',1,'2026-08-05 14:28:49',NULL),(281,9,1,'platform',1,'2026-08-05 14:28:49',NULL),(282,9,29,'rider',1,'2026-08-05 14:28:49',NULL),(283,9,18,'customer',1,'2026-08-05 14:28:54',NULL),(284,9,1,'platform',1,'2026-08-05 14:28:54',NULL),(285,9,29,'rider',1,'2026-08-05 14:28:54',NULL),(286,9,18,'customer',1,'2026-08-05 14:28:59',NULL),(287,9,1,'platform',1,'2026-08-05 14:28:59',NULL),(288,9,29,'rider',1,'2026-08-05 14:28:59',NULL),(289,9,18,'customer',1,'2026-08-05 14:29:04',NULL),(290,9,1,'platform',1,'2026-08-05 14:29:04',NULL),(291,9,29,'rider',1,'2026-08-05 14:29:04',NULL),(292,9,18,'customer',1,'2026-08-05 14:29:09',NULL),(293,9,1,'platform',1,'2026-08-05 14:29:09',NULL),(294,9,29,'rider',1,'2026-08-05 14:29:09',NULL),(295,9,18,'customer',1,'2026-08-05 14:29:14',NULL),(296,9,1,'platform',1,'2026-08-05 14:29:14',NULL),(297,9,29,'rider',1,'2026-08-05 14:29:14',NULL),(298,9,18,'customer',1,'2026-08-05 14:29:19',NULL),(299,9,1,'platform',1,'2026-08-05 14:29:19',NULL),(300,9,29,'rider',1,'2026-08-05 14:29:19',NULL),(301,9,18,'customer',1,'2026-08-05 14:29:24',NULL),(302,9,1,'platform',1,'2026-08-05 14:29:24',NULL),(303,9,29,'rider',1,'2026-08-05 14:29:24',NULL),(304,9,18,'customer',1,'2026-08-05 14:29:29',NULL),(305,9,1,'platform',1,'2026-08-05 14:29:29',NULL),(306,9,29,'rider',1,'2026-08-05 14:29:29',NULL),(307,9,18,'customer',1,'2026-08-05 14:29:34',NULL),(308,9,1,'platform',1,'2026-08-05 14:29:34',NULL),(309,9,29,'rider',1,'2026-08-05 14:29:34',NULL),(310,9,18,'customer',1,'2026-08-05 14:29:39',NULL),(311,9,1,'platform',1,'2026-08-05 14:29:39',NULL),(312,9,29,'rider',1,'2026-08-05 14:29:39',NULL),(313,9,18,'customer',1,'2026-08-05 14:29:44',NULL),(314,9,1,'platform',1,'2026-08-05 14:29:44',NULL),(315,9,29,'rider',1,'2026-08-05 14:29:44',NULL),(316,9,18,'customer',1,'2026-08-05 14:29:49',NULL),(317,9,1,'platform',1,'2026-08-05 14:29:49',NULL),(318,9,29,'rider',1,'2026-08-05 14:29:49',NULL),(319,9,18,'customer',1,'2026-08-05 14:29:54',NULL),(320,9,1,'platform',1,'2026-08-05 14:29:54',NULL),(321,9,29,'rider',1,'2026-08-05 14:29:54',NULL),(322,9,18,'customer',1,'2026-08-05 14:29:59',NULL),(323,9,1,'platform',1,'2026-08-05 14:29:59',NULL),(324,9,29,'rider',1,'2026-08-05 14:29:59',NULL),(325,9,18,'customer',1,'2026-08-05 14:30:04',NULL),(326,9,1,'platform',1,'2026-08-05 14:30:04',NULL),(327,9,29,'rider',1,'2026-08-05 14:30:04',NULL),(328,9,18,'customer',1,'2026-08-05 14:30:09',NULL),(329,9,1,'platform',1,'2026-08-05 14:30:09',NULL),(330,9,29,'rider',1,'2026-08-05 14:30:09',NULL),(331,9,18,'customer',1,'2026-08-05 14:30:14',NULL),(332,9,1,'platform',1,'2026-08-05 14:30:14',NULL),(333,9,29,'rider',1,'2026-08-05 14:30:14',NULL),(334,9,18,'customer',1,'2026-08-05 14:30:19',NULL),(335,9,1,'platform',1,'2026-08-05 14:30:19',NULL),(336,9,29,'rider',1,'2026-08-05 14:30:19',NULL),(337,9,18,'customer',1,'2026-08-05 14:30:24',NULL),(338,9,1,'platform',1,'2026-08-05 14:30:24',NULL),(339,9,29,'rider',1,'2026-08-05 14:30:24',NULL),(340,9,18,'customer',1,'2026-08-05 14:30:29',NULL),(341,9,1,'platform',1,'2026-08-05 14:30:29',NULL),(342,9,29,'rider',1,'2026-08-05 14:30:29',NULL),(343,9,18,'customer',1,'2026-08-05 14:30:34',NULL),(344,9,1,'platform',1,'2026-08-05 14:30:34',NULL),(345,9,29,'rider',1,'2026-08-05 14:30:34',NULL),(346,9,18,'customer',1,'2026-08-05 14:30:39',NULL),(347,9,1,'platform',1,'2026-08-05 14:30:39',NULL),(348,9,29,'rider',1,'2026-08-05 14:30:39',NULL),(349,9,18,'customer',1,'2026-08-05 14:30:44',NULL),(350,9,1,'platform',1,'2026-08-05 14:30:44',NULL),(351,9,29,'rider',1,'2026-08-05 14:30:44',NULL),(352,9,18,'customer',1,'2026-08-05 14:30:47',NULL),(353,9,1,'platform',1,'2026-08-05 14:30:47',NULL),(354,9,29,'rider',1,'2026-08-05 14:30:47',NULL),(355,9,18,'customer',1,'2026-08-05 14:30:52',NULL),(356,9,1,'platform',1,'2026-08-05 14:30:52',NULL),(357,9,29,'rider',1,'2026-08-05 14:30:52',NULL),(358,9,18,'customer',1,'2026-08-05 14:30:57',NULL),(359,9,1,'platform',1,'2026-08-05 14:30:57',NULL),(360,9,29,'rider',1,'2026-08-05 14:30:57',NULL),(361,9,18,'customer',1,'2026-08-05 14:31:02',NULL),(362,9,1,'platform',1,'2026-08-05 14:31:02',NULL),(363,9,29,'rider',1,'2026-08-05 14:31:02',NULL),(364,9,18,'customer',1,'2026-08-05 14:31:07',NULL),(365,9,1,'platform',1,'2026-08-05 14:31:07',NULL),(366,9,29,'rider',1,'2026-08-05 14:31:07',NULL),(367,9,18,'customer',1,'2026-08-05 14:31:12',NULL),(368,9,1,'platform',1,'2026-08-05 14:31:12',NULL),(369,9,29,'rider',1,'2026-08-05 14:31:12',NULL),(370,9,18,'customer',1,'2026-08-05 14:31:17',NULL),(371,9,1,'platform',1,'2026-08-05 14:31:17',NULL),(372,9,29,'rider',1,'2026-08-05 14:31:17',NULL),(373,9,18,'customer',1,'2026-08-05 14:31:21',NULL),(374,9,1,'platform',1,'2026-08-05 14:31:21',NULL),(375,9,29,'rider',1,'2026-08-05 14:31:21',NULL),(376,9,18,'customer',1,'2026-08-05 14:31:21',NULL),(377,9,1,'platform',1,'2026-08-05 14:31:21',NULL),(378,9,29,'rider',1,'2026-08-05 14:31:21',NULL),(379,9,18,'customer',1,'2026-08-05 14:31:21',NULL),(380,9,1,'platform',1,'2026-08-05 14:31:21',NULL),(381,9,29,'rider',1,'2026-08-05 14:31:21',NULL),(382,9,18,'customer',1,'2026-08-05 14:31:21',NULL),(383,9,1,'platform',1,'2026-08-05 14:31:21',NULL),(384,9,29,'rider',1,'2026-08-05 14:31:21',NULL),(385,9,18,'customer',1,'2026-08-05 14:31:22',NULL),(386,9,1,'platform',1,'2026-08-05 14:31:22',NULL),(387,9,29,'rider',1,'2026-08-05 14:31:22',NULL),(388,9,18,'customer',1,'2026-08-05 14:31:27',NULL),(389,9,1,'platform',1,'2026-08-05 14:31:27',NULL),(390,9,29,'rider',1,'2026-08-05 14:31:27',NULL),(391,9,18,'customer',1,'2026-08-05 14:31:32',NULL),(392,9,1,'platform',1,'2026-08-05 14:31:32',NULL),(393,9,29,'rider',1,'2026-08-05 14:31:32',NULL),(394,9,18,'customer',1,'2026-08-05 14:31:37',NULL),(395,9,1,'platform',1,'2026-08-05 14:31:37',NULL),(396,9,29,'rider',1,'2026-08-05 14:31:37',NULL),(397,9,18,'customer',1,'2026-08-05 14:31:42',NULL),(398,9,1,'platform',1,'2026-08-05 14:31:42',NULL),(399,9,29,'rider',1,'2026-08-05 14:31:42',NULL),(400,9,18,'customer',1,'2026-08-05 14:31:47',NULL),(401,9,1,'platform',1,'2026-08-05 14:31:47',NULL),(402,9,29,'rider',1,'2026-08-05 14:31:47',NULL),(403,9,18,'customer',1,'2026-08-05 14:31:52',NULL),(404,9,1,'platform',1,'2026-08-05 14:31:52',NULL),(405,9,29,'rider',1,'2026-08-05 14:31:52',NULL),(406,9,18,'customer',1,'2026-08-05 14:31:57',NULL),(407,9,1,'platform',1,'2026-08-05 14:31:57',NULL),(408,9,29,'rider',1,'2026-08-05 14:31:57',NULL),(409,9,18,'customer',1,'2026-08-05 14:32:02',NULL),(410,9,1,'platform',1,'2026-08-05 14:32:02',NULL),(411,9,29,'rider',1,'2026-08-05 14:32:02',NULL),(412,9,18,'customer',1,'2026-08-05 14:32:07',NULL),(413,9,1,'platform',1,'2026-08-05 14:32:07',NULL),(414,9,29,'rider',1,'2026-08-05 14:32:07',NULL),(415,9,18,'customer',1,'2026-08-05 14:32:12',NULL),(416,9,1,'platform',1,'2026-08-05 14:32:12',NULL),(417,9,29,'rider',1,'2026-08-05 14:32:12',NULL),(418,9,18,'customer',1,'2026-08-05 14:32:12',NULL),(419,9,1,'platform',1,'2026-08-05 14:32:12',NULL),(420,9,29,'rider',1,'2026-08-05 14:32:13',NULL),(421,9,18,'customer',1,'2026-08-05 14:32:17',NULL),(422,9,1,'platform',1,'2026-08-05 14:32:17',NULL),(423,9,29,'rider',1,'2026-08-05 14:32:17',NULL),(424,9,18,'customer',1,'2026-08-05 14:38:06',NULL),(425,9,1,'platform',1,'2026-08-05 14:38:06',NULL),(426,9,29,'rider',1,'2026-08-05 14:38:06',NULL),(427,9,18,'customer',1,'2026-08-05 14:38:11',NULL),(428,9,1,'platform',1,'2026-08-05 14:38:11',NULL),(429,9,29,'rider',1,'2026-08-05 14:38:11',NULL),(430,9,18,'customer',1,'2026-08-05 14:38:16',NULL),(431,9,1,'platform',1,'2026-08-05 14:38:16',NULL),(432,9,29,'rider',1,'2026-08-05 14:38:16',NULL),(433,9,18,'customer',1,'2026-08-05 14:38:18',NULL),(434,9,1,'platform',1,'2026-08-05 14:38:18',NULL),(435,9,29,'rider',1,'2026-08-05 14:38:18',NULL),(436,9,18,'customer',1,'2026-08-05 14:38:33',NULL),(437,9,1,'platform',1,'2026-08-05 14:38:33',NULL),(438,9,29,'rider',1,'2026-08-05 14:38:33',NULL),(439,9,18,'customer',1,'2026-08-05 14:38:36',NULL),(440,9,1,'platform',1,'2026-08-05 14:38:36',NULL),(441,9,29,'rider',1,'2026-08-05 14:38:36',NULL),(442,9,18,'customer',1,'2026-08-05 15:35:58',NULL),(443,9,1,'platform',1,'2026-08-05 15:35:58',NULL),(444,9,29,'rider',1,'2026-08-05 15:35:58',NULL),(445,9,18,'customer',1,'2026-08-05 15:36:03',NULL),(446,9,1,'platform',1,'2026-08-05 15:36:03',NULL),(447,9,29,'rider',1,'2026-08-05 15:36:03',NULL),(448,10,18,'customer',1,'2026-08-06 09:40:46',NULL),(449,10,1,'platform',1,'2026-08-06 09:40:46',NULL),(450,10,30,'rider',1,'2026-08-06 09:40:46',NULL),(451,10,18,'customer',1,'2026-08-06 09:40:51',NULL),(452,10,1,'platform',1,'2026-08-06 09:40:51',NULL),(453,10,30,'rider',1,'2026-08-06 09:40:51',NULL),(454,10,18,'customer',1,'2026-08-06 09:40:51',NULL),(455,10,1,'platform',1,'2026-08-06 09:40:51',NULL),(456,10,30,'rider',1,'2026-08-06 09:40:51',NULL),(457,10,18,'customer',1,'2026-08-06 09:40:51',NULL),(458,10,1,'platform',1,'2026-08-06 09:40:51',NULL),(459,10,30,'rider',1,'2026-08-06 09:40:51',NULL),(460,10,18,'customer',1,'2026-08-06 09:40:51',NULL),(461,10,1,'platform',1,'2026-08-06 09:40:51',NULL),(462,10,30,'rider',1,'2026-08-06 09:40:51',NULL),(463,10,18,'customer',1,'2026-08-06 09:40:51',NULL),(464,10,1,'platform',1,'2026-08-06 09:40:51',NULL),(465,10,30,'rider',1,'2026-08-06 09:40:51',NULL),(466,10,18,'customer',1,'2026-08-06 09:40:56',NULL),(467,10,1,'platform',1,'2026-08-06 09:40:56',NULL),(468,10,30,'rider',1,'2026-08-06 09:40:56',NULL),(469,10,18,'customer',1,'2026-08-06 09:41:01',NULL),(470,10,1,'platform',1,'2026-08-06 09:41:01',NULL),(471,10,30,'rider',1,'2026-08-06 09:41:01',NULL),(472,10,18,'customer',1,'2026-08-06 09:41:06',NULL),(473,10,1,'platform',1,'2026-08-06 09:41:06',NULL),(474,10,30,'rider',1,'2026-08-06 09:41:06',NULL),(475,10,18,'customer',1,'2026-08-06 09:41:11',NULL),(476,10,1,'platform',1,'2026-08-06 09:41:11',NULL),(477,10,30,'rider',1,'2026-08-06 09:41:11',NULL),(478,10,18,'customer',1,'2026-08-06 09:41:16',NULL),(479,10,1,'platform',1,'2026-08-06 09:41:16',NULL),(480,10,30,'rider',1,'2026-08-06 09:41:16',NULL),(481,10,18,'customer',1,'2026-08-06 09:41:21',NULL),(482,10,1,'platform',1,'2026-08-06 09:41:21',NULL),(483,10,30,'rider',1,'2026-08-06 09:41:21',NULL),(484,10,18,'customer',1,'2026-08-06 09:41:26',NULL),(485,10,1,'platform',1,'2026-08-06 09:41:26',NULL),(486,10,30,'rider',1,'2026-08-06 09:41:26',NULL),(487,10,18,'customer',1,'2026-08-06 09:41:31',NULL),(488,10,1,'platform',1,'2026-08-06 09:41:31',NULL),(489,10,30,'rider',1,'2026-08-06 09:41:31',NULL),(490,10,18,'customer',1,'2026-08-06 09:44:30',NULL),(491,10,1,'platform',1,'2026-08-06 09:44:30',NULL),(492,10,30,'rider',1,'2026-08-06 09:44:30',NULL),(493,10,18,'customer',1,'2026-08-06 09:44:35',NULL),(494,10,1,'platform',1,'2026-08-06 09:44:35',NULL),(495,10,30,'rider',1,'2026-08-06 09:44:35',NULL),(496,10,18,'customer',1,'2026-08-06 09:44:40',NULL),(497,10,1,'platform',1,'2026-08-06 09:44:40',NULL),(498,10,30,'rider',1,'2026-08-06 09:44:40',NULL),(499,10,18,'customer',1,'2026-08-06 09:45:07',NULL),(500,10,1,'platform',1,'2026-08-06 09:45:07',NULL),(501,10,30,'rider',1,'2026-08-06 09:45:07',NULL),(502,10,18,'customer',1,'2026-08-06 10:22:23',NULL),(503,10,1,'platform',1,'2026-08-06 10:22:23',NULL),(504,10,30,'rider',1,'2026-08-06 10:22:23',NULL),(505,10,18,'customer',1,'2026-08-06 11:31:30',NULL),(506,10,1,'platform',1,'2026-08-06 11:31:30',NULL),(507,10,30,'rider',1,'2026-08-06 11:31:30',NULL),(508,10,18,'customer',1,'2026-08-06 11:53:41',NULL),(509,10,1,'platform',1,'2026-08-06 11:53:41',NULL),(510,10,30,'rider',1,'2026-08-06 11:53:41',NULL),(511,10,18,'customer',1,'2026-08-06 11:53:46',NULL),(512,10,1,'platform',1,'2026-08-06 11:53:46',NULL),(513,10,30,'rider',1,'2026-08-06 11:53:46',NULL),(514,10,18,'customer',1,'2026-08-06 11:53:51',NULL),(515,10,1,'platform',1,'2026-08-06 11:53:51',NULL),(516,10,30,'rider',1,'2026-08-06 11:53:51',NULL),(517,10,18,'customer',1,'2026-08-06 11:53:56',NULL),(518,10,1,'platform',1,'2026-08-06 11:53:56',NULL),(519,10,30,'rider',1,'2026-08-06 11:53:56',NULL),(520,10,18,'customer',1,'2026-08-06 11:54:01',NULL),(521,10,1,'platform',1,'2026-08-06 11:54:01',NULL),(522,10,30,'rider',1,'2026-08-06 11:54:01',NULL),(523,10,18,'customer',1,'2026-08-12 09:02:07',NULL),(524,10,1,'platform',1,'2026-08-12 09:02:07',NULL),(525,10,30,'rider',1,'2026-08-12 09:02:07',NULL),(526,10,18,'customer',1,'2026-08-12 09:02:12',NULL),(527,10,1,'platform',1,'2026-08-12 09:02:12',NULL),(528,10,30,'rider',1,'2026-08-12 09:02:12',NULL),(529,11,18,'customer',1,'2026-08-25 16:26:09',NULL),(530,11,1,'platform',1,'2026-08-25 16:26:09',NULL),(531,11,18,'rider',1,'2026-08-25 16:26:09',NULL),(532,11,18,'customer',1,'2026-08-25 16:26:14',NULL),(533,11,1,'platform',1,'2026-08-25 16:26:14',NULL),(534,11,18,'rider',1,'2026-08-25 16:26:14',NULL),(535,11,18,'customer',1,'2026-08-25 16:26:28',NULL),(536,11,1,'platform',1,'2026-08-25 16:26:28',NULL),(537,11,18,'rider',1,'2026-08-25 16:26:28',NULL),(538,11,18,'customer',1,'2026-08-25 16:26:28',NULL),(539,11,1,'platform',1,'2026-08-25 16:26:28',NULL),(540,11,18,'rider',1,'2026-08-25 16:26:28',NULL),(541,11,18,'customer',1,'2026-08-25 16:26:28',NULL),(542,11,1,'platform',1,'2026-08-25 16:26:28',NULL),(543,11,18,'rider',1,'2026-08-25 16:26:28',NULL),(544,11,18,'customer',1,'2026-08-25 16:26:28',NULL),(545,11,1,'platform',1,'2026-08-25 16:26:28',NULL),(546,11,18,'rider',1,'2026-08-25 16:26:28',NULL),(547,11,18,'customer',1,'2026-08-25 16:26:30',NULL),(548,11,1,'platform',1,'2026-08-25 16:26:30',NULL),(549,11,18,'rider',1,'2026-08-25 16:26:30',NULL),(550,11,18,'customer',1,'2026-08-25 16:26:30',NULL),(551,11,1,'platform',1,'2026-08-25 16:26:30',NULL),(552,11,18,'rider',1,'2026-08-25 16:26:30',NULL),(553,11,18,'customer',1,'2026-08-25 16:26:30',NULL),(554,11,1,'platform',1,'2026-08-25 16:26:30',NULL),(555,11,18,'rider',1,'2026-08-25 16:26:30',NULL),(556,11,18,'customer',1,'2026-08-25 16:26:30',NULL),(557,11,1,'platform',1,'2026-08-25 16:26:30',NULL),(558,11,18,'rider',1,'2026-08-25 16:26:30',NULL),(559,11,18,'customer',1,'2026-08-25 16:26:31',NULL),(560,11,1,'platform',1,'2026-08-25 16:26:31',NULL),(561,11,18,'rider',1,'2026-08-25 16:26:31',NULL),(562,11,18,'customer',1,'2026-08-25 16:26:31',NULL),(563,11,1,'platform',1,'2026-08-25 16:26:31',NULL),(564,11,18,'rider',1,'2026-08-25 16:26:31',NULL),(565,11,18,'customer',1,'2026-08-25 16:26:31',NULL),(566,11,1,'platform',1,'2026-08-25 16:26:31',NULL),(567,11,18,'rider',1,'2026-08-25 16:26:31',NULL),(568,11,18,'customer',1,'2026-08-25 16:26:31',NULL),(569,11,1,'platform',1,'2026-08-25 16:26:31',NULL),(570,11,18,'rider',1,'2026-08-25 16:26:31',NULL),(571,11,18,'customer',1,'2026-08-25 16:34:37',NULL),(572,11,1,'platform',1,'2026-08-25 16:34:37',NULL),(573,11,18,'rider',1,'2026-08-25 16:34:37',NULL),(574,11,18,'customer',1,'2026-08-25 16:34:41',NULL),(575,11,1,'platform',1,'2026-08-25 16:34:41',NULL),(576,11,18,'rider',1,'2026-08-25 16:34:41',NULL),(577,11,18,'customer',1,'2026-08-25 16:34:41',NULL),(578,11,1,'platform',1,'2026-08-25 16:34:41',NULL),(579,11,18,'rider',1,'2026-08-25 16:34:41',NULL),(580,11,18,'customer',1,'2026-08-25 16:34:41',NULL),(581,11,1,'platform',1,'2026-08-25 16:34:41',NULL),(582,11,18,'rider',1,'2026-08-25 16:34:41',NULL),(583,11,18,'customer',1,'2026-08-25 16:34:41',NULL),(584,11,1,'platform',1,'2026-08-25 16:34:41',NULL),(585,11,18,'rider',1,'2026-08-25 16:34:41',NULL),(586,11,18,'customer',1,'2026-08-25 16:34:42',NULL),(587,11,1,'platform',1,'2026-08-25 16:34:42',NULL),(588,11,18,'rider',1,'2026-08-25 16:34:42',NULL),(589,11,18,'customer',1,'2026-09-16 07:49:54',NULL),(590,11,1,'platform',1,'2026-09-16 07:49:54',NULL),(591,11,18,'rider',1,'2026-09-16 07:49:54',NULL),(592,11,18,'customer',1,'2026-09-16 07:49:58',NULL),(593,11,1,'platform',1,'2026-09-16 07:49:58',NULL),(594,11,18,'rider',1,'2026-09-16 07:49:58',NULL),(595,11,18,'customer',1,'2026-09-16 07:50:03',NULL),(596,11,1,'platform',1,'2026-09-16 07:50:03',NULL),(597,11,18,'rider',1,'2026-09-16 07:50:03',NULL),(598,11,18,'customer',1,'2026-09-16 07:50:07',NULL),(599,11,1,'platform',1,'2026-09-16 07:50:07',NULL),(600,11,18,'rider',1,'2026-09-16 07:50:07',NULL),(601,11,18,'customer',1,'2026-09-16 07:50:12',NULL),(602,11,1,'platform',1,'2026-09-16 07:50:12',NULL),(603,11,18,'rider',1,'2026-09-16 07:50:12',NULL),(604,11,18,'customer',1,'2026-09-16 07:50:16',NULL),(605,11,1,'platform',1,'2026-09-16 07:50:16',NULL),(606,11,18,'rider',1,'2026-09-16 07:50:16',NULL),(607,12,18,'customer',1,'2026-09-16 13:20:27',NULL),(608,12,1,'store',1,'2026-09-16 13:20:27',NULL),(609,12,1,'platform',1,'2026-09-16 13:20:27',NULL),(610,12,29,'rider',1,'2026-09-16 13:20:27',NULL),(611,12,18,'customer',1,'2026-09-16 13:20:32',NULL),(612,12,1,'store',1,'2026-09-16 13:20:32',NULL),(613,12,1,'platform',1,'2026-09-16 13:20:32',NULL),(614,12,29,'rider',1,'2026-09-16 13:20:32',NULL),(615,12,18,'customer',1,'2026-09-16 13:20:36',NULL),(616,12,1,'store',1,'2026-09-16 13:20:36',NULL),(617,12,1,'platform',1,'2026-09-16 13:20:36',NULL),(618,12,29,'rider',1,'2026-09-16 13:20:36',NULL),(619,12,18,'customer',1,'2026-09-16 13:20:59',NULL),(620,12,1,'store',1,'2026-09-16 13:20:59',NULL),(621,12,1,'platform',1,'2026-09-16 13:20:59',NULL),(622,12,29,'rider',1,'2026-09-16 13:20:59',NULL),(623,12,18,'customer',1,'2026-09-16 13:21:04',NULL),(624,12,1,'store',1,'2026-09-16 13:21:04',NULL),(625,12,1,'platform',1,'2026-09-16 13:21:04',NULL),(626,12,29,'rider',1,'2026-09-16 13:21:04',NULL),(627,12,18,'customer',1,'2026-09-16 13:21:08',NULL),(628,12,1,'store',1,'2026-09-16 13:21:08',NULL),(629,12,1,'platform',1,'2026-09-16 13:21:08',NULL),(630,12,29,'rider',1,'2026-09-16 13:21:08',NULL),(631,13,18,'customer',1,'2026-09-16 13:48:05',NULL),(632,13,1,'store',1,'2026-09-16 13:48:05',NULL),(633,13,1,'platform',1,'2026-09-16 13:48:05',NULL),(634,13,15,'rider',1,'2026-09-16 13:48:05',NULL),(635,13,18,'customer',1,'2026-09-16 13:48:10',NULL),(636,13,1,'store',1,'2026-09-16 13:48:10',NULL),(637,13,1,'platform',1,'2026-09-16 13:48:10',NULL),(638,13,15,'rider',1,'2026-09-16 13:48:10',NULL),(639,13,18,'customer',1,'2026-09-16 13:48:14',NULL),(640,13,1,'store',1,'2026-09-16 13:48:14',NULL),(641,13,1,'platform',1,'2026-09-16 13:48:14',NULL),(642,13,15,'rider',1,'2026-09-16 13:48:14',NULL),(643,13,18,'customer',1,'2026-09-16 13:48:19',NULL),(644,13,1,'store',1,'2026-09-16 13:48:19',NULL),(645,13,1,'platform',1,'2026-09-16 13:48:19',NULL),(646,13,15,'rider',1,'2026-09-16 13:48:19',NULL),(647,13,18,'customer',1,'2026-09-16 13:48:23',NULL),(648,13,1,'store',1,'2026-09-16 13:48:23',NULL),(649,13,1,'platform',1,'2026-09-16 13:48:23',NULL),(650,13,15,'rider',1,'2026-09-16 13:48:23',NULL),(651,13,18,'customer',1,'2026-09-16 13:48:28',NULL),(652,13,1,'store',1,'2026-09-16 13:48:28',NULL),(653,13,1,'platform',1,'2026-09-16 13:48:28',NULL),(654,13,15,'rider',1,'2026-09-16 13:48:28',NULL),(655,13,18,'customer',1,'2026-09-16 13:48:32',NULL),(656,13,1,'store',1,'2026-09-16 13:48:32',NULL),(657,13,1,'platform',1,'2026-09-16 13:48:32',NULL),(658,13,15,'rider',1,'2026-09-16 13:48:32',NULL),(659,13,18,'customer',1,'2026-09-16 13:48:37',NULL),(660,13,1,'store',1,'2026-09-16 13:48:37',NULL),(661,13,1,'platform',1,'2026-09-16 13:48:37',NULL),(662,13,15,'rider',1,'2026-09-16 13:48:37',NULL),(663,13,18,'customer',1,'2026-09-16 13:48:41',NULL),(664,13,1,'store',1,'2026-09-16 13:48:41',NULL),(665,13,1,'platform',1,'2026-09-16 13:48:41',NULL),(666,13,15,'rider',1,'2026-09-16 13:48:41',NULL),(667,13,18,'customer',1,'2026-09-16 13:48:46',NULL),(668,13,1,'store',1,'2026-09-16 13:48:46',NULL),(669,13,1,'platform',1,'2026-09-16 13:48:46',NULL),(670,13,15,'rider',1,'2026-09-16 13:48:46',NULL),(671,13,18,'customer',1,'2026-09-16 13:50:46',NULL),(672,13,1,'store',1,'2026-09-16 13:50:46',NULL),(673,13,1,'platform',1,'2026-09-16 13:50:46',NULL),(674,13,15,'rider',1,'2026-09-16 13:50:46',NULL),(675,13,18,'customer',1,'2026-09-16 13:50:50',NULL),(676,13,1,'store',1,'2026-09-16 13:50:50',NULL),(677,13,1,'platform',1,'2026-09-16 13:50:50',NULL),(678,13,15,'rider',1,'2026-09-16 13:50:50',NULL),(679,13,18,'customer',1,'2026-09-16 13:50:55',NULL),(680,13,1,'store',1,'2026-09-16 13:50:55',NULL),(681,13,1,'platform',1,'2026-09-16 13:50:55',NULL),(682,13,15,'rider',1,'2026-09-16 13:50:55',NULL),(683,13,18,'customer',1,'2026-09-16 13:50:59',NULL),(684,13,1,'store',1,'2026-09-16 13:50:59',NULL),(685,13,1,'platform',1,'2026-09-16 13:50:59',NULL),(686,13,15,'rider',1,'2026-09-16 13:50:59',NULL),(687,14,9,'customer',1,'2026-09-24 08:56:56',NULL),(688,14,1,'platform',1,'2026-09-24 08:56:56',NULL),(689,14,18,'rider',1,'2026-09-24 08:56:56',NULL),(690,14,9,'customer',1,'2026-09-24 08:56:59',NULL),(691,14,1,'platform',1,'2026-09-24 08:56:59',NULL),(692,14,18,'rider',1,'2026-09-24 08:56:59',NULL),(693,14,9,'customer',1,'2026-09-24 08:56:59',NULL),(694,14,1,'platform',1,'2026-09-24 08:56:59',NULL),(695,14,18,'rider',1,'2026-09-24 08:56:59',NULL),(696,14,9,'customer',1,'2026-09-24 08:56:59',NULL),(697,14,1,'platform',1,'2026-09-24 08:56:59',NULL),(698,14,18,'rider',1,'2026-09-24 08:56:59',NULL),(699,14,9,'customer',1,'2026-09-24 08:57:02',NULL),(700,14,1,'platform',1,'2026-09-24 08:57:02',NULL),(701,14,18,'rider',1,'2026-09-24 08:57:02',NULL),(702,14,9,'customer',1,'2026-09-24 08:57:05',NULL),(703,14,1,'platform',1,'2026-09-24 08:57:05',NULL),(704,14,18,'rider',1,'2026-09-24 08:57:05',NULL),(705,15,8,'customer',1,'2026-09-24 09:52:40',NULL),(706,15,1,'store',1,'2026-09-24 09:52:40',NULL),(707,15,1,'platform',1,'2026-09-24 09:52:40',NULL),(708,15,8,'customer',1,'2026-09-24 09:52:45',NULL),(709,15,1,'store',1,'2026-09-24 09:52:45',NULL),(710,15,1,'platform',1,'2026-09-24 09:52:45',NULL),(711,15,8,'customer',1,'2026-09-24 09:52:49',NULL),(712,15,1,'store',1,'2026-09-24 09:52:49',NULL),(713,15,1,'platform',1,'2026-09-24 09:52:49',NULL),(714,15,8,'customer',1,'2026-09-24 09:52:54',NULL),(715,15,1,'store',1,'2026-09-24 09:52:54',NULL),(716,15,1,'platform',1,'2026-09-24 09:52:54',NULL),(717,15,8,'customer',1,'2026-09-24 09:52:59',NULL),(718,15,1,'store',1,'2026-09-24 09:52:59',NULL),(719,15,1,'platform',1,'2026-09-24 09:52:59',NULL),(720,15,8,'customer',1,'2026-09-24 09:53:03',NULL),(721,15,1,'store',1,'2026-09-24 09:53:03',NULL),(722,15,1,'platform',1,'2026-09-24 09:53:03',NULL),(723,15,8,'customer',1,'2026-09-24 09:53:08',NULL),(724,15,1,'store',1,'2026-09-24 09:53:08',NULL),(725,15,1,'platform',1,'2026-09-24 09:53:08',NULL),(726,15,8,'customer',1,'2026-09-24 09:53:12',NULL),(727,15,1,'store',1,'2026-09-24 09:53:12',NULL),(728,15,1,'platform',1,'2026-09-24 09:53:12',NULL),(729,15,8,'customer',1,'2026-09-24 09:53:17',NULL),(730,15,1,'store',1,'2026-09-24 09:53:17',NULL),(731,15,1,'platform',1,'2026-09-24 09:53:17',NULL),(732,15,8,'customer',1,'2026-09-24 09:53:21',NULL),(733,15,1,'store',1,'2026-09-24 09:53:21',NULL),(734,15,1,'platform',1,'2026-09-24 09:53:21',NULL),(735,15,8,'customer',1,'2026-09-24 09:53:26',NULL),(736,15,1,'store',1,'2026-09-24 09:53:26',NULL),(737,15,1,'platform',1,'2026-09-24 09:53:26',NULL),(738,15,8,'customer',1,'2026-09-24 09:53:30',NULL),(739,15,1,'store',1,'2026-09-24 09:53:30',NULL),(740,15,1,'platform',1,'2026-09-24 09:53:30',NULL),(741,15,8,'customer',1,'2026-09-24 09:53:35',NULL),(742,15,1,'store',1,'2026-09-24 09:53:35',NULL),(743,15,1,'platform',1,'2026-09-24 09:53:35',NULL),(744,15,18,'rider',1,'2026-09-24 09:53:35',NULL),(745,15,8,'customer',1,'2026-09-24 09:53:39',NULL),(746,15,1,'store',1,'2026-09-24 09:53:39',NULL),(747,15,1,'platform',1,'2026-09-24 09:53:39',NULL),(748,15,18,'rider',1,'2026-09-24 09:53:39',NULL),(749,15,8,'customer',1,'2026-09-24 09:54:39',NULL),(750,15,1,'store',1,'2026-09-24 09:54:39',NULL),(751,15,1,'platform',1,'2026-09-24 09:54:39',NULL),(752,15,18,'rider',1,'2026-09-24 09:54:39',NULL),(753,15,8,'customer',1,'2026-09-24 09:54:44',NULL),(754,15,1,'store',1,'2026-09-24 09:54:44',NULL),(755,15,1,'platform',1,'2026-09-24 09:54:44',NULL),(756,15,18,'rider',1,'2026-09-24 09:54:44',NULL),(757,15,8,'customer',1,'2026-09-24 09:54:48',NULL),(758,15,1,'store',1,'2026-09-24 09:54:48',NULL),(759,15,1,'platform',1,'2026-09-24 09:54:48',NULL),(760,15,18,'rider',1,'2026-09-24 09:54:48',NULL),(761,15,8,'customer',1,'2026-09-24 09:54:53',NULL),(762,15,1,'store',1,'2026-09-24 09:54:53',NULL),(763,15,1,'platform',1,'2026-09-24 09:54:53',NULL),(764,15,18,'rider',1,'2026-09-24 09:54:53',NULL),(765,15,8,'customer',1,'2026-09-24 09:54:57',NULL),(766,15,1,'store',1,'2026-09-24 09:54:57',NULL),(767,15,1,'platform',1,'2026-09-24 09:54:57',NULL),(768,15,18,'rider',1,'2026-09-24 09:54:57',NULL),(769,15,8,'customer',1,'2026-09-24 09:55:02',NULL),(770,15,1,'store',1,'2026-09-24 09:55:02',NULL),(771,15,1,'platform',1,'2026-09-24 09:55:02',NULL),(772,15,18,'rider',1,'2026-09-24 09:55:02',NULL),(773,15,8,'customer',1,'2026-09-24 09:55:06',NULL),(774,15,1,'store',1,'2026-09-24 09:55:06',NULL),(775,15,1,'platform',1,'2026-09-24 09:55:06',NULL),(776,15,18,'rider',1,'2026-09-24 09:55:06',NULL),(777,15,8,'customer',1,'2026-09-24 09:55:11',NULL),(778,15,1,'store',1,'2026-09-24 09:55:11',NULL),(779,15,1,'platform',1,'2026-09-24 09:55:11',NULL),(780,15,18,'rider',1,'2026-09-24 09:55:11',NULL),(781,15,8,'customer',1,'2026-09-24 09:55:15',NULL),(782,15,1,'store',1,'2026-09-24 09:55:15',NULL),(783,15,1,'platform',1,'2026-09-24 09:55:15',NULL),(784,15,18,'rider',1,'2026-09-24 09:55:15',NULL),(785,15,8,'customer',1,'2026-09-24 09:55:20',NULL),(786,15,1,'store',1,'2026-09-24 09:55:20',NULL),(787,15,1,'platform',1,'2026-09-24 09:55:20',NULL),(788,15,18,'rider',1,'2026-09-24 09:55:20',NULL),(789,15,8,'customer',1,'2026-09-24 09:55:24',NULL),(790,15,1,'store',1,'2026-09-24 09:55:24',NULL),(791,15,1,'platform',1,'2026-09-24 09:55:24',NULL),(792,15,18,'rider',1,'2026-09-24 09:55:24',NULL),(793,15,8,'customer',1,'2026-09-24 09:55:29',NULL),(794,15,1,'store',1,'2026-09-24 09:55:29',NULL),(795,15,1,'platform',1,'2026-09-24 09:55:29',NULL),(796,15,18,'rider',1,'2026-09-24 09:55:29',NULL),(797,15,8,'customer',1,'2026-09-24 09:55:33',NULL),(798,15,1,'store',1,'2026-09-24 09:55:33',NULL),(799,15,1,'platform',1,'2026-09-24 09:55:33',NULL),(800,15,18,'rider',1,'2026-09-24 09:55:33',NULL),(801,15,8,'customer',1,'2026-09-24 09:55:38',NULL),(802,15,1,'store',1,'2026-09-24 09:55:38',NULL),(803,15,1,'platform',1,'2026-09-24 09:55:38',NULL),(804,15,18,'rider',1,'2026-09-24 09:55:38',NULL),(805,15,8,'customer',1,'2026-09-24 09:55:43',NULL),(806,15,1,'store',1,'2026-09-24 09:55:43',NULL),(807,15,1,'platform',1,'2026-09-24 09:55:43',NULL),(808,15,18,'rider',1,'2026-09-24 09:55:43',NULL),(809,15,8,'customer',1,'2026-09-24 09:55:47',NULL),(810,15,1,'store',1,'2026-09-24 09:55:47',NULL),(811,15,1,'platform',1,'2026-09-24 09:55:47',NULL),(812,15,18,'rider',1,'2026-09-24 09:55:47',NULL),(813,15,8,'customer',1,'2026-09-24 09:55:52',NULL),(814,15,1,'store',1,'2026-09-24 09:55:52',NULL),(815,15,1,'platform',1,'2026-09-24 09:55:52',NULL),(816,15,18,'rider',1,'2026-09-24 09:55:52',NULL),(817,15,8,'customer',1,'2026-09-24 09:55:56',NULL),(818,15,1,'store',1,'2026-09-24 09:55:56',NULL),(819,15,1,'platform',1,'2026-09-24 09:55:56',NULL),(820,15,18,'rider',1,'2026-09-24 09:55:56',NULL),(821,15,8,'customer',1,'2026-09-24 09:56:01',NULL),(822,15,1,'store',1,'2026-09-24 09:56:01',NULL),(823,15,1,'platform',1,'2026-09-24 09:56:01',NULL),(824,15,18,'rider',1,'2026-09-24 09:56:01',NULL),(825,15,8,'customer',1,'2026-09-24 09:56:05',NULL),(826,15,1,'store',1,'2026-09-24 09:56:05',NULL),(827,15,1,'platform',1,'2026-09-24 09:56:05',NULL),(828,15,18,'rider',1,'2026-09-24 09:56:05',NULL),(829,15,8,'customer',1,'2026-09-24 09:56:10',NULL),(830,15,1,'store',1,'2026-09-24 09:56:10',NULL),(831,15,1,'platform',1,'2026-09-24 09:56:10',NULL),(832,15,18,'rider',1,'2026-09-24 09:56:10',NULL),(833,15,8,'customer',1,'2026-09-24 09:56:14',NULL),(834,15,1,'store',1,'2026-09-24 09:56:14',NULL),(835,15,1,'platform',1,'2026-09-24 09:56:14',NULL),(836,15,18,'rider',1,'2026-09-24 09:56:14',NULL),(837,15,8,'customer',1,'2026-09-24 09:56:17',NULL),(838,15,1,'store',1,'2026-09-24 09:56:17',NULL),(839,15,1,'platform',1,'2026-09-24 09:56:17',NULL),(840,15,18,'rider',1,'2026-09-24 09:56:17',NULL),(841,15,8,'customer',1,'2026-09-24 09:56:18',NULL),(842,15,1,'store',1,'2026-09-24 09:56:18',NULL),(843,15,1,'platform',1,'2026-09-24 09:56:18',NULL),(844,15,18,'rider',1,'2026-09-24 09:56:18',NULL),(845,15,8,'customer',1,'2026-09-24 09:56:18',NULL),(846,15,1,'store',1,'2026-09-24 09:56:18',NULL),(847,15,1,'platform',1,'2026-09-24 09:56:18',NULL),(848,15,18,'rider',1,'2026-09-24 09:56:18',NULL),(849,15,8,'customer',1,'2026-09-24 09:56:23',NULL),(850,15,1,'store',1,'2026-09-24 09:56:23',NULL),(851,15,1,'platform',1,'2026-09-24 09:56:23',NULL),(852,15,18,'rider',1,'2026-09-24 09:56:23',NULL),(853,15,8,'customer',1,'2026-09-24 09:56:27',NULL),(854,15,1,'store',1,'2026-09-24 09:56:27',NULL),(855,15,1,'platform',1,'2026-09-24 09:56:27',NULL),(856,15,18,'rider',1,'2026-09-24 09:56:27',NULL),(857,15,8,'customer',1,'2026-09-24 09:56:32',NULL),(858,15,1,'store',1,'2026-09-24 09:56:32',NULL),(859,15,1,'platform',1,'2026-09-24 09:56:32',NULL),(860,15,18,'rider',1,'2026-09-24 09:56:32',NULL),(861,15,8,'customer',1,'2026-09-24 09:56:36',NULL),(862,15,1,'store',1,'2026-09-24 09:56:36',NULL),(863,15,1,'platform',1,'2026-09-24 09:56:36',NULL),(864,15,18,'rider',1,'2026-09-24 09:56:36',NULL),(865,15,8,'customer',1,'2026-09-24 09:56:41',NULL),(866,15,1,'store',1,'2026-09-24 09:56:41',NULL),(867,15,1,'platform',1,'2026-09-24 09:56:41',NULL),(868,15,18,'rider',1,'2026-09-24 09:56:41',NULL),(869,15,8,'customer',1,'2026-09-24 09:56:46',NULL),(870,15,1,'store',1,'2026-09-24 09:56:46',NULL),(871,15,1,'platform',1,'2026-09-24 09:56:46',NULL),(872,15,18,'rider',1,'2026-09-24 09:56:46',NULL),(873,15,8,'customer',1,'2026-09-24 09:56:50',NULL),(874,15,1,'store',1,'2026-09-24 09:56:50',NULL),(875,15,1,'platform',1,'2026-09-24 09:56:50',NULL),(876,15,18,'rider',1,'2026-09-24 09:56:50',NULL),(877,15,8,'customer',1,'2026-09-24 09:56:55',NULL),(878,15,1,'store',1,'2026-09-24 09:56:55',NULL),(879,15,1,'platform',1,'2026-09-24 09:56:55',NULL),(880,15,18,'rider',1,'2026-09-24 09:56:55',NULL),(881,15,8,'customer',1,'2026-09-24 09:56:59',NULL),(882,15,1,'store',1,'2026-09-24 09:56:59',NULL),(883,15,1,'platform',1,'2026-09-24 09:56:59',NULL),(884,15,18,'rider',1,'2026-09-24 09:56:59',NULL),(885,15,8,'customer',1,'2026-09-24 09:57:04',NULL),(886,15,1,'store',1,'2026-09-24 09:57:04',NULL),(887,15,1,'platform',1,'2026-09-24 09:57:04',NULL),(888,15,18,'rider',1,'2026-09-24 09:57:04',NULL),(889,15,8,'customer',1,'2026-09-24 09:57:08',NULL),(890,15,1,'store',1,'2026-09-24 09:57:08',NULL),(891,15,1,'platform',1,'2026-09-24 09:57:08',NULL),(892,15,18,'rider',1,'2026-09-24 09:57:08',NULL),(893,15,8,'customer',1,'2026-09-24 09:57:13',NULL),(894,15,1,'store',1,'2026-09-24 09:57:13',NULL),(895,15,1,'platform',1,'2026-09-24 09:57:13',NULL),(896,15,18,'rider',1,'2026-09-24 09:57:13',NULL),(897,16,9,'customer',1,'2026-09-24 15:02:30',NULL),(898,16,1,'platform',1,'2026-09-24 15:02:30',NULL),(899,16,18,'rider',1,'2026-09-24 15:02:30',NULL),(900,16,9,'customer',1,'2026-09-24 15:02:33',NULL),(901,16,1,'platform',1,'2026-09-24 15:02:33',NULL),(902,16,18,'rider',1,'2026-09-24 15:02:33',NULL),(903,16,9,'customer',1,'2026-09-24 15:02:36',NULL),(904,16,1,'platform',1,'2026-09-24 15:02:36',NULL),(905,16,18,'rider',1,'2026-09-24 15:02:36',NULL),(906,16,9,'customer',1,'2026-09-24 15:02:37',NULL),(907,16,1,'platform',1,'2026-09-24 15:02:37',NULL),(908,16,18,'rider',1,'2026-09-24 15:02:37',NULL),(909,16,9,'customer',1,'2026-09-24 15:02:37',NULL),(910,16,1,'platform',1,'2026-09-24 15:02:37',NULL),(911,16,18,'rider',1,'2026-09-24 15:02:37',NULL),(912,16,9,'customer',1,'2026-09-24 15:02:37',NULL),(913,16,1,'platform',1,'2026-09-24 15:02:37',NULL),(914,16,18,'rider',1,'2026-09-24 15:02:37',NULL),(915,16,9,'customer',1,'2026-09-24 15:02:37',NULL),(916,16,1,'platform',1,'2026-09-24 15:02:37',NULL),(917,16,18,'rider',1,'2026-09-24 15:02:37',NULL),(918,16,9,'customer',1,'2026-09-24 15:02:37',NULL),(919,16,1,'platform',1,'2026-09-24 15:02:37',NULL),(920,16,18,'rider',1,'2026-09-24 15:02:37',NULL),(921,16,9,'customer',1,'2026-09-24 15:02:39',NULL),(922,16,1,'platform',1,'2026-09-24 15:02:39',NULL),(923,16,18,'rider',1,'2026-09-24 15:02:39',NULL),(924,16,9,'customer',1,'2026-09-24 15:02:42',NULL),(925,16,1,'platform',1,'2026-09-24 15:02:42',NULL),(926,16,18,'rider',1,'2026-09-24 15:02:42',NULL),(927,16,9,'customer',1,'2026-09-24 15:02:46',NULL),(928,16,1,'platform',1,'2026-09-24 15:02:46',NULL),(929,16,18,'rider',1,'2026-09-24 15:02:46',NULL),(930,16,9,'customer',1,'2026-09-24 15:02:49',NULL),(931,16,1,'platform',1,'2026-09-24 15:02:49',NULL),(932,16,18,'rider',1,'2026-09-24 15:02:49',NULL),(933,16,9,'customer',1,'2026-09-24 15:02:52',NULL),(934,16,1,'platform',1,'2026-09-24 15:02:52',NULL),(935,16,18,'rider',1,'2026-09-24 15:02:52',NULL),(936,16,9,'customer',1,'2026-09-24 15:02:55',NULL),(937,16,1,'platform',1,'2026-09-24 15:02:55',NULL),(938,16,18,'rider',1,'2026-09-24 15:02:55',NULL),(939,16,9,'customer',1,'2026-09-24 15:02:58',NULL),(940,16,1,'platform',1,'2026-09-24 15:02:58',NULL),(941,16,18,'rider',1,'2026-09-24 15:02:58',NULL),(942,16,9,'customer',1,'2026-09-24 15:03:01',NULL),(943,16,1,'platform',1,'2026-09-24 15:03:01',NULL),(944,16,18,'rider',1,'2026-09-24 15:03:01',NULL),(945,16,9,'customer',1,'2026-09-24 15:03:04',NULL),(946,16,1,'platform',1,'2026-09-24 15:03:04',NULL),(947,16,18,'rider',1,'2026-09-24 15:03:04',NULL),(948,16,9,'customer',1,'2026-09-24 15:03:07',NULL),(949,16,1,'platform',1,'2026-09-24 15:03:07',NULL),(950,16,18,'rider',1,'2026-09-24 15:03:07',NULL),(951,16,9,'customer',1,'2026-09-24 15:03:10',NULL),(952,16,1,'platform',1,'2026-09-24 15:03:10',NULL),(953,16,18,'rider',1,'2026-09-24 15:03:10',NULL),(954,16,9,'customer',1,'2026-09-24 15:03:13',NULL),(955,16,1,'platform',1,'2026-09-24 15:03:13',NULL),(956,16,18,'rider',1,'2026-09-24 15:03:13',NULL),(957,16,9,'customer',1,'2026-09-24 15:03:16',NULL),(958,16,1,'platform',1,'2026-09-24 15:03:16',NULL),(959,16,18,'rider',1,'2026-09-24 15:03:16',NULL),(960,16,9,'customer',1,'2026-09-24 15:03:19',NULL),(961,16,1,'platform',1,'2026-09-24 15:03:19',NULL),(962,16,18,'rider',1,'2026-09-24 15:03:19',NULL),(963,16,9,'customer',1,'2026-09-24 15:03:22',NULL),(964,16,1,'platform',1,'2026-09-24 15:03:22',NULL),(965,16,18,'rider',1,'2026-09-24 15:03:22',NULL),(966,15,8,'customer',1,'2026-09-24 15:03:23',NULL),(967,15,1,'store',1,'2026-09-24 15:03:23',NULL),(968,15,1,'platform',1,'2026-09-24 15:03:23',NULL),(969,15,18,'rider',1,'2026-09-24 15:03:23',NULL),(970,16,9,'customer',1,'2026-09-24 15:03:25',NULL),(971,16,1,'platform',1,'2026-09-24 15:03:25',NULL),(972,16,18,'rider',1,'2026-09-24 15:03:25',NULL),(973,15,8,'customer',1,'2026-09-24 15:03:28',NULL),(974,15,1,'store',1,'2026-09-24 15:03:28',NULL),(975,15,1,'platform',1,'2026-09-24 15:03:28',NULL),(976,15,18,'rider',1,'2026-09-24 15:03:28',NULL),(977,16,9,'customer',1,'2026-09-24 15:03:28',NULL),(978,16,1,'platform',1,'2026-09-24 15:03:28',NULL),(979,16,18,'rider',1,'2026-09-24 15:03:28',NULL),(980,16,9,'customer',1,'2026-09-24 15:03:31',NULL),(981,16,1,'platform',1,'2026-09-24 15:03:31',NULL),(982,16,18,'rider',1,'2026-09-24 15:03:31',NULL),(983,15,8,'customer',1,'2026-09-24 15:03:32',NULL),(984,15,1,'store',1,'2026-09-24 15:03:32',NULL),(985,15,1,'platform',1,'2026-09-24 15:03:32',NULL),(986,15,18,'rider',1,'2026-09-24 15:03:32',NULL),(987,15,8,'customer',1,'2026-09-24 15:03:33',NULL),(988,15,1,'store',1,'2026-09-24 15:03:33',NULL),(989,15,1,'platform',1,'2026-09-24 15:03:33',NULL),(990,15,18,'rider',1,'2026-09-24 15:03:33',NULL),(991,15,8,'customer',1,'2026-09-24 15:03:33',NULL),(992,15,1,'store',1,'2026-09-24 15:03:33',NULL),(993,15,1,'platform',1,'2026-09-24 15:03:33',NULL),(994,15,18,'rider',1,'2026-09-24 15:03:33',NULL),(995,15,8,'customer',1,'2026-09-24 15:03:33',NULL),(996,15,1,'store',1,'2026-09-24 15:03:33',NULL),(997,15,1,'platform',1,'2026-09-24 15:03:33',NULL),(998,15,18,'rider',1,'2026-09-24 15:03:33',NULL),(999,15,8,'customer',1,'2026-09-24 15:03:33',NULL),(1000,15,1,'store',1,'2026-09-24 15:03:33',NULL),(1001,15,1,'platform',1,'2026-09-24 15:03:33',NULL),(1002,15,18,'rider',1,'2026-09-24 15:03:33',NULL),(1003,16,9,'customer',1,'2026-09-24 15:03:34',NULL),(1004,16,1,'platform',1,'2026-09-24 15:03:34',NULL),(1005,16,18,'rider',1,'2026-09-24 15:03:34',NULL),(1006,15,8,'customer',1,'2026-09-24 15:03:37',NULL),(1007,15,1,'store',1,'2026-09-24 15:03:37',NULL),(1008,15,1,'platform',1,'2026-09-24 15:03:37',NULL),(1009,15,18,'rider',1,'2026-09-24 15:03:37',NULL),(1010,16,9,'customer',1,'2026-09-24 15:03:37',NULL),(1011,16,1,'platform',1,'2026-09-24 15:03:37',NULL),(1012,16,18,'rider',1,'2026-09-24 15:03:37',NULL),(1013,16,9,'customer',1,'2026-09-24 15:03:39',NULL),(1014,16,1,'platform',1,'2026-09-24 15:03:39',NULL),(1015,16,18,'rider',1,'2026-09-24 15:03:39',NULL),(1016,15,8,'customer',1,'2026-09-24 15:03:42',NULL),(1017,15,1,'store',1,'2026-09-24 15:03:42',NULL),(1018,15,1,'platform',1,'2026-09-24 15:03:42',NULL),(1019,15,18,'rider',1,'2026-09-24 15:03:42',NULL),(1020,16,9,'customer',1,'2026-09-24 15:03:42',NULL),(1021,16,1,'platform',1,'2026-09-24 15:03:42',NULL),(1022,16,18,'rider',1,'2026-09-24 15:03:42',NULL),(1023,15,8,'customer',1,'2026-09-24 15:03:46',NULL),(1024,15,1,'store',1,'2026-09-24 15:03:46',NULL),(1025,15,1,'platform',1,'2026-09-24 15:03:46',NULL),(1026,15,18,'rider',1,'2026-09-24 15:03:46',NULL),(1027,15,8,'customer',1,'2026-09-24 15:03:51',NULL),(1028,15,1,'store',1,'2026-09-24 15:03:51',NULL),(1029,15,1,'platform',1,'2026-09-24 15:03:51',NULL),(1030,15,18,'rider',1,'2026-09-24 15:03:51',NULL),(1031,15,8,'customer',1,'2026-09-24 15:03:55',NULL),(1032,15,1,'store',1,'2026-09-24 15:03:55',NULL),(1033,15,1,'platform',1,'2026-09-24 15:03:55',NULL),(1034,15,18,'rider',1,'2026-09-24 15:03:55',NULL),(1035,15,8,'customer',1,'2026-09-24 15:04:00',NULL),(1036,15,1,'store',1,'2026-09-24 15:04:00',NULL),(1037,15,1,'platform',1,'2026-09-24 15:04:00',NULL),(1038,15,18,'rider',1,'2026-09-24 15:04:00',NULL),(1039,17,9,'customer',1,'2026-09-24 15:22:49',NULL),(1040,17,1,'platform',1,'2026-09-24 15:22:49',NULL),(1041,17,18,'rider',1,'2026-09-24 15:22:49',NULL),(1042,17,9,'customer',1,'2026-09-24 15:22:51',NULL),(1043,17,1,'platform',1,'2026-09-24 15:22:51',NULL),(1044,17,18,'rider',1,'2026-09-24 15:22:51',NULL),(1045,17,9,'customer',1,'2026-09-24 15:22:51',NULL),(1046,17,1,'platform',1,'2026-09-24 15:22:51',NULL),(1047,17,18,'rider',1,'2026-09-24 15:22:51',NULL),(1048,17,9,'customer',1,'2026-09-24 15:22:51',NULL),(1049,17,1,'platform',1,'2026-09-24 15:22:51',NULL),(1050,17,18,'rider',1,'2026-09-24 15:22:51',NULL),(1051,17,9,'customer',1,'2026-09-24 15:22:51',NULL),(1052,17,1,'platform',1,'2026-09-24 15:22:51',NULL),(1053,17,18,'rider',1,'2026-09-24 15:22:51',NULL),(1054,17,9,'customer',1,'2026-09-24 15:22:51',NULL),(1055,17,1,'platform',1,'2026-09-24 15:22:51',NULL),(1056,17,18,'rider',1,'2026-09-24 15:22:51',NULL),(1057,17,9,'customer',1,'2026-09-24 15:22:52',NULL),(1058,17,1,'platform',1,'2026-09-24 15:22:52',NULL),(1059,17,18,'rider',1,'2026-09-24 15:22:52',NULL),(1060,18,4,'customer',1,'2026-09-24 15:27:16',NULL),(1061,18,38,'store',1,'2026-09-24 15:27:16',NULL),(1062,18,1,'platform',1,'2026-09-24 15:27:16',NULL),(1063,18,4,'customer',1,'2026-09-24 15:27:21',NULL),(1064,18,38,'store',1,'2026-09-24 15:27:21',NULL),(1065,18,1,'platform',1,'2026-09-24 15:27:21',NULL),(1066,18,4,'customer',1,'2026-09-24 15:27:25',NULL),(1067,18,38,'store',1,'2026-09-24 15:27:25',NULL),(1068,18,1,'platform',1,'2026-09-24 15:27:25',NULL),(1069,18,4,'customer',1,'2026-09-24 15:27:30',NULL),(1070,18,38,'store',1,'2026-09-24 15:27:30',NULL),(1071,18,1,'platform',1,'2026-09-24 15:27:30',NULL),(1072,18,4,'customer',1,'2026-09-24 15:27:35',NULL),(1073,18,38,'store',1,'2026-09-24 15:27:35',NULL),(1074,18,1,'platform',1,'2026-09-24 15:27:35',NULL),(1075,18,4,'customer',1,'2026-09-24 15:27:39',NULL),(1076,18,38,'store',1,'2026-09-24 15:27:39',NULL),(1077,18,1,'platform',1,'2026-09-24 15:27:39',NULL),(1078,18,4,'customer',1,'2026-09-24 15:27:44',NULL),(1079,18,38,'store',1,'2026-09-24 15:27:44',NULL),(1080,18,1,'platform',1,'2026-09-24 15:27:44',NULL),(1081,18,4,'customer',1,'2026-09-24 15:27:48',NULL),(1082,18,38,'store',1,'2026-09-24 15:27:48',NULL),(1083,18,1,'platform',1,'2026-09-24 15:27:48',NULL),(1084,18,4,'customer',1,'2026-09-24 15:27:53',NULL),(1085,18,38,'store',1,'2026-09-24 15:27:53',NULL),(1086,18,1,'platform',1,'2026-09-24 15:27:53',NULL),(1087,18,4,'customer',1,'2026-09-24 15:27:57',NULL),(1088,18,38,'store',1,'2026-09-24 15:27:57',NULL),(1089,18,1,'platform',1,'2026-09-24 15:27:57',NULL),(1090,18,4,'customer',1,'2026-09-24 15:28:02',NULL),(1091,18,38,'store',1,'2026-09-24 15:28:02',NULL),(1092,18,1,'platform',1,'2026-09-24 15:28:02',NULL),(1093,18,4,'customer',1,'2026-09-24 15:28:06',NULL),(1094,18,38,'store',1,'2026-09-24 15:28:06',NULL),(1095,18,1,'platform',1,'2026-09-24 15:28:06',NULL),(1096,18,4,'customer',1,'2026-09-24 15:28:11',NULL),(1097,18,38,'store',1,'2026-09-24 15:28:11',NULL),(1098,18,1,'platform',1,'2026-09-24 15:28:11',NULL),(1099,18,4,'customer',1,'2026-09-24 15:28:15',NULL),(1100,18,38,'store',1,'2026-09-24 15:28:15',NULL),(1101,18,1,'platform',1,'2026-09-24 15:28:15',NULL),(1102,18,18,'rider',1,'2026-09-24 15:28:15',NULL),(1103,18,4,'customer',1,'2026-09-24 15:28:20',NULL),(1104,18,38,'store',1,'2026-09-24 15:28:20',NULL),(1105,18,1,'platform',1,'2026-09-24 15:28:20',NULL),(1106,18,18,'rider',1,'2026-09-24 15:28:20',NULL),(1107,18,4,'customer',1,'2026-09-24 15:28:24',NULL),(1108,18,38,'store',1,'2026-09-24 15:28:24',NULL),(1109,18,1,'platform',1,'2026-09-24 15:28:24',NULL),(1110,18,18,'rider',1,'2026-09-24 15:28:24',NULL),(1111,18,4,'customer',1,'2026-09-24 15:28:28',NULL),(1112,18,38,'store',1,'2026-09-24 15:28:28',NULL),(1113,18,1,'platform',1,'2026-09-24 15:28:28',NULL),(1114,18,18,'rider',1,'2026-09-24 15:28:28',NULL),(1115,18,4,'customer',1,'2026-09-24 15:28:33',NULL),(1116,18,38,'store',1,'2026-09-24 15:28:33',NULL),(1117,18,1,'platform',1,'2026-09-24 15:28:33',NULL),(1118,18,18,'rider',1,'2026-09-24 15:28:33',NULL),(1119,18,4,'customer',1,'2026-09-24 15:28:37',NULL),(1120,18,38,'store',1,'2026-09-24 15:28:37',NULL),(1121,18,1,'platform',1,'2026-09-24 15:28:37',NULL),(1122,18,18,'rider',1,'2026-09-24 15:28:37',NULL),(1123,18,4,'customer',1,'2026-09-24 15:28:42',NULL),(1124,18,38,'store',1,'2026-09-24 15:28:42',NULL),(1125,18,1,'platform',1,'2026-09-24 15:28:42',NULL),(1126,18,18,'rider',1,'2026-09-24 15:28:42',NULL),(1127,18,4,'customer',1,'2026-09-24 15:28:46',NULL),(1128,18,38,'store',1,'2026-09-24 15:28:46',NULL),(1129,18,1,'platform',1,'2026-09-24 15:28:46',NULL),(1130,18,18,'rider',1,'2026-09-24 15:28:46',NULL),(1131,18,4,'customer',1,'2026-09-24 15:28:51',NULL),(1132,18,38,'store',1,'2026-09-24 15:28:51',NULL),(1133,18,1,'platform',1,'2026-09-24 15:28:51',NULL),(1134,18,18,'rider',1,'2026-09-24 15:28:51',NULL),(1135,18,4,'customer',1,'2026-09-24 15:28:55',NULL),(1136,18,38,'store',1,'2026-09-24 15:28:55',NULL),(1137,18,1,'platform',1,'2026-09-24 15:28:55',NULL),(1138,18,18,'rider',1,'2026-09-24 15:28:55',NULL),(1139,18,4,'customer',1,'2026-09-24 15:29:00',NULL),(1140,18,38,'store',1,'2026-09-24 15:29:00',NULL),(1141,18,1,'platform',1,'2026-09-24 15:29:00',NULL),(1142,18,18,'rider',1,'2026-09-24 15:29:00',NULL),(1143,18,4,'customer',1,'2026-09-24 15:29:04',NULL),(1144,18,38,'store',1,'2026-09-24 15:29:04',NULL),(1145,18,1,'platform',1,'2026-09-24 15:29:04',NULL),(1146,18,18,'rider',1,'2026-09-24 15:29:04',NULL),(1147,18,4,'customer',1,'2026-09-24 15:29:09',NULL),(1148,18,38,'store',1,'2026-09-24 15:29:09',NULL),(1149,18,1,'platform',1,'2026-09-24 15:29:09',NULL),(1150,18,18,'rider',1,'2026-09-24 15:29:09',NULL),(1151,18,4,'customer',1,'2026-09-24 15:29:13',NULL),(1152,18,38,'store',1,'2026-09-24 15:29:13',NULL),(1153,18,1,'platform',1,'2026-09-24 15:29:13',NULL),(1154,18,18,'rider',1,'2026-09-24 15:29:13',NULL),(1155,18,4,'customer',1,'2026-09-24 15:29:18',NULL),(1156,18,38,'store',1,'2026-09-24 15:29:18',NULL),(1157,18,1,'platform',1,'2026-09-24 15:29:18',NULL),(1158,18,18,'rider',1,'2026-09-24 15:29:18',NULL),(1159,18,4,'customer',1,'2026-09-24 15:29:22',NULL),(1160,18,38,'store',1,'2026-09-24 15:29:22',NULL),(1161,18,1,'platform',1,'2026-09-24 15:29:22',NULL),(1162,18,18,'rider',1,'2026-09-24 15:29:22',NULL),(1163,18,4,'customer',1,'2026-09-24 15:29:27',NULL),(1164,18,38,'store',1,'2026-09-24 15:29:27',NULL),(1165,18,1,'platform',1,'2026-09-24 15:29:27',NULL),(1166,18,18,'rider',1,'2026-09-24 15:29:27',NULL),(1167,18,4,'customer',1,'2026-09-24 15:29:31',NULL),(1168,18,38,'store',1,'2026-09-24 15:29:31',NULL),(1169,18,1,'platform',1,'2026-09-24 15:29:31',NULL),(1170,18,18,'rider',1,'2026-09-24 15:29:31',NULL),(1171,18,4,'customer',1,'2026-09-24 15:29:36',NULL),(1172,18,38,'store',1,'2026-09-24 15:29:36',NULL),(1173,18,1,'platform',1,'2026-09-24 15:29:36',NULL),(1174,18,18,'rider',1,'2026-09-24 15:29:36',NULL),(1175,18,4,'customer',1,'2026-09-24 15:29:40',NULL),(1176,18,38,'store',1,'2026-09-24 15:29:40',NULL),(1177,18,1,'platform',1,'2026-09-24 15:29:40',NULL),(1178,18,18,'rider',1,'2026-09-24 15:29:40',NULL),(1179,18,4,'customer',1,'2026-09-24 15:29:45',NULL),(1180,18,38,'store',1,'2026-09-24 15:29:45',NULL),(1181,18,1,'platform',1,'2026-09-24 15:29:45',NULL),(1182,18,18,'rider',1,'2026-09-24 15:29:45',NULL),(1183,18,4,'customer',1,'2026-09-24 15:29:49',NULL),(1184,18,38,'store',1,'2026-09-24 15:29:49',NULL),(1185,18,1,'platform',1,'2026-09-24 15:29:49',NULL),(1186,18,18,'rider',1,'2026-09-24 15:29:49',NULL),(1187,18,4,'customer',1,'2026-09-24 15:29:54',NULL),(1188,18,38,'store',1,'2026-09-24 15:29:54',NULL),(1189,18,1,'platform',1,'2026-09-24 15:29:54',NULL),(1190,18,18,'rider',1,'2026-09-24 15:29:54',NULL),(1191,18,4,'customer',1,'2026-09-24 15:29:58',NULL),(1192,18,38,'store',1,'2026-09-24 15:29:58',NULL),(1193,18,1,'platform',1,'2026-09-24 15:29:58',NULL),(1194,18,18,'rider',1,'2026-09-24 15:29:58',NULL),(1195,18,4,'customer',1,'2026-09-24 15:30:03',NULL),(1196,18,38,'store',1,'2026-09-24 15:30:03',NULL),(1197,18,1,'platform',1,'2026-09-24 15:30:03',NULL),(1198,18,18,'rider',1,'2026-09-24 15:30:03',NULL),(1199,18,4,'customer',1,'2026-09-24 15:30:07',NULL),(1200,18,38,'store',1,'2026-09-24 15:30:07',NULL),(1201,18,1,'platform',1,'2026-09-24 15:30:07',NULL),(1202,18,18,'rider',1,'2026-09-24 15:30:07',NULL),(1203,18,4,'customer',1,'2026-09-24 15:30:12',NULL),(1204,18,38,'store',1,'2026-09-24 15:30:12',NULL),(1205,18,1,'platform',1,'2026-09-24 15:30:12',NULL),(1206,18,18,'rider',1,'2026-09-24 15:30:12',NULL),(1207,19,4,'customer',1,'2026-09-24 15:30:16',NULL),(1208,19,1,'platform',1,'2026-09-24 15:30:16',NULL),(1209,19,4,'customer',1,'2026-09-24 15:30:16',NULL),(1210,19,1,'platform',1,'2026-09-24 15:30:16',NULL),(1211,18,4,'customer',1,'2026-09-24 15:30:16',NULL),(1212,18,38,'store',1,'2026-09-24 15:30:16',NULL),(1213,18,1,'platform',1,'2026-09-24 15:30:16',NULL),(1214,18,18,'rider',1,'2026-09-24 15:30:16',NULL),(1215,18,4,'customer',1,'2026-09-24 15:30:21',NULL),(1216,18,38,'store',1,'2026-09-24 15:30:21',NULL),(1217,18,1,'platform',1,'2026-09-24 15:30:21',NULL),(1218,18,18,'rider',1,'2026-09-24 15:30:21',NULL),(1219,18,4,'customer',1,'2026-09-24 15:30:25',NULL),(1220,18,38,'store',1,'2026-09-24 15:30:25',NULL),(1221,18,1,'platform',1,'2026-09-24 15:30:25',NULL),(1222,18,18,'rider',1,'2026-09-24 15:30:25',NULL),(1223,18,4,'customer',1,'2026-09-24 15:30:30',NULL),(1224,18,38,'store',1,'2026-09-24 15:30:30',NULL),(1225,18,1,'platform',1,'2026-09-24 15:30:30',NULL),(1226,18,18,'rider',1,'2026-09-24 15:30:30',NULL),(1227,18,4,'customer',1,'2026-09-24 15:30:34',NULL),(1228,18,38,'store',1,'2026-09-24 15:30:34',NULL),(1229,18,1,'platform',1,'2026-09-24 15:30:34',NULL),(1230,18,18,'rider',1,'2026-09-24 15:30:34',NULL),(1231,18,4,'customer',1,'2026-09-24 15:30:39',NULL),(1232,18,38,'store',1,'2026-09-24 15:30:39',NULL),(1233,18,1,'platform',1,'2026-09-24 15:30:39',NULL),(1234,18,18,'rider',1,'2026-09-24 15:30:39',NULL),(1235,18,4,'customer',1,'2026-09-24 15:30:44',NULL),(1236,18,38,'store',1,'2026-09-24 15:30:44',NULL),(1237,18,1,'platform',1,'2026-09-24 15:30:44',NULL),(1238,18,18,'rider',1,'2026-09-24 15:30:44',NULL),(1239,18,4,'customer',1,'2026-09-24 15:30:48',NULL),(1240,18,38,'store',1,'2026-09-24 15:30:48',NULL),(1241,18,1,'platform',1,'2026-09-24 15:30:48',NULL),(1242,18,18,'rider',1,'2026-09-24 15:30:48',NULL),(1243,18,4,'customer',1,'2026-09-24 15:30:53',NULL),(1244,18,38,'store',1,'2026-09-24 15:30:53',NULL),(1245,18,1,'platform',1,'2026-09-24 15:30:53',NULL),(1246,18,18,'rider',1,'2026-09-24 15:30:53',NULL),(1247,18,4,'customer',1,'2026-09-24 15:30:57',NULL),(1248,18,38,'store',1,'2026-09-24 15:30:57',NULL),(1249,18,1,'platform',1,'2026-09-24 15:30:57',NULL),(1250,18,18,'rider',1,'2026-09-24 15:30:57',NULL),(1251,18,4,'customer',1,'2026-09-24 15:31:02',NULL),(1252,18,38,'store',1,'2026-09-24 15:31:02',NULL),(1253,18,1,'platform',1,'2026-09-24 15:31:02',NULL),(1254,18,18,'rider',1,'2026-09-24 15:31:02',NULL),(1255,18,4,'customer',1,'2026-09-24 15:31:06',NULL),(1256,18,38,'store',1,'2026-09-24 15:31:06',NULL),(1257,18,1,'platform',1,'2026-09-24 15:31:06',NULL),(1258,18,18,'rider',1,'2026-09-24 15:31:06',NULL),(1259,18,4,'customer',1,'2026-09-24 15:31:11',NULL),(1260,18,38,'store',1,'2026-09-24 15:31:11',NULL),(1261,18,1,'platform',1,'2026-09-24 15:31:11',NULL),(1262,18,18,'rider',1,'2026-09-24 15:31:11',NULL),(1263,18,4,'customer',1,'2026-09-24 15:31:15',NULL),(1264,18,38,'store',1,'2026-09-24 15:31:15',NULL),(1265,18,1,'platform',1,'2026-09-24 15:31:15',NULL),(1266,18,18,'rider',1,'2026-09-24 15:31:15',NULL),(1267,18,4,'customer',1,'2026-09-24 15:31:20',NULL),(1268,18,38,'store',1,'2026-09-24 15:31:20',NULL),(1269,18,1,'platform',1,'2026-09-24 15:31:20',NULL),(1270,18,18,'rider',1,'2026-09-24 15:31:20',NULL),(1271,18,4,'customer',1,'2026-09-24 15:31:24',NULL),(1272,18,38,'store',1,'2026-09-24 15:31:24',NULL),(1273,18,1,'platform',1,'2026-09-24 15:31:24',NULL),(1274,18,18,'rider',1,'2026-09-24 15:31:24',NULL),(1275,18,4,'customer',1,'2026-09-24 15:31:29',NULL),(1276,18,38,'store',1,'2026-09-24 15:31:29',NULL),(1277,18,1,'platform',1,'2026-09-24 15:31:29',NULL),(1278,18,18,'rider',1,'2026-09-24 15:31:29',NULL),(1279,18,4,'customer',1,'2026-09-24 15:31:33',NULL),(1280,18,38,'store',1,'2026-09-24 15:31:33',NULL),(1281,18,1,'platform',1,'2026-09-24 15:31:33',NULL),(1282,18,18,'rider',1,'2026-09-24 15:31:33',NULL),(1283,18,4,'customer',1,'2026-09-24 15:31:38',NULL),(1284,18,38,'store',1,'2026-09-24 15:31:38',NULL),(1285,18,1,'platform',1,'2026-09-24 15:31:38',NULL),(1286,18,18,'rider',1,'2026-09-24 15:31:38',NULL),(1287,18,4,'customer',1,'2026-09-24 15:32:08',NULL),(1288,18,38,'store',1,'2026-09-24 15:32:08',NULL),(1289,18,1,'platform',1,'2026-09-24 15:32:08',NULL),(1290,18,18,'rider',1,'2026-09-24 15:32:08',NULL),(1291,18,4,'customer',1,'2026-09-24 15:33:08',NULL),(1292,18,38,'store',1,'2026-09-24 15:33:08',NULL),(1293,18,1,'platform',1,'2026-09-24 15:33:08',NULL),(1294,18,18,'rider',1,'2026-09-24 15:33:08',NULL),(1295,18,4,'customer',1,'2026-09-24 15:34:08',NULL),(1296,18,38,'store',1,'2026-09-24 15:34:08',NULL),(1297,18,1,'platform',1,'2026-09-24 15:34:08',NULL),(1298,18,18,'rider',1,'2026-09-24 15:34:08',NULL),(1299,18,4,'customer',1,'2026-09-24 15:35:08',NULL),(1300,18,38,'store',1,'2026-09-24 15:35:08',NULL),(1301,18,1,'platform',1,'2026-09-24 15:35:08',NULL),(1302,18,18,'rider',1,'2026-09-24 15:35:08',NULL),(1303,18,4,'customer',1,'2026-09-24 15:36:08',NULL),(1304,18,38,'store',1,'2026-09-24 15:36:08',NULL),(1305,18,1,'platform',1,'2026-09-24 15:36:08',NULL),(1306,18,18,'rider',1,'2026-09-24 15:36:08',NULL),(1307,18,4,'customer',1,'2026-09-24 15:37:08',NULL),(1308,18,38,'store',1,'2026-09-24 15:37:08',NULL),(1309,18,1,'platform',1,'2026-09-24 15:37:08',NULL),(1310,18,18,'rider',1,'2026-09-24 15:37:08',NULL),(1311,18,4,'customer',1,'2026-09-24 15:38:08',NULL),(1312,18,38,'store',1,'2026-09-24 15:38:08',NULL),(1313,18,1,'platform',1,'2026-09-24 15:38:08',NULL),(1314,18,18,'rider',1,'2026-09-24 15:38:08',NULL),(1315,18,4,'customer',1,'2026-09-24 15:39:08',NULL),(1316,18,38,'store',1,'2026-09-24 15:39:08',NULL),(1317,18,1,'platform',1,'2026-09-24 15:39:08',NULL),(1318,18,18,'rider',1,'2026-09-24 15:39:08',NULL),(1319,18,4,'customer',1,'2026-09-24 15:40:08',NULL),(1320,18,38,'store',1,'2026-09-24 15:40:08',NULL),(1321,18,1,'platform',1,'2026-09-24 15:40:08',NULL),(1322,18,18,'rider',1,'2026-09-24 15:40:08',NULL),(1323,18,4,'customer',1,'2026-09-24 15:41:08',NULL),(1324,18,38,'store',1,'2026-09-24 15:41:08',NULL),(1325,18,1,'platform',1,'2026-09-24 15:41:08',NULL),(1326,18,18,'rider',1,'2026-09-24 15:41:08',NULL),(1327,18,4,'customer',1,'2026-09-24 15:42:08',NULL),(1328,18,38,'store',1,'2026-09-24 15:42:08',NULL),(1329,18,1,'platform',1,'2026-09-24 15:42:08',NULL),(1330,18,18,'rider',1,'2026-09-24 15:42:08',NULL),(1331,18,4,'customer',1,'2026-09-24 15:43:08',NULL),(1332,18,38,'store',1,'2026-09-24 15:43:08',NULL),(1333,18,1,'platform',1,'2026-09-24 15:43:08',NULL),(1334,18,18,'rider',1,'2026-09-24 15:43:08',NULL),(1335,18,4,'customer',1,'2026-09-24 15:44:08',NULL),(1336,18,38,'store',1,'2026-09-24 15:44:08',NULL),(1337,18,1,'platform',1,'2026-09-24 15:44:08',NULL),(1338,18,18,'rider',1,'2026-09-24 15:44:08',NULL),(1339,18,4,'customer',1,'2026-09-24 15:44:44',NULL),(1340,18,38,'store',1,'2026-09-24 15:44:44',NULL),(1341,18,1,'platform',1,'2026-09-24 15:44:44',NULL),(1342,18,18,'rider',1,'2026-09-24 15:44:44',NULL),(1343,18,4,'customer',1,'2026-09-24 15:44:45',NULL),(1344,18,38,'store',1,'2026-09-24 15:44:45',NULL),(1345,18,1,'platform',1,'2026-09-24 15:44:45',NULL),(1346,18,18,'rider',1,'2026-09-24 15:44:45',NULL),(1347,20,4,'customer',1,'2026-09-24 16:50:22',NULL),(1348,20,38,'store',1,'2026-09-24 16:50:22',NULL),(1349,20,1,'platform',1,'2026-09-24 16:50:22',NULL),(1350,20,4,'customer',1,'2026-09-24 16:50:26',NULL),(1351,20,38,'store',1,'2026-09-24 16:50:26',NULL),(1352,20,1,'platform',1,'2026-09-24 16:50:26',NULL),(1353,20,4,'customer',1,'2026-09-24 16:50:31',NULL),(1354,20,38,'store',1,'2026-09-24 16:50:31',NULL),(1355,20,1,'platform',1,'2026-09-24 16:50:31',NULL),(1356,20,4,'customer',1,'2026-09-24 16:50:36',NULL),(1357,20,38,'store',1,'2026-09-24 16:50:36',NULL),(1358,20,1,'platform',1,'2026-09-24 16:50:36',NULL),(1359,20,4,'customer',1,'2026-09-24 16:50:40',NULL),(1360,20,38,'store',1,'2026-09-24 16:50:40',NULL),(1361,20,1,'platform',1,'2026-09-24 16:50:40',NULL),(1362,20,18,'rider',1,'2026-09-24 16:50:40',NULL),(1363,20,4,'customer',1,'2026-09-24 16:50:45',NULL),(1364,20,38,'store',1,'2026-09-24 16:50:45',NULL),(1365,20,1,'platform',1,'2026-09-24 16:50:45',NULL),(1366,20,18,'rider',1,'2026-09-24 16:50:45',NULL),(1367,20,4,'customer',1,'2026-09-24 16:50:49',NULL),(1368,20,38,'store',1,'2026-09-24 16:50:49',NULL),(1369,20,1,'platform',1,'2026-09-24 16:50:49',NULL),(1370,20,18,'rider',1,'2026-09-24 16:50:49',NULL),(1371,20,4,'customer',1,'2026-09-24 16:50:53',NULL),(1372,20,38,'store',1,'2026-09-24 16:50:53',NULL),(1373,20,1,'platform',1,'2026-09-24 16:50:53',NULL),(1374,20,18,'rider',1,'2026-09-24 16:50:53',NULL),(1375,20,4,'customer',1,'2026-09-24 16:50:58',NULL),(1376,20,38,'store',1,'2026-09-24 16:50:58',NULL),(1377,20,1,'platform',1,'2026-09-24 16:50:58',NULL),(1378,20,18,'rider',1,'2026-09-24 16:50:58',NULL),(1379,20,4,'customer',1,'2026-09-24 16:51:02',NULL),(1380,20,38,'store',1,'2026-09-24 16:51:02',NULL),(1381,20,1,'platform',1,'2026-09-24 16:51:02',NULL),(1382,20,18,'rider',1,'2026-09-24 16:51:02',NULL),(1383,20,4,'customer',1,'2026-09-24 16:51:07',NULL),(1384,20,38,'store',1,'2026-09-24 16:51:07',NULL),(1385,20,1,'platform',1,'2026-09-24 16:51:07',NULL),(1386,20,18,'rider',1,'2026-09-24 16:51:07',NULL),(1387,20,4,'customer',1,'2026-09-24 16:51:11',NULL),(1388,20,38,'store',1,'2026-09-24 16:51:11',NULL),(1389,20,1,'platform',1,'2026-09-24 16:51:11',NULL),(1390,20,18,'rider',1,'2026-09-24 16:51:11',NULL),(1391,20,4,'customer',1,'2026-09-24 16:51:16',NULL),(1392,20,38,'store',1,'2026-09-24 16:51:16',NULL),(1393,20,1,'platform',1,'2026-09-24 16:51:16',NULL),(1394,20,18,'rider',1,'2026-09-24 16:51:16',NULL),(1395,20,4,'customer',1,'2026-09-24 16:51:20',NULL),(1396,20,38,'store',1,'2026-09-24 16:51:20',NULL),(1397,20,1,'platform',1,'2026-09-24 16:51:20',NULL),(1398,20,18,'rider',1,'2026-09-24 16:51:20',NULL),(1399,20,4,'customer',1,'2026-09-24 16:51:25',NULL),(1400,20,38,'store',1,'2026-09-24 16:51:25',NULL),(1401,20,1,'platform',1,'2026-09-24 16:51:25',NULL),(1402,20,18,'rider',1,'2026-09-24 16:51:25',NULL),(1403,20,4,'customer',1,'2026-09-24 16:51:29',NULL),(1404,20,38,'store',1,'2026-09-24 16:51:29',NULL),(1405,20,1,'platform',1,'2026-09-24 16:51:29',NULL),(1406,20,18,'rider',1,'2026-09-24 16:51:29',NULL),(1407,20,4,'customer',1,'2026-09-24 16:51:34',NULL),(1408,20,38,'store',1,'2026-09-24 16:51:34',NULL),(1409,20,1,'platform',1,'2026-09-24 16:51:34',NULL),(1410,20,18,'rider',1,'2026-09-24 16:51:34',NULL),(1411,20,4,'customer',1,'2026-09-24 16:51:38',NULL),(1412,20,38,'store',1,'2026-09-24 16:51:38',NULL),(1413,20,1,'platform',1,'2026-09-24 16:51:38',NULL),(1414,20,18,'rider',1,'2026-09-24 16:51:38',NULL);
+/*!40000 ALTER TABLE `chat_conversation_members` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `chat_conversations`
+--
+
+DROP TABLE IF EXISTS `chat_conversations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `chat_conversations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `customer_id` int NOT NULL,
+  `seller_id` int DEFAULT NULL,
+  `platform_owner_id` int DEFAULT NULL,
+  `rider_user_id` int DEFAULT NULL,
+  `assigned_agent_id` int DEFAULT NULL,
+  `order_id` int DEFAULT NULL,
+  `shop_user_id` int DEFAULT NULL,
+  `refund_id` bigint unsigned DEFAULT NULL,
+  `entity_type` enum('general','order','refund') COLLATE utf8mb4_unicode_ci DEFAULT 'general',
+  `conversation_type` enum('support','order_tracking','refund_inquiry','complaint') COLLATE utf8mb4_unicode_ci DEFAULT 'support',
+  `conversation_channel` enum('customer_platform','customer_store','store_platform','delivery','group') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'customer_platform',
+  `subject` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` enum('open','in_progress','resolved','closed') COLLATE utf8mb4_unicode_ci DEFAULT 'open',
+  `priority` enum('low','medium','high','urgent') COLLATE utf8mb4_unicode_ci DEFAULT 'medium',
+  `is_escalated` tinyint(1) DEFAULT '0',
+  `escalated_at` timestamp NULL DEFAULT NULL,
+  `escalated_reason` text COLLATE utf8mb4_unicode_ci,
+  `first_message_time` timestamp NULL DEFAULT NULL,
+  `last_message_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `resolved_at` timestamp NULL DEFAULT NULL,
+  `satisfaction_rating` int DEFAULT NULL COMMENT '1-5 stars',
+  `satisfaction_feedback` text COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_chat_conversations_shop_user_id` (`shop_user_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `chat_conversations`
+--
+
+LOCK TABLES `chat_conversations` WRITE;
+/*!40000 ALTER TABLE `chat_conversations` DISABLE KEYS */;
+INSERT INTO `chat_conversations` VALUES (1,4,NULL,NULL,NULL,9,NULL,NULL,NULL,'general','support','customer_platform','Customer Support Request','closed','medium',0,NULL,NULL,'2026-03-19 04:21:24','2026-03-19 07:25:29','2026-03-19 07:25:29',NULL,NULL,'2026-03-19 04:21:22','2026-03-19 07:25:29'),(2,4,NULL,NULL,NULL,9,118,NULL,NULL,'order','order_tracking','customer_platform','Customer Support Request','in_progress','medium',0,NULL,NULL,'2026-03-19 07:17:05','2026-04-09 04:50:00',NULL,NULL,NULL,'2026-03-19 07:16:59','2026-04-09 04:50:00'),(3,31,NULL,NULL,NULL,9,109,NULL,NULL,'order','order_tracking','customer_platform','Support Request','in_progress','medium',1,'2026-03-27 12:09:03','asd','2026-03-23 18:17:04','2026-04-09 05:09:15',NULL,NULL,NULL,'2026-03-23 18:16:59','2026-04-09 05:09:15'),(4,28,NULL,NULL,NULL,31,NULL,NULL,NULL,'general','support','customer_platform','Customer Support Request','in_progress','medium',0,NULL,NULL,'2026-04-10 08:00:18','2026-04-10 08:00:18',NULL,NULL,NULL,'2026-03-25 14:37:07','2026-04-10 08:00:18'),(5,35,NULL,NULL,NULL,31,NULL,NULL,NULL,'general','support','customer_platform','Customer Support Request','in_progress','medium',0,NULL,NULL,'2026-04-10 08:00:18','2026-04-10 08:00:18',NULL,NULL,NULL,'2026-03-31 09:29:38','2026-04-10 08:00:18'),(7,4,NULL,NULL,NULL,1,118,NULL,NULL,'order','order_tracking','customer_platform','[BUSINESS] Order Problem Request','resolved','urgent',1,'2026-04-09 09:57:55','Help Center ticket marked for priority review.','2026-04-09 09:57:55','2026-04-10 03:39:55',NULL,NULL,NULL,'2026-04-09 09:57:55','2026-04-10 03:39:55'),(8,4,NULL,NULL,NULL,1,122,NULL,NULL,'order','order_tracking','customer_platform','[BUSINESS] Order Problem for Order #ORD-20260331-69CBD1C','in_progress','medium',0,NULL,NULL,'2026-04-09 10:09:51','2026-04-09 10:10:03',NULL,NULL,NULL,'2026-04-09 10:09:51','2026-04-09 10:10:03'),(9,18,NULL,1,29,NULL,139,NULL,NULL,'order','order_tracking','delivery','Delivery Chat','in_progress','medium',0,NULL,NULL,'2026-08-05 14:19:42','2026-08-05 14:31:21',NULL,NULL,NULL,'2026-08-05 14:18:49','2026-08-05 14:31:21'),(10,18,NULL,1,30,NULL,140,NULL,NULL,'order','order_tracking','delivery','Delivery Chat','in_progress','medium',0,NULL,NULL,'2026-08-06 09:40:51','2026-08-06 09:40:51',NULL,NULL,NULL,'2026-08-06 09:40:46','2026-08-06 09:40:51'),(11,18,NULL,1,18,NULL,143,NULL,NULL,'order','order_tracking','delivery','Delivery Chat','in_progress','medium',0,NULL,NULL,'2026-08-25 16:26:28','2026-08-25 16:34:41',NULL,NULL,NULL,'2026-08-25 16:26:09','2026-08-25 16:34:41'),(12,18,1,1,29,NULL,147,NULL,NULL,'order','order_tracking','delivery','Delivery Chat','open','medium',0,NULL,NULL,NULL,'2026-09-16 13:20:27',NULL,NULL,NULL,'2026-09-16 13:20:27','2026-09-16 13:20:27'),(13,18,1,1,15,NULL,148,NULL,NULL,'order','order_tracking','delivery','Delivery Chat','open','medium',0,NULL,NULL,NULL,'2026-09-16 13:48:05',NULL,NULL,NULL,'2026-09-16 13:48:05','2026-09-16 13:48:05'),(14,9,NULL,1,18,NULL,46,NULL,NULL,'order','order_tracking','delivery','Delivery Chat','open','medium',0,NULL,NULL,NULL,'2026-09-24 08:56:56',NULL,NULL,NULL,'2026-09-24 08:56:56','2026-09-24 08:56:56'),(15,8,1,1,18,NULL,149,NULL,NULL,'order','order_tracking','delivery','Delivery Chat','in_progress','medium',0,NULL,NULL,'2026-09-24 15:03:33','2026-09-24 15:03:33',NULL,NULL,NULL,'2026-09-24 09:52:40','2026-09-24 15:03:33'),(16,9,NULL,1,18,NULL,66,NULL,NULL,'order','order_tracking','delivery','Delivery Chat','in_progress','medium',0,NULL,NULL,'2026-09-24 15:02:37','2026-09-24 15:02:37',NULL,NULL,NULL,'2026-09-24 15:02:30','2026-09-24 15:02:37'),(17,9,NULL,1,18,NULL,64,NULL,NULL,'order','order_tracking','delivery','Delivery Chat','in_progress','medium',0,NULL,NULL,'2026-09-24 15:22:51','2026-09-24 15:22:51',NULL,NULL,NULL,'2026-09-24 15:22:49','2026-09-24 15:22:51'),(18,4,38,1,18,NULL,150,NULL,NULL,'order','order_tracking','delivery','Delivery Chat','open','medium',0,NULL,NULL,NULL,'2026-09-24 15:28:15',NULL,NULL,NULL,'2026-09-24 15:27:16','2026-09-24 15:28:15'),(19,4,NULL,1,NULL,NULL,NULL,NULL,NULL,'general','support','customer_platform','Support Request','open','medium',0,NULL,NULL,NULL,'2026-09-24 15:30:16',NULL,NULL,NULL,'2026-09-24 15:30:16','2026-09-24 15:30:16'),(20,4,38,1,18,NULL,152,NULL,NULL,'order','order_tracking','delivery','Delivery Chat','open','medium',0,NULL,NULL,NULL,'2026-09-24 16:50:40',NULL,NULL,NULL,'2026-09-24 16:50:22','2026-09-24 16:50:40');
+/*!40000 ALTER TABLE `chat_conversations` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `chat_messages`
+--
+
+DROP TABLE IF EXISTS `chat_messages`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `chat_messages` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `conversation_id` bigint unsigned NOT NULL,
+  `sender_id` int NOT NULL,
+  `sender_type` enum('customer','agent','system','store','platform','rider') COLLATE utf8mb4_unicode_ci DEFAULT 'customer',
+  `message_text` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `message_type` enum('text','image','file','system') COLLATE utf8mb4_unicode_ci DEFAULT 'text',
+  `tags` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `referenced_order_id` int DEFAULT NULL,
+  `referenced_refund_id` bigint unsigned DEFAULT NULL,
+  `is_read` tinyint(1) DEFAULT '0',
+  `read_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `chat_messages_chk_1` CHECK (json_valid(`tags`))
+) ENGINE=InnoDB AUTO_INCREMENT=95 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `chat_messages`
+--
+
+LOCK TABLES `chat_messages` WRITE;
+/*!40000 ALTER TABLE `chat_messages` DISABLE KEYS */;
+INSERT INTO `chat_messages` VALUES (1,1,4,'customer','asd','text',NULL,NULL,NULL,1,'2026-03-19 05:57:28','2026-03-19 04:21:24','2026-03-19 05:57:28'),(2,1,4,'customer','ako judoy?','text',NULL,NULL,NULL,1,'2026-03-19 05:57:28','2026-03-19 04:21:30','2026-03-19 05:57:28'),(3,1,4,'customer','asd','text',NULL,NULL,NULL,1,'2026-03-19 05:57:28','2026-03-19 04:27:41','2026-03-19 05:57:28'),(4,1,4,'customer','asd','text',NULL,NULL,NULL,1,'2026-03-19 05:57:28','2026-03-19 04:35:58','2026-03-19 05:57:28'),(5,1,4,'customer','asdasd','text',NULL,NULL,NULL,1,'2026-03-19 05:57:28','2026-03-19 04:36:00','2026-03-19 05:57:28'),(6,1,4,'customer','[File: dwas.png]','file',NULL,NULL,NULL,1,'2026-03-19 05:57:28','2026-03-19 04:50:18','2026-03-19 05:57:28'),(7,1,4,'customer','asddda','text',NULL,NULL,NULL,1,'2026-03-19 05:57:28','2026-03-19 04:54:50','2026-03-19 05:57:28'),(8,1,4,'customer','asdsad','text',NULL,NULL,NULL,1,'2026-03-19 05:57:28','2026-03-19 04:54:54','2026-03-19 05:57:28'),(9,1,4,'customer','pare?','text',NULL,NULL,NULL,1,'2026-03-19 05:57:28','2026-03-19 05:29:19','2026-03-19 05:57:28'),(10,1,4,'customer','hello','text',NULL,NULL,NULL,1,'2026-03-19 05:57:28','2026-03-19 05:49:29','2026-03-19 05:57:28'),(11,1,9,'system','Agent assigned to conversation','text',NULL,NULL,NULL,1,'2026-03-19 05:57:48','2026-03-19 05:57:31','2026-03-19 05:57:48'),(12,1,9,'system','Agent assigned to conversation','text',NULL,NULL,NULL,1,'2026-03-19 05:57:48','2026-03-19 05:57:40','2026-03-19 05:57:48'),(13,1,4,'customer','hello?','text',NULL,NULL,NULL,1,'2026-03-19 07:05:04','2026-03-19 05:57:55','2026-03-19 07:05:04'),(14,1,4,'customer','helopooo','text',NULL,NULL,NULL,1,'2026-03-19 07:05:04','2026-03-19 05:58:16','2026-03-19 07:05:04'),(15,1,4,'customer','???','text',NULL,NULL,NULL,1,'2026-03-19 07:05:04','2026-03-19 06:31:41','2026-03-19 07:05:04'),(16,1,4,'customer','bakit walang nag chachat? mahal mo pa ba ako?','text',NULL,NULL,NULL,1,'2026-03-19 07:05:04','2026-03-19 06:45:46','2026-03-19 07:05:04'),(17,1,4,'customer','asdasdasda','text',NULL,NULL,NULL,1,'2026-03-19 07:05:04','2026-03-19 06:49:48','2026-03-19 07:05:04'),(18,1,4,'customer','asdasd','text',NULL,NULL,NULL,1,'2026-03-19 07:05:04','2026-03-19 06:59:06','2026-03-19 07:05:04'),(19,1,4,'customer','bakit ba ayaw gumana? huhuhu','text',NULL,NULL,NULL,1,'2026-03-19 07:05:04','2026-03-19 06:59:23','2026-03-19 07:05:04'),(20,1,9,'agent','asd','text',NULL,NULL,NULL,1,'2026-03-19 07:05:38','2026-03-19 07:05:35','2026-03-19 07:05:38'),(21,1,4,'customer','asd','text',NULL,NULL,NULL,1,'2026-03-19 07:05:45','2026-03-19 07:05:41','2026-03-19 07:05:45'),(22,1,9,'agent','Hello! How can I help you today?','text',NULL,NULL,NULL,1,'2026-03-19 07:05:57','2026-03-19 07:05:55','2026-03-19 07:05:57'),(23,1,9,'agent','Could you please provide your order number?','text',NULL,NULL,NULL,1,'2026-03-19 07:06:04','2026-03-19 07:06:04','2026-03-19 07:06:04'),(24,1,4,'customer','123','text',NULL,NULL,NULL,1,'2026-03-19 07:06:13','2026-03-19 07:06:08','2026-03-19 07:06:13'),(25,1,9,'agent','Is there anything else I can assist you with?','text',NULL,NULL,NULL,1,'2026-03-19 07:06:14','2026-03-19 07:06:13','2026-03-19 07:06:14'),(26,1,4,'customer','123','text',NULL,NULL,NULL,1,'2026-03-19 07:07:11','2026-03-19 07:06:19','2026-03-19 07:07:11'),(27,1,9,'agent','Your order is out for delivery.','text',NULL,NULL,NULL,1,'2026-03-19 07:07:11','2026-03-19 07:07:11','2026-03-19 07:07:11'),(28,1,9,'agent','Could you please provide your order number?','text',NULL,NULL,NULL,1,'2026-03-19 07:07:34','2026-03-19 07:07:25','2026-03-19 07:07:34'),(29,1,9,'agent','aalis tayo sa tunay na mujndo?','text',NULL,NULL,NULL,1,'2026-03-19 07:10:20','2026-03-19 07:09:49','2026-03-19 07:10:20'),(30,1,9,'agent','Conversation closed','system',NULL,NULL,NULL,1,'2026-03-19 07:10:20','2026-03-19 07:10:07','2026-03-19 07:10:20'),(31,1,4,'customer','awe','text',NULL,NULL,NULL,1,'2026-03-19 07:10:25','2026-03-19 07:10:23','2026-03-19 07:10:25'),(32,1,9,'agent','mahal mo b a ako?','text',NULL,NULL,NULL,1,'2026-03-19 07:14:43','2026-03-19 07:14:37','2026-03-19 07:14:43'),(33,1,4,'customer','hindi po ate','text',NULL,NULL,NULL,1,'2026-03-19 07:14:47','2026-03-19 07:14:46','2026-03-19 07:14:47'),(34,2,4,'customer','asd','text',NULL,NULL,NULL,1,'2026-03-19 07:17:08','2026-03-19 07:17:05','2026-03-19 07:17:08'),(35,2,9,'system','Agent assigned to conversation','text',NULL,NULL,NULL,1,'2026-03-19 07:17:59','2026-03-19 07:17:58','2026-03-19 07:17:59'),(36,2,9,'agent','Could you please provide your order number?','text',NULL,NULL,NULL,1,'2026-03-19 07:18:02','2026-03-19 07:18:01','2026-03-19 07:18:02'),(37,2,4,'customer','ORD-20260317-69B95DB','text',NULL,NULL,NULL,1,'2026-03-19 07:22:31','2026-03-19 07:22:24','2026-03-19 07:22:31'),(38,2,9,'agent','Your order is currently being prepared.','text',NULL,NULL,NULL,1,'2026-03-19 07:22:40','2026-03-19 07:22:40','2026-03-19 07:22:40'),(39,2,9,'agent','asdd','text',NULL,NULL,NULL,1,'2026-03-19 07:26:07','2026-03-19 07:25:11','2026-03-19 07:26:07'),(40,2,9,'agent','asd','text',NULL,NULL,NULL,1,'2026-03-19 07:26:07','2026-03-19 07:25:14','2026-03-19 07:26:07'),(41,1,9,'agent','Conversation closed','system',NULL,NULL,NULL,1,'2026-03-19 08:22:40','2026-03-19 07:25:29','2026-03-19 08:22:40'),(42,2,9,'agent','hello?','text',NULL,NULL,NULL,1,'2026-03-19 07:27:08','2026-03-19 07:27:07','2026-03-19 07:27:08'),(43,2,4,'customer','hello?','text',NULL,NULL,NULL,1,'2026-03-19 07:27:17','2026-03-19 07:27:15','2026-03-19 07:27:17'),(44,2,4,'customer','asdasdsad','text',NULL,NULL,NULL,1,'2026-03-19 07:37:46','2026-03-19 07:37:44','2026-03-19 07:37:46'),(45,2,9,'agent','asdasdsad','text',NULL,NULL,NULL,1,'2026-03-19 07:37:49','2026-03-19 07:37:49','2026-03-19 07:37:49'),(46,2,9,'agent','asdsad','text',NULL,NULL,NULL,1,'2026-03-19 07:53:01','2026-03-19 07:43:10','2026-03-19 07:53:01'),(47,2,9,'agent','adssad','text',NULL,NULL,NULL,1,'2026-03-19 07:53:01','2026-03-19 07:43:11','2026-03-19 07:53:01'),(48,2,4,'customer','hi?','text',NULL,NULL,NULL,1,'2026-03-19 07:59:19','2026-03-19 07:53:06','2026-03-19 07:59:19'),(49,2,9,'agent','asd','text',NULL,NULL,NULL,1,'2026-03-19 08:06:54','2026-03-19 08:06:52','2026-03-19 08:06:54'),(50,2,4,'customer','asdad','text',NULL,NULL,NULL,1,'2026-03-19 08:06:57','2026-03-19 08:06:56','2026-03-19 08:06:57'),(51,2,4,'customer','asdasda','text',NULL,NULL,NULL,1,'2026-03-19 08:11:37','2026-03-19 08:11:35','2026-03-19 08:11:37'),(52,2,4,'customer','asdasda','text',NULL,NULL,NULL,1,'2026-03-19 08:22:50','2026-03-19 08:11:41','2026-03-19 08:22:50'),(53,2,4,'customer','asd','text',NULL,NULL,NULL,1,'2026-03-19 08:22:50','2026-03-19 08:22:29','2026-03-19 08:22:50'),(54,2,4,'customer','asd','text',NULL,NULL,NULL,1,'2026-03-23 18:05:18','2026-03-19 08:35:45','2026-03-23 18:05:18'),(55,3,31,'customer','hello?','text',NULL,NULL,NULL,1,'2026-03-27 12:08:51','2026-03-23 18:17:04','2026-03-27 12:08:51'),(56,3,31,'customer','???','text',NULL,NULL,NULL,1,'2026-03-27 12:08:51','2026-03-23 18:24:31','2026-03-27 12:08:51'),(57,3,31,'customer','kamusta?','text',NULL,NULL,NULL,1,'2026-03-27 12:08:51','2026-03-23 18:24:43','2026-03-27 12:08:51'),(58,3,31,'customer','san na yung order ko?','text',NULL,NULL,NULL,1,'2026-03-27 12:08:51','2026-03-25 06:06:46','2026-03-27 12:08:51'),(59,3,9,'system','├â┬ó├à┬í├é┬á├â┬»├é┬╕├é┬Å Conversation escalated: asd','text',NULL,NULL,NULL,0,NULL,'2026-03-27 12:09:03','2026-03-27 12:09:03'),(60,2,4,'customer','is anyone available to chat?','text',NULL,NULL,NULL,1,'2026-04-09 05:09:40','2026-04-09 04:35:39','2026-04-09 05:09:40'),(63,3,9,'system','Agent assigned to conversation','text',NULL,NULL,NULL,0,NULL,'2026-04-09 05:09:02','2026-04-09 05:09:02'),(64,3,9,'system','Agent assigned to conversation','text',NULL,NULL,NULL,0,NULL,'2026-04-09 05:09:02','2026-04-09 05:09:02'),(65,3,9,'system','Agent assigned to conversation','text',NULL,NULL,NULL,0,NULL,'2026-04-09 05:09:02','2026-04-09 05:09:02'),(66,3,9,'system','Agent assigned to conversation','text',NULL,NULL,NULL,0,NULL,'2026-04-09 05:09:03','2026-04-09 05:09:03'),(67,3,9,'system','Agent assigned to conversation','text',NULL,NULL,NULL,0,NULL,'2026-04-09 05:09:03','2026-04-09 05:09:03'),(68,3,9,'agent','Your order is currently being prepared.','text',NULL,NULL,NULL,0,NULL,'2026-04-09 05:09:15','2026-04-09 05:09:15'),(69,3,9,'agent','Your order is currently being prepared.','text',NULL,NULL,NULL,0,NULL,'2026-04-09 05:09:15','2026-04-09 05:09:15'),(70,3,9,'agent','Your order is currently being prepared.','text',NULL,NULL,NULL,0,NULL,'2026-04-09 05:09:15','2026-04-09 05:09:15'),(71,3,9,'agent','Your order is currently being prepared.','text',NULL,NULL,NULL,0,NULL,'2026-04-09 05:09:15','2026-04-09 05:09:15'),(72,7,4,'customer','Help Center ticket submitted.\nIssue type: Order Problem\nPriority: Urgent\nOrder number: ORD-20260331-69CBD1C\nOrder status: Confirmed\n\nasdsadasd','text',NULL,NULL,NULL,0,NULL,'2026-04-09 09:57:55','2026-04-09 09:57:55'),(73,8,4,'customer','Help Center ticket submitted.\nIssue type: Order Problem\nPriority: Medium\nOrder number: ORD-20260331-69CBD1C\nOrder status: Confirmed\n\nasd','text',NULL,NULL,NULL,0,NULL,'2026-04-09 10:09:51','2026-04-09 10:09:51'),(74,8,4,'customer','what','text',NULL,NULL,NULL,0,NULL,'2026-04-09 10:10:03','2026-04-09 10:10:03'),(75,7,9,'agent','asd','text',NULL,NULL,NULL,1,'2026-04-10 03:39:42','2026-04-09 10:21:02','2026-04-10 03:39:42'),(76,7,9,'agent','asd','text',NULL,NULL,NULL,1,'2026-04-10 03:39:42','2026-04-09 10:21:18','2026-04-10 03:39:42'),(77,7,9,'agent','asd','text',NULL,NULL,NULL,1,'2026-04-10 03:39:42','2026-04-09 10:21:20','2026-04-10 03:39:42'),(78,7,9,'agent','123asd','text',NULL,NULL,NULL,1,'2026-04-10 03:39:42','2026-04-09 10:21:26','2026-04-10 03:39:42'),(79,7,9,'agent','asd','text',NULL,NULL,NULL,1,'2026-04-10 03:39:42','2026-04-09 15:18:49','2026-04-10 03:39:42'),(80,7,4,'customer','asd','text',NULL,NULL,NULL,0,NULL,'2026-04-10 03:39:55','2026-04-10 03:39:55'),(81,7,4,'customer','asd','text',NULL,NULL,NULL,0,NULL,'2026-04-10 03:39:55','2026-04-10 03:39:55'),(82,5,31,'system','Agent assigned to conversation','text',NULL,NULL,NULL,0,NULL,'2026-04-10 08:00:18','2026-04-10 08:00:18'),(83,5,31,'agent','Your order is out for delivery.','text',NULL,NULL,NULL,0,NULL,'2026-04-10 08:00:18','2026-04-10 08:00:18'),(84,4,31,'system','Agent assigned to conversation','text',NULL,NULL,NULL,0,NULL,'2026-04-10 08:00:18','2026-04-10 08:00:18'),(85,9,18,'customer','asd','text',NULL,NULL,NULL,0,NULL,'2026-08-05 14:19:42','2026-08-05 14:19:42'),(86,9,18,'customer','asd','text',NULL,NULL,NULL,0,NULL,'2026-08-05 14:31:21','2026-08-05 14:31:21'),(87,10,18,'customer','asd','text',NULL,NULL,NULL,0,NULL,'2026-08-06 09:40:51','2026-08-06 09:40:51'),(88,11,18,'rider','Please leave at front door','text',NULL,NULL,NULL,0,NULL,'2026-08-25 16:26:28','2026-08-25 16:26:28'),(89,11,18,'rider','Take your time, thank you!','text',NULL,NULL,NULL,0,NULL,'2026-08-25 16:26:30','2026-08-25 16:26:30'),(90,11,18,'rider','I\'m waiting outside','text',NULL,NULL,NULL,0,NULL,'2026-08-25 16:26:31','2026-08-25 16:26:31'),(91,11,18,'rider','k','text',NULL,NULL,NULL,0,NULL,'2026-08-25 16:34:41','2026-08-25 16:34:41'),(92,16,18,'rider','hello po san na po kayo?','text',NULL,NULL,NULL,0,NULL,'2026-09-24 15:02:37','2026-09-24 15:02:37'),(93,15,8,'customer','I\'m waiting outside','text',NULL,NULL,NULL,0,NULL,'2026-09-24 15:03:33','2026-09-24 15:03:33'),(94,17,18,'rider','here na','text',NULL,NULL,NULL,0,NULL,'2026-09-24 15:22:51','2026-09-24 15:22:51');
+/*!40000 ALTER TABLE `chat_messages` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `chat_notifications`
+--
+
+DROP TABLE IF EXISTS `chat_notifications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `chat_notifications` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `conversation_id` bigint unsigned NOT NULL,
+  `user_id` int NOT NULL,
+  `notification_type` enum('new_message','customer_message','agent_message','conversation_update') COLLATE utf8mb4_unicode_ci DEFAULT 'new_message',
+  `is_read` tinyint(1) DEFAULT '0',
+  `read_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=186 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `chat_notifications`
+--
+
+LOCK TABLES `chat_notifications` WRITE;
+/*!40000 ALTER TABLE `chat_notifications` DISABLE KEYS */;
+INSERT INTO `chat_notifications` VALUES (1,3,1,'conversation_update',0,NULL,'2026-03-27 12:09:03'),(2,3,6,'conversation_update',0,NULL,'2026-03-27 12:09:03'),(3,3,9,'conversation_update',0,NULL,'2026-03-27 12:09:03'),(4,3,10,'conversation_update',0,NULL,'2026-03-27 12:09:03'),(5,3,11,'conversation_update',0,NULL,'2026-03-27 12:09:03'),(6,3,31,'conversation_update',0,NULL,'2026-03-27 12:09:03'),(7,2,9,'customer_message',0,NULL,'2026-04-09 04:35:39'),(28,3,31,'conversation_update',0,NULL,'2026-04-09 05:09:02'),(29,3,1,'conversation_update',0,NULL,'2026-04-09 05:09:02'),(30,3,6,'conversation_update',0,NULL,'2026-04-09 05:09:02'),(31,3,10,'conversation_update',0,NULL,'2026-04-09 05:09:02'),(32,3,11,'conversation_update',0,NULL,'2026-04-09 05:09:02'),(33,3,35,'conversation_update',0,NULL,'2026-04-09 05:09:02'),(34,3,31,'conversation_update',0,NULL,'2026-04-09 05:09:02'),(35,3,1,'conversation_update',0,NULL,'2026-04-09 05:09:02'),(36,3,6,'conversation_update',0,NULL,'2026-04-09 05:09:02'),(37,3,10,'conversation_update',0,NULL,'2026-04-09 05:09:02'),(38,3,11,'conversation_update',0,NULL,'2026-04-09 05:09:02'),(39,3,35,'conversation_update',0,NULL,'2026-04-09 05:09:02'),(40,3,31,'conversation_update',0,NULL,'2026-04-09 05:09:02'),(41,3,1,'conversation_update',0,NULL,'2026-04-09 05:09:02'),(42,3,6,'conversation_update',0,NULL,'2026-04-09 05:09:02'),(43,3,10,'conversation_update',0,NULL,'2026-04-09 05:09:03'),(44,3,11,'conversation_update',0,NULL,'2026-04-09 05:09:03'),(45,3,35,'conversation_update',0,NULL,'2026-04-09 05:09:03'),(46,3,31,'conversation_update',0,NULL,'2026-04-09 05:09:03'),(47,3,1,'conversation_update',0,NULL,'2026-04-09 05:09:03'),(48,3,6,'conversation_update',0,NULL,'2026-04-09 05:09:03'),(49,3,10,'conversation_update',0,NULL,'2026-04-09 05:09:03'),(50,3,11,'conversation_update',0,NULL,'2026-04-09 05:09:03'),(51,3,35,'conversation_update',0,NULL,'2026-04-09 05:09:03'),(52,3,31,'conversation_update',0,NULL,'2026-04-09 05:09:03'),(53,3,1,'conversation_update',0,NULL,'2026-04-09 05:09:03'),(54,3,6,'conversation_update',0,NULL,'2026-04-09 05:09:03'),(55,3,10,'conversation_update',0,NULL,'2026-04-09 05:09:03'),(56,3,11,'conversation_update',0,NULL,'2026-04-09 05:09:03'),(57,3,35,'conversation_update',0,NULL,'2026-04-09 05:09:03'),(58,3,31,'agent_message',0,NULL,'2026-04-09 05:09:15'),(59,3,1,'agent_message',0,NULL,'2026-04-09 05:09:15'),(60,3,6,'agent_message',0,NULL,'2026-04-09 05:09:15'),(61,3,10,'agent_message',0,NULL,'2026-04-09 05:09:15'),(62,3,11,'agent_message',0,NULL,'2026-04-09 05:09:15'),(63,3,35,'agent_message',0,NULL,'2026-04-09 05:09:15'),(64,3,31,'agent_message',0,NULL,'2026-04-09 05:09:15'),(65,3,1,'agent_message',0,NULL,'2026-04-09 05:09:15'),(66,3,6,'agent_message',0,NULL,'2026-04-09 05:09:15'),(67,3,10,'agent_message',0,NULL,'2026-04-09 05:09:15'),(68,3,11,'agent_message',0,NULL,'2026-04-09 05:09:15'),(69,3,35,'agent_message',0,NULL,'2026-04-09 05:09:15'),(70,3,31,'agent_message',0,NULL,'2026-04-09 05:09:15'),(71,3,1,'agent_message',0,NULL,'2026-04-09 05:09:15'),(72,3,6,'agent_message',0,NULL,'2026-04-09 05:09:15'),(73,3,10,'agent_message',0,NULL,'2026-04-09 05:09:15'),(74,3,11,'agent_message',0,NULL,'2026-04-09 05:09:15'),(75,3,35,'agent_message',0,NULL,'2026-04-09 05:09:15'),(76,3,31,'agent_message',0,NULL,'2026-04-09 05:09:15'),(77,3,1,'agent_message',0,NULL,'2026-04-09 05:09:15'),(78,3,6,'agent_message',0,NULL,'2026-04-09 05:09:15'),(79,3,10,'agent_message',0,NULL,'2026-04-09 05:09:15'),(80,3,11,'agent_message',0,NULL,'2026-04-09 05:09:15'),(81,3,35,'agent_message',0,NULL,'2026-04-09 05:09:15'),(82,7,1,'conversation_update',0,NULL,'2026-04-09 09:57:55'),(83,7,6,'conversation_update',0,NULL,'2026-04-09 09:57:55'),(84,7,9,'conversation_update',0,NULL,'2026-04-09 09:57:55'),(85,7,10,'conversation_update',0,NULL,'2026-04-09 09:57:55'),(86,7,11,'conversation_update',0,NULL,'2026-04-09 09:57:55'),(87,7,31,'conversation_update',0,NULL,'2026-04-09 09:57:55'),(88,7,35,'conversation_update',0,NULL,'2026-04-09 09:57:55'),(89,8,1,'customer_message',0,NULL,'2026-04-09 10:10:03'),(90,7,1,'customer_message',0,NULL,'2026-04-10 03:39:55'),(91,7,6,'customer_message',0,NULL,'2026-04-10 03:39:55'),(92,7,9,'customer_message',0,NULL,'2026-04-10 03:39:55'),(93,7,10,'customer_message',0,NULL,'2026-04-10 03:39:55'),(94,7,11,'customer_message',0,NULL,'2026-04-10 03:39:55'),(95,7,31,'customer_message',0,NULL,'2026-04-10 03:39:55'),(96,7,35,'customer_message',0,NULL,'2026-04-10 03:39:55'),(97,7,1,'customer_message',0,NULL,'2026-04-10 03:39:55'),(98,7,6,'customer_message',0,NULL,'2026-04-10 03:39:55'),(99,7,9,'customer_message',0,NULL,'2026-04-10 03:39:55'),(100,7,10,'customer_message',0,NULL,'2026-04-10 03:39:55'),(101,7,11,'customer_message',0,NULL,'2026-04-10 03:39:55'),(102,7,31,'customer_message',0,NULL,'2026-04-10 03:39:55'),(103,7,35,'customer_message',0,NULL,'2026-04-10 03:39:55'),(104,5,35,'conversation_update',0,NULL,'2026-04-10 08:00:18'),(105,5,35,'agent_message',0,NULL,'2026-04-10 08:00:18'),(106,4,28,'conversation_update',0,NULL,'2026-04-10 08:00:18'),(107,9,1,'customer_message',0,NULL,'2026-08-05 14:19:42'),(108,9,29,'customer_message',0,NULL,'2026-08-05 14:19:42'),(109,9,6,'customer_message',0,NULL,'2026-08-05 14:19:42'),(110,9,9,'customer_message',0,NULL,'2026-08-05 14:19:42'),(111,9,10,'customer_message',0,NULL,'2026-08-05 14:19:42'),(112,9,11,'customer_message',0,NULL,'2026-08-05 14:19:42'),(113,9,12,'customer_message',0,NULL,'2026-08-05 14:19:42'),(114,9,13,'customer_message',0,NULL,'2026-08-05 14:19:42'),(115,9,14,'customer_message',0,NULL,'2026-08-05 14:19:42'),(116,9,15,'customer_message',0,NULL,'2026-08-05 14:19:42'),(117,9,19,'customer_message',0,NULL,'2026-08-05 14:19:42'),(118,9,26,'customer_message',0,NULL,'2026-08-05 14:19:42'),(119,9,27,'customer_message',0,NULL,'2026-08-05 14:19:42'),(120,9,30,'customer_message',0,NULL,'2026-08-05 14:19:42'),(121,9,31,'customer_message',0,NULL,'2026-08-05 14:19:42'),(122,9,33,'customer_message',0,NULL,'2026-08-05 14:19:42'),(123,9,34,'customer_message',0,NULL,'2026-08-05 14:19:42'),(124,9,35,'customer_message',0,NULL,'2026-08-05 14:19:42'),(125,9,1,'customer_message',0,NULL,'2026-08-05 14:31:21'),(126,9,29,'customer_message',0,NULL,'2026-08-05 14:31:21'),(127,9,6,'customer_message',0,NULL,'2026-08-05 14:31:21'),(128,9,9,'customer_message',0,NULL,'2026-08-05 14:31:21'),(129,9,10,'customer_message',0,NULL,'2026-08-05 14:31:21'),(130,9,11,'customer_message',0,NULL,'2026-08-05 14:31:21'),(131,9,12,'customer_message',0,NULL,'2026-08-05 14:31:21'),(132,9,13,'customer_message',0,NULL,'2026-08-05 14:31:21'),(133,9,14,'customer_message',0,NULL,'2026-08-05 14:31:21'),(134,9,15,'customer_message',0,NULL,'2026-08-05 14:31:21'),(135,9,19,'customer_message',0,NULL,'2026-08-05 14:31:21'),(136,9,26,'customer_message',0,NULL,'2026-08-05 14:31:21'),(137,9,27,'customer_message',0,NULL,'2026-08-05 14:31:21'),(138,9,30,'customer_message',0,NULL,'2026-08-05 14:31:21'),(139,9,31,'customer_message',0,NULL,'2026-08-05 14:31:21'),(140,9,33,'customer_message',0,NULL,'2026-08-05 14:31:21'),(141,9,34,'customer_message',0,NULL,'2026-08-05 14:31:21'),(142,9,35,'customer_message',0,NULL,'2026-08-05 14:31:21'),(143,10,1,'customer_message',0,NULL,'2026-08-06 09:40:51'),(144,10,30,'customer_message',0,NULL,'2026-08-06 09:40:51'),(145,10,6,'customer_message',0,NULL,'2026-08-06 09:40:51'),(146,10,9,'customer_message',0,NULL,'2026-08-06 09:40:51'),(147,10,10,'customer_message',0,NULL,'2026-08-06 09:40:51'),(148,10,11,'customer_message',0,NULL,'2026-08-06 09:40:51'),(149,10,12,'customer_message',0,NULL,'2026-08-06 09:40:51'),(150,10,13,'customer_message',0,NULL,'2026-08-06 09:40:51'),(151,10,14,'customer_message',0,NULL,'2026-08-06 09:40:51'),(152,10,15,'customer_message',0,NULL,'2026-08-06 09:40:51'),(153,10,19,'customer_message',0,NULL,'2026-08-06 09:40:51'),(154,10,26,'customer_message',0,NULL,'2026-08-06 09:40:51'),(155,10,27,'customer_message',0,NULL,'2026-08-06 09:40:51'),(156,10,29,'customer_message',0,NULL,'2026-08-06 09:40:51'),(157,10,31,'customer_message',0,NULL,'2026-08-06 09:40:51'),(158,10,33,'customer_message',0,NULL,'2026-08-06 09:40:51'),(159,10,34,'customer_message',0,NULL,'2026-08-06 09:40:51'),(160,10,35,'customer_message',0,NULL,'2026-08-06 09:40:51'),(161,15,1,'customer_message',0,NULL,'2026-09-24 15:03:33'),(162,15,18,'customer_message',0,NULL,'2026-09-24 15:03:33'),(163,15,6,'customer_message',0,NULL,'2026-09-24 15:03:33'),(164,15,9,'customer_message',0,NULL,'2026-09-24 15:03:33'),(165,15,10,'customer_message',0,NULL,'2026-09-24 15:03:33'),(166,15,11,'customer_message',0,NULL,'2026-09-24 15:03:33'),(167,15,12,'customer_message',0,NULL,'2026-09-24 15:03:33'),(168,15,13,'customer_message',0,NULL,'2026-09-24 15:03:33'),(169,15,14,'customer_message',0,NULL,'2026-09-24 15:03:33'),(170,15,15,'customer_message',0,NULL,'2026-09-24 15:03:33'),(171,15,19,'customer_message',0,NULL,'2026-09-24 15:03:33'),(172,15,26,'customer_message',0,NULL,'2026-09-24 15:03:33'),(173,15,27,'customer_message',0,NULL,'2026-09-24 15:03:33'),(174,15,29,'customer_message',0,NULL,'2026-09-24 15:03:33'),(175,15,30,'customer_message',0,NULL,'2026-09-24 15:03:33'),(176,15,31,'customer_message',0,NULL,'2026-09-24 15:03:33'),(177,15,33,'customer_message',0,NULL,'2026-09-24 15:03:33'),(178,15,34,'customer_message',0,NULL,'2026-09-24 15:03:33'),(179,15,35,'customer_message',0,NULL,'2026-09-24 15:03:33'),(180,15,38,'customer_message',0,NULL,'2026-09-24 15:03:33'),(181,15,42,'customer_message',0,NULL,'2026-09-24 15:03:33'),(182,15,43,'customer_message',0,NULL,'2026-09-24 15:03:33'),(183,15,44,'customer_message',0,NULL,'2026-09-24 15:03:33'),(184,15,45,'customer_message',0,NULL,'2026-09-24 15:03:33'),(185,15,46,'customer_message',0,NULL,'2026-09-24 15:03:33');
+/*!40000 ALTER TABLE `chat_notifications` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `chat_quick_responses`
+--
+
+DROP TABLE IF EXISTS `chat_quick_responses`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `chat_quick_responses` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `agent_id` int DEFAULT NULL,
+  `category` enum('greeting','order_status','refund','complaint','general','closing') COLLATE utf8mb4_unicode_ci DEFAULT 'general',
+  `title` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `content` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `is_global` tinyint(1) DEFAULT '1',
+  `usage_count` int DEFAULT '0',
+  `is_active` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `chat_quick_responses`
+--
+
+LOCK TABLES `chat_quick_responses` WRITE;
+/*!40000 ALTER TABLE `chat_quick_responses` DISABLE KEYS */;
+INSERT INTO `chat_quick_responses` VALUES (1,NULL,'greeting','Welcome','Hello! Thank you for contacting our support team. How can I help you today?',1,0,1,'2026-03-19 06:55:42','2026-03-19 06:55:42'),(2,NULL,'greeting','Greeting with Hours','Hi there! ├â┬░├à┬╕├óΓé¼╦£├óΓé¼┬╣ Thanks for reaching out. Our support team is here to help. What can we do for you?',1,0,1,'2026-03-19 06:55:42','2026-03-19 06:55:42'),(3,NULL,'order_status','Order Preparing','Your order is currently being prepared by our kitchen team. We\'ll have it ready soon! ├â┬░├à┬╕├é┬ì├é┬│',1,0,1,'2026-03-19 06:55:42','2026-03-19 06:55:42'),(4,NULL,'order_status','Order Ready for Pickup','Great news! Your order is ready for pickup. You can collect it anytime at your preferred location.',1,0,1,'2026-03-19 06:55:42','2026-03-19 06:55:42'),(5,NULL,'order_status','Out for Delivery','Your order is now out for delivery! ├â┬░├à┬╕├à┬í├óΓé¼ΓÇ¥ The driver will arrive shortly. Please keep your phone handy.',1,0,1,'2026-03-19 06:55:42','2026-03-19 06:55:42'),(6,NULL,'order_status','Delivered','Your order has been delivered! ├â┬░├à┬╕├óΓé¼┼ô├é┬ª We hope you enjoy your lechon. Please rate your experience!',1,0,1,'2026-03-19 06:55:42','2026-03-19 06:55:42'),(7,NULL,'refund','Refund Initiated','We\'ve processed your refund request. Please allow 3-5 business days for the amount to reflect in your account.',1,0,1,'2026-03-19 06:55:42','2026-03-19 06:55:42'),(8,NULL,'refund','Refund Details','Your refund status is currently being reviewed. We\'ll update you as soon as a decision is made.',1,0,1,'2026-03-19 06:55:42','2026-03-19 06:55:42'),(9,NULL,'complaint','We Apologize','We sincerely apologize for the inconvenience you experienced. Let\'s work together to resolve this.',1,0,1,'2026-03-19 06:55:42','2026-03-19 06:55:42'),(10,NULL,'complaint','Investigation','Thank you for reporting this. We\'re investigating the matter and will provide you with an update soon.',1,0,1,'2026-03-19 06:55:42','2026-03-19 06:55:42'),(11,NULL,'closing','Closing 1','Is there anything else I can help you with today?',1,0,1,'2026-03-19 06:55:42','2026-03-19 06:55:42'),(12,NULL,'closing','Closing 2','Thank you for choosing us! If you need anything else, feel free to reach out anytime.',1,0,1,'2026-03-19 06:55:42','2026-03-19 06:55:42'),(13,NULL,'general','Please Provide Order Number','Could you please provide your order number so I can look into this for you?',1,0,1,'2026-03-19 06:55:42','2026-03-19 06:55:42'),(14,NULL,'general','Checking Status','I\'m checking on that for you right now. Please give me just a moment.',1,0,1,'2026-03-19 06:55:42','2026-03-19 06:55:42');
+/*!40000 ALTER TABLE `chat_quick_responses` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `chat_refund_requests`
+--
+
+DROP TABLE IF EXISTS `chat_refund_requests`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `chat_refund_requests` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `conversation_id` bigint unsigned NOT NULL,
+  `refund_id` bigint unsigned DEFAULT NULL,
+  `order_id` int NOT NULL,
+  `requested_by` int NOT NULL,
+  `reason` text COLLATE utf8mb4_unicode_ci,
+  `screenshot_paths` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `status` enum('pending','approved','rejected','completed') COLLATE utf8mb4_unicode_ci DEFAULT 'pending',
+  `admin_notes` text COLLATE utf8mb4_unicode_ci,
+  `processed_by` int DEFAULT NULL,
+  `processed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `chat_refund_requests_chk_1` CHECK (json_valid(`screenshot_paths`))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `chat_refund_requests`
+--
+
+LOCK TABLES `chat_refund_requests` WRITE;
+/*!40000 ALTER TABLE `chat_refund_requests` DISABLE KEYS */;
+/*!40000 ALTER TABLE `chat_refund_requests` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `chat_typing_indicators`
+--
+
+DROP TABLE IF EXISTS `chat_typing_indicators`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `chat_typing_indicators` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `conversation_id` bigint unsigned NOT NULL,
+  `user_id` int NOT NULL,
+  `is_typing` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `chat_typing_indicators`
+--
+
+LOCK TABLES `chat_typing_indicators` WRITE;
+/*!40000 ALTER TABLE `chat_typing_indicators` DISABLE KEYS */;
+/*!40000 ALTER TABLE `chat_typing_indicators` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `cod_collections`
+--
+
+DROP TABLE IF EXISTS `cod_collections`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `cod_collections` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `order_id` int NOT NULL,
+  `tracking_id` int DEFAULT NULL,
+  `rider_id` int NOT NULL,
+  `order_total` decimal(10,2) NOT NULL,
+  `cash_received` decimal(10,2) NOT NULL,
+  `change_given` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `remitted_amount` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `remittance_status` enum('pending','remitted','verified') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `remittance_reference` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `remitted_at` datetime DEFAULT NULL,
+  `collected_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `notes` text COLLATE utf8mb4_unicode_ci,
+  PRIMARY KEY (`id`),
+  KEY `idx_cod_order` (`order_id`),
+  KEY `idx_cod_rider` (`rider_id`),
+  KEY `idx_cod_status` (`remittance_status`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `cod_collections`
+--
+
+LOCK TABLES `cod_collections` WRITE;
+/*!40000 ALTER TABLE `cod_collections` DISABLE KEYS */;
+INSERT INTO `cod_collections` VALUES (1,152,41,5,1206.76,1206.76,0.00,0.00,'pending',NULL,NULL,'2026-09-25 00:51:03',NULL);
+/*!40000 ALTER TABLE `cod_collections` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `commission_rules`
+--
+
+DROP TABLE IF EXISTS `commission_rules`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commission_rules` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `rule_code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `partner_user_id` int DEFAULT NULL,
+  `rule_name` varchar(150) COLLATE utf8mb4_general_ci NOT NULL,
+  `scope_type` enum('global','partner') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'global',
+  `commission_percent` decimal(5,2) NOT NULL DEFAULT '10.00',
+  `effective_from` date NOT NULL,
+  `effective_to` date DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `notes` text COLLATE utf8mb4_general_ci,
+  `created_by` int DEFAULT NULL,
+  `updated_by` int DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `commission_rules`
+--
+
+LOCK TABLES `commission_rules` WRITE;
+/*!40000 ALTER TABLE `commission_rules` DISABLE KEYS */;
+INSERT INTO `commission_rules` VALUES (1,'default_global_rate',NULL,'Default Platform Commission','global',10.00,'2024-01-01',NULL,1,'Default global commission rule created by tenant scope migration.',9,9,'2026-03-27 10:13:44','2026-03-27 10:13:44');
+/*!40000 ALTER TABLE `commission_rules` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `customer_favorites`
+--
+
+DROP TABLE IF EXISTS `customer_favorites`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `customer_favorites` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `favorite_type` enum('store','product') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `store_key` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `product_id` int DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `customer_favorites`
+--
+
+LOCK TABLES `customer_favorites` WRITE;
+/*!40000 ALTER TABLE `customer_favorites` DISABLE KEYS */;
+/*!40000 ALTER TABLE `customer_favorites` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `customer_notification_preferences`
+--
+
+DROP TABLE IF EXISTS `customer_notification_preferences`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `customer_notification_preferences` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `sms_notifications` tinyint(1) DEFAULT '1',
+  `email_notifications` tinyint(1) DEFAULT '1',
+  `push_notifications` tinyint(1) DEFAULT '0',
+  `in_app_notifications` tinyint(1) DEFAULT '1',
+  `notify_on_order_confirmed` tinyint(1) DEFAULT '1',
+  `notify_on_processing` tinyint(1) DEFAULT '1',
+  `notify_on_driver_assigned` tinyint(1) DEFAULT '1',
+  `notify_on_pickup` tinyint(1) DEFAULT '1',
+  `notify_on_on_the_way` tinyint(1) DEFAULT '1',
+  `notify_on_arriving` tinyint(1) DEFAULT '1',
+  `notify_on_delivered` tinyint(1) DEFAULT '1',
+  `notify_on_failed` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `customer_notification_preferences`
+--
+
+LOCK TABLES `customer_notification_preferences` WRITE;
+/*!40000 ALTER TABLE `customer_notification_preferences` DISABLE KEYS */;
+/*!40000 ALTER TABLE `customer_notification_preferences` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `decision_comparisons`
+--
+
+DROP TABLE IF EXISTS `decision_comparisons`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `decision_comparisons` (
+  `comparison_id` int NOT NULL,
+  `comparison_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `options` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `comparison_matrix` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `best_option` int DEFAULT NULL,
+  `analysis` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `user_id` int DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT `decision_comparisons_chk_1` CHECK (json_valid(`options`)),
+  CONSTRAINT `decision_comparisons_chk_2` CHECK (json_valid(`comparison_matrix`)),
+  CONSTRAINT `decision_comparisons_chk_3` CHECK (json_valid(`analysis`))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `decision_comparisons`
+--
+
+LOCK TABLES `decision_comparisons` WRITE;
+/*!40000 ALTER TABLE `decision_comparisons` DISABLE KEYS */;
+/*!40000 ALTER TABLE `decision_comparisons` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `decision_scores`
+--
+
+DROP TABLE IF EXISTS `decision_scores`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `decision_scores` (
+  `score_id` int NOT NULL,
+  `recommendation_id` int NOT NULL,
+  `demand_certainty` decimal(5,2) DEFAULT NULL,
+  `cost_efficiency` decimal(5,2) DEFAULT NULL,
+  `implementation_speed` decimal(5,2) DEFAULT NULL,
+  `risk_level` decimal(5,2) DEFAULT NULL,
+  `strategic_fit` decimal(5,2) DEFAULT NULL,
+  `total_score` decimal(5,2) NOT NULL,
+  `ranking` int DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `decision_scores`
+--
+
+LOCK TABLES `decision_scores` WRITE;
+/*!40000 ALTER TABLE `decision_scores` DISABLE KEYS */;
+/*!40000 ALTER TABLE `decision_scores` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `decisions_recommendations`
+--
+
+DROP TABLE IF EXISTS `decisions_recommendations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `decisions_recommendations` (
+  `recommendation_id` int NOT NULL,
+  `decision_category` enum('inventory','staffing','production','pricing','marketing','logistics') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `recommendation_text` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `priority` enum('critical','high','medium','low') COLLATE utf8mb4_unicode_ci DEFAULT 'medium',
+  `confidence_score` decimal(5,2) DEFAULT NULL,
+  `recommendation_date` date NOT NULL,
+  `action_start_date` date DEFAULT NULL,
+  `action_end_date` date DEFAULT NULL,
+  `expected_impact` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `expected_impact_value` decimal(10,2) DEFAULT NULL,
+  `status` enum('pending','implemented','in_progress','rejected','expired') COLLATE utf8mb4_unicode_ci DEFAULT 'pending',
+  `implementation_notes` text COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `decisions_recommendations`
+--
+
+LOCK TABLES `decisions_recommendations` WRITE;
+/*!40000 ALTER TABLE `decisions_recommendations` DISABLE KEYS */;
+/*!40000 ALTER TABLE `decisions_recommendations` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `deduction_rates`
+--
+
+DROP TABLE IF EXISTS `deduction_rates`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `deduction_rates` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `year` int NOT NULL,
+  `month` int DEFAULT NULL,
+  `rate_type` enum('sss','philhealth','pagibig','bir') COLLATE utf8mb4_general_ci NOT NULL,
+  `employee_rate` decimal(5,3) DEFAULT '0.000',
+  `employer_rate` decimal(5,3) DEFAULT '0.000',
+  `salary_ceiling` decimal(12,2) DEFAULT NULL,
+  `minimum_salary` decimal(12,2) DEFAULT NULL,
+  `flat_rate` decimal(12,2) DEFAULT NULL,
+  `notes` text COLLATE utf8mb4_general_ci,
+  `active` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `deduction_rates`
+--
+
+LOCK TABLES `deduction_rates` WRITE;
+/*!40000 ALTER TABLE `deduction_rates` DISABLE KEYS */;
+INSERT INTO `deduction_rates` VALUES (1,2026,NULL,'sss',0.045,0.095,29500.00,1000.00,NULL,NULL,1,'2026-01-19 08:30:10','2026-01-19 08:30:10'),(2,2026,NULL,'philhealth',0.025,0.025,100000.00,10000.00,NULL,NULL,1,'2026-01-19 08:30:10','2026-01-19 08:30:10'),(3,2026,NULL,'pagibig',0.010,0.020,5000.00,1000.00,NULL,NULL,1,'2026-01-19 08:30:10','2026-01-19 08:30:10');
+/*!40000 ALTER TABLE `deduction_rates` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `delivery_chat_messages`
+--
+
+DROP TABLE IF EXISTS `delivery_chat_messages`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `delivery_chat_messages` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `order_id` int NOT NULL,
+  `tracking_id` int DEFAULT NULL,
+  `sender_user_id` int NOT NULL,
+  `sender_role` enum('customer','driver') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `message_text` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `is_read` tinyint(1) NOT NULL DEFAULT '0',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `delivery_chat_messages`
+--
+
+LOCK TABLES `delivery_chat_messages` WRITE;
+/*!40000 ALTER TABLE `delivery_chat_messages` DISABLE KEYS */;
+INSERT INTO `delivery_chat_messages` VALUES (1,105,9,9,'customer','asdad',0,'2026-03-23 17:43:52'),(2,106,10,30,'driver','otw na po',1,'2026-03-23 17:45:34'),(3,106,10,9,'customer','ok po ingat',1,'2026-03-23 17:45:43'),(4,106,10,30,'driver','<3',1,'2026-03-23 17:45:48'),(5,106,10,30,'driver','lapit na po ako mam',1,'2026-03-23 17:46:07'),(6,107,11,30,'driver','otw',0,'2026-03-23 17:53:33'),(7,108,12,30,'driver','wtf',0,'2026-03-23 18:09:09'),(8,109,13,31,'customer','asd',0,'2026-03-23 18:09:21');
+/*!40000 ALTER TABLE `delivery_chat_messages` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `delivery_methods`
+--
+
+DROP TABLE IF EXISTS `delivery_methods`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `delivery_methods` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `method_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `provider_id` int DEFAULT NULL,
+  `description` text COLLATE utf8mb4_general_ci,
+  `is_active` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `delivery_methods`
+--
+
+LOCK TABLES `delivery_methods` WRITE;
+/*!40000 ALTER TABLE `delivery_methods` DISABLE KEYS */;
+INSERT INTO `delivery_methods` VALUES (1,'Standard Delivery',1,NULL,1,'2026-01-22 16:01:26'),(2,'Express Delivery',1,NULL,1,'2026-01-22 16:01:26'),(3,'Pickup',1,NULL,1,'2026-01-22 16:01:26'),(4,'FoodPanda Delivery',2,NULL,0,'2026-01-22 16:01:26'),(5,'GrabFood Delivery',3,NULL,0,'2026-01-22 16:01:26');
+/*!40000 ALTER TABLE `delivery_methods` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `delivery_proofs`
+--
+
+DROP TABLE IF EXISTS `delivery_proofs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `delivery_proofs` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `order_id` int NOT NULL,
+  `tracking_id` int DEFAULT NULL,
+  `rider_id` int NOT NULL,
+  `verification_type` enum('pin','photo','signature','qr') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pin',
+  `delivery_pin` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `pin_verified` tinyint(1) NOT NULL DEFAULT '0',
+  `photo_path` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `signature_path` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `recipient_name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `delivery_notes` text COLLATE utf8mb4_unicode_ci,
+  `delivered_latitude` decimal(10,8) DEFAULT NULL,
+  `delivered_longitude` decimal(11,8) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_proof_order` (`order_id`),
+  KEY `idx_proof_rider` (`rider_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `delivery_proofs`
+--
+
+LOCK TABLES `delivery_proofs` WRITE;
+/*!40000 ALTER TABLE `delivery_proofs` DISABLE KEYS */;
+INSERT INTO `delivery_proofs` VALUES (1,66,38,5,'photo',NULL,1,'uploads/proof_of_delivery/POD_66_1790262229_f35ccc2840.png',NULL,'justine santos',NULL,14.32470550,120.98057050,'2026-09-24 23:03:49'),(2,150,39,5,'photo',NULL,1,'uploads/proof_of_delivery/POD_150_1790263707_019e56ae20.jpg',NULL,'justine santos',NULL,14.32470550,120.98057050,'2026-09-24 23:28:27'),(3,64,37,5,'photo',NULL,1,'uploads/proof_of_delivery/POD_64_1790265174_dd90d66ab5.jpg',NULL,'justine santos',NULL,14.32470550,120.98057050,'2026-09-24 23:52:54'),(4,152,41,5,'photo',NULL,1,'uploads/proof_of_delivery/POD_152_1790268668_e5d1cfe26a.jpg',NULL,'justine santos',NULL,14.32470550,120.98057050,'2026-09-25 00:51:08');
+/*!40000 ALTER TABLE `delivery_proofs` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Temporary view structure for view `delivery_ratings`
+--
+
+DROP TABLE IF EXISTS `delivery_ratings`;
+/*!50001 DROP VIEW IF EXISTS `delivery_ratings`*/;
+SET @saved_cs_client     = @@character_set_client;
+/*!50503 SET character_set_client = utf8mb4 */;
+/*!50001 CREATE VIEW `delivery_ratings` AS SELECT 
+ 1 AS `id`,
+ 1 AS `order_id`,
+ 1 AS `user_id`,
+ 1 AS `rating`,
+ 1 AS `comment`,
+ 1 AS `created_at`*/;
+SET character_set_client = @saved_cs_client;
+
+--
+-- Table structure for table `delivery_reviews`
+--
+
+DROP TABLE IF EXISTS `delivery_reviews`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `delivery_reviews` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `order_id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `rating` tinyint(1) NOT NULL,
+  `comment` text COLLATE utf8mb4_general_ci,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `delivery_reviews`
+--
+
+LOCK TABLES `delivery_reviews` WRITE;
+/*!40000 ALTER TABLE `delivery_reviews` DISABLE KEYS */;
+INSERT INTO `delivery_reviews` VALUES (1,99,1,5,'mabait malaki tiite','2026-03-17 06:52:49'),(2,102,9,5,'laki tite','2026-03-17 13:58:49'),(3,104,9,5,'','2026-03-23 17:07:12'),(4,106,9,5,'','2026-03-23 17:47:11'),(5,107,9,5,'','2026-03-23 17:54:42'),(6,108,9,5,'','2026-03-27 07:31:30'),(7,152,4,5,'','2026-09-24 16:52:08');
+/*!40000 ALTER TABLE `delivery_reviews` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `departments`
+--
+
+DROP TABLE IF EXISTS `departments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `departments` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `department_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `description` text COLLATE utf8mb4_general_ci,
+  `manager_id` int DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `departments`
+--
+
+LOCK TABLES `departments` WRITE;
+/*!40000 ALTER TABLE `departments` DISABLE KEYS */;
+INSERT INTO `departments` VALUES (1,'Finance','Finance',1,'2026-01-23 07:00:14','2026-02-10 14:38:31'),(2,'Delivery','Sino ka?',4,'2026-02-01 11:22:28','2026-02-01 11:22:28'),(3,'Receptionist','',NULL,'2026-02-10 14:38:48','2026-02-10 14:38:48'),(4,'Lechonero','',NULL,'2026-02-10 14:38:56','2026-02-10 14:38:56'),(5,'Assistant','',NULL,'2026-02-10 14:39:06','2026-02-10 14:39:06'),(6,'Delivery Riders','Delivery Riders',31,'2026-03-31 08:40:35','2026-03-31 08:40:35');
+/*!40000 ALTER TABLE `departments` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `driver_assignment_history`
+--
+
+DROP TABLE IF EXISTS `driver_assignment_history`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `driver_assignment_history` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `tracking_id` int NOT NULL,
+  `order_id` int NOT NULL,
+  `driver_id` int DEFAULT NULL,
+  `assignment_method` enum('automatic','manual','system_reassign') COLLATE utf8mb4_general_ci DEFAULT 'manual',
+  `assigned_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `assignment_score` int DEFAULT NULL COMMENT 'Score determining suitability for assignment 0-100',
+  `assignment_criteria` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT 'Details of criteria used for assignment',
+  `reason_if_unassigned` text COLLATE utf8mb4_general_ci,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `driver_assignment_history_chk_1` CHECK (json_valid(`assignment_criteria`))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `driver_assignment_history`
+--
+
+LOCK TABLES `driver_assignment_history` WRITE;
+/*!40000 ALTER TABLE `driver_assignment_history` DISABLE KEYS */;
+/*!40000 ALTER TABLE `driver_assignment_history` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `driver_availability`
+--
+
+DROP TABLE IF EXISTS `driver_availability`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `driver_availability` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `driver_id` int NOT NULL,
+  `date` date NOT NULL,
+  `available_from` time DEFAULT NULL,
+  `available_to` time DEFAULT NULL,
+  `max_deliveries_per_day` int DEFAULT '10',
+  `current_deliveries_count` int DEFAULT '0',
+  `is_available` tinyint(1) DEFAULT '1',
+  `status` enum('available','on_break','offline','unavailable') COLLATE utf8mb4_general_ci DEFAULT 'available',
+  `last_location_latitude` decimal(10,8) DEFAULT NULL,
+  `last_location_longitude` decimal(11,8) DEFAULT NULL,
+  `last_location_update` timestamp NULL DEFAULT NULL,
+  `current_order_count` int DEFAULT '0',
+  `estimated_completion_time` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `driver_availability`
+--
+
+LOCK TABLES `driver_availability` WRITE;
+/*!40000 ALTER TABLE `driver_availability` DISABLE KEYS */;
+/*!40000 ALTER TABLE `driver_availability` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `driver_delivery_stats`
+--
+
+DROP TABLE IF EXISTS `driver_delivery_stats`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `driver_delivery_stats` (
+  `driver_id` int NOT NULL,
+  `total_deliveries` int NOT NULL DEFAULT '0',
+  `successful_deliveries` int NOT NULL DEFAULT '0',
+  `failed_deliveries` int NOT NULL DEFAULT '0',
+  `total_distance_km` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `avg_delivery_time_minutes` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `avg_rating` decimal(3,2) NOT NULL DEFAULT '0.00',
+  `success_rate` decimal(5,2) GENERATED ALWAYS AS (if((`total_deliveries` > 0),((`successful_deliveries` / `total_deliveries`) * 100),0)) STORED,
+  `last_updated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `driver_delivery_stats`
+--
+
+LOCK TABLES `driver_delivery_stats` WRITE;
+/*!40000 ALTER TABLE `driver_delivery_stats` DISABLE KEYS */;
+INSERT INTO `driver_delivery_stats` (`driver_id`, `total_deliveries`, `successful_deliveries`, `failed_deliveries`, `total_distance_km`, `avg_delivery_time_minutes`, `avg_rating`, `last_updated`) VALUES (18,2,2,0,0.00,0.00,0.00,'2026-03-17 13:38:24'),(19,4,4,0,0.00,0.00,0.00,'2026-03-23 17:54:35'),(11,1,1,0,0.00,0.00,0.00,'2026-08-25 16:35:15');
+/*!40000 ALTER TABLE `driver_delivery_stats` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `employee_deductions`
+--
+
+DROP TABLE IF EXISTS `employee_deductions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `employee_deductions` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `employee_id` int NOT NULL,
+  `deduction_type` enum('loan','cash_advance','other') COLLATE utf8mb4_general_ci NOT NULL,
+  `description` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `amount_per_payroll` decimal(10,2) NOT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date DEFAULT NULL,
+  `status` enum('active','inactive','completed') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'active',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `employee_deductions`
+--
+
+LOCK TABLES `employee_deductions` WRITE;
+/*!40000 ALTER TABLE `employee_deductions` DISABLE KEYS */;
+INSERT INTO `employee_deductions` VALUES (1,7,'cash_advance','asdasd',50.00,'2026-03-01','2026-03-15','active','2026-03-12 16:09:04','2026-03-12 16:09:04');
+/*!40000 ALTER TABLE `employee_deductions` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `employee_turnover`
+--
+
+DROP TABLE IF EXISTS `employee_turnover`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `employee_turnover` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `employee_id` int NOT NULL,
+  `separation_type` enum('resignation','termination','retirement','contract_end') COLLATE utf8mb4_general_ci DEFAULT 'resignation',
+  `resignation_date` date DEFAULT NULL,
+  `last_working_day` date DEFAULT NULL,
+  `notice_period_days` int DEFAULT NULL,
+  `resignation_reason` text COLLATE utf8mb4_general_ci,
+  `resignation_notes` text COLLATE utf8mb4_general_ci,
+  `termination_reason` text COLLATE utf8mb4_general_ci,
+  `exit_interview_date` date DEFAULT NULL,
+  `exit_interview_notes` text COLLATE utf8mb4_general_ci,
+  `exit_clearance_status` enum('pending','completed','pending_items') COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `clearance_notes` text COLLATE utf8mb4_general_ci,
+  `rehire_eligible` enum('yes','no','conditional') COLLATE utf8mb4_general_ci DEFAULT 'yes',
+  `rehire_conditions` text COLLATE utf8mb4_general_ci,
+  `final_paycheck_date` date DEFAULT NULL,
+  `benefits_continuation` text COLLATE utf8mb4_general_ci,
+  `severance_package` decimal(12,2) DEFAULT NULL,
+  `processed_by` int DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `employee_turnover`
+--
+
+LOCK TABLES `employee_turnover` WRITE;
+/*!40000 ALTER TABLE `employee_turnover` DISABLE KEYS */;
+/*!40000 ALTER TABLE `employee_turnover` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `employees`
+--
+
+DROP TABLE IF EXISTS `employees`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `employees` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int DEFAULT NULL,
+  `employee_id` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `first_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `last_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `email` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `phone` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `department_id` int DEFAULT NULL,
+  `position_id` int DEFAULT NULL,
+  `position` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `hire_date` date NOT NULL,
+  `employment_type` enum('full_time','part_time','contract','temporary') COLLATE utf8mb4_general_ci DEFAULT 'full_time',
+  `employment_basis` enum('monthly','daily') COLLATE utf8mb4_general_ci DEFAULT 'monthly',
+  `salary` decimal(12,2) DEFAULT NULL,
+  `daily_rate` decimal(10,2) DEFAULT '0.00',
+  `address` text COLLATE utf8mb4_general_ci,
+  `emergency_contact` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `emergency_phone` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `status` enum('active','inactive','on_leave','terminated') COLLATE utf8mb4_general_ci DEFAULT 'active',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `sss_number` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `philhealth_number` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `pagibig_number` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `tin_number` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `vehicle_details` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Vehicle details like plate number, model, etc.',
+  PRIMARY KEY (`id`),
+  KEY `idx_employees_position_id` (`position_id`),
+  CONSTRAINT `fk_employees_position_id` FOREIGN KEY (`position_id`) REFERENCES `job_positions` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `employees`
+--
+
+LOCK TABLES `employees` WRITE;
+/*!40000 ALTER TABLE `employees` DISABLE KEYS */;
+INSERT INTO `employees` VALUES (2,NULL,'EMP-20260127-4585','Local','One','localone@gmail.com','09123456789',1,1,'Staff','2005-03-23','full_time','monthly',890.00,0.00,NULL,NULL,NULL,'active','2026-01-27 13:24:35','2026-04-09 04:53:22',NULL,NULL,NULL,NULL,NULL),(3,9,'EMP-20260130-9786','justine','santos','asd@gmail.com','09917471283',1,2,'asd','2026-01-30','full_time','daily',0.00,500.00,NULL,NULL,NULL,'inactive','2026-01-30 08:30:54','2026-04-09 04:53:22','123','123','123','123',NULL),(6,14,'EMP-20260206-5297','justine','santos','employee@gmail.com','09917471283',2,3,'employee','2026-02-06','full_time','daily',0.00,600.00,NULL,NULL,NULL,'terminated','2026-02-06 10:26:32','2026-04-09 04:53:22','','','','',NULL),(7,15,'EMP-20260210-2435','asd','asd','asdasd@gmail.com','123123123',2,3,'employee','2026-02-10','full_time','daily',0.00,700.00,NULL,NULL,NULL,'active','2026-02-09 16:12:00','2026-04-09 04:53:22','','','','',NULL),(8,NULL,'EMP-20250101-0001','John','Doe','john.doe@company.com',NULL,NULL,5,'Software Developer','2024-01-15','full_time','monthly',50000.00,0.00,NULL,NULL,NULL,'active','2026-02-10 14:08:05','2026-04-09 04:53:22',NULL,NULL,NULL,NULL,NULL),(9,NULL,'EMP-20250101-0002','Jane','Smith','jane.smith@company.com',NULL,NULL,6,'Project Manager','2024-02-01','full_time','monthly',60000.00,0.00,NULL,NULL,NULL,'active','2026-02-10 14:08:05','2026-04-09 04:53:22',NULL,NULL,NULL,NULL,NULL),(10,19,'EMP-20250101-0003','Bob','Johnson','bob.johnson@company.com',NULL,NULL,7,'Hourly Staff','2024-03-10','full_time','daily',0.00,1500.00,NULL,NULL,NULL,'active','2026-02-10 14:08:05','2026-04-09 04:53:22',NULL,NULL,NULL,NULL,NULL),(11,18,'EMP-20260210-7429','justine','santos','justinehero03@gmail.com','12345678901',2,3,'employee','2026-02-10','full_time','daily',0.00,90.00,NULL,NULL,NULL,'active','2026-02-10 14:11:30','2026-04-09 04:53:22','','','','',NULL),(12,NULL,'EMP-20260212-8174','Employee','One','employeeone@gmail.com','09123456789',3,9,'Staff','2026-02-11','full_time','monthly',0.00,480.00,NULL,NULL,NULL,'active','2026-02-12 06:24:39','2026-04-09 04:53:22','','','','',NULL),(13,NULL,'EMP-20260212-1941','Employee','Two','employeetwo@gmail.com','09112345678',3,9,'Staff','2026-02-01','full_time','daily',0.00,600.00,NULL,NULL,NULL,'active','2026-02-12 06:31:28','2026-04-09 04:53:22','','','','',NULL),(16,26,'EMP-20260212-5171','Local','Employee','localemployee@gmail.com','09987654321',3,10,'Receipt','2026-01-31','full_time','daily',0.00,600.00,NULL,NULL,NULL,'active','2026-02-12 06:51:46','2026-04-09 04:53:22','','','','',NULL),(17,27,'EMP-20260212-7349','Local Two','Employee','localemployee2@gmail.com','09912345678',3,10,'Receipt','2026-01-31','full_time','daily',0.00,600.00,NULL,NULL,NULL,'active','2026-02-12 07:13:42','2026-04-09 04:53:22','','','','',NULL),(18,29,'EMP-20260317-2059','justine','budoy','asd123123@gmail.com','09917471283',2,12,'driver','2026-03-17','full_time','monthly',0.00,900.00,NULL,NULL,NULL,'active','2026-03-17 05:43:54','2026-04-09 04:53:22','','','','',NULL),(19,30,'EMP-20260317-3382','justine','asdasd','asdasd123123@gmail.com','09917471283',2,12,'driver','2026-03-17','full_time','daily',0.00,900.00,NULL,NULL,NULL,'active','2026-03-17 13:49:25','2026-04-09 04:53:22','','','','',NULL),(20,33,'EMP-20260331-3987','Joshua','Santos','joshuasantosivan14@gmail.com','+63 9937626925',6,14,'Delivery Rider','2026-03-31','full_time','daily',0.00,900.00,NULL,NULL,NULL,'active','2026-03-31 08:41:38','2026-04-09 04:53:22','','','','',NULL),(21,34,'EMP-20260331-8055','joshua','santos','josh@gmail.com','09171234567',6,15,'driver','2026-03-31','full_time','daily',0.00,900.00,NULL,NULL,NULL,'active','2026-03-31 09:08:38','2026-04-09 04:53:22','','','','',NULL);
+/*!40000 ALTER TABLE `employees` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `employees_geo_tracking`
+--
+
+DROP TABLE IF EXISTS `employees_geo_tracking`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `employees_geo_tracking` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `employee_id` int NOT NULL,
+  `current_latitude` decimal(10,8) DEFAULT NULL,
+  `current_longitude` decimal(11,8) DEFAULT NULL,
+  `current_location_address` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `accuracy_meters` float DEFAULT NULL,
+  `battery_percentage` int DEFAULT NULL,
+  `tracking_status` enum('active','inactive','low_battery') COLLATE utf8mb4_general_ci DEFAULT 'active',
+  `last_update` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=167 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `employees_geo_tracking`
+--
+
+LOCK TABLES `employees_geo_tracking` WRITE;
+/*!40000 ALTER TABLE `employees_geo_tracking` DISABLE KEYS */;
+INSERT INTO `employees_geo_tracking` VALUES (1,19,14.32473751,120.98059722,NULL,122,NULL,'active','2026-03-23 18:24:59','2026-03-23 17:43:00'),(2,21,14.32477600,120.98059800,NULL,212,NULL,'active','2026-03-31 09:08:59','2026-03-31 09:08:59'),(3,11,14.32471389,120.98056555,NULL,98,NULL,'active','2026-08-25 17:16:44','2026-04-09 09:52:48'),(4,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:18:05','2026-09-24 08:18:05'),(5,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:18:11','2026-09-24 08:18:11'),(6,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:18:18','2026-09-24 08:18:18'),(7,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:18:23','2026-09-24 08:18:23'),(8,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:18:33','2026-09-24 08:18:33'),(9,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:18:37','2026-09-24 08:18:37'),(10,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:18:38','2026-09-24 08:18:38'),(11,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:18:47','2026-09-24 08:18:47'),(12,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:18:50','2026-09-24 08:18:50'),(13,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:18:57','2026-09-24 08:18:57'),(14,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:19:06','2026-09-24 08:19:06'),(15,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:19:19','2026-09-24 08:19:19'),(16,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:19:39','2026-09-24 08:19:39'),(17,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:19:44','2026-09-24 08:19:44'),(18,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:19:47','2026-09-24 08:19:47'),(19,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:20:26','2026-09-24 08:20:26'),(20,11,14.35000000,120.95000000,NULL,50000,NULL,'active','2026-09-24 08:20:30','2026-09-24 08:20:30'),(21,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:20:31','2026-09-24 08:20:31'),(22,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:20:32','2026-09-24 08:20:32'),(23,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:20:34','2026-09-24 08:20:34'),(24,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:20:37','2026-09-24 08:20:37'),(25,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:20:47','2026-09-24 08:20:47'),(26,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:20:52','2026-09-24 08:20:52'),(27,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:20:55','2026-09-24 08:20:55'),(28,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:21:00','2026-09-24 08:21:00'),(29,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:21:19','2026-09-24 08:21:19'),(30,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:22:11','2026-09-24 08:22:11'),(31,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:23:27','2026-09-24 08:23:27'),(32,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:25:03','2026-09-24 08:25:03'),(33,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:25:07','2026-09-24 08:25:07'),(34,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:25:09','2026-09-24 08:25:09'),(35,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:25:16','2026-09-24 08:25:16'),(36,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:25:42','2026-09-24 08:25:42'),(37,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:25:56','2026-09-24 08:25:56'),(38,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:28:24','2026-09-24 08:28:24'),(39,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:28:33','2026-09-24 08:28:33'),(40,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:28:37','2026-09-24 08:28:37'),(41,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:28:38','2026-09-24 08:28:38'),(42,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:28:39','2026-09-24 08:28:39'),(43,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:28:43','2026-09-24 08:28:43'),(44,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:28:44','2026-09-24 08:28:44'),(45,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:28:45','2026-09-24 08:28:45'),(46,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:28:46','2026-09-24 08:28:46'),(47,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:28:47','2026-09-24 08:28:47'),(48,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:28:51','2026-09-24 08:28:51'),(49,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:28:52','2026-09-24 08:28:52'),(50,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:29:06','2026-09-24 08:29:06'),(51,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:29:06','2026-09-24 08:29:06'),(52,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:29:07','2026-09-24 08:29:07'),(53,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:29:07','2026-09-24 08:29:07'),(54,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:29:11','2026-09-24 08:29:11'),(55,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:29:19','2026-09-24 08:29:19'),(56,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:29:20','2026-09-24 08:29:20'),(57,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:29:24','2026-09-24 08:29:24'),(58,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:29:36','2026-09-24 08:29:36'),(59,11,14.32477800,120.98058300,NULL,178,NULL,'active','2026-09-24 08:31:02','2026-09-24 08:31:02'),(60,11,14.32477800,120.98058300,NULL,178,NULL,'active','2026-09-24 08:31:05','2026-09-24 08:31:05'),(61,11,14.32477800,120.98058300,NULL,178,NULL,'active','2026-09-24 08:31:07','2026-09-24 08:31:07'),(62,11,14.32477800,120.98058300,NULL,178,NULL,'active','2026-09-24 08:31:10','2026-09-24 08:31:10'),(63,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:31:16','2026-09-24 08:31:16'),(64,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:31:18','2026-09-24 08:31:18'),(65,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:31:19','2026-09-24 08:31:19'),(66,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:31:20','2026-09-24 08:31:20'),(67,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:31:22','2026-09-24 08:31:22'),(68,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:31:22','2026-09-24 08:31:22'),(69,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:31:23','2026-09-24 08:31:23'),(70,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:31:38','2026-09-24 08:31:38'),(71,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:31:43','2026-09-24 08:31:43'),(72,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:33:45','2026-09-24 08:33:45'),(73,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:33:46','2026-09-24 08:33:46'),(74,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:33:48','2026-09-24 08:33:48'),(75,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:33:53','2026-09-24 08:33:53'),(76,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:33:54','2026-09-24 08:33:54'),(77,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:34:08','2026-09-24 08:34:08'),(78,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:34:10','2026-09-24 08:34:10'),(79,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:36:21','2026-09-24 08:36:21'),(80,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:36:27','2026-09-24 08:36:27'),(81,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:36:31','2026-09-24 08:36:31'),(82,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:36:36','2026-09-24 08:36:36'),(83,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 08:36:40','2026-09-24 08:36:40'),(84,11,14.32477800,120.98058300,NULL,178,NULL,'active','2026-09-24 08:54:33','2026-09-24 08:54:33'),(85,11,14.32477800,120.98058300,NULL,178,NULL,'active','2026-09-24 08:54:35','2026-09-24 08:54:35'),(86,11,14.32477800,120.98058300,NULL,178,NULL,'active','2026-09-24 08:54:38','2026-09-24 08:54:38'),(87,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:49:50','2026-09-24 09:49:50'),(88,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:49:50','2026-09-24 09:49:50'),(89,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:49:56','2026-09-24 09:49:56'),(90,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:49:57','2026-09-24 09:49:57'),(91,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:49:58','2026-09-24 09:49:58'),(92,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:53:00','2026-09-24 09:53:00'),(93,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:53:01','2026-09-24 09:53:01'),(94,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:53:01','2026-09-24 09:53:01'),(95,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:53:01','2026-09-24 09:53:01'),(96,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:53:02','2026-09-24 09:53:02'),(97,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:53:02','2026-09-24 09:53:02'),(98,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:53:13','2026-09-24 09:53:13'),(99,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:53:19','2026-09-24 09:53:19'),(100,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:53:21','2026-09-24 09:53:21'),(101,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:53:23','2026-09-24 09:53:23'),(102,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:53:27','2026-09-24 09:53:27'),(103,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:53:33','2026-09-24 09:53:33'),(104,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:53:36','2026-09-24 09:53:36'),(105,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:55:44','2026-09-24 09:55:44'),(106,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:55:44','2026-09-24 09:55:44'),(107,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:55:49','2026-09-24 09:55:49'),(108,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:55:57','2026-09-24 09:55:57'),(109,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:56:04','2026-09-24 09:56:04'),(110,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:56:06','2026-09-24 09:56:06'),(111,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:56:10','2026-09-24 09:56:10'),(112,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:56:11','2026-09-24 09:56:11'),(113,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:56:12','2026-09-24 09:56:12'),(114,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:56:13','2026-09-24 09:56:13'),(115,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:56:45','2026-09-24 09:56:45'),(116,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:56:54','2026-09-24 09:56:54'),(117,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:56:59','2026-09-24 09:56:59'),(118,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:57:00','2026-09-24 09:57:00'),(119,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:57:01','2026-09-24 09:57:01'),(120,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:57:05','2026-09-24 09:57:05'),(121,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:57:06','2026-09-24 09:57:06'),(122,11,14.32477800,120.98058300,NULL,178,NULL,'active','2026-09-24 09:57:51','2026-09-24 09:57:51'),(123,11,14.32477800,120.98058300,NULL,178,NULL,'active','2026-09-24 09:59:26','2026-09-24 09:59:26'),(124,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 09:59:39','2026-09-24 09:59:39'),(125,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 10:00:33','2026-09-24 10:00:33'),(126,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 10:00:35','2026-09-24 10:00:35'),(127,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 10:00:36','2026-09-24 10:00:36'),(128,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 10:00:37','2026-09-24 10:00:37'),(129,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 10:00:38','2026-09-24 10:00:38'),(130,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 10:00:43','2026-09-24 10:00:43'),(131,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 10:00:45','2026-09-24 10:00:45'),(132,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 10:01:15','2026-09-24 10:01:15'),(133,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 10:01:19','2026-09-24 10:01:19'),(134,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 10:01:55','2026-09-24 10:01:55'),(135,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 10:01:57','2026-09-24 10:01:57'),(136,11,14.35000000,120.95000000,NULL,50000,NULL,'active','2026-09-24 10:22:52','2026-09-24 10:22:52'),(137,11,14.32463300,120.98055800,NULL,178,NULL,'active','2026-09-24 10:22:55','2026-09-24 10:22:55'),(138,11,14.32463300,120.98055800,NULL,178,NULL,'active','2026-09-24 10:22:57','2026-09-24 10:22:57'),(139,11,14.32463300,120.98055800,NULL,178,NULL,'active','2026-09-24 10:23:03','2026-09-24 10:23:03'),(140,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 10:23:06','2026-09-24 10:23:06'),(141,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:02:20','2026-09-24 15:02:20'),(142,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:02:22','2026-09-24 15:02:22'),(143,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:03:41','2026-09-24 15:03:41'),(144,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:03:51','2026-09-24 15:03:51'),(145,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:03:55','2026-09-24 15:03:55'),(146,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:03:56','2026-09-24 15:03:56'),(147,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:04:04','2026-09-24 15:04:04'),(148,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:04:49','2026-09-24 15:04:49'),(149,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:04:51','2026-09-24 15:04:51'),(150,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:04:54','2026-09-24 15:04:54'),(151,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:04:58','2026-09-24 15:04:58'),(152,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:05:02','2026-09-24 15:05:02'),(153,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:05:12','2026-09-24 15:05:12'),(154,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:05:32','2026-09-24 15:05:32'),(155,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:05:35','2026-09-24 15:05:35'),(156,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:05:42','2026-09-24 15:05:42'),(157,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:05:43','2026-09-24 15:05:43'),(158,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:05:45','2026-09-24 15:05:45'),(159,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:05:47','2026-09-24 15:05:47'),(160,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:05:55','2026-09-24 15:05:55'),(161,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:06:08','2026-09-24 15:06:08'),(162,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:06:11','2026-09-24 15:06:11'),(163,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:22:23','2026-09-24 15:22:23'),(164,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:22:25','2026-09-24 15:22:25'),(165,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:22:32','2026-09-24 15:22:32'),(166,11,14.32470550,120.98057050,NULL,118,NULL,'active','2026-09-24 15:22:38','2026-09-24 15:22:38');
+/*!40000 ALTER TABLE `employees_geo_tracking` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `expenses`
+--
+
+DROP TABLE IF EXISTS `expenses`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `expenses` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `category` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `description` text COLLATE utf8mb4_general_ci,
+  `vendor` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `amount` decimal(10,2) NOT NULL,
+  `payment_method` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `receipt_image` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `status` enum('pending','approved','rejected') COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `is_recurring` tinyint(1) DEFAULT '0',
+  `expense_date` datetime NOT NULL,
+  `recorded_by` int DEFAULT NULL,
+  `source_type` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `source_id` int DEFAULT NULL,
+  `owner_user_id` int DEFAULT NULL,
+  `is_system_generated` tinyint(1) NOT NULL DEFAULT '0',
+  `metadata_json` longtext COLLATE utf8mb4_general_ci,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `expenses`
+--
+
+LOCK TABLES `expenses` WRITE;
+/*!40000 ALTER TABLE `expenses` DISABLE KEYS */;
+INSERT INTO `expenses` VALUES (1,'Utilities','',NULL,123123.00,NULL,NULL,'pending',0,'2026-01-30 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-01-30 08:17:21','2026-04-11 10:18:41'),(2,'Utilities','asd',NULL,123123.00,NULL,NULL,'approved',0,'2026-02-01 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-02-01 09:18:12','2026-04-11 10:18:41'),(3,'Raw Materials','mnice','abc',15555.00,'Cash',NULL,'approved',0,'2026-02-01 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-02-01 10:28:39','2026-04-11 10:18:41'),(4,'Labor','asdasd','abc',151515.00,'Cash',NULL,'approved',0,'2026-02-01 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-02-01 10:34:46','2026-04-11 10:18:41'),(5,'Marketing','para sa kaunlaran.','',1000.00,'Cash',NULL,'approved',0,'2026-02-01 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-02-01 11:31:31','2026-04-11 10:18:41'),(6,'Payroll','Payroll for justine santos (Feb 2026)',NULL,0.00,NULL,NULL,'approved',0,'2026-02-10 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-02-10 14:34:53','2026-04-11 10:18:41'),(7,'Payroll','Payroll for asd asd (Feb 2026)',NULL,1137.50,NULL,NULL,'approved',0,'2026-02-10 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-02-10 14:35:52','2026-04-11 10:18:41'),(8,'Payroll','Payroll for asd asd (Feb 2026)',NULL,1137.50,NULL,NULL,'approved',0,'2026-02-10 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-02-10 14:37:07','2026-04-11 10:18:41'),(9,'Payroll','Payroll for justine santos (Feb 2026)',NULL,99.38,NULL,NULL,'approved',0,'2026-02-10 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-02-10 14:42:52','2026-04-11 10:18:41'),(10,'Payroll','Payroll for asd asd (Feb 2026)',NULL,1137.50,NULL,NULL,'approved',0,'2026-02-10 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-02-10 14:47:58','2026-04-11 10:18:41'),(11,'Payroll','Payroll for asd asd (Feb 2026)',NULL,1137.50,NULL,NULL,'approved',0,'2026-02-10 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-02-10 14:59:19','2026-04-11 10:18:41'),(12,'Payroll','Payroll for asd asd (Feb 2026)',NULL,1137.50,NULL,NULL,'approved',0,'2026-02-10 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-02-10 15:34:33','2026-04-11 10:18:41'),(13,'Payroll','Payroll for Local Employee (Feb 2026)',NULL,693.75,NULL,NULL,'approved',0,'2026-02-12 00:00:00',6,NULL,NULL,NULL,0,NULL,'2026-02-12 06:54:56','2026-04-11 10:18:41'),(14,'Payroll','Payroll for Local Two Employee (Feb 2026)',NULL,693.75,NULL,NULL,'approved',0,'2026-02-12 00:00:00',6,NULL,NULL,NULL,0,NULL,'2026-02-12 07:22:20','2026-04-11 10:18:41'),(15,'Payroll','Payroll for asd asd (Feb 2026)',NULL,1137.50,NULL,NULL,'approved',0,'2026-02-16 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-02-16 14:53:35','2026-04-11 10:18:41'),(16,'Payroll','Payroll for asd asd (Feb 2026)',NULL,1137.50,NULL,NULL,'approved',0,'2026-02-17 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-02-17 11:48:07','2026-04-11 10:18:41'),(17,'Payroll','Payroll for asd asd (Feb 2026)',NULL,0.00,NULL,NULL,'approved',0,'2026-02-17 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-02-17 12:13:14','2026-04-11 10:18:41'),(18,'Payroll','Payroll for asd asd (Feb 2026)',NULL,1946.88,NULL,NULL,'approved',0,'2026-02-17 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-02-17 12:13:55','2026-04-11 10:18:41'),(19,'Raw Materials','Lechon','John Pork',50000.00,'Cash','uploads/receipts/6994784f45200.png','approved',0,'2026-02-17 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-02-17 14:16:47','2026-04-11 10:18:41'),(20,'Raw Materials','Lechon','John Pork',50000.00,'Cash','uploads/receipts/69947853c9238.png','approved',0,'2026-02-17 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-02-17 14:16:51','2026-04-11 10:18:41'),(21,'Payroll','Payroll for justine asdasd (Mar 2026)',NULL,1293.75,NULL,NULL,'approved',0,'2026-03-17 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-03-17 13:53:30','2026-04-11 10:18:41'),(22,'Payroll','Payroll for justine budoy (Mar 2026)',NULL,0.00,NULL,NULL,'approved',0,'2026-03-17 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-03-17 13:53:34','2026-04-11 10:18:41'),(23,'Payroll','Payroll for justine asdasd (Mar 01, 2026 to Mar 31, 2026)',NULL,1293.75,NULL,NULL,'approved',0,'2026-03-27 00:00:00',9,NULL,NULL,NULL,0,NULL,'2026-03-27 09:19:10','2026-04-11 10:18:41'),(24,'Platform Billing','Platform billing invoice SUB-20260901-EAD7D6','Lechon Delights Platform',1199.00,'Platform Billing',NULL,'pending',0,'2026-09-04 00:00:00',38,'0',2,38,1,'{\"invoice_number\":\"SUB-20260901-EAD7D6\",\"invoice_status\":\"issued\",\"notes\":\"Instant subscription checkout: Pro (Monthly). Non-refundable; 1-month continued access upon cancellation.\"}','2026-09-01 13:31:10','2026-09-01 21:31:10');
+/*!40000 ALTER TABLE `expenses` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `finance_signature_audit_log`
+--
+
+DROP TABLE IF EXISTS `finance_signature_audit_log`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `finance_signature_audit_log` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `admin_user_id` int NOT NULL,
+  `signed_by` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `signature_input` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `signature_image_path` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `action_key` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'approve_refund, reject_cancellation, approve_payroll, etc.',
+  `action_type` enum('approve','reject') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `entity_type` enum('refund','cancellation','payroll') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `entity_id` bigint unsigned NOT NULL,
+  `decision_note` text COLLATE utf8mb4_unicode_ci,
+  `ip_address` varchar(45) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `user_agent` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `signed_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `finance_signature_audit_log`
+--
+
+LOCK TABLES `finance_signature_audit_log` WRITE;
+/*!40000 ALTER TABLE `finance_signature_audit_log` DISABLE KEYS */;
+INSERT INTO `finance_signature_audit_log` VALUES (1,9,'justine santos','image_signature','uploads/finance_signatures/payroll_approve_33_9_20260327171910_0188007ccc.png','approve_payroll','approve','payroll',33,'Approved in finance module.','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0','2026-03-27 17:19:10','2026-03-27 09:19:10'),(2,31,'justine santos','image_signature','uploads/finance_signatures/finance_decision_reject_refund_31_20260410211312_a6ee0cc507.png','reject_refund','reject','refund',16,'asd','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36','2026-04-10 21:13:12','2026-04-10 13:13:12'),(3,31,'justine santos','image_signature','uploads/finance_signatures/finance_decision_reject_refund_31_20260410211319_0f4dbf51c5.png','reject_refund','reject','refund',17,'asd','::1','Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36','2026-04-10 21:13:19','2026-04-10 13:13:19');
+/*!40000 ALTER TABLE `finance_signature_audit_log` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `food_delivery_integrations`
+--
+
+DROP TABLE IF EXISTS `food_delivery_integrations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `food_delivery_integrations` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `platform_name` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `api_key` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `api_secret` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `partner_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `restaurant_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT '0',
+  `sandbox_mode` tinyint(1) NOT NULL DEFAULT '1',
+  `webhook_secret` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `food_delivery_integrations`
+--
+
+LOCK TABLES `food_delivery_integrations` WRITE;
+/*!40000 ALTER TABLE `food_delivery_integrations` DISABLE KEYS */;
+INSERT INTO `food_delivery_integrations` VALUES (1,'FoodPanda',NULL,NULL,NULL,NULL,0,1,NULL,'2026-03-25 05:20:46','2026-03-25 05:20:46'),(2,'GrabFood',NULL,NULL,NULL,NULL,0,1,NULL,'2026-03-25 05:20:46','2026-03-25 05:20:46'),(3,'Lalamove',NULL,NULL,'MOTORCYCLE',NULL,1,1,NULL,'2026-08-12 07:42:36','2026-08-12 07:42:36');
+/*!40000 ALTER TABLE `food_delivery_integrations` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `forecast_accuracy_metrics`
+--
+
+DROP TABLE IF EXISTS `forecast_accuracy_metrics`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `forecast_accuracy_metrics` (
+  `metric_id` int NOT NULL,
+  `forecast_id` int DEFAULT NULL,
+  `forecast_type` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `predicted_value` decimal(10,2) DEFAULT NULL,
+  `actual_value` decimal(10,2) DEFAULT NULL,
+  `mean_absolute_error` decimal(10,2) DEFAULT NULL,
+  `mean_absolute_percentage_error` decimal(5,2) DEFAULT NULL,
+  `root_mean_squared_error` decimal(10,2) DEFAULT NULL,
+  `accuracy_score` decimal(5,2) DEFAULT NULL,
+  `evaluation_date` date NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `forecast_accuracy_metrics`
+--
+
+LOCK TABLES `forecast_accuracy_metrics` WRITE;
+/*!40000 ALTER TABLE `forecast_accuracy_metrics` DISABLE KEYS */;
+/*!40000 ALTER TABLE `forecast_accuracy_metrics` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `forecasting_config`
+--
+
+DROP TABLE IF EXISTS `forecasting_config`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `forecasting_config` (
+  `config_id` int NOT NULL,
+  `config_key` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `config_value` text COLLATE utf8mb4_unicode_ci,
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `forecasting_config`
+--
+
+LOCK TABLES `forecasting_config` WRITE;
+/*!40000 ALTER TABLE `forecasting_config` DISABLE KEYS */;
+INSERT INTO `forecasting_config` VALUES (1,'min_forecast_days','7','Minimum forecast period in days','2026-03-11 02:34:29'),(2,'max_forecast_days','365','Maximum forecast period in days','2026-03-11 02:34:29'),(3,'confidence_threshold','0.75','Minimum confidence score for recommendations','2026-03-11 02:34:29'),(4,'model_type','exponential_smoothing','Default forecasting model','2026-03-11 02:34:29'),(5,'update_frequency','daily','How often to regenerate forecasts','2026-03-11 02:34:29'),(6,'enable_seasonal_adjustment','true','Apply seasonal adjustments','2026-03-11 02:34:29'),(7,'enable_event_adjustment','true','Adjust forecasts based on events','2026-03-11 02:34:29');
+/*!40000 ALTER TABLE `forecasting_config` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `forecasts`
+--
+
+DROP TABLE IF EXISTS `forecasts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `forecasts` (
+  `forecast_id` int NOT NULL,
+  `forecast_type` enum('daily_orders','product_demand','revenue','inventory_need','staffing_need') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `forecast_period_days` int NOT NULL DEFAULT '7',
+  `forecast_start_date` date NOT NULL,
+  `forecast_end_date` date NOT NULL,
+  `metric_name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `predicted_value` decimal(10,2) DEFAULT NULL,
+  `confidence_level` decimal(5,2) DEFAULT '0.85',
+  `model_used` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `forecasts`
+--
+
+LOCK TABLES `forecasts` WRITE;
+/*!40000 ALTER TABLE `forecasts` DISABLE KEYS */;
+INSERT INTO `forecasts` VALUES (1,'daily_orders',7,'2026-03-12','2026-03-12','daily_orders',0.35,0.86,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(2,'daily_orders',7,'2026-03-13','2026-03-13','daily_orders',0.34,0.81,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(3,'daily_orders',7,'2026-03-14','2026-03-14','daily_orders',0.33,0.77,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(4,'daily_orders',7,'2026-03-15','2026-03-15','daily_orders',0.32,0.73,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(5,'daily_orders',7,'2026-03-16','2026-03-16','daily_orders',0.30,0.69,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(6,'daily_orders',7,'2026-03-17','2026-03-17','daily_orders',0.29,0.64,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(7,'daily_orders',7,'2026-03-18','2026-03-18','daily_orders',0.28,0.60,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(8,'daily_orders',7,'2026-03-12','2026-03-12','daily_orders',0.35,0.86,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(9,'daily_orders',7,'2026-03-13','2026-03-13','daily_orders',0.34,0.81,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(10,'daily_orders',7,'2026-03-14','2026-03-14','daily_orders',0.33,0.77,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(11,'daily_orders',7,'2026-03-15','2026-03-15','daily_orders',0.32,0.73,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(12,'daily_orders',7,'2026-03-16','2026-03-16','daily_orders',0.30,0.69,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(13,'daily_orders',7,'2026-03-17','2026-03-17','daily_orders',0.29,0.64,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(14,'daily_orders',7,'2026-03-18','2026-03-18','daily_orders',0.28,0.60,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(15,'revenue',7,'2026-03-12','2026-03-12','revenue',4703.69,0.86,'aov_multiplier','2026-03-11 02:36:17','2026-03-11 02:36:17'),(16,'revenue',7,'2026-03-13','2026-03-13','revenue',4569.30,0.81,'aov_multiplier','2026-03-11 02:36:17','2026-03-11 02:36:17'),(17,'revenue',7,'2026-03-14','2026-03-14','revenue',4434.91,0.77,'aov_multiplier','2026-03-11 02:36:17','2026-03-11 02:36:17'),(18,'revenue',7,'2026-03-15','2026-03-15','revenue',4300.52,0.73,'aov_multiplier','2026-03-11 02:36:17','2026-03-11 02:36:17'),(19,'revenue',7,'2026-03-16','2026-03-16','revenue',4031.74,0.69,'aov_multiplier','2026-03-11 02:36:17','2026-03-11 02:36:17'),(20,'revenue',7,'2026-03-17','2026-03-17','revenue',3897.34,0.64,'aov_multiplier','2026-03-11 02:36:17','2026-03-11 02:36:17'),(21,'revenue',7,'2026-03-18','2026-03-18','revenue',3762.95,0.60,'aov_multiplier','2026-03-11 02:36:17','2026-03-11 02:36:17'),(22,'daily_orders',7,'2026-03-12','2026-03-12','daily_orders',0.35,0.86,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(23,'daily_orders',7,'2026-03-13','2026-03-13','daily_orders',0.34,0.81,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(24,'daily_orders',7,'2026-03-14','2026-03-14','daily_orders',0.33,0.77,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(25,'daily_orders',7,'2026-03-15','2026-03-15','daily_orders',0.32,0.73,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(26,'daily_orders',7,'2026-03-16','2026-03-16','daily_orders',0.30,0.69,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(27,'daily_orders',7,'2026-03-17','2026-03-17','daily_orders',0.29,0.64,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(28,'daily_orders',7,'2026-03-18','2026-03-18','daily_orders',0.28,0.60,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(29,'daily_orders',7,'2026-03-12','2026-03-12','daily_orders',0.35,0.86,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(30,'daily_orders',7,'2026-03-13','2026-03-13','daily_orders',0.34,0.81,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(31,'daily_orders',7,'2026-03-14','2026-03-14','daily_orders',0.33,0.77,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(32,'daily_orders',7,'2026-03-15','2026-03-15','daily_orders',0.32,0.73,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(33,'daily_orders',7,'2026-03-16','2026-03-16','daily_orders',0.30,0.69,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(34,'daily_orders',7,'2026-03-17','2026-03-17','daily_orders',0.29,0.64,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(35,'daily_orders',7,'2026-03-18','2026-03-18','daily_orders',0.28,0.60,'exponential_smoothing','2026-03-11 02:36:17','2026-03-11 02:36:17'),(36,'revenue',7,'2026-03-12','2026-03-12','revenue',4703.69,0.86,'aov_multiplier','2026-03-11 02:36:17','2026-03-11 02:36:17'),(37,'revenue',7,'2026-03-13','2026-03-13','revenue',4569.30,0.81,'aov_multiplier','2026-03-11 02:36:17','2026-03-11 02:36:17'),(38,'revenue',7,'2026-03-14','2026-03-14','revenue',4434.91,0.77,'aov_multiplier','2026-03-11 02:36:17','2026-03-11 02:36:17'),(39,'revenue',7,'2026-03-15','2026-03-15','revenue',4300.52,0.73,'aov_multiplier','2026-03-11 02:36:17','2026-03-11 02:36:17'),(40,'revenue',7,'2026-03-16','2026-03-16','revenue',4031.74,0.69,'aov_multiplier','2026-03-11 02:36:17','2026-03-11 02:36:17'),(41,'revenue',7,'2026-03-17','2026-03-17','revenue',3897.34,0.64,'aov_multiplier','2026-03-11 02:36:17','2026-03-11 02:36:17'),(42,'revenue',7,'2026-03-18','2026-03-18','revenue',3762.95,0.60,'aov_multiplier','2026-03-11 02:36:17','2026-03-11 02:36:17'),(43,'daily_orders',7,'2026-03-12','2026-03-12','daily_orders',0.35,0.86,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(44,'daily_orders',7,'2026-03-13','2026-03-13','daily_orders',0.34,0.81,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(45,'daily_orders',7,'2026-03-14','2026-03-14','daily_orders',0.33,0.77,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(46,'daily_orders',7,'2026-03-15','2026-03-15','daily_orders',0.32,0.73,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(47,'daily_orders',7,'2026-03-16','2026-03-16','daily_orders',0.30,0.69,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(48,'daily_orders',7,'2026-03-17','2026-03-17','daily_orders',0.29,0.64,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(49,'daily_orders',7,'2026-03-18','2026-03-18','daily_orders',0.28,0.60,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(50,'daily_orders',7,'2026-03-12','2026-03-12','daily_orders',0.35,0.86,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(51,'daily_orders',7,'2026-03-13','2026-03-13','daily_orders',0.34,0.81,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(52,'daily_orders',7,'2026-03-14','2026-03-14','daily_orders',0.33,0.77,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(53,'daily_orders',7,'2026-03-15','2026-03-15','daily_orders',0.32,0.73,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(54,'daily_orders',7,'2026-03-16','2026-03-16','daily_orders',0.30,0.69,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(55,'daily_orders',7,'2026-03-17','2026-03-17','daily_orders',0.29,0.64,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(56,'daily_orders',7,'2026-03-18','2026-03-18','daily_orders',0.28,0.60,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(57,'revenue',7,'2026-03-12','2026-03-12','revenue',4703.69,0.86,'aov_multiplier','2026-03-11 03:50:42','2026-03-11 03:50:42'),(58,'revenue',7,'2026-03-13','2026-03-13','revenue',4569.30,0.81,'aov_multiplier','2026-03-11 03:50:42','2026-03-11 03:50:42'),(59,'revenue',7,'2026-03-14','2026-03-14','revenue',4434.91,0.77,'aov_multiplier','2026-03-11 03:50:42','2026-03-11 03:50:42'),(60,'revenue',7,'2026-03-15','2026-03-15','revenue',4300.52,0.73,'aov_multiplier','2026-03-11 03:50:42','2026-03-11 03:50:42'),(61,'revenue',7,'2026-03-16','2026-03-16','revenue',4031.74,0.69,'aov_multiplier','2026-03-11 03:50:42','2026-03-11 03:50:42'),(62,'revenue',7,'2026-03-17','2026-03-17','revenue',3897.34,0.64,'aov_multiplier','2026-03-11 03:50:42','2026-03-11 03:50:42'),(63,'revenue',7,'2026-03-18','2026-03-18','revenue',3762.95,0.60,'aov_multiplier','2026-03-11 03:50:42','2026-03-11 03:50:42'),(64,'daily_orders',7,'2026-03-12','2026-03-12','daily_orders',0.35,0.86,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(65,'daily_orders',7,'2026-03-13','2026-03-13','daily_orders',0.34,0.81,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(66,'daily_orders',7,'2026-03-14','2026-03-14','daily_orders',0.33,0.77,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(67,'daily_orders',7,'2026-03-15','2026-03-15','daily_orders',0.32,0.73,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(68,'daily_orders',7,'2026-03-16','2026-03-16','daily_orders',0.30,0.69,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(69,'daily_orders',7,'2026-03-17','2026-03-17','daily_orders',0.29,0.64,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(70,'daily_orders',7,'2026-03-18','2026-03-18','daily_orders',0.28,0.60,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(71,'daily_orders',7,'2026-03-12','2026-03-12','daily_orders',0.35,0.86,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(72,'daily_orders',7,'2026-03-13','2026-03-13','daily_orders',0.34,0.81,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(73,'daily_orders',7,'2026-03-14','2026-03-14','daily_orders',0.33,0.77,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(74,'daily_orders',7,'2026-03-15','2026-03-15','daily_orders',0.32,0.73,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(75,'daily_orders',7,'2026-03-16','2026-03-16','daily_orders',0.30,0.69,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(76,'daily_orders',7,'2026-03-17','2026-03-17','daily_orders',0.29,0.64,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(77,'daily_orders',7,'2026-03-18','2026-03-18','daily_orders',0.28,0.60,'exponential_smoothing','2026-03-11 03:50:42','2026-03-11 03:50:42'),(78,'revenue',7,'2026-03-12','2026-03-12','revenue',4703.69,0.86,'aov_multiplier','2026-03-11 03:50:42','2026-03-11 03:50:42'),(79,'revenue',7,'2026-03-13','2026-03-13','revenue',4569.30,0.81,'aov_multiplier','2026-03-11 03:50:42','2026-03-11 03:50:42'),(80,'revenue',7,'2026-03-14','2026-03-14','revenue',4434.91,0.77,'aov_multiplier','2026-03-11 03:50:42','2026-03-11 03:50:42'),(81,'revenue',7,'2026-03-15','2026-03-15','revenue',4300.52,0.73,'aov_multiplier','2026-03-11 03:50:42','2026-03-11 03:50:42'),(82,'revenue',7,'2026-03-16','2026-03-16','revenue',4031.74,0.69,'aov_multiplier','2026-03-11 03:50:42','2026-03-11 03:50:42'),(83,'revenue',7,'2026-03-17','2026-03-17','revenue',3897.34,0.64,'aov_multiplier','2026-03-11 03:50:42','2026-03-11 03:50:42'),(84,'revenue',7,'2026-03-18','2026-03-18','revenue',3762.95,0.60,'aov_multiplier','2026-03-11 03:50:42','2026-03-11 03:50:42'),(85,'daily_orders',7,'2026-03-12','2026-03-12','daily_orders',0.35,0.86,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(86,'daily_orders',7,'2026-03-13','2026-03-13','daily_orders',0.34,0.81,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(87,'daily_orders',7,'2026-03-14','2026-03-14','daily_orders',0.33,0.77,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(88,'daily_orders',7,'2026-03-15','2026-03-15','daily_orders',0.32,0.73,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(89,'daily_orders',7,'2026-03-16','2026-03-16','daily_orders',0.30,0.69,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(90,'daily_orders',7,'2026-03-17','2026-03-17','daily_orders',0.29,0.64,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(91,'daily_orders',7,'2026-03-18','2026-03-18','daily_orders',0.28,0.60,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(92,'daily_orders',7,'2026-03-12','2026-03-12','daily_orders',0.35,0.86,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(93,'daily_orders',7,'2026-03-13','2026-03-13','daily_orders',0.34,0.81,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(94,'daily_orders',7,'2026-03-14','2026-03-14','daily_orders',0.33,0.77,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(95,'daily_orders',7,'2026-03-15','2026-03-15','daily_orders',0.32,0.73,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(96,'daily_orders',7,'2026-03-16','2026-03-16','daily_orders',0.30,0.69,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(97,'daily_orders',7,'2026-03-17','2026-03-17','daily_orders',0.29,0.64,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(98,'daily_orders',7,'2026-03-18','2026-03-18','daily_orders',0.28,0.60,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(99,'revenue',7,'2026-03-12','2026-03-12','revenue',4703.69,0.86,'aov_multiplier','2026-03-11 03:50:49','2026-03-11 03:50:49'),(100,'revenue',7,'2026-03-13','2026-03-13','revenue',4569.30,0.81,'aov_multiplier','2026-03-11 03:50:49','2026-03-11 03:50:49'),(101,'revenue',7,'2026-03-14','2026-03-14','revenue',4434.91,0.77,'aov_multiplier','2026-03-11 03:50:49','2026-03-11 03:50:49'),(102,'revenue',7,'2026-03-15','2026-03-15','revenue',4300.52,0.73,'aov_multiplier','2026-03-11 03:50:49','2026-03-11 03:50:49'),(103,'revenue',7,'2026-03-16','2026-03-16','revenue',4031.74,0.69,'aov_multiplier','2026-03-11 03:50:49','2026-03-11 03:50:49'),(104,'revenue',7,'2026-03-17','2026-03-17','revenue',3897.34,0.64,'aov_multiplier','2026-03-11 03:50:49','2026-03-11 03:50:49'),(105,'revenue',7,'2026-03-18','2026-03-18','revenue',3762.95,0.60,'aov_multiplier','2026-03-11 03:50:49','2026-03-11 03:50:49'),(106,'daily_orders',7,'2026-03-12','2026-03-12','daily_orders',0.35,0.86,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(107,'daily_orders',7,'2026-03-13','2026-03-13','daily_orders',0.34,0.81,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(108,'daily_orders',7,'2026-03-14','2026-03-14','daily_orders',0.33,0.77,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(109,'daily_orders',7,'2026-03-15','2026-03-15','daily_orders',0.32,0.73,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(110,'daily_orders',7,'2026-03-16','2026-03-16','daily_orders',0.30,0.69,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(111,'daily_orders',7,'2026-03-17','2026-03-17','daily_orders',0.29,0.64,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(112,'daily_orders',7,'2026-03-18','2026-03-18','daily_orders',0.28,0.60,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(113,'daily_orders',7,'2026-03-12','2026-03-12','daily_orders',0.35,0.86,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(114,'daily_orders',7,'2026-03-13','2026-03-13','daily_orders',0.34,0.81,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(115,'daily_orders',7,'2026-03-14','2026-03-14','daily_orders',0.33,0.77,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(116,'daily_orders',7,'2026-03-15','2026-03-15','daily_orders',0.32,0.73,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(117,'daily_orders',7,'2026-03-16','2026-03-16','daily_orders',0.30,0.69,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(118,'daily_orders',7,'2026-03-17','2026-03-17','daily_orders',0.29,0.64,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(119,'daily_orders',7,'2026-03-18','2026-03-18','daily_orders',0.28,0.60,'exponential_smoothing','2026-03-11 03:50:49','2026-03-11 03:50:49'),(120,'revenue',7,'2026-03-12','2026-03-12','revenue',4703.69,0.86,'aov_multiplier','2026-03-11 03:50:49','2026-03-11 03:50:49'),(121,'revenue',7,'2026-03-13','2026-03-13','revenue',4569.30,0.81,'aov_multiplier','2026-03-11 03:50:49','2026-03-11 03:50:49'),(122,'revenue',7,'2026-03-14','2026-03-14','revenue',4434.91,0.77,'aov_multiplier','2026-03-11 03:50:49','2026-03-11 03:50:49'),(123,'revenue',7,'2026-03-15','2026-03-15','revenue',4300.52,0.73,'aov_multiplier','2026-03-11 03:50:49','2026-03-11 03:50:49'),(124,'revenue',7,'2026-03-16','2026-03-16','revenue',4031.74,0.69,'aov_multiplier','2026-03-11 03:50:49','2026-03-11 03:50:49'),(125,'revenue',7,'2026-03-17','2026-03-17','revenue',3897.34,0.64,'aov_multiplier','2026-03-11 03:50:49','2026-03-11 03:50:49'),(126,'revenue',7,'2026-03-18','2026-03-18','revenue',3762.95,0.60,'aov_multiplier','2026-03-11 03:50:49','2026-03-11 03:50:49'),(127,'daily_orders',7,'2026-03-12','2026-03-12','daily_orders',0.35,0.86,'exponential_smoothing','2026-03-11 03:50:50','2026-03-11 03:50:50'),(128,'daily_orders',7,'2026-03-13','2026-03-13','daily_orders',0.34,0.81,'exponential_smoothing','2026-03-11 03:50:50','2026-03-11 03:50:50'),(129,'daily_orders',7,'2026-03-14','2026-03-14','daily_orders',0.33,0.77,'exponential_smoothing','2026-03-11 03:50:50','2026-03-11 03:50:50'),(130,'daily_orders',7,'2026-03-15','2026-03-15','daily_orders',0.32,0.73,'exponential_smoothing','2026-03-11 03:50:50','2026-03-11 03:50:50'),(131,'daily_orders',7,'2026-03-16','2026-03-16','daily_orders',0.30,0.69,'exponential_smoothing','2026-03-11 03:50:50','2026-03-11 03:50:50'),(132,'daily_orders',7,'2026-03-17','2026-03-17','daily_orders',0.29,0.64,'exponential_smoothing','2026-03-11 03:50:50','2026-03-11 03:50:50'),(133,'daily_orders',7,'2026-03-18','2026-03-18','daily_orders',0.28,0.60,'exponential_smoothing','2026-03-11 03:50:50','2026-03-11 03:50:50'),(134,'daily_orders',7,'2026-03-12','2026-03-12','daily_orders',0.35,0.86,'exponential_smoothing','2026-03-11 03:50:50','2026-03-11 03:50:50'),(135,'daily_orders',7,'2026-03-13','2026-03-13','daily_orders',0.34,0.81,'exponential_smoothing','2026-03-11 03:50:50','2026-03-11 03:50:50'),(136,'daily_orders',7,'2026-03-14','2026-03-14','daily_orders',0.33,0.77,'exponential_smoothing','2026-03-11 03:50:50','2026-03-11 03:50:50'),(137,'daily_orders',7,'2026-03-15','2026-03-15','daily_orders',0.32,0.73,'exponential_smoothing','2026-03-11 03:50:50','2026-03-11 03:50:50'),(138,'daily_orders',7,'2026-03-16','2026-03-16','daily_orders',0.30,0.69,'exponential_smoothing','2026-03-11 03:50:50','2026-03-11 03:50:50'),(139,'daily_orders',7,'2026-03-17','2026-03-17','daily_orders',0.29,0.64,'exponential_smoothing','2026-03-11 03:50:50','2026-03-11 03:50:50'),(140,'daily_orders',7,'2026-03-18','2026-03-18','daily_orders',0.28,0.60,'exponential_smoothing','2026-03-11 03:50:50','2026-03-11 03:50:50'),(141,'revenue',7,'2026-03-12','2026-03-12','revenue',4703.69,0.86,'aov_multiplier','2026-03-11 03:50:50','2026-03-11 03:50:50'),(142,'revenue',7,'2026-03-13','2026-03-13','revenue',4569.30,0.81,'aov_multiplier','2026-03-11 03:50:50','2026-03-11 03:50:50'),(143,'revenue',7,'2026-03-14','2026-03-14','revenue',4434.91,0.77,'aov_multiplier','2026-03-11 03:50:50','2026-03-11 03:50:50'),(144,'revenue',7,'2026-03-15','2026-03-15','revenue',4300.52,0.73,'aov_multiplier','2026-03-11 03:50:50','2026-03-11 03:50:50'),(145,'revenue',7,'2026-03-16','2026-03-16','revenue',4031.74,0.69,'aov_multiplier','2026-03-11 03:50:50','2026-03-11 03:50:50'),(146,'revenue',7,'2026-03-17','2026-03-17','revenue',3897.34,0.64,'aov_multiplier','2026-03-11 03:50:50','2026-03-11 03:50:50'),(147,'revenue',7,'2026-03-18','2026-03-18','revenue',3762.95,0.60,'aov_multiplier','2026-03-11 03:50:50','2026-03-11 03:50:50');
+/*!40000 ALTER TABLE `forecasts` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `franchise_applications`
+--
+
+DROP TABLE IF EXISTS `franchise_applications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `franchise_applications` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `application_number` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `user_id` int NOT NULL,
+  `business_name` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `business_type` enum('sole_proprietorship','partnership','corporation','llc') COLLATE utf8mb4_general_ci NOT NULL,
+  `tin_number` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `dti_sec_number` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `bir_registration_number` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `mayors_permit` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `business_address` text COLLATE utf8mb4_general_ci NOT NULL,
+  `proposed_location` text COLLATE utf8mb4_general_ci NOT NULL,
+  `region_name` varchar(120) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `region_code` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `province_name` varchar(120) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `province_code` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `city_name` varchar(120) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `city_code` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `barangay_name` varchar(120) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `barangay_code` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `contact_person` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `contact_phone` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `contact_email` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `capital_investment` decimal(12,2) NOT NULL,
+  `business_experience` text COLLATE utf8mb4_general_ci NOT NULL,
+  `marketing_plan` text COLLATE utf8mb4_general_ci NOT NULL,
+  `status` varchar(32) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'pending',
+  `admin_notes` text COLLATE utf8mb4_general_ci,
+  `admin_id` int DEFAULT NULL,
+  `reviewed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `franchise_applications`
+--
+
+LOCK TABLES `franchise_applications` WRITE;
+/*!40000 ALTER TABLE `franchise_applications` DISABLE KEYS */;
+INSERT INTO `franchise_applications` VALUES (16,'FR-20260126-000010294',10,'Lydias','sole_proprietorship','123-123-231-232','123123123123123213','23223322323',NULL,'asdasdas','asdasda',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'Local Account','09123456789','0',600000.00,'asdasdas','dasdasdasdsad','approved','',6,'2026-01-26 07:04:47','2026-01-26 07:04:24','2026-01-26 07:04:47'),(17,'FR-20260127-000011637',11,'Linda','sole_proprietorship','123-123-231-232','32323232332','23223322323',NULL,'asdasd','asdasdasdas',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'Local One','09123456789','0',500000.00,'asdasas','asasasas','rejected','bad',6,'2026-01-27 11:59:37','2026-01-27 11:59:08','2026-01-27 11:59:37'),(18,'FR-20260127-000011132',11,'Linda','sole_proprietorship','341-131-221-331','123123123123123213','23223322323',NULL,'asdasd','asdasd',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'Local One','09123456789','0',4000000.00,'asdasdasd','asasdasasas','approved','Great',6,'2026-01-27 12:00:52','2026-01-27 12:00:36','2026-01-27 12:00:52'),(21,'FR-20260325-000031-E7D2',31,'justine business','partnership','123','123','123','123','asd','asd',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'justine santos','09917471283','justinehero033@gmail.com',1000000.00,'asd','asd','approved','asdasd',9,'2026-03-25 06:03:10','2026-03-25 06:02:09','2026-03-25 06:03:10'),(22,'FR-20260331-000035-0822',35,'Janna Restaurant','partnership','123','123','123','123','asd','asd',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'Janna Santos','09917471286','jannasantos@gmail.com',1000000.00,'wala','wala','approved','asd',9,'2026-03-31 09:31:03','2026-03-31 09:29:17','2026-03-31 09:31:03'),(23,'FR-20260827-000018-584E',18,'ako budoy','partnership','N/A','N/A','N/A','N/A','El Salvador Street, Zone I (Pob.), City of Dasmariñas, Cavite (Partnership Scope), CALABARZON','El Salvador Street, Zone I (Pob.), City of Dasmariñas, Cavite (Partnership Scope), CALABARZON','CALABARZON','040000000','Cavite (Partnership Scope)','042100000','City of Dasmariñas','042106000','Zone I (Pob.)','042106016','justine santos','09917471283','justinehero03@gmail.com',100000.00,'asd','asd','pending',NULL,NULL,NULL,'2026-08-27 03:43:03','2026-09-16 13:47:14');
+/*!40000 ALTER TABLE `franchise_applications` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `franchise_documents`
+--
+
+DROP TABLE IF EXISTS `franchise_documents`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `franchise_documents` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `application_id` int NOT NULL,
+  `document_type` enum('dti_doc','bir_doc','mayor_doc','valid_id','address_proof','bank_proof') COLLATE utf8mb4_general_ci NOT NULL,
+  `file_name` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `file_path` varchar(500) COLLATE utf8mb4_general_ci NOT NULL,
+  `uploaded_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=125 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `franchise_documents`
+--
+
+LOCK TABLES `franchise_documents` WRITE;
+/*!40000 ALTER TABLE `franchise_documents` DISABLE KEYS */;
+INSERT INTO `franchise_documents` VALUES (91,16,'dti_doc','16_dti_doc_1769411064_etst.png','uploads/franchise_documents/16_dti_doc_1769411064_etst.png','2026-01-26 07:04:24'),(92,16,'bir_doc','16_bir_doc_1769411064_etst.png','uploads/franchise_documents/16_bir_doc_1769411064_etst.png','2026-01-26 07:04:24'),(93,16,'mayor_doc','16_mayor_doc_1769411064_etst.png','uploads/franchise_documents/16_mayor_doc_1769411064_etst.png','2026-01-26 07:04:24'),(94,16,'valid_id','16_valid_id_1769411064_etst.png','uploads/franchise_documents/16_valid_id_1769411064_etst.png','2026-01-26 07:04:24'),(95,16,'address_proof','16_address_proof_1769411064_etst.png','uploads/franchise_documents/16_address_proof_1769411064_etst.png','2026-01-26 07:04:24'),(96,16,'bank_proof','16_bank_proof_1769411064_etst.png','uploads/franchise_documents/16_bank_proof_1769411064_etst.png','2026-01-26 07:04:24'),(97,17,'dti_doc','17_dti_doc_1769515148_etst.png','uploads/franchise_documents/17_dti_doc_1769515148_etst.png','2026-01-27 11:59:08'),(98,17,'bir_doc','17_bir_doc_1769515148_etst.png','uploads/franchise_documents/17_bir_doc_1769515148_etst.png','2026-01-27 11:59:08'),(99,17,'mayor_doc','17_mayor_doc_1769515148_etst.png','uploads/franchise_documents/17_mayor_doc_1769515148_etst.png','2026-01-27 11:59:08'),(100,17,'valid_id','17_valid_id_1769515148_etst.png','uploads/franchise_documents/17_valid_id_1769515148_etst.png','2026-01-27 11:59:08'),(101,17,'address_proof','17_address_proof_1769515148_etst.png','uploads/franchise_documents/17_address_proof_1769515148_etst.png','2026-01-27 11:59:08'),(102,17,'bank_proof','17_bank_proof_1769515148_etst.png','uploads/franchise_documents/17_bank_proof_1769515148_etst.png','2026-01-27 11:59:08'),(103,18,'dti_doc','18_dti_doc_1769515236_etst.png','uploads/franchise_documents/18_dti_doc_1769515236_etst.png','2026-01-27 12:00:36'),(104,18,'bir_doc','18_bir_doc_1769515236_etst.png','uploads/franchise_documents/18_bir_doc_1769515236_etst.png','2026-01-27 12:00:36'),(105,18,'mayor_doc','18_mayor_doc_1769515236_etst.png','uploads/franchise_documents/18_mayor_doc_1769515236_etst.png','2026-01-27 12:00:36'),(106,18,'valid_id','18_valid_id_1769515236_etst.png','uploads/franchise_documents/18_valid_id_1769515236_etst.png','2026-01-27 12:00:36'),(107,18,'address_proof','18_address_proof_1769515236_etst.png','uploads/franchise_documents/18_address_proof_1769515236_etst.png','2026-01-27 12:00:36'),(108,18,'bank_proof','18_bank_proof_1769515236_etst.png','uploads/franchise_documents/18_bank_proof_1769515236_etst.png','2026-01-27 12:00:36'),(109,21,'dti_doc','21_dti_doc_1774418529_6866_dwa.png','uploads/franchise_documents/21_dti_doc_1774418529_6866_dwa.png','2026-03-25 06:02:09'),(110,21,'bir_doc','21_bir_doc_1774418529_4966_dwa.png','uploads/franchise_documents/21_bir_doc_1774418529_4966_dwa.png','2026-03-25 06:02:09'),(111,21,'mayor_doc','21_mayor_doc_1774418529_3263_dwa.png','uploads/franchise_documents/21_mayor_doc_1774418529_3263_dwa.png','2026-03-25 06:02:09'),(112,21,'valid_id','21_valid_id_1774418529_8334_dwa.png','uploads/franchise_documents/21_valid_id_1774418529_8334_dwa.png','2026-03-25 06:02:09'),(113,21,'address_proof','21_address_proof_1774418529_2846_dwa.png','uploads/franchise_documents/21_address_proof_1774418529_2846_dwa.png','2026-03-25 06:02:09'),(114,21,'bank_proof','21_bank_proof_1774418529_8585_dwa.png','uploads/franchise_documents/21_bank_proof_1774418529_8585_dwa.png','2026-03-25 06:02:09'),(115,22,'dti_doc','22_dti_doc_1774949357_2116_647557994_1302530665063705_1704346290197884754_n.jpg','uploads/franchise_documents/22_dti_doc_1774949357_2116_647557994_1302530665063705_1704346290197884754_n.jpg','2026-03-31 09:29:17'),(116,22,'bir_doc','22_bir_doc_1774949357_6113_647557994_1302530665063705_1704346290197884754_n.jpg','uploads/franchise_documents/22_bir_doc_1774949357_6113_647557994_1302530665063705_1704346290197884754_n.jpg','2026-03-31 09:29:17'),(117,22,'mayor_doc','22_mayor_doc_1774949357_1228_647557994_1302530665063705_1704346290197884754_n.jpg','uploads/franchise_documents/22_mayor_doc_1774949357_1228_647557994_1302530665063705_1704346290197884754_n.jpg','2026-03-31 09:29:17'),(118,22,'valid_id','22_valid_id_1774949357_1646_643799435_3399894513501431_6464971131933478899_n.jpg','uploads/franchise_documents/22_valid_id_1774949357_1646_643799435_3399894513501431_6464971131933478899_n.jpg','2026-03-31 09:29:17'),(119,22,'address_proof','22_address_proof_1774949357_2834_647557994_1302530665063705_1704346290197884754_n.jpg','uploads/franchise_documents/22_address_proof_1774949357_2834_647557994_1302530665063705_1704346290197884754_n.jpg','2026-03-31 09:29:17'),(120,22,'bank_proof','22_bank_proof_1774949357_6863_647557994_1302530665063705_1704346290197884754_n.jpg','uploads/franchise_documents/22_bank_proof_1774949357_6863_647557994_1302530665063705_1704346290197884754_n.jpg','2026-03-31 09:29:17'),(121,23,'dti_doc','23_dti_doc_1787802183_5540_code1.png','uploads/franchise_documents/23_dti_doc_1787802183_5540_code1.png','2026-08-27 03:43:03'),(122,23,'bir_doc','23_bir_doc_1787802183_3104_code2.png','uploads/franchise_documents/23_bir_doc_1787802183_3104_code2.png','2026-08-27 03:43:03'),(123,23,'valid_id','23_valid_id_1787802183_9609_fesfe.png','uploads/franchise_documents/23_valid_id_1787802183_9609_fesfe.png','2026-08-27 03:43:03'),(124,23,'address_proof','23_address_proof_1787802183_8314_code1.png','uploads/franchise_documents/23_address_proof_1787802183_8314_code1.png','2026-08-27 03:43:03');
+/*!40000 ALTER TABLE `franchise_documents` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `hr_position_module_access`
+--
+
+DROP TABLE IF EXISTS `hr_position_module_access`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `hr_position_module_access` (
+  `position_id` int NOT NULL,
+  `module_key` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `is_enabled` tinyint(1) NOT NULL DEFAULT '1',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`position_id`,`module_key`),
+  CONSTRAINT `fk_hr_position_module_access_position` FOREIGN KEY (`position_id`) REFERENCES `job_positions` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `hr_position_module_access`
+--
+
+LOCK TABLES `hr_position_module_access` WRITE;
+/*!40000 ALTER TABLE `hr_position_module_access` DISABLE KEYS */;
+INSERT INTO `hr_position_module_access` VALUES (3,'employee.logistics',1,'2026-04-09 04:53:22','2026-04-09 04:53:22'),(4,'employee.logistics',1,'2026-04-09 04:53:22','2026-04-09 04:53:22'),(8,'employee.logistics',1,'2026-04-09 04:53:22','2026-04-09 04:53:22'),(12,'employee.logistics',1,'2026-04-09 04:53:22','2026-04-09 04:53:22'),(13,'employee.logistics',1,'2026-04-09 04:53:22','2026-04-09 04:53:22');
+/*!40000 ALTER TABLE `hr_position_module_access` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `inventory`
+--
+
+DROP TABLE IF EXISTS `inventory`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `inventory` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `product_id` int NOT NULL,
+  `current_stock` int NOT NULL DEFAULT '0',
+  `min_stock_level` int NOT NULL DEFAULT '10',
+  `last_updated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `is_archived` tinyint(1) DEFAULT '0',
+  `inventory_date` date NOT NULL DEFAULT (curdate()),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `product_date_unique` (`product_id`,`inventory_date`)
+) ENGINE=InnoDB AUTO_INCREMENT=132 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `inventory`
+--
+
+LOCK TABLES `inventory` WRITE;
+/*!40000 ALTER TABLE `inventory` DISABLE KEYS */;
+INSERT INTO `inventory` VALUES (1,12,0,10,'2026-01-19 07:35:14',0,'2026-02-16'),(2,13,0,10,'2026-01-19 07:35:14',0,'2026-02-16'),(3,3,0,10,'2026-01-19 07:35:14',0,'2026-02-16'),(4,4,0,10,'2026-01-19 07:35:14',0,'2026-02-16'),(5,5,0,10,'2026-01-19 07:35:14',0,'2026-02-16'),(6,6,10,10,'2026-01-29 08:20:18',0,'2026-02-16'),(7,7,0,10,'2026-02-17 13:40:40',0,'2026-02-16'),(8,8,0,10,'2026-01-19 07:35:14',0,'2026-02-16'),(9,9,0,10,'2026-01-19 07:35:14',0,'2026-02-16'),(10,10,0,10,'2026-01-19 07:35:14',0,'2026-02-16'),(11,11,0,10,'2026-02-17 11:40:40',0,'2026-02-16'),(12,1,100,10,'2026-02-01 09:51:00',0,'2026-02-16'),(13,2,0,10,'2026-02-17 10:00:22',1,'2026-02-16'),(14,17,1,5,'2026-01-26 06:39:57',0,'2026-02-16'),(15,14,5,5,'2026-02-17 10:01:36',1,'2026-02-16'),(16,20,10,5,'2026-02-01 12:01:51',0,'2026-02-16'),(17,19,5,5,'2026-02-16 15:19:43',0,'2026-02-16'),(18,2,7,5,'2026-02-17 13:59:37',0,'2026-02-17'),(19,14,14,5,'2026-02-17 10:25:07',0,'2026-02-17'),(20,7,4,5,'2026-02-17 15:28:34',0,'2026-02-17'),(21,1,1,5,'2026-02-17 14:57:29',0,'2026-02-17'),(26,4,-6,5,'2026-02-17 12:45:48',0,'2026-02-17'),(27,11,0,5,'2026-02-17 14:00:35',0,'2026-02-17'),(28,6,7,5,'2026-02-17 14:43:07',0,'2026-02-17'),(29,3,3,5,'2026-02-17 14:36:52',0,'2026-02-17'),(30,11,5,5,'2026-02-24 14:08:09',0,'2026-02-24'),(31,2,2,5,'2026-02-24 14:08:09',0,'2026-02-24'),(32,7,5,5,'2026-02-24 15:17:19',0,'2026-02-24'),(33,11,0,5,'2026-02-24 17:08:21',0,'2026-02-25'),(34,21,6,5,'2026-03-11 02:17:49',0,'2026-03-11'),(35,11,10,5,'2026-03-11 06:04:37',0,'2026-03-11'),(36,2,10,5,'2026-03-11 06:04:42',0,'2026-03-11'),(37,7,10,5,'2026-03-11 06:04:46',0,'2026-03-11'),(38,6,10,5,'2026-03-11 06:05:19',0,'2026-03-11'),(39,21,3,5,'2026-03-13 03:32:06',0,'2026-03-13'),(40,2,-1,5,'2026-03-16 06:33:26',0,'2026-03-16'),(41,3,42,5,'2026-03-16 09:08:45',0,'2026-03-16'),(42,11,12208,5,'2026-03-17 14:48:00',0,'2026-03-17'),(43,5,11,5,'2026-03-19 05:53:09',0,'2026-03-19'),(44,26,6,5,'2026-03-23 18:07:14',0,'2026-03-24'),(45,1,10,5,'2026-03-25 14:23:05',0,'2026-03-25'),(46,2,10,5,'2026-03-25 14:23:05',0,'2026-03-25'),(47,3,10,5,'2026-03-25 14:23:05',0,'2026-03-25'),(48,4,10,5,'2026-03-25 14:23:05',0,'2026-03-25'),(49,5,9,5,'2026-03-25 14:36:12',0,'2026-03-25'),(50,6,10,5,'2026-03-25 14:23:05',0,'2026-03-25'),(51,7,10,5,'2026-03-25 14:23:05',0,'2026-03-25'),(52,8,10,10,'2026-03-25 14:23:05',0,'2026-03-25'),(53,9,10,10,'2026-03-25 14:23:05',0,'2026-03-25'),(54,11,10,5,'2026-03-25 14:23:05',0,'2026-03-25'),(55,12,10,10,'2026-03-25 14:23:05',0,'2026-03-25'),(56,13,10,10,'2026-03-25 14:23:05',0,'2026-03-25'),(57,14,10,5,'2026-03-25 14:23:05',0,'2026-03-25'),(58,21,10,5,'2026-03-25 14:23:05',0,'2026-03-25'),(59,22,10,5,'2026-03-25 14:23:05',0,'2026-03-25'),(60,23,10,5,'2026-03-25 14:23:05',0,'2026-03-25'),(61,24,10,5,'2026-03-25 14:23:05',0,'2026-03-25'),(62,25,10,5,'2026-03-25 14:23:05',0,'2026-03-25'),(63,26,10,5,'2026-03-25 14:23:05',0,'2026-03-25'),(64,27,10,5,'2026-03-25 14:23:05',0,'2026-03-25'),(76,5,9,5,'2026-03-25 17:36:39',0,'2026-03-26'),(77,1,10,5,'2026-03-27 03:16:52',0,'2026-03-27'),(78,2,10,5,'2026-03-27 03:16:52',0,'2026-03-27'),(79,3,10,5,'2026-03-27 03:16:52',0,'2026-03-27'),(80,4,10,5,'2026-03-27 03:16:52',0,'2026-03-27'),(81,5,10,5,'2026-03-27 03:16:52',0,'2026-03-27'),(82,6,0,5,'2026-03-27 03:54:08',0,'2026-03-27'),(83,7,10,5,'2026-03-27 03:16:52',0,'2026-03-27'),(84,8,10,10,'2026-03-27 03:16:52',0,'2026-03-27'),(85,9,10,10,'2026-03-27 03:16:52',0,'2026-03-27'),(86,11,10,5,'2026-03-27 03:16:52',0,'2026-03-27'),(87,12,10,10,'2026-03-27 03:16:52',0,'2026-03-27'),(88,13,10,10,'2026-03-27 03:16:52',0,'2026-03-27'),(89,14,10,5,'2026-03-27 03:16:52',0,'2026-03-27'),(90,21,10,5,'2026-03-27 03:16:52',0,'2026-03-27'),(91,22,10,5,'2026-03-27 03:16:52',0,'2026-03-27'),(92,23,10,5,'2026-03-27 03:16:52',0,'2026-03-27'),(93,24,10,5,'2026-03-27 03:16:52',0,'2026-03-27'),(94,25,10,5,'2026-03-27 03:16:52',0,'2026-03-27'),(95,26,10,5,'2026-03-27 03:16:52',0,'2026-03-27'),(96,27,10,5,'2026-03-27 03:16:52',0,'2026-03-27'),(108,28,9,5,'2026-03-27 07:32:39',0,'2026-03-27'),(109,29,9,5,'2026-03-27 12:10:15',0,'2026-03-27'),(110,30,0,5,'2026-03-31 14:34:26',0,'2026-03-31'),(111,28,10,5,'2026-03-31 08:38:56',0,'2026-03-31'),(112,29,8,5,'2026-03-31 14:38:51',0,'2026-03-31'),(113,31,10,5,'2026-03-31 09:33:47',0,'2026-03-31'),(114,28,9,5,'2026-04-09 09:55:04',0,'2026-04-09'),(115,24,9,5,'2026-04-09 10:09:15',0,'2026-04-09'),(116,28,9,5,'2026-04-10 08:24:45',0,'2026-04-10'),(117,30,10,5,'2026-04-10 08:39:02',0,'2026-04-10'),(118,29,10,5,'2026-04-10 08:39:05',0,'2026-04-10'),(119,30,9,5,'2026-04-11 09:12:59',0,'2026-04-11'),(120,29,10,5,'2026-04-11 02:20:32',0,'2026-04-11'),(121,28,10,5,'2026-04-11 02:20:35',0,'2026-04-11'),(122,28,9,5,'2026-08-05 14:18:20',0,'2026-08-05'),(123,5,9,5,'2026-08-06 09:40:21',0,'2026-08-06'),(124,29,10,5,'2026-08-06 14:34:45',0,'2026-08-06'),(125,28,9,5,'2026-08-12 09:05:58',0,'2026-08-12'),(126,24,9,5,'2026-08-25 16:25:52',0,'2026-08-26'),(127,24,8,5,'2026-09-16 13:47:30',0,'2026-09-16'),(128,22,9,5,'2026-09-24 09:52:33',0,'2026-09-24'),(129,24,9,5,'2026-09-24 15:27:09',0,'2026-09-24'),(130,24,9,5,'2026-09-24 16:49:26',0,'2026-09-25'),(131,6,9,5,'2026-09-24 16:50:00',0,'2026-09-25');
+/*!40000 ALTER TABLE `inventory` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `inventory_history`
+--
+
+DROP TABLE IF EXISTS `inventory_history`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `inventory_history` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `product_id` int NOT NULL,
+  `adjustment_type` enum('received','add','reduce','damage','correction','created','restored','archived','automation') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'correction',
+  `quantity_changed` int NOT NULL,
+  `previous_stock` int NOT NULL,
+  `new_stock` int NOT NULL,
+  `notes` text COLLATE utf8mb4_general_ci,
+  `admin_id` int DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=154 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `inventory_history`
+--
+
+LOCK TABLES `inventory_history` WRITE;
+/*!40000 ALTER TABLE `inventory_history` DISABLE KEYS */;
+INSERT INTO `inventory_history` VALUES (1,11,'add',123123,0,123123,'',9,'2026-01-22 07:17:16'),(2,11,'add',123123,123123,246246,'',9,'2026-01-22 07:17:21'),(3,2,'add',30,0,30,'barely stocks',6,'2026-01-23 07:35:28'),(4,17,'',1,0,1,'Initial inventory created',6,'2026-01-26 06:39:57'),(5,6,'received',5,0,5,'',9,'2026-01-29 08:20:10'),(6,6,'received',5,5,10,'',9,'2026-01-29 08:20:18'),(7,14,'',100,0,100,'Initial inventory created',9,'2026-01-30 08:55:55'),(8,7,'add',16,0,16,'',9,'2026-02-01 09:50:32'),(9,1,'add',100,0,100,'1000',9,'2026-02-01 09:51:00'),(10,20,'',10,0,10,'Initial inventory created',9,'2026-02-01 12:01:51'),(11,11,'received',12,246246,246258,'',9,'2026-02-01 12:02:50'),(12,11,'received',12,246258,246270,'',9,'2026-02-01 12:04:49'),(13,14,'',0,100,100,'Inventory archived',9,'2026-02-01 12:05:06'),(14,14,'',5,0,5,'Inventory restored from archive',9,'2026-02-16 15:19:18'),(15,19,'',5,0,5,'Initial inventory created',9,'2026-02-16 15:19:43'),(16,7,'reduce',1,16,15,'asd (Date: 2026-02-16)',9,'2026-02-16 15:41:26'),(17,7,'reduce',1,15,14,'asd (Date: 2026-02-16)',9,'2026-02-16 15:47:38'),(18,7,'reduce',1,14,13,' (Date: 2026-02-16)',9,'2026-02-16 15:47:59'),(19,2,'reduce',1,30,29,' (Date: 2026-02-16)',9,'2026-02-16 15:49:08'),(20,2,'reduce',28,29,1,' (Date: 2026-02-16)',9,'2026-02-16 15:49:17'),(21,2,'reduce',28,1,0,' (Date: 2026-02-16)',9,'2026-02-16 15:53:12'),(22,2,'add',1,1,2,' (Date: 2026-02-17)',9,'2026-02-17 09:59:39'),(23,2,'add',1,2,3,' (Date: 2026-02-17)',9,'2026-02-17 09:59:43'),(24,2,'add',10,3,13,'asd (Date: 2026-02-17)',9,'2026-02-17 09:59:55'),(25,2,'add',10,13,23,'asd (Date: 2026-02-17)',9,'2026-02-17 10:00:03'),(26,2,'reduce',5,23,18,' (Date: 2026-02-17)',9,'2026-02-17 10:00:17'),(27,2,'',0,0,0,'Inventory archived',9,'2026-02-17 10:00:22'),(28,2,'',0,18,18,'Inventory archived',9,'2026-02-17 10:00:22'),(30,2,'',5,0,5,'Inventory restored from archive',9,'2026-02-17 10:00:33'),(31,14,'reduce',4,4,0,' (Date: 2026-02-17)',9,'2026-02-17 10:01:24'),(32,14,'reduce',4,0,0,' (Date: 2026-02-17)',9,'2026-02-17 10:01:29'),(33,14,'',0,5,5,'Inventory archived',9,'2026-02-17 10:01:36'),(34,14,'',0,0,0,'Inventory archived',9,'2026-02-17 10:01:36'),(36,14,'',4,0,4,'Inventory restored from archive',9,'2026-02-17 10:01:42'),(37,7,'',5,0,5,'Initial inventory created',9,'2026-02-17 10:24:29'),(38,2,'add',5,5,10,'123 (Date: 2026-02-17)',9,'2026-02-17 10:24:54'),(39,14,'received',5,4,9,'123 (Date: 2026-02-17)',9,'2026-02-17 10:25:03'),(40,14,'received',5,9,14,'123 (Date: 2026-02-17)',9,'2026-02-17 10:25:07'),(41,1,'',5,0,5,'Initial inventory created',9,'2026-02-17 10:25:30'),(42,7,'add',1,5,6,' (Date: 2026-02-17)',9,'2026-02-17 10:51:42'),(43,7,'add',1,6,7,' (Date: 2026-02-17)',9,'2026-02-17 10:52:39'),(44,7,'add',1,7,8,' (Date: 2026-02-17)',9,'2026-02-17 10:58:10'),(45,7,'add',1,8,9,' (Date: 2026-02-17)',9,'2026-02-17 10:58:13'),(46,1,'reduce',1,5,4,' (Date: 2026-02-17)',9,'2026-02-17 11:08:47'),(47,1,'reduce',1,4,3,' (Date: 2026-02-17)',9,'2026-02-17 11:08:50'),(48,1,'reduce',1,3,2,' (Date: 2026-02-17)',9,'2026-02-17 11:20:45'),(49,1,'reduce',2,2,0,' (Date: 2026-02-17)',9,'2026-02-17 12:27:10'),(50,1,'reduce',2,0,0,' (Date: 2026-02-17)',9,'2026-02-17 12:27:15'),(51,1,'add',5,0,5,' (Date: 2026-02-17)',9,'2026-02-17 12:35:59'),(52,1,'add',5,5,10,' (Date: 2026-02-17)',9,'2026-02-17 12:41:01'),(53,7,'received',5,8,13,' (Date: 2026-02-17)',9,'2026-02-17 13:33:12'),(54,7,'received',5,13,18,' (Date: 2026-02-17)',9,'2026-02-17 13:34:11'),(55,11,'',19,0,19,'Initial inventory created',9,'2026-02-17 13:38:24'),(56,7,'reduce',13,13,0,' (Date: 2026-02-16)',9,'2026-02-17 13:40:40'),(57,7,'reduce',15,18,3,' (Date: 2026-02-17)',9,'2026-02-17 13:40:49'),(58,7,'reduce',1,3,2,'Order #ORD-20260217-699472F',NULL,'2026-02-17 13:54:22'),(59,2,'reduce',3,10,7,'Order #ORD-20260217-6994743',NULL,'2026-02-17 13:59:37'),(60,11,'reduce',19,19,0,'Order #ORD-20260217-6994747',NULL,'2026-02-17 14:00:35'),(61,3,'add',5,-2,3,' (Date: 2026-02-17)',9,'2026-02-17 14:36:52'),(62,6,'add',14,-3,11,' (Date: 2026-02-17)',9,'2026-02-17 14:37:01'),(63,6,'reduce',1,11,10,'Order #ORD-20260217-69947E0',NULL,'2026-02-17 14:42:11'),(64,6,'reduce',3,10,7,'Order #ORD-20260217-69947E6',NULL,'2026-02-17 14:43:07'),(65,7,'add',5,0,5,' (Date: 2026-02-17)',9,'2026-02-17 14:46:01'),(66,1,'reduce',4,5,1,'Order #ORD-20260217-699481C',NULL,'2026-02-17 14:57:29'),(67,7,'reduce',1,5,4,'Order #ORD-20260217-6994890',NULL,'2026-02-17 15:28:34'),(68,11,'',15,0,15,'Initial inventory created',9,'2026-02-24 12:18:24'),(69,11,'reduce',4,15,11,'Order #ORD-20260224-699D971',NULL,'2026-02-24 12:18:52'),(70,11,'reduce',2,11,9,'Order #ORD-20260224-699D99C',NULL,'2026-02-24 12:30:23'),(71,11,'reduce',1,9,8,'Order #ORD-20260224-699D9A0',NULL,'2026-02-24 12:31:18'),(72,2,'',5,0,5,'Initial inventory created',9,'2026-02-24 13:28:39'),(73,11,'reduce',1,8,7,'Order #ORD-20260224-699DA79',NULL,'2026-02-24 13:29:14'),(74,2,'reduce',1,5,4,'Order #ORD-20260224-699DA79',NULL,'2026-02-24 13:29:14'),(75,11,'reduce',1,7,6,'Order #ORD-20260224-699DAC0',NULL,'2026-02-24 13:48:11'),(76,2,'reduce',1,4,3,'Order #ORD-20260224-699DAC0',NULL,'2026-02-24 13:48:11'),(77,11,'reduce',1,6,5,'Order #ORD-20260224-699DB0B',NULL,'2026-02-24 14:08:09'),(78,2,'reduce',1,3,2,'Order #ORD-20260224-699DB0B',NULL,'2026-02-24 14:08:09'),(79,7,'',5,0,5,'Initial inventory created',9,'2026-02-24 15:17:19'),(80,11,'',5,0,5,'Initial inventory created',9,'2026-02-24 17:00:46'),(81,11,'reduce',5,5,0,'Walk-in Order #WALK-20260225-21F93E80',NULL,'2026-02-24 17:08:21'),(82,21,'',10,0,10,'Initial inventory created',9,'2026-03-11 02:17:08'),(83,21,'reduce',3,10,7,'Walk-in Order #WALK-20260311-14D15AA8',NULL,'2026-03-11 02:17:29'),(84,21,'reduce',1,7,6,'Walk-in Order #WALK-20260311-8309CEFB',NULL,'2026-03-11 02:17:49'),(85,11,'',10,0,10,'Initial inventory created',9,'2026-03-11 06:04:37'),(86,2,'',10,0,10,'Initial inventory created',9,'2026-03-11 06:04:42'),(87,7,'',10,0,10,'Initial inventory created',9,'2026-03-11 06:04:46'),(88,6,'',10,0,10,'Initial inventory created',9,'2026-03-11 06:05:19'),(89,21,'',5,0,5,'Initial inventory created',9,'2026-03-12 16:13:03'),(90,21,'reduce',1,5,4,'Order #ORD-20260313-69B37B9',NULL,'2026-03-13 02:51:35'),(91,21,'reduce',1,4,3,'Order #ORD-20260313-69B3851',NULL,'2026-03-13 03:32:06'),(92,2,'',5,0,5,'Initial inventory created',9,'2026-03-16 05:45:01'),(93,2,'reduce',1,5,4,'Order #ORD-20260316-69B7993',NULL,'2026-03-16 05:46:47'),(94,2,'reduce',1,4,3,'Order #ORD-20260316-69B79F4',NULL,'2026-03-16 06:12:42'),(95,2,'reduce',1,3,2,'Order #ORD-20260316-69B7A2C',NULL,'2026-03-16 06:33:25'),(96,2,'reduce',1,2,1,'Order #ORD-20260316-69B7A2C',NULL,'2026-03-16 06:33:25'),(97,2,'reduce',1,1,0,'Order #ORD-20260316-69B7A2C',NULL,'2026-03-16 06:33:26'),(98,2,'reduce',1,0,-1,'Order #ORD-20260316-69B7A2C',NULL,'2026-03-16 06:33:26'),(99,3,'',50,0,50,'Initial inventory created',9,'2026-03-16 06:46:27'),(100,3,'reduce',1,50,49,'Order #ORD-20260316-69B7A8C',NULL,'2026-03-16 06:53:08'),(101,3,'reduce',2,49,47,'Order #ORD-20260316-69B7AA8',NULL,'2026-03-16 07:00:38'),(102,3,'reduce',1,47,46,'Order #ORD-20260316-69B7ADA',NULL,'2026-03-16 07:13:56'),(103,3,'reduce',1,46,45,'Order #ORD-20260316-69B7B22',NULL,'2026-03-16 07:33:10'),(104,3,'reduce',3,45,42,'Order #ORD-20260316-69B7C88',NULL,'2026-03-16 09:08:45'),(105,11,'',12213,0,12213,'Initial inventory created',1,'2026-03-17 05:45:10'),(106,11,'reduce',1,12213,12212,'Order #ORD-20260317-69B8EA7',NULL,'2026-03-17 05:45:43'),(107,11,'reduce',1,12212,12211,'Order #ORD-20260317-69B9049',NULL,'2026-03-17 07:37:05'),(108,11,'reduce',1,12211,12210,'Order #ORD-20260317-69B958F',NULL,'2026-03-17 13:37:23'),(109,11,'reduce',1,12210,12209,'Order #ORD-20260317-69B95DB',NULL,'2026-03-17 13:57:24'),(110,11,'reduce',1,12209,12208,'Walk-in Order #WALK-20260317-A2FF528E',NULL,'2026-03-17 14:48:00'),(111,5,'',11,0,11,'Initial inventory created',9,'2026-03-19 05:53:09'),(112,26,'',12,0,12,'Initial inventory created',9,'2026-03-23 17:01:45'),(113,26,'reduce',1,12,11,'Order #ORD-20260324-69C1728',NULL,'2026-03-23 17:04:16'),(114,26,'reduce',1,11,10,'Order #ORD-20260324-69C17BB',NULL,'2026-03-23 17:43:35'),(115,26,'reduce',1,10,9,'Order #ORD-20260324-69C17C1',NULL,'2026-03-23 17:45:13'),(116,26,'reduce',1,9,8,'Order #ORD-20260324-69C17DF',NULL,'2026-03-23 17:53:03'),(117,26,'reduce',1,8,7,'Order #ORD-20260324-69C17FE',NULL,'2026-03-23 18:02:14'),(118,26,'reduce',1,7,6,'Order #ORD-20260324-69C1814',NULL,'2026-03-23 18:07:14'),(119,5,'reduce',1,10,9,'Order #ORD-20260325-69C3F2C',NULL,'2026-03-25 14:36:12'),(120,5,'reduce',1,10,9,'Order #ORD-20260326-69C41C0',NULL,'2026-03-25 17:36:39'),(121,6,'reduce',10,10,0,'Walk-in Order #WALK-20260327-117A3336',NULL,'2026-03-27 03:54:08'),(122,28,'reduce',1,10,9,'Order #ORD-20260327-69C6328',NULL,'2026-03-27 07:32:39'),(123,29,'created',10,0,10,'Initial inventory created',31,'2026-03-27 08:01:35'),(124,29,'reduce',10,10,0,'Walk-in Order #WALK-20260327-0DDBA7F3',NULL,'2026-03-27 08:21:06'),(125,29,'automation',10,0,10,'Auto top-up from create inventory',31,'2026-03-27 09:40:07'),(126,29,'reduce',1,10,9,'Order #ORD-20260327-69C6739',NULL,'2026-03-27 12:10:15'),(127,30,'created',10,0,10,'Initial inventory created using bulk create',31,'2026-03-31 08:38:56'),(128,28,'created',10,0,10,'Initial inventory created using bulk create',31,'2026-03-31 08:38:56'),(129,29,'created',10,0,10,'Initial inventory created using bulk create',31,'2026-03-31 08:38:56'),(130,31,'created',10,0,10,'Initial inventory created',35,'2026-03-31 09:33:47'),(131,29,'reduce',1,10,9,'Order #ORD-20260331-69CBD1C',NULL,'2026-03-31 13:53:33'),(132,30,'reduce',10,10,0,'Walk-in Order #WALK-20260331-2E0917B3',NULL,'2026-03-31 14:34:26'),(133,29,'reduce',1,9,8,'Order #ORD-20260331-69CBDC6',NULL,'2026-03-31 14:38:51'),(134,28,'reduce',1,10,9,'Walk-in Order #WALK-20260409-0D806EA9',NULL,'2026-04-09 09:55:04'),(135,24,'reduce',1,10,9,'Order #ORD-20260409-69D77AB',NULL,'2026-04-09 10:09:15'),(136,28,'reduce',1,10,9,'Walk-in Order #WALK-20260410-2A0525D4',NULL,'2026-04-10 08:24:45'),(137,30,'created',10,0,10,'Initial inventory created',31,'2026-04-10 08:39:02'),(138,29,'created',10,0,10,'Initial inventory created',31,'2026-04-10 08:39:05'),(139,30,'created',10,0,10,'Initial inventory created',31,'2026-04-11 02:20:29'),(140,29,'created',10,0,10,'Initial inventory created',31,'2026-04-11 02:20:32'),(141,28,'created',10,0,10,'Initial inventory created',31,'2026-04-11 02:20:35'),(142,30,'reduce',1,10,9,'Walk-in Order #WALK-20260411-6F384ED3',NULL,'2026-04-11 09:12:59'),(143,28,'reduce',1,10,9,'Order #ORD-20260805-6A7345F79D25D',NULL,'2026-08-05 14:18:20'),(144,5,'reduce',1,10,9,'Order #ORD-20260806-CDB481',NULL,'2026-08-06 09:40:21'),(145,29,'created',10,0,10,'Initial inventory created',31,'2026-08-06 14:34:45'),(146,28,'reduce',1,10,9,'Order #ORD-20260812-22EA22',NULL,'2026-08-12 09:05:58'),(147,24,'reduce',1,10,9,'Order #ORD-20260826-1E51E9',NULL,'2026-08-25 16:25:52'),(148,24,'reduce',1,10,9,'Order #ORD-20260916-9D0501',NULL,'2026-09-16 13:19:52'),(149,24,'reduce',1,9,8,'Order #ORD-20260916-2ABF12',NULL,'2026-09-16 13:47:30'),(150,22,'reduce',1,10,9,'Order #ORD-20260924-495477',NULL,'2026-09-24 09:52:33'),(151,24,'reduce',1,10,9,'Order #ORD-20260924-FE2F41',NULL,'2026-09-24 15:27:09'),(152,24,'reduce',1,10,9,'Order #ORD-20260925-8144AD',NULL,'2026-09-24 16:49:26'),(153,6,'reduce',1,10,9,'COD Order #ORD-20260925-8B60AC',NULL,'2026-09-24 16:50:00');
+/*!40000 ALTER TABLE `inventory_history` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Temporary view structure for view `job_openings`
+--
+
+DROP TABLE IF EXISTS `job_openings`;
+/*!50001 DROP VIEW IF EXISTS `job_openings`*/;
+SET @saved_cs_client     = @@character_set_client;
+/*!50503 SET character_set_client = utf8mb4 */;
+/*!50001 CREATE VIEW `job_openings` AS SELECT 
+ 1 AS `id`,
+ 1 AS `position_title`,
+ 1 AS `job_title`,
+ 1 AS `department_id`,
+ 1 AS `description`,
+ 1 AS `requirements`,
+ 1 AS `salary_range_min`,
+ 1 AS `salary_range_max`,
+ 1 AS `employment_type`,
+ 1 AS `status`,
+ 1 AS `posted_date`,
+ 1 AS `closing_date`,
+ 1 AS `created_by`,
+ 1 AS `created_at`,
+ 1 AS `updated_at`*/;
+SET character_set_client = @saved_cs_client;
+
+--
+-- Table structure for table `job_positions`
+--
+
+DROP TABLE IF EXISTS `job_positions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `job_positions` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `position_title` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `department_id` int DEFAULT NULL,
+  `description` text COLLATE utf8mb4_general_ci,
+  `requirements` text COLLATE utf8mb4_general_ci,
+  `salary_range_min` decimal(12,2) DEFAULT NULL,
+  `salary_range_max` decimal(12,2) DEFAULT NULL,
+  `employment_type` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `status` enum('open','filled','closed','on_hold') COLLATE utf8mb4_general_ci DEFAULT 'open',
+  `posted_date` date NOT NULL,
+  `closing_date` date DEFAULT NULL,
+  `created_by` int DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `job_positions`
+--
+
+LOCK TABLES `job_positions` WRITE;
+/*!40000 ALTER TABLE `job_positions` DISABLE KEYS */;
+INSERT INTO `job_positions` VALUES (1,'Staff',1,NULL,NULL,NULL,NULL,'full_time','open','2026-04-09',NULL,NULL,'2026-04-09 04:53:22','2026-04-09 04:53:22'),(2,'asd',1,NULL,NULL,NULL,NULL,'full_time','open','2026-04-09',NULL,9,'2026-04-09 04:53:22','2026-04-09 04:53:22'),(3,'employee',2,NULL,NULL,NULL,NULL,'full_time','open','2026-04-09',NULL,14,'2026-04-09 04:53:22','2026-04-09 04:53:22'),(4,'employee',2,NULL,NULL,NULL,NULL,'full_time','open','2026-04-09',NULL,15,'2026-04-09 04:53:22','2026-04-09 04:53:22'),(5,'Software Developer',NULL,NULL,NULL,NULL,NULL,'full_time','open','2026-04-09',NULL,NULL,'2026-04-09 04:53:22','2026-04-09 04:53:22'),(6,'Project Manager',NULL,NULL,NULL,NULL,NULL,'full_time','open','2026-04-09',NULL,NULL,'2026-04-09 04:53:22','2026-04-09 04:53:22'),(7,'Hourly Staff',NULL,NULL,NULL,NULL,NULL,'full_time','open','2026-04-09',NULL,19,'2026-04-09 04:53:22','2026-04-09 04:53:22'),(8,'employee',2,NULL,NULL,NULL,NULL,'full_time','open','2026-04-09',NULL,18,'2026-04-09 04:53:22','2026-04-09 04:53:22'),(9,'Staff',3,NULL,NULL,NULL,NULL,'full_time','open','2026-04-09',NULL,NULL,'2026-04-09 04:53:22','2026-04-09 04:53:22'),(10,'Receipt',3,NULL,NULL,NULL,NULL,'full_time','open','2026-04-09',NULL,26,'2026-04-09 04:53:22','2026-04-09 04:53:22'),(11,'Receipt',3,NULL,NULL,NULL,NULL,'full_time','open','2026-04-09',NULL,27,'2026-04-09 04:53:22','2026-04-09 04:53:22'),(12,'driver',2,NULL,NULL,NULL,NULL,'full_time','open','2026-04-09',NULL,29,'2026-04-09 04:53:22','2026-04-09 04:53:22'),(13,'driver',2,NULL,NULL,NULL,NULL,'full_time','open','2026-04-09',NULL,30,'2026-04-09 04:53:22','2026-04-09 04:53:22'),(14,'Delivery Rider',6,NULL,NULL,NULL,NULL,'full_time','open','2026-04-09',NULL,33,'2026-04-09 04:53:22','2026-04-09 04:53:22'),(15,'driver',6,NULL,NULL,NULL,NULL,'full_time','open','2026-04-09',NULL,34,'2026-04-09 04:53:22','2026-04-09 04:53:22');
+/*!40000 ALTER TABLE `job_positions` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `leave_balance`
+--
+
+DROP TABLE IF EXISTS `leave_balance`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `leave_balance` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `employee_id` int NOT NULL,
+  `leave_type` enum('sick','vacation','personal','maternity','paternity','emergency') COLLATE utf8mb4_general_ci NOT NULL,
+  `year` int NOT NULL,
+  `initial_balance` decimal(5,2) DEFAULT '0.00',
+  `used_days` decimal(5,2) DEFAULT '0.00',
+  `balance_remaining` decimal(5,2) DEFAULT '0.00',
+  `carry_over` decimal(5,2) DEFAULT '0.00',
+  `notes` text COLLATE utf8mb4_general_ci,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `leave_balance`
+--
+
+LOCK TABLES `leave_balance` WRITE;
+/*!40000 ALTER TABLE `leave_balance` DISABLE KEYS */;
+/*!40000 ALTER TABLE `leave_balance` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `leave_requests`
+--
+
+DROP TABLE IF EXISTS `leave_requests`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `leave_requests` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `employee_id` int NOT NULL,
+  `leave_type` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `reason` text COLLATE utf8mb4_general_ci,
+  `proof_path` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `status` enum('pending','approved','rejected','cancelled') COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `reviewed_by` int DEFAULT NULL,
+  `review_notes` text COLLATE utf8mb4_general_ci,
+  `reviewed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `leave_balance_before` decimal(5,2) DEFAULT NULL,
+  `leave_balance_after` decimal(5,2) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `leave_requests`
+--
+
+LOCK TABLES `leave_requests` WRITE;
+/*!40000 ALTER TABLE `leave_requests` DISABLE KEYS */;
+INSERT INTO `leave_requests` VALUES (1,7,'Sick Leave','2026-02-10','2026-02-14','asd','../uploads/leave_proofs/proof_7_1770653574.png','rejected',9,'','2026-02-10 15:16:49','2026-02-09 16:12:54','2026-02-10 15:16:49',NULL,NULL),(2,7,'Sick Leave','2026-02-17','2026-02-21','asdasd','../uploads/leave_proofs/proof_7_1771328956.png','approved',9,NULL,'2026-02-17 11:49:39','2026-02-17 11:49:16','2026-02-17 11:49:39',NULL,NULL),(3,7,'Sick Leave','2026-02-17','2026-02-17','asdasd','../uploads/leave_proofs/proof_7_1771329165.png','rejected',9,'','2026-02-17 12:13:07','2026-02-17 11:52:45','2026-02-17 12:13:07',NULL,NULL);
+/*!40000 ALTER TABLE `leave_requests` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `leave_types`
+--
+
+DROP TABLE IF EXISTS `leave_types`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `leave_types` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `description` text COLLATE utf8mb4_general_ci,
+  `requires_proof` tinyint(1) NOT NULL DEFAULT '0' COMMENT '1 if proof is mandatory, 0 otherwise',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `leave_types`
+--
+
+LOCK TABLES `leave_types` WRITE;
+/*!40000 ALTER TABLE `leave_types` DISABLE KEYS */;
+INSERT INTO `leave_types` VALUES (1,'Sick Leave','Leave taken due to illness or medical appointments.',1,1,'2026-02-09 15:41:53'),(2,'Vacation Leave','Paid time off for leisure and personal travel.',0,1,'2026-02-09 15:41:53'),(3,'Emergency Leave','Leave for unforeseen urgent personal or family matters.',1,1,'2026-02-09 15:41:53'),(4,'Personal Leave','Leave for personal reasons not covered by other types.',0,1,'2026-02-09 15:41:53'),(5,'Maternity Leave','Leave for new mothers, as per company policy and law.',1,1,'2026-02-09 15:41:53'),(6,'Paternity Leave','Leave for new fathers, as per company policy and law.',1,1,'2026-02-09 15:41:53'),(7,'Bereavement Leave','Leave taken due to the death of a close family member.',0,1,'2026-02-09 15:41:53');
+/*!40000 ALTER TABLE `leave_types` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `logistics_api_logs`
+--
+
+DROP TABLE IF EXISTS `logistics_api_logs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `logistics_api_logs` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `provider_name` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `request_type` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `request_data` longtext COLLATE utf8mb4_general_ci,
+  `response_data` longtext COLLATE utf8mb4_general_ci,
+  `http_status_code` int DEFAULT NULL,
+  `success` tinyint(1) DEFAULT NULL,
+  `error_message` text COLLATE utf8mb4_general_ci,
+  `execution_time_ms` int DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=77 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `logistics_api_logs`
+--
+
+LOCK TABLES `logistics_api_logs` WRITE;
+/*!40000 ALTER TABLE `logistics_api_logs` DISABLE KEYS */;
+INSERT INTO `logistics_api_logs` VALUES (1,'SYSTEM','create_tracking','{\"order_id\":96,\"tracking_id\":1}',NULL,NULL,0,'',NULL,'2026-03-16 07:13:56'),(2,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-16 07:13:56'),(3,'SYSTEM','create_tracking','{\"order_id\":97,\"tracking_id\":2}',NULL,NULL,0,'',NULL,'2026-03-16 07:33:10'),(4,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-16 07:33:10'),(5,'SYSTEM','create_tracking','{\"order_id\":98,\"tracking_id\":3}',NULL,NULL,0,'',NULL,'2026-03-16 09:08:45'),(6,'SYSTEM','create_tracking','{\"order_id\":99,\"tracking_id\":4}',NULL,NULL,0,'',NULL,'2026-03-17 05:45:43'),(7,'SYSTEM','send_sms_failed','{\"phone\":\"09171234567\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-17 05:45:43'),(8,'SYSTEM','send_sms_failed','{\"phone\":\"09171234567\",\"message\":\"Your driver is on the way to your location.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-17 05:45:54'),(9,'SYSTEM','send_sms_failed','{\"phone\":\"09171234567\",\"message\":\"Your driver is arriving soon. Please be ready.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-17 05:45:56'),(10,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your order delivery has been cancelled.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-17 07:35:34'),(11,'SYSTEM','create_tracking','{\"order_id\":100,\"tracking_id\":5}',NULL,NULL,0,'',NULL,'2026-03-17 07:37:05'),(12,'SYSTEM','send_sms_failed','{\"phone\":\"09171234567\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-17 07:37:05'),(13,'SYSTEM','send_sms_failed','{\"phone\":\"09171234567\",\"message\":\"Your driver is on the way to your location.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-17 07:37:38'),(14,'SYSTEM','send_sms_failed','{\"phone\":\"09171234567\",\"message\":\"Your driver is arriving soon. Please be ready.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-17 07:37:40'),(15,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your order delivery has been cancelled.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-17 07:41:19'),(16,'SYSTEM','create_tracking','{\"order_id\":101,\"tracking_id\":6}',NULL,NULL,0,'',NULL,'2026-03-17 13:37:23'),(17,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-17 13:37:24'),(18,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your driver is on the way to your location.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-17 13:38:05'),(19,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your driver is arriving soon. Please be ready.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-17 13:38:07'),(20,'SYSTEM','create_tracking','{\"order_id\":102,\"tracking_id\":7}',NULL,NULL,0,'',NULL,'2026-03-17 13:57:24'),(21,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-17 13:57:24'),(22,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your driver is on the way to your location.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-17 13:58:15'),(23,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your driver is arriving soon. Please be ready.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-17 13:58:18'),(24,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-18 14:49:42'),(25,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-18 14:51:22'),(26,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-18 14:51:39'),(27,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-18 14:59:50'),(28,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-18 15:00:01'),(29,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-18 15:02:05'),(30,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-18 15:02:11'),(31,'SYSTEM','create_tracking','{\"order_id\":104,\"tracking_id\":8}',NULL,NULL,0,'',NULL,'2026-03-23 17:04:16'),(32,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-23 17:04:16'),(33,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your driver is on the way to your location.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-23 17:05:12'),(34,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your driver is arriving soon. Please be ready.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-23 17:05:23'),(35,'SYSTEM','create_tracking','{\"order_id\":105,\"tracking_id\":9}',NULL,NULL,0,'',NULL,'2026-03-23 17:43:35'),(36,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-23 17:43:35'),(37,'SYSTEM','create_tracking','{\"order_id\":106,\"tracking_id\":10}',NULL,NULL,0,'',NULL,'2026-03-23 17:45:13'),(38,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-23 17:45:13'),(39,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your driver is on the way to your location.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-23 17:46:11'),(40,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your driver is arriving soon. Please be ready.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-23 17:46:16'),(41,'SYSTEM','create_tracking','{\"order_id\":107,\"tracking_id\":11}',NULL,NULL,0,'',NULL,'2026-03-23 17:53:03'),(42,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-23 17:53:03'),(43,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your driver is on the way to your location.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-23 17:53:42'),(44,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your driver is arriving soon. Please be ready.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-23 17:54:30'),(45,'SYSTEM','create_tracking','{\"order_id\":108,\"tracking_id\":12}',NULL,NULL,0,'',NULL,'2026-03-23 18:02:14'),(46,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-23 18:02:14'),(47,'SYSTEM','create_tracking','{\"order_id\":109,\"tracking_id\":13}',NULL,NULL,0,'',NULL,'2026-03-23 18:07:14'),(48,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-23 18:07:14'),(49,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your driver is on the way to your location.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-23 18:17:19'),(50,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your driver is on the way to your location.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-03-23 18:17:19'),(51,'SYSTEM','create_tracking','{\"order_id\":111,\"tracking_id\":14}',NULL,NULL,0,'',NULL,'2026-03-25 17:36:39'),(52,'SYSTEM','create_tracking','{\"order_id\":113,\"tracking_id\":15}',NULL,NULL,0,'',NULL,'2026-03-27 07:32:39'),(53,'SYSTEM','create_tracking','{\"order_id\":117,\"tracking_id\":16}',NULL,NULL,0,'',NULL,'2026-03-27 12:10:15'),(54,'SYSTEM','create_tracking','{\"order_id\":118,\"tracking_id\":17}',NULL,NULL,0,'',NULL,'2026-03-31 13:53:33'),(55,'SYSTEM','create_tracking','{\"order_id\":120,\"tracking_id\":18}',NULL,NULL,0,'',NULL,'2026-03-31 14:38:51'),(56,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your driver is on the way to your location.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-04-09 09:53:19'),(57,'SYSTEM','create_tracking','{\"order_id\":122,\"tracking_id\":19}',NULL,NULL,0,'',NULL,'2026-04-09 10:09:15'),(58,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your order delivery has been cancelled.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-04-10 08:37:33'),(59,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your order delivery has been cancelled.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-04-10 08:37:35'),(60,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your order delivery has been cancelled.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-04-10 08:37:39'),(61,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your order delivery has been cancelled.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-04-11 13:54:15'),(62,'SYSTEM','send_sms_failed','{\"phone\":\"09917471281\",\"message\":\"Your order delivery has been cancelled.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-04-11 13:54:20'),(63,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your order delivery has been cancelled.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-04-11 13:54:22'),(64,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your order delivery has been cancelled.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-04-11 13:54:25'),(65,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Sorry, the delivery could not be completed. Our team will contact you soon.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-04-11 13:55:02'),(66,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-08-05 14:18:20'),(67,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-08-06 09:40:21'),(68,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-08-12 09:05:58'),(69,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-08-25 16:25:52'),(70,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your driver is on the way to your location.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-08-25 16:30:52'),(71,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your driver is arriving soon. Please be ready.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-08-25 16:31:07'),(72,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your driver is arriving soon. Please be ready.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-08-25 16:31:08'),(73,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your driver is arriving soon. Please be ready.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-08-25 16:31:08'),(74,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-09-16 13:19:53'),(75,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"A driver has been assigned to your order.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-09-16 13:47:30'),(76,'SYSTEM','send_sms_failed','{\"phone\":\"09917471283\",\"message\":\"Your order delivery has been cancelled.\"}',NULL,NULL,0,'Twilio client not initialized or configured.',NULL,'2026-09-16 13:52:52');
+/*!40000 ALTER TABLE `logistics_api_logs` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `logistics_audit_log`
+--
+
+DROP TABLE IF EXISTS `logistics_audit_log`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `logistics_audit_log` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `tracking_id` int NOT NULL,
+  `order_id` int NOT NULL,
+  `action` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `actor_type` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `actor_id` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `old_value` text COLLATE utf8mb4_general_ci,
+  `new_value` text COLLATE utf8mb4_general_ci,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `logistics_audit_log`
+--
+
+LOCK TABLES `logistics_audit_log` WRITE;
+/*!40000 ALTER TABLE `logistics_audit_log` DISABLE KEYS */;
+INSERT INTO `logistics_audit_log` VALUES (1,4,99,'status_updated','system','18',NULL,'Status updated to: delivered','2026-03-17 07:30:03'),(2,5,100,'status_updated','system','18',NULL,'Status updated to: delivered','2026-03-17 13:23:10'),(3,5,100,'proof_delivered','employee','18',NULL,'POD submitted: good condition by asd','2026-03-17 13:23:10'),(4,6,101,'status_updated','system','18',NULL,'Status updated to: delivered','2026-03-17 13:38:24'),(5,6,101,'proof_delivered','employee','18',NULL,'POD submitted: good condition by asd','2026-03-17 13:38:24'),(6,7,102,'status_updated','system','19',NULL,'Status updated to: delivered','2026-03-17 13:58:33'),(7,7,102,'proof_delivered','employee','19',NULL,'POD submitted: good condition by asdasd','2026-03-17 13:58:33'),(8,8,104,'status_updated','system','19',NULL,'Status updated to: delivered','2026-03-23 17:05:37'),(9,8,104,'proof_delivered','employee','19',NULL,'POD submitted: good condition by asdsad','2026-03-23 17:05:37'),(10,10,106,'status_updated','system','19',NULL,'Status updated to: delivered','2026-03-23 17:46:54'),(11,10,106,'proof_delivered','employee','19',NULL,'POD submitted: good condition by asdasd','2026-03-23 17:46:54'),(12,11,107,'status_updated','system','19',NULL,'Status updated to: delivered','2026-03-23 17:54:35'),(13,11,107,'proof_delivered','employee','19',NULL,'POD submitted: good condition by adasd','2026-03-23 17:54:35'),(14,23,143,'status_updated','system','11',NULL,'Status updated to: delivered','2026-08-25 16:35:15'),(15,23,143,'proof_delivered','employee','11',NULL,'POD submitted: good condition by h','2026-08-25 16:35:15');
+/*!40000 ALTER TABLE `logistics_audit_log` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `logistics_issues`
+--
+
+DROP TABLE IF EXISTS `logistics_issues`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `logistics_issues` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `tracking_id` int NOT NULL,
+  `issue_type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `resolved` tinyint(1) NOT NULL DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `logistics_issues`
+--
+
+LOCK TABLES `logistics_issues` WRITE;
+/*!40000 ALTER TABLE `logistics_issues` DISABLE KEYS */;
+INSERT INTO `logistics_issues` VALUES (1,17,'cancellation','Admin cancelled',0,'2026-04-10 08:37:33','2026-04-10 08:37:33'),(2,16,'cancellation','Admin cancelled',0,'2026-04-10 08:37:35','2026-04-10 08:37:35'),(3,15,'cancellation','Admin cancelled',0,'2026-04-10 08:37:39','2026-04-10 08:37:39'),(4,19,'cancellation','Admin cancelled',0,'2026-04-11 13:54:15','2026-04-11 13:54:15'),(5,14,'cancellation','Admin cancelled',0,'2026-04-11 13:54:20','2026-04-11 13:54:20'),(6,13,'cancellation','Admin cancelled',0,'2026-04-11 13:54:22','2026-04-11 13:54:22'),(7,12,'cancellation','Admin cancelled',0,'2026-04-11 13:54:25','2026-04-11 13:54:25'),(8,25,'cancellation','Admin cancelled',0,'2026-09-16 13:52:52','2026-09-16 13:52:52');
+/*!40000 ALTER TABLE `logistics_issues` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `logistics_providers`
+--
+
+DROP TABLE IF EXISTS `logistics_providers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `logistics_providers` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `provider_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `api_key` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `api_secret` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `sandbox_mode` tinyint(1) DEFAULT '1',
+  `is_active` tinyint(1) DEFAULT '1',
+  `base_url` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `webhook_url` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `logistics_providers`
+--
+
+LOCK TABLES `logistics_providers` WRITE;
+/*!40000 ALTER TABLE `logistics_providers` DISABLE KEYS */;
+INSERT INTO `logistics_providers` VALUES (1,'In-House Delivery',NULL,NULL,1,1,NULL,NULL,'2026-01-22 16:01:26','2026-01-22 16:01:26'),(2,'FoodPanda',NULL,NULL,1,0,NULL,NULL,'2026-01-22 16:01:26','2026-01-22 16:01:26'),(3,'GrabFood',NULL,NULL,1,0,NULL,NULL,'2026-01-22 16:01:26','2026-01-22 16:01:26');
+/*!40000 ALTER TABLE `logistics_providers` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `logistics_tracking`
+--
+
+DROP TABLE IF EXISTS `logistics_tracking`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `logistics_tracking` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `order_id` int NOT NULL,
+  `tracking_number` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `logistics_provider_id` int DEFAULT NULL,
+  `delivery_method_id` int DEFAULT NULL,
+  `driver_id` int DEFAULT NULL,
+  `driver_name` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `driver_phone` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `driver_vehicle` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `current_status` varchar(50) COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `status_timestamp` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `pickup_time` datetime DEFAULT NULL,
+  `delivery_time` datetime DEFAULT NULL,
+  `estimated_delivery` datetime DEFAULT NULL,
+  `current_latitude` decimal(10,8) DEFAULT NULL,
+  `current_longitude` decimal(11,8) DEFAULT NULL,
+  `last_location_update` timestamp NULL DEFAULT NULL,
+  `special_instructions` text COLLATE utf8mb4_general_ci,
+  `external_tracking_id` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `external_tracking_url` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `total_distance_km` decimal(8,2) DEFAULT NULL,
+  `cost` decimal(10,2) DEFAULT NULL,
+  `proof_of_delivery_path` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `proof_of_delivery_timestamp` timestamp NULL DEFAULT NULL,
+  `customer_signature_path` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `customer_name_confirmed` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `delivery_notes` text COLLATE utf8mb4_general_ci,
+  `failed_reason` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `failed_timestamp` timestamp NULL DEFAULT NULL,
+  `attempts` int NOT NULL DEFAULT '0',
+  `last_attempt_timestamp` datetime DEFAULT NULL,
+  `automatic_assignment` tinyint(1) DEFAULT '0',
+  `notes` text COLLATE utf8mb4_general_ci,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=42 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `logistics_tracking`
+--
+
+LOCK TABLES `logistics_tracking` WRITE;
+/*!40000 ALTER TABLE `logistics_tracking` DISABLE KEYS */;
+INSERT INTO `logistics_tracking` VALUES (1,96,NULL,1,1,7,'asd asd','123123123','','assigned','2026-03-16 07:13:56',NULL,NULL,NULL,NULL,NULL,'2026-03-18 15:02:11','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-03-16 07:13:56','2026-03-18 15:02:11'),(2,97,NULL,1,1,11,'justine santos','12345678901','','cancelled','2026-03-16 07:33:10',NULL,NULL,NULL,NULL,NULL,'2026-03-17 07:41:19','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-03-16 07:33:10','2026-03-17 07:41:19'),(3,98,NULL,1,1,NULL,NULL,NULL,NULL,'cancelled','2026-03-16 09:08:45',NULL,NULL,NULL,NULL,NULL,'2026-03-17 07:35:34','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-03-16 09:08:45','2026-03-17 07:35:34'),(4,99,NULL,1,1,18,'justine budoy','09917471283','','delivered','2026-03-17 05:45:43',NULL,'2026-03-17 15:30:03',NULL,14.32470875,120.98059100,'2026-03-17 05:45:56','',NULL,NULL,NULL,NULL,'proof_of_delivery/POD_ORD-20260317-69B8EA7_eed154542951afbd8eab27b3d9628b5f.jpg','2026-03-17 07:30:03','proof_of_delivery/SIG_99_326ebd5da48a4166c162d1de20525c8a.png',NULL,NULL,NULL,NULL,0,NULL,0,'Condition: Good\nDriver Notes: asd','2026-03-17 05:45:43','2026-03-17 07:30:03'),(5,100,NULL,1,1,18,'justine budoy','09917471283','','delivered','2026-03-17 07:37:05',NULL,'2026-03-17 21:23:10',NULL,14.32470875,120.98059100,'2026-03-17 07:37:40','asd',NULL,NULL,NULL,NULL,'proof_of_delivery/POD_ORD-20260317-69B9049_5a87fa2fdc8ba8c05fc1702160473ca8.jpg','2026-03-17 13:23:10','proof_of_delivery/SIG_100_bc6c331d45ad1135059bab9dccbeaa8b.png',NULL,NULL,NULL,NULL,0,NULL,0,'Condition: Good\nDriver Notes: asd','2026-03-17 07:37:05','2026-03-17 13:23:10'),(6,101,NULL,1,1,18,'justine budoy','09917471283','','delivered','2026-03-17 13:37:23',NULL,'2026-03-17 21:38:24',NULL,14.32477650,120.98059100,'2026-03-17 13:38:07','',NULL,NULL,NULL,NULL,'proof_of_delivery/POD_ORD-20260317-69B958F_fc0ea574e74fb98dde2b4142489da3a2.jpg','2026-03-17 13:38:24','proof_of_delivery/SIG_101_d0d4ab947959f53a061c47aff0848c35.png',NULL,NULL,NULL,NULL,0,NULL,0,'Condition: Good\nDriver Notes: asd','2026-03-17 13:37:23','2026-03-17 13:38:24'),(7,102,NULL,1,1,19,'justine asdasd','09917471283','','delivered','2026-03-17 13:57:24',NULL,'2026-03-17 21:58:33',NULL,14.32478267,120.98060014,'2026-03-17 13:58:18','asd',NULL,NULL,NULL,NULL,'proof_of_delivery/POD_ORD-20260317-69B95DB_2dee74a68b354746aeb9bf27086c9d15.jpg','2026-03-17 13:58:33','proof_of_delivery/SIG_102_be808fc56da1f7584b62ae794c579e36.png',NULL,NULL,NULL,NULL,0,NULL,0,'Condition: Good\nDriver Notes: asdads','2026-03-17 13:57:24','2026-03-17 13:58:33'),(8,104,NULL,1,1,19,'justine asdasd','09917471283','','delivered','2026-03-23 17:04:16',NULL,'2026-03-24 01:05:37',NULL,14.32477625,120.98059450,'2026-03-23 17:05:23','',NULL,NULL,NULL,NULL,'proof_of_delivery/POD_ORD-20260324-69C1728_df42289d9a98a2b5c7b06d920ed63c0b.jpg','2026-03-23 17:05:37','proof_of_delivery/SIG_104_7bbfbf9e9feca90f1daf765dc8487381.png',NULL,NULL,NULL,NULL,0,NULL,0,'Condition: Good\nDriver Notes: asdasd','2026-03-23 17:04:16','2026-03-23 17:05:37'),(9,105,NULL,1,1,11,'justine santos','12345678901','','failed','2026-03-23 17:43:35',NULL,NULL,NULL,14.34000000,120.95000000,'2026-04-11 13:55:02','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-03-23 17:43:35','2026-04-11 13:55:02'),(10,106,NULL,1,1,19,'justine asdasd','09917471283','','delivered','2026-03-23 17:45:13',NULL,'2026-03-24 01:46:54',NULL,14.32477600,120.98059800,'2026-03-23 17:46:45','',NULL,NULL,NULL,NULL,'proof_of_delivery/POD_ORD-20260324-69C17C1_42c18f08828197dcf44819f98eb2f523.jpg','2026-03-23 17:46:54','proof_of_delivery/SIG_106_19d7ff1306c545505fff5d6c5ec1dc2b.png',NULL,NULL,NULL,NULL,0,NULL,0,'Condition: Good\nDriver Notes: asdasd','2026-03-23 17:45:13','2026-03-23 17:50:00'),(11,107,NULL,1,1,19,'justine asdasd','09917471283','','delivered','2026-03-23 17:53:03',NULL,'2026-03-24 01:54:35',NULL,14.32477600,120.98059800,'2026-03-23 17:54:30','',NULL,NULL,NULL,NULL,'proof_of_delivery/POD_ORD-20260324-69C17DF_37b38310fce4eab558d41c04847e8799.jpg','2026-03-23 17:54:35','proof_of_delivery/SIG_107_5d3556f8874d445d0e066613be4ac4f2.png',NULL,NULL,NULL,NULL,0,NULL,0,'Condition: Good\nDriver Notes: ads','2026-03-23 17:53:03','2026-03-23 17:54:35'),(12,108,NULL,1,1,19,'justine asdasd','09917471283','','cancelled','2026-03-23 18:02:14',NULL,NULL,NULL,14.32473751,120.98059722,'2026-04-11 13:54:25','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-03-23 18:02:14','2026-04-11 13:54:25'),(13,109,NULL,1,1,18,'justine budoy','09917471283','','cancelled','2026-03-23 18:07:14',NULL,NULL,NULL,NULL,NULL,'2026-04-11 13:54:22','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-03-23 18:07:14','2026-04-11 13:54:22'),(14,111,NULL,1,1,NULL,NULL,NULL,NULL,'cancelled','2026-03-25 17:36:39',NULL,NULL,NULL,NULL,NULL,'2026-04-11 13:54:20','asd\nDelivery Distance: 12.89 km',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-03-25 17:36:39','2026-04-11 13:54:20'),(15,113,NULL,1,1,NULL,NULL,NULL,NULL,'cancelled','2026-03-27 07:32:39',NULL,NULL,NULL,NULL,NULL,'2026-04-10 08:37:39','asd\nDelivery Distance: 12.89 km',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-03-27 07:32:39','2026-04-10 08:37:39'),(16,117,NULL,1,1,NULL,NULL,NULL,NULL,'cancelled','2026-03-27 12:10:15',NULL,NULL,NULL,NULL,NULL,'2026-04-10 08:37:35','asd\nDelivery Distance: 12.89 km',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-03-27 12:10:15','2026-04-10 08:37:35'),(17,118,NULL,1,1,NULL,NULL,NULL,NULL,'cancelled','2026-03-31 13:53:33',NULL,NULL,NULL,NULL,NULL,'2026-04-10 08:37:33','asd\nDelivery Distance: 12.89 km',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-03-31 13:53:33','2026-04-10 08:37:33'),(18,120,NULL,1,1,NULL,NULL,NULL,NULL,'cancelled','2026-03-31 14:38:51',NULL,NULL,NULL,NULL,NULL,NULL,'asd\nDelivery Distance: 12.89 km',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-03-31 14:38:51','2026-04-10 08:01:31'),(19,122,NULL,1,1,NULL,NULL,NULL,NULL,'cancelled','2026-04-09 10:09:15',NULL,NULL,NULL,NULL,NULL,'2026-04-11 13:54:15','asd\nDelivery Distance: 12.89 km',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-04-09 10:09:15','2026-04-11 13:54:15'),(20,139,NULL,1,1,18,'justine budoy','09917471283','','assigned','2026-08-05 14:18:20',NULL,NULL,NULL,NULL,NULL,'2026-08-05 14:18:20','Nearest fulfillment store: Alabang Branch | Delivery Distance: 12.88 km | Estimated delivery: 55 - 70 minutes',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-08-05 14:18:20','2026-08-05 14:18:20'),(21,140,NULL,1,1,19,'justine asdasd','09917471283','','assigned','2026-08-06 09:40:21',NULL,NULL,NULL,NULL,NULL,'2026-08-06 09:40:21','Nearest fulfillment store: Alabang Branch | Delivery Distance: 12.88 km | Estimated delivery: 55 - 70 minutes',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-08-06 09:40:21','2026-08-06 09:40:21'),(22,141,NULL,1,1,7,'asd asd','123123123','','assigned','2026-08-12 09:05:58',NULL,NULL,NULL,NULL,NULL,'2026-08-12 09:05:58','Nearest fulfillment store: Quezon City Branch | Delivery Distance: 13,334.66 km | Estimated delivery: 32025 - 32040 minutes',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-08-12 09:05:58','2026-08-12 09:05:58'),(23,143,NULL,1,1,11,'justine santos','12345678901','','delivered','2026-08-25 16:25:52',NULL,'2026-08-26 00:35:15',NULL,14.32473526,120.98055876,'2026-08-25 16:34:13','Nearest fulfillment store: Alabang Branch | Delivery Distance: 112.52 km | Estimated delivery: 295 - 310 minutes',NULL,NULL,NULL,NULL,'proof_of_delivery/POD_ORD-20260826-1E51E9_a8b9fee1d6971f8e72ac128a74042a99.png','2026-08-25 16:35:15','proof_of_delivery/SIG_143_ad9ee65614b65cb35dbf6f753804a1ef.png',NULL,NULL,NULL,NULL,0,NULL,0,'Condition: Good\nDriver Notes: ;l','2026-08-25 16:25:52','2026-08-25 16:35:15'),(24,147,NULL,1,1,18,'justine budoy','09917471283','','assigned','2026-09-16 13:19:52',NULL,NULL,NULL,14.32496700,120.98060800,'2026-09-16 13:19:53','Nearest fulfillment store: Dasmariñas Branch | Delivery Distance: 4.76 km | Estimated delivery: 35 - 50 minutes',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-09-16 13:19:52','2026-09-16 13:19:53'),(25,148,NULL,1,1,7,'asd asd','123123123','','cancelled','2026-09-16 13:47:30',NULL,NULL,NULL,14.32496700,120.98060800,'2026-09-16 13:52:52','Nearest fulfillment store: Dasmariñas Branch | Delivery Distance: 4.76 km | Estimated delivery: 35 - 50 minutes',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-09-16 13:47:30','2026-09-16 13:52:52'),(26,26,'TRK-26',NULL,NULL,5,'justine santos','09917471283','Honda Click 125i','arrived_at_restaurant','2026-09-24 08:18:31',NULL,NULL,NULL,14.32470550,120.98057050,'2026-09-24 08:18:38',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-09-24 08:18:11','2026-09-24 08:18:38'),(27,27,'TRK-27',NULL,NULL,5,'justine santos','09917471283','Honda Click 125i','arrived_at_restaurant','2026-09-24 08:19:04',NULL,NULL,NULL,14.32470550,120.98057050,'2026-09-24 08:19:19',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-09-24 08:18:47','2026-09-24 08:19:19'),(28,31,'TRK-31',NULL,NULL,5,'justine santos','09917471283','Honda Click 125i','arrived_at_restaurant','2026-09-24 08:25:40',NULL,NULL,NULL,14.32470550,120.98057050,'2026-09-24 08:25:56',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-09-24 08:19:38','2026-09-24 08:25:56'),(29,32,'TRK-32',NULL,NULL,5,'justine santos','09917471283','Honda Click 125i','arrived_at_restaurant','2026-09-24 08:28:36',NULL,NULL,NULL,14.32470550,120.98057050,'2026-09-24 08:28:44',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-09-24 08:28:24','2026-09-24 08:28:44'),(30,39,'TRK-39',NULL,NULL,5,'justine santos','09917471283','Honda Click 125i','assigned','2026-09-24 08:28:45',NULL,NULL,NULL,14.32470550,120.98057050,'2026-09-24 08:28:46',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-09-24 08:28:45','2026-09-24 08:28:46'),(31,40,'TRK-40',NULL,NULL,5,'justine santos','09917471283','Honda Click 125i','assigned','2026-09-24 08:28:47',NULL,NULL,NULL,14.32470550,120.98057050,'2026-09-24 08:28:47',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-09-24 08:28:47','2026-09-24 08:28:47'),(32,44,'TRK-44',NULL,NULL,5,'justine santos','09917471283','Honda Click 125i','assigned','2026-09-24 08:28:51',NULL,NULL,NULL,14.32477800,120.98058300,'2026-09-24 08:31:05',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-09-24 08:28:51','2026-09-24 08:31:05'),(33,46,'TRK-46',NULL,NULL,5,'justine santos','09917471283','Honda Click 125i','arrived_at_restaurant','2026-09-24 09:49:49',NULL,NULL,NULL,14.32470550,120.98057050,'2026-09-24 09:49:57',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-09-24 08:31:06','2026-09-24 09:49:57'),(34,52,'TRK-52',NULL,NULL,5,'justine santos','09917471283','Honda Click 125i','assigned','2026-09-24 09:49:58',NULL,NULL,NULL,14.32470550,120.98057050,'2026-09-24 09:53:27',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-09-24 09:49:58','2026-09-24 09:53:27'),(35,149,NULL,1,1,5,'justine santos','09917471283','Honda Click 125i','arrived_at_restaurant','2026-09-24 09:57:04',NULL,NULL,NULL,14.32470550,120.98057050,'2026-09-24 09:59:39','Nearest fulfillment store: jm lechon | Delivery Distance: 2.58 km | Estimated delivery: 30 - 45 minutes',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-09-24 09:52:33','2026-09-24 09:59:39'),(36,60,'TRK-60',NULL,NULL,5,'justine santos','09917471283','Honda Click 125i','assigned','2026-09-24 10:00:33',NULL,NULL,NULL,14.32470550,120.98057050,'2026-09-24 10:00:35',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-09-24 10:00:33','2026-09-24 10:00:35'),(37,64,'TRK-64',NULL,NULL,5,'justine santos','09917471283','Honda Click 125i','delivered','2026-09-24 15:22:43','2026-09-24 23:05:10','2026-09-24 23:52:54',NULL,14.32470550,120.98057050,'2026-09-24 15:22:38',NULL,NULL,NULL,NULL,NULL,'uploads/proof_of_delivery/POD_64_1790265174_dd90d66ab5.jpg','2026-09-24 15:52:54',NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-09-24 10:00:36','2026-09-24 15:52:54'),(38,66,'TRK-66',NULL,NULL,5,'justine santos','09917471283','Honda Click 125i','delivered','2026-09-24 10:23:07','2026-09-24 18:23:01','2026-09-24 23:03:49',NULL,14.32470550,120.98057050,'2026-09-24 15:03:41',NULL,NULL,NULL,NULL,NULL,'uploads/proof_of_delivery/POD_66_1790262229_f35ccc2840.png','2026-09-24 15:03:49',NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-09-24 10:00:38','2026-09-24 15:03:49'),(39,150,NULL,1,1,5,'justine santos','09917471283','Honda Click 125i','delivered','2026-09-24 15:28:17','2026-09-24 23:28:20','2026-09-24 23:28:27',NULL,14.32437190,120.97728250,NULL,'Nearest fulfillment store: jm lechon | Delivery Distance: 2.58 km | Estimated delivery: 30 - 45 minutes',NULL,NULL,NULL,NULL,'uploads/proof_of_delivery/POD_150_1790263707_019e56ae20.jpg','2026-09-24 15:28:27',NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-09-24 15:27:09','2026-09-24 15:28:27'),(40,151,NULL,1,1,NULL,NULL,NULL,NULL,'pending','2026-09-24 16:49:26',NULL,NULL,NULL,14.32436220,120.97727640,NULL,'Nearest fulfillment store: jm lechon | Delivery Distance: 2.58 km | Estimated delivery: 30 - 45 minutes',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(41,152,NULL,1,1,5,'justine santos','09917471283','Honda Click 125i','delivered','2026-09-24 16:50:40','2026-09-25 00:50:45','2026-09-25 00:51:08',NULL,14.32436220,120.97727640,NULL,'Nearest fulfillment store: jm lechon | Delivery Distance: 2.58 km | Estimated delivery: 30 - 45 minutes',NULL,NULL,NULL,NULL,'uploads/proof_of_delivery/POD_152_1790268668_e5d1cfe26a.jpg','2026-09-24 16:51:08',NULL,NULL,NULL,NULL,NULL,0,NULL,0,NULL,'2026-09-24 16:50:00','2026-09-24 16:51:08');
+/*!40000 ALTER TABLE `logistics_tracking` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `logistics_tracking_history`
+--
+
+DROP TABLE IF EXISTS `logistics_tracking_history`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `logistics_tracking_history` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `tracking_id` int NOT NULL,
+  `status` varchar(50) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'pending',
+  `status_description` text COLLATE utf8mb4_general_ci,
+  `latitude` decimal(10,8) DEFAULT NULL,
+  `longitude` decimal(11,8) DEFAULT NULL,
+  `proof_path` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'File path for proof associated with this history entry',
+  `timestamp` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `external_event_id` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=119 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `logistics_tracking_history`
+--
+
+LOCK TABLES `logistics_tracking_history` WRITE;
+/*!40000 ALTER TABLE `logistics_tracking_history` DISABLE KEYS */;
+INSERT INTO `logistics_tracking_history` VALUES (1,1,'assigned','Driver asd asd assigned',NULL,NULL,NULL,'2026-03-16 07:13:56',NULL,'2026-03-16 07:13:56'),(2,2,'assigned','Driver justine santos assigned',NULL,NULL,NULL,'2026-03-16 07:33:10',NULL,'2026-03-16 07:33:10'),(3,4,'assigned','Driver justine budoy assigned',NULL,NULL,NULL,'2026-03-17 05:45:43',NULL,'2026-03-17 05:45:43'),(4,4,'on_the_way','',NULL,NULL,NULL,'2026-03-17 05:45:54',NULL,'2026-03-17 05:45:54'),(5,4,'arriving','',NULL,NULL,NULL,'2026-03-17 05:45:56',NULL,'2026-03-17 05:45:56'),(6,4,'delivered','',NULL,NULL,NULL,'2026-03-17 07:30:03',NULL,'2026-03-17 07:30:03'),(7,3,'cancelled','Cancellation Reason: Admin cancelled',NULL,NULL,NULL,'2026-03-17 07:35:34',NULL,'2026-03-17 07:35:34'),(8,5,'assigned','Driver justine budoy assigned',NULL,NULL,NULL,'2026-03-17 07:37:05',NULL,'2026-03-17 07:37:05'),(9,5,'on_the_way','',NULL,NULL,NULL,'2026-03-17 07:37:38',NULL,'2026-03-17 07:37:38'),(10,5,'arriving','',NULL,NULL,NULL,'2026-03-17 07:37:40',NULL,'2026-03-17 07:37:40'),(11,2,'cancelled','Cancellation Reason: Admin cancelled',NULL,NULL,NULL,'2026-03-17 07:41:19',NULL,'2026-03-17 07:41:19'),(12,5,'delivered','',NULL,NULL,NULL,'2026-03-17 13:23:10',NULL,'2026-03-17 13:23:10'),(13,6,'assigned','Driver justine budoy assigned',NULL,NULL,NULL,'2026-03-17 13:37:24',NULL,'2026-03-17 13:37:24'),(14,6,'on_the_way','',NULL,NULL,NULL,'2026-03-17 13:38:05',NULL,'2026-03-17 13:38:05'),(15,6,'arriving','',NULL,NULL,NULL,'2026-03-17 13:38:07',NULL,'2026-03-17 13:38:07'),(16,6,'delivered','',NULL,NULL,NULL,'2026-03-17 13:38:24',NULL,'2026-03-17 13:38:24'),(17,7,'assigned','Driver justine asdasd assigned',NULL,NULL,NULL,'2026-03-17 13:57:24',NULL,'2026-03-17 13:57:24'),(18,7,'on_the_way','',NULL,NULL,NULL,'2026-03-17 13:58:15',NULL,'2026-03-17 13:58:15'),(19,7,'arriving','',NULL,NULL,NULL,'2026-03-17 13:58:18',NULL,'2026-03-17 13:58:18'),(20,7,'delivered','',NULL,NULL,NULL,'2026-03-17 13:58:33',NULL,'2026-03-17 13:58:33'),(21,1,'assigned','Driver justine budoy assigned',NULL,NULL,NULL,'2026-03-18 14:49:42',NULL,'2026-03-18 14:49:42'),(22,1,'assigned','Driver justine budoy assigned',NULL,NULL,NULL,'2026-03-18 14:51:22',NULL,'2026-03-18 14:51:22'),(23,1,'assigned','Driver justine asdasd assigned',NULL,NULL,NULL,'2026-03-18 14:51:39',NULL,'2026-03-18 14:51:39'),(24,1,'assigned','Driver justine budoy assigned',NULL,NULL,NULL,'2026-03-18 14:59:50',NULL,'2026-03-18 14:59:50'),(25,1,'assigned','Driver justine asdasd assigned',NULL,NULL,NULL,'2026-03-18 15:00:01',NULL,'2026-03-18 15:00:01'),(26,1,'assigned','Driver justine asdasd assigned',NULL,NULL,NULL,'2026-03-18 15:02:05',NULL,'2026-03-18 15:02:05'),(27,1,'assigned','Driver asd asd assigned',NULL,NULL,NULL,'2026-03-18 15:02:11',NULL,'2026-03-18 15:02:11'),(28,8,'assigned','Driver justine asdasd assigned',NULL,NULL,NULL,'2026-03-23 17:04:16',NULL,'2026-03-23 17:04:16'),(29,8,'on_the_way','',NULL,NULL,NULL,'2026-03-23 17:05:12',NULL,'2026-03-23 17:05:12'),(30,8,'arriving','',NULL,NULL,NULL,'2026-03-23 17:05:23',NULL,'2026-03-23 17:05:23'),(31,8,'delivered','',NULL,NULL,NULL,'2026-03-23 17:05:37',NULL,'2026-03-23 17:05:37'),(32,9,'assigned','Driver justine santos assigned',NULL,NULL,NULL,'2026-03-23 17:43:35',NULL,'2026-03-23 17:43:35'),(33,10,'assigned','Driver justine asdasd assigned',NULL,NULL,NULL,'2026-03-23 17:45:13',NULL,'2026-03-23 17:45:13'),(34,10,'on_the_way','',NULL,NULL,NULL,'2026-03-23 17:46:11',NULL,'2026-03-23 17:46:11'),(35,10,'arriving','',14.32473751,120.98059722,NULL,'2026-03-23 17:46:16',NULL,'2026-03-23 17:46:16'),(36,10,'delivered','',NULL,NULL,NULL,'2026-03-23 17:46:54',NULL,'2026-03-23 17:46:54'),(37,11,'assigned','Driver justine asdasd assigned',NULL,NULL,NULL,'2026-03-23 17:53:03',NULL,'2026-03-23 17:53:03'),(38,11,'on_the_way','',14.32473751,120.98059722,NULL,'2026-03-23 17:53:42',NULL,'2026-03-23 17:53:42'),(39,11,'arriving','',NULL,NULL,NULL,'2026-03-23 17:54:30',NULL,'2026-03-23 17:54:30'),(40,11,'delivered','',NULL,NULL,NULL,'2026-03-23 17:54:35',NULL,'2026-03-23 17:54:35'),(41,12,'assigned','Driver justine asdasd assigned',NULL,NULL,NULL,'2026-03-23 18:02:14',NULL,'2026-03-23 18:02:14'),(42,13,'assigned','Driver justine budoy assigned',NULL,NULL,NULL,'2026-03-23 18:07:14',NULL,'2026-03-23 18:07:14'),(43,12,'on_the_way','',14.32473117,120.98059333,NULL,'2026-03-23 18:17:19',NULL,'2026-03-23 18:17:19'),(44,12,'on_the_way','',14.32473117,120.98059333,NULL,'2026-03-23 18:17:19',NULL,'2026-03-23 18:17:19'),(45,9,'on_the_way','',NULL,NULL,NULL,'2026-04-09 09:53:18',NULL,'2026-04-09 09:53:18'),(46,17,'cancelled','Cancellation Reason: Admin cancelled',NULL,NULL,NULL,'2026-04-10 08:37:33',NULL,'2026-04-10 08:37:33'),(47,16,'cancelled','Cancellation Reason: Admin cancelled',NULL,NULL,NULL,'2026-04-10 08:37:35',NULL,'2026-04-10 08:37:35'),(48,15,'cancelled','Cancellation Reason: Admin cancelled',NULL,NULL,NULL,'2026-04-10 08:37:39',NULL,'2026-04-10 08:37:39'),(49,19,'cancelled','Cancellation Reason: Admin cancelled',NULL,NULL,NULL,'2026-04-11 13:54:15',NULL,'2026-04-11 13:54:15'),(50,14,'cancelled','Cancellation Reason: Admin cancelled',NULL,NULL,NULL,'2026-04-11 13:54:20',NULL,'2026-04-11 13:54:20'),(51,13,'cancelled','Cancellation Reason: Admin cancelled',NULL,NULL,NULL,'2026-04-11 13:54:22',NULL,'2026-04-11 13:54:22'),(52,12,'cancelled','Cancellation Reason: Admin cancelled',NULL,NULL,NULL,'2026-04-11 13:54:25',NULL,'2026-04-11 13:54:25'),(53,9,'failed','aa',NULL,NULL,NULL,'2026-04-11 13:55:02',NULL,'2026-04-11 13:55:02'),(54,20,'assigned','Driver justine budoy assigned',NULL,NULL,NULL,'2026-08-05 14:18:20',NULL,'2026-08-05 14:18:20'),(55,21,'assigned','Driver justine asdasd assigned',NULL,NULL,NULL,'2026-08-06 09:40:21',NULL,'2026-08-06 09:40:21'),(56,22,'assigned','Driver asd asd assigned',NULL,NULL,NULL,'2026-08-12 09:05:58',NULL,'2026-08-12 09:05:58'),(57,23,'assigned','Driver justine santos assigned',NULL,NULL,NULL,'2026-08-25 16:25:52',NULL,'2026-08-25 16:25:52'),(58,23,'on_the_way','',NULL,NULL,NULL,'2026-08-25 16:30:52',NULL,'2026-08-25 16:30:52'),(59,23,'arriving','',NULL,NULL,NULL,'2026-08-25 16:31:07',NULL,'2026-08-25 16:31:07'),(60,23,'arriving','',14.32469334,120.98056699,NULL,'2026-08-25 16:31:08',NULL,'2026-08-25 16:31:08'),(61,23,'arriving','',14.32469334,120.98056699,NULL,'2026-08-25 16:31:08',NULL,'2026-08-25 16:31:08'),(62,23,'delivered','',NULL,NULL,NULL,'2026-08-25 16:35:15',NULL,'2026-08-25 16:35:15'),(63,24,'assigned','Driver justine budoy assigned',NULL,NULL,NULL,'2026-09-16 13:19:53',NULL,'2026-09-16 13:19:53'),(64,25,'assigned','Driver asd asd assigned',NULL,NULL,NULL,'2026-09-16 13:47:30',NULL,'2026-09-16 13:47:30'),(65,25,'cancelled','Cancellation Reason: Admin cancelled',NULL,NULL,NULL,'2026-09-16 13:52:52',NULL,'2026-09-16 13:52:52'),(66,26,'assigned','Delivery accepted by rider',NULL,NULL,NULL,'2026-09-24 08:18:11',NULL,'2026-09-24 08:18:11'),(67,26,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 08:18:17',NULL,'2026-09-24 08:18:17'),(68,26,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 08:18:21',NULL,'2026-09-24 08:18:21'),(69,26,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 08:18:31',NULL,'2026-09-24 08:18:31'),(70,27,'assigned','Delivery accepted by rider',NULL,NULL,NULL,'2026-09-24 08:18:47',NULL,'2026-09-24 08:18:47'),(71,27,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 08:18:49',NULL,'2026-09-24 08:18:49'),(72,27,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 08:18:53',NULL,'2026-09-24 08:18:53'),(73,27,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 08:19:04',NULL,'2026-09-24 08:19:04'),(74,28,'assigned','Delivery accepted by rider',NULL,NULL,NULL,'2026-09-24 08:19:38',NULL,'2026-09-24 08:19:38'),(75,28,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 08:19:42',NULL,'2026-09-24 08:19:42'),(76,28,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 08:20:51',NULL,'2026-09-24 08:20:51'),(77,28,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 08:20:53',NULL,'2026-09-24 08:20:53'),(78,28,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 08:20:55',NULL,'2026-09-24 08:20:55'),(79,28,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 08:25:01',NULL,'2026-09-24 08:25:01'),(80,28,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 08:25:12',NULL,'2026-09-24 08:25:12'),(81,28,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 08:25:40',NULL,'2026-09-24 08:25:40'),(82,29,'assigned','Delivery accepted by rider',NULL,NULL,NULL,'2026-09-24 08:28:24',NULL,'2026-09-24 08:28:24'),(83,29,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 08:28:32',NULL,'2026-09-24 08:28:32'),(84,29,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 08:28:34',NULL,'2026-09-24 08:28:34'),(85,29,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 08:28:36',NULL,'2026-09-24 08:28:36'),(86,30,'assigned','Delivery accepted by rider',NULL,NULL,NULL,'2026-09-24 08:28:45',NULL,'2026-09-24 08:28:45'),(87,31,'assigned','Delivery accepted by rider',NULL,NULL,NULL,'2026-09-24 08:28:47',NULL,'2026-09-24 08:28:47'),(88,32,'assigned','Delivery accepted by rider',NULL,NULL,NULL,'2026-09-24 08:28:51',NULL,'2026-09-24 08:28:51'),(89,33,'assigned','Delivery accepted by rider',NULL,NULL,NULL,'2026-09-24 08:31:06',NULL,'2026-09-24 08:31:06'),(90,33,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 08:33:49',NULL,'2026-09-24 08:33:49'),(91,33,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 08:54:36',NULL,'2026-09-24 08:54:36'),(92,33,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 09:49:49',NULL,'2026-09-24 09:49:49'),(93,34,'assigned','Delivery accepted by rider',NULL,NULL,NULL,'2026-09-24 09:49:58',NULL,'2026-09-24 09:49:58'),(94,35,'assigned','Delivery accepted by rider',NULL,NULL,NULL,'2026-09-24 09:53:32',NULL,'2026-09-24 09:53:32'),(95,35,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 09:53:34',NULL,'2026-09-24 09:53:34'),(96,35,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 09:55:47',NULL,'2026-09-24 09:55:47'),(97,35,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 09:57:04',NULL,'2026-09-24 09:57:04'),(98,36,'assigned','Delivery accepted by rider',NULL,NULL,NULL,'2026-09-24 10:00:33',NULL,'2026-09-24 10:00:33'),(99,37,'assigned','Delivery accepted by rider',NULL,NULL,NULL,'2026-09-24 10:00:36',NULL,'2026-09-24 10:00:36'),(100,38,'assigned','Delivery accepted by rider',NULL,NULL,NULL,'2026-09-24 10:00:38',NULL,'2026-09-24 10:00:38'),(101,38,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 10:00:40',NULL,'2026-09-24 10:00:40'),(102,38,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 10:01:53',NULL,'2026-09-24 10:01:53'),(103,38,'picked_up','Rider confirmed pickup from restaurant',NULL,NULL,NULL,'2026-09-24 10:23:01',NULL,'2026-09-24 10:23:01'),(104,38,'arriving','Arrived At Customer',NULL,NULL,NULL,'2026-09-24 10:23:07',NULL,'2026-09-24 10:23:07'),(105,38,'delivered','Order successfully delivered to customer with photo proof',NULL,NULL,'uploads/proof_of_delivery/POD_66_1790262229_f35ccc2840.png','2026-09-24 15:03:49',NULL,'2026-09-24 15:03:49'),(106,37,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 15:03:54',NULL,'2026-09-24 15:03:54'),(107,37,'picked_up','Rider confirmed pickup from restaurant',NULL,NULL,NULL,'2026-09-24 15:05:10',NULL,'2026-09-24 15:05:10'),(108,37,'arriving','Arrived At Customer',NULL,NULL,NULL,'2026-09-24 15:22:39',NULL,'2026-09-24 15:22:39'),(109,37,'arriving','Arrived At Customer',NULL,NULL,NULL,'2026-09-24 15:22:43',NULL,'2026-09-24 15:22:43'),(110,39,'assigned','Delivery accepted by rider',NULL,NULL,NULL,'2026-09-24 15:28:15',NULL,'2026-09-24 15:28:15'),(111,39,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 15:28:17',NULL,'2026-09-24 15:28:17'),(112,39,'picked_up','Rider confirmed pickup from restaurant',NULL,NULL,NULL,'2026-09-24 15:28:20',NULL,'2026-09-24 15:28:20'),(113,39,'delivered','Order successfully delivered to customer with photo proof',NULL,NULL,'uploads/proof_of_delivery/POD_150_1790263707_019e56ae20.jpg','2026-09-24 15:28:27',NULL,'2026-09-24 15:28:27'),(114,37,'delivered','Order successfully delivered to customer with photo proof',NULL,NULL,'uploads/proof_of_delivery/POD_64_1790265174_dd90d66ab5.jpg','2026-09-24 15:52:54',NULL,'2026-09-24 15:52:54'),(115,41,'assigned','Delivery accepted by rider',NULL,NULL,NULL,'2026-09-24 16:50:38',NULL,'2026-09-24 16:50:38'),(116,41,'arrived_at_restaurant','Arrived At Restaurant',NULL,NULL,NULL,'2026-09-24 16:50:40',NULL,'2026-09-24 16:50:40'),(117,41,'picked_up','Rider confirmed pickup from restaurant',NULL,NULL,NULL,'2026-09-24 16:50:45',NULL,'2026-09-24 16:50:45'),(118,41,'delivered','Order successfully delivered to customer with photo proof',NULL,NULL,'uploads/proof_of_delivery/POD_152_1790268668_e5d1cfe26a.jpg','2026-09-24 16:51:08',NULL,'2026-09-24 16:51:08');
+/*!40000 ALTER TABLE `logistics_tracking_history` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `materials`
+--
+
+DROP TABLE IF EXISTS `materials`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `materials` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `unit` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
+  `current_stock` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `min_level` decimal(10,2) NOT NULL DEFAULT '10.00',
+  `cost_per_unit` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `last_updated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `materials`
+--
+
+LOCK TABLES `materials` WRITE;
+/*!40000 ALTER TABLE `materials` DISABLE KEYS */;
+INSERT INTO `materials` VALUES (3,'asd','100',9.00,10.00,10.00,'2026-02-26 14:42:16');
+/*!40000 ALTER TABLE `materials` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `notifications`
+--
+
+DROP TABLE IF EXISTS `notifications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `notifications` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `type` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `title` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `message` text COLLATE utf8mb4_general_ci NOT NULL,
+  `related_id` int DEFAULT NULL,
+  `related_type` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `is_read` tinyint(1) DEFAULT '0',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=682 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `notifications`
+--
+
+LOCK TABLES `notifications` WRITE;
+/*!40000 ALTER TABLE `notifications` DISABLE KEYS */;
+INSERT INTO `notifications` VALUES (5,8,'franchise_rejected','Franchise Application Update','Your franchise application has been reviewed. Feedback: bad...',5,'franchise_application',1,'2026-01-20 14:00:24','2026-01-20 14:03:38'),(6,8,'franchise_rejected','Franchise Application Update','Your franchise application has been reviewed. Feedback: bad...',5,'franchise_application',1,'2026-01-20 14:00:26','2026-01-20 14:00:52'),(7,8,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Linda2 has been approved. Our team will contact you shortly.',6,'franchise_application',1,'2026-01-20 14:03:11','2026-01-20 14:03:38'),(8,8,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Linda2 has been approved. Our team will contact you shortly.',6,'franchise_application',1,'2026-01-20 14:03:13','2026-01-20 14:03:38'),(13,1,'order','Order Status Update','Your order #001 has been confirmed and is being prepared!',NULL,'order',0,'2026-01-22 17:12:34','2026-01-22 17:12:34'),(14,9,'order_preparing','Order Being Prepared','Your order #ORD-20260122-6971CE3 is now being prepared.',26,'order',1,'2026-01-22 17:19:42','2026-01-22 17:21:57'),(15,9,'preorder_confirmed','Pre-Order Confirmed','Your pre-order for Dinuguan (1 kg) has been confirmed!',6,'pre_order',1,'2026-01-22 17:20:45','2026-01-22 17:21:57'),(16,9,'preorder_confirmed','Pre-Order Confirmed','Your pre-order for Dinuguan (1 kg) has been confirmed!',6,'pre_order',1,'2026-01-22 17:20:49','2026-01-22 17:21:57'),(17,9,'preorder_confirmed','Pre-Order Confirmed','Your pre-order for Whole Lechon (10-12 kg) has been confirmed!',3,'pre_order',1,'2026-01-22 17:20:53','2026-01-22 17:21:57'),(18,9,'preorder_confirmed','Pre-Order Confirmed','Your pre-order for Whole Lechon (10-12 kg) has been confirmed!',3,'pre_order',1,'2026-01-22 17:20:54','2026-01-22 17:21:57'),(19,9,'preorder_in_preparation','Pre-Order Being Prepared','Your pre-order for Whole Lechon (10-12 kg) is now being prepared.',2,'pre_order',1,'2026-01-22 19:08:36','2026-01-27 16:23:14'),(20,6,'franchise_rejected','Franchise Application Update','Your franchise application has been reviewed. Feedback: bad...',12,'franchise_application',1,'2026-01-23 06:58:25','2026-01-23 06:58:54'),(24,10,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Lydias has been approved. Our team will contact you shortly.',16,'franchise_application',1,'2026-01-26 07:04:47','2026-01-26 07:55:15'),(25,11,'franchise_rejected','Franchise Application Update','Your franchise application has been reviewed. Feedback: bad...',17,'franchise_application',1,'2026-01-27 11:59:37','2026-01-27 12:00:04'),(26,11,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Linda has been approved. Our team will contact you shortly.',18,'franchise_application',1,'2026-01-27 12:00:52','2026-01-27 12:01:27'),(27,9,'preorder_in_preparation','Pre-Order Being Prepared','Your pre-order for Whole Lechon (10-12 kg) is now being prepared.',1,'pre_order',1,'2026-01-27 13:11:42','2026-01-27 16:23:14'),(28,9,'preorder_confirmed','Pre-Order Confirmed','Your pre-order for Linda Lechon tie has been confirmed!',16,'pre_order',1,'2026-01-27 14:57:52','2026-01-27 16:23:14'),(29,9,'preorder_completed','Pre-Order Completed','Your pre-order for Dinuguan (1 kg) has been completed. Thank you!',25,'pre_order',1,'2026-01-28 07:07:19','2026-02-16 18:11:36'),(30,9,'preorder_completed','Pre-Order Completed','Your pre-order for Dinuguan (1 kg) has been completed. Thank you!',25,'pre_order',1,'2026-01-28 07:07:25','2026-02-16 18:11:36'),(31,9,'preorder_completed','Pre-Order Completed','Your pre-order for Dinuguan (1 kg) has been completed. Thank you!',25,'pre_order',1,'2026-01-28 07:07:27','2026-02-16 18:11:36'),(32,9,'preorder_completed','Pre-Order Completed','Your pre-order for Dinuguan (1 kg) has been completed. Thank you!',24,'pre_order',1,'2026-01-28 07:07:30','2026-02-16 18:11:36'),(33,9,'order_preparing','Order Being Prepared','Your order #ORD-20260129-697B17D is now being prepared.',33,'order',1,'2026-01-30 07:18:46','2026-02-16 18:11:36'),(34,9,'order_preparing','Order Being Prepared','Your order #ORD-20260128-6979B65 is now being prepared.',32,'order',1,'2026-01-30 07:18:49','2026-02-16 18:11:36'),(35,9,'order_confirmed','Order Confirmed','Your order #ORD-20260128-6978E69 has been confirmed and will be prepared soon!',31,'order',1,'2026-01-30 07:18:50','2026-02-16 18:11:36'),(36,9,'order_cancelled','Order Cancelled','Your order #ORD-20260122-6972493 has been cancelled.',28,'order',1,'2026-01-30 07:18:55','2026-02-16 18:11:36'),(37,9,'order_confirmed','Order Confirmed','Your order #ORD-20260129-697B17D has been confirmed and will be prepared soon!',33,'order',1,'2026-01-30 07:54:22','2026-02-16 18:11:36'),(38,9,'order_cancelled','Order Cancelled','Your order #ORD-20260129-697B17D has been cancelled.',33,'order',1,'2026-01-30 07:54:29','2026-02-16 18:11:36'),(39,9,'order_confirmed','Order Confirmed','Your order #ORD-20260129-697B17D has been confirmed and will be prepared soon!',33,'order',1,'2026-01-30 07:54:34','2026-02-16 18:11:36'),(40,9,'preorder_confirmed','Pre-Order Confirmed','Your pre-order for Dinuguan (1 kg) has been confirmed!',23,'pre_order',1,'2026-01-30 08:56:20','2026-02-16 18:11:36'),(41,9,'preorder_ready_for_pickup','Pre-Order Ready for Pickup','Your pre-order for Dinuguan (1 kg) is ready for pickup!',22,'pre_order',1,'2026-02-01 11:11:22','2026-02-16 18:11:36'),(42,9,'preorder_in_preparation','Pre-Order Being Prepared','Your pre-order for Whole Lechon (10-12 kg) is now being prepared.',28,'pre_order',1,'2026-02-01 11:12:09','2026-02-16 18:11:36'),(43,9,'preorder_ready_for_pickup','Pre-Order Ready for Pickup','Your pre-order for Whole Lechon (10-12 kg) is ready for pickup!',28,'pre_order',1,'2026-02-01 11:28:57','2026-02-16 18:11:36'),(44,9,'preorder_completed','Pre-Order Completed','Your pre-order for Whole Lechon (10-12 kg) has been completed. Thank you!',28,'pre_order',1,'2026-02-01 11:29:15','2026-02-16 18:11:36'),(45,9,'preorder_completed','Pre-Order Completed','Your pre-order for Whole Lechon (10-12 kg) has been completed. Thank you!',28,'pre_order',1,'2026-02-01 11:29:19','2026-02-16 18:11:36'),(46,9,'preorder_in_preparation','Pre-Order Being Prepared','Your pre-order for Whole Lechon (10-12 kg) is now being prepared.',28,'pre_order',1,'2026-02-01 11:30:34','2026-02-16 18:11:36'),(47,9,'preorder_cancelled','Pre-Order Cancelled','Your pre-order for Whole Lechon (10-12 kg) has been cancelled.',28,'pre_order',1,'2026-02-01 11:32:14','2026-02-16 18:11:36'),(48,9,'preorder_cancelled','Pre-Order Cancelled','Your pre-order for Whole Lechon (10-12 kg) has been cancelled.',28,'pre_order',1,'2026-02-01 11:32:18','2026-02-16 18:11:36'),(49,9,'order_preparing','Order Being Prepared','Your order #ORD-20260129-697B17D is now being prepared.',33,'order',1,'2026-02-01 13:38:10','2026-02-16 18:11:36'),(50,9,'order_delivered','Order Delivered','Your order #ORD-20260129-697B17D has been delivered. Thank you for your purchase!',33,'order',1,'2026-02-01 13:38:20','2026-02-16 18:11:36'),(51,9,'order_confirmed','Order Confirmed','Your order #ORD-20260128-6979B65 has been confirmed and will be prepared soon!',32,'order',1,'2026-02-16 15:07:12','2026-02-16 18:11:36'),(52,9,'order_preparing','Order Being Prepared','Your order #ORD-20260217-6994466 is now being prepared.',46,'order',1,'2026-02-17 10:47:31','2026-02-17 12:24:07'),(53,9,'order_confirmed','Order Confirmed','Your order #ORD-20260217-6994466 has been confirmed and will be prepared soon!',46,'order',1,'2026-02-17 10:47:43','2026-02-17 12:24:07'),(54,9,'order_confirmed','Order Confirmed','Your order #ORD-20260217-6994466 has been confirmed and will be prepared soon!',46,'order',1,'2026-02-17 10:48:49','2026-02-17 12:24:07'),(55,9,'preorder_confirmed','Pre-Order Confirmed','Your pre-order for Whole Lechon (10-12 kg) has been confirmed!',33,'pre_order',1,'2026-02-17 11:29:20','2026-02-17 12:24:07'),(56,15,'attendance_approved','Attendance Request Update','Your manual attendance request for Feb 17, 2026 has been Approved.',23,'attendance',0,'2026-02-17 11:52:21','2026-02-17 11:52:21'),(57,15,'leave_rejected','Leave Request Rejected','Your leave request starting Feb 17, 2026 has been rejected. Reason: ',3,'leave',1,'2026-02-17 12:13:07','2026-02-17 12:14:13'),(58,15,'payslip_generated','Payslip Available','Your payslip for the period Feb 17 - Feb 17, 2026 has been generated.',7,'payslip',0,'2026-02-17 12:13:14','2026-02-17 12:13:14'),(59,15,'payslip_generated','Payslip Available','Your payslip for the period Feb 01 - Feb 28, 2026 has been generated.',8,'payslip',1,'2026-02-17 12:13:55','2026-02-17 12:14:10'),(60,9,'preorder_completed','Pre-Order Completed','Your pre-order for Dinuguan (1 kg) has been completed. Thank you!',40,'pre_order',1,'2026-02-17 15:01:52','2026-02-24 13:56:07'),(61,9,'order_delivered','Order Delivered','Your order #ORD-20260224-699D971 has been delivered. Thank you for your purchase!',79,'order',1,'2026-02-24 12:19:36','2026-02-24 13:56:07'),(62,9,'order_delivered','Order Delivered','Your order #ORD-20260224-699D971 has been delivered. Thank you for your purchase!',79,'order',1,'2026-02-24 12:26:29','2026-02-24 13:56:07'),(63,9,'order_confirmed','Order Confirmed','Your order #ORD-20260224-699D9A0 has been confirmed and will be prepared soon!',81,'order',1,'2026-02-24 12:34:18','2026-02-24 13:56:07'),(64,9,'order_confirmed','Order Confirmed','Your order #ORD-20260224-699D9A0 has been confirmed and will be prepared soon!',81,'order',1,'2026-02-24 12:36:08','2026-02-24 13:56:07'),(65,9,'order_delivered','Order Delivered','Your order #ORD-20260224-699D9A0 has been delivered. Thank you for your purchase!',81,'order',1,'2026-02-24 12:36:12','2026-02-24 13:55:58'),(66,1,'order_cancelled','Order Cancelled by User','User #9 cancelled Order #76. A refund may be required.',76,'order',0,'2026-02-24 13:45:44','2026-02-24 13:45:44'),(67,6,'order_cancelled','Order Cancelled by User','User #9 cancelled Order #76. A refund may be required.',76,'order',0,'2026-02-24 13:45:44','2026-02-24 13:45:44'),(68,9,'order_cancelled','Order Cancelled by User','User #9 cancelled Order #76. A refund may be required.',76,'order',1,'2026-02-24 13:45:44','2026-02-24 13:56:03'),(69,1,'order_cancelled','Order Cancelled by User','User #9 cancelled Order #83. A refund may be required.',83,'order',0,'2026-02-24 13:48:25','2026-02-24 13:48:25'),(70,6,'order_cancelled','Order Cancelled by User','User #9 cancelled Order #83. A refund may be required.',83,'order',0,'2026-02-24 13:48:25','2026-02-24 13:48:25'),(71,9,'order_cancelled','Order Cancelled by User','User #9 cancelled Order #83. A refund may be required.',83,'order',1,'2026-02-24 13:48:25','2026-02-24 13:55:50'),(72,1,'order_cancelled','Order Cancelled by User','User #9 cancelled Order #84. A refund may be required.',84,'order',0,'2026-02-24 14:08:27','2026-02-24 14:08:27'),(73,6,'order_cancelled','Order Cancelled by User','User #9 cancelled Order #84. A refund may be required.',84,'order',0,'2026-02-24 14:08:27','2026-02-24 14:08:27'),(74,9,'order_cancelled','Order Cancelled by User','User #9 cancelled Order #84. A refund may be required.',84,'order',1,'2026-02-24 14:08:27','2026-02-24 14:08:42'),(75,9,'order_cancelled','Order Cancelled','Your order #ORD-20260217-6994484 has been cancelled.',47,'order',1,'2026-02-24 14:08:50','2026-02-24 14:08:56'),(76,9,'order_confirmed','Order Confirmed','Your order #ORD-20260224-699DB0B has been confirmed and will be prepared soon!',84,'order',1,'2026-02-24 14:21:39','2026-02-24 14:38:55'),(77,9,'order_cancelled','Order Cancelled','Your order #ORD-20260224-699DB0B has been cancelled.',84,'order',1,'2026-02-24 14:21:58','2026-02-24 14:38:55'),(78,9,'order_cancelled','Order Cancelled','Your order #ORD-20260224-699DB0B has been cancelled.',84,'order',1,'2026-02-24 14:22:01','2026-02-24 14:38:15'),(79,1,'refund_request','Refund Request','User #9 requested a refund for Order #81. Reason: asd',81,'order',0,'2026-02-24 14:36:40','2026-02-24 14:36:40'),(80,6,'refund_request','Refund Request','User #9 requested a refund for Order #81. Reason: asd',81,'order',0,'2026-02-24 14:36:40','2026-02-24 14:36:40'),(81,9,'refund_request','Refund Request','User #9 requested a refund for Order #81. Reason: asd',81,'order',1,'2026-02-24 14:36:40','2026-02-24 14:38:13'),(82,1,'refund_request','Refund Request','User #9 requested a refund for Order #81. Reason: asd',81,'order',0,'2026-02-24 14:36:44','2026-02-24 14:36:44'),(83,6,'refund_request','Refund Request','User #9 requested a refund for Order #81. Reason: asd',81,'order',0,'2026-02-24 14:36:44','2026-02-24 14:36:44'),(84,9,'refund_request','Refund Request','User #9 requested a refund for Order #81. Reason: asd',81,'order',1,'2026-02-24 14:36:44','2026-02-24 14:38:11'),(85,1,'refund_request','Refund Request','User #9 requested a refund for Order #81. Reason: asdasd',81,'order',0,'2026-02-24 14:37:12','2026-02-24 14:37:12'),(86,6,'refund_request','Refund Request','User #9 requested a refund for Order #81. Reason: asdasd',81,'order',0,'2026-02-24 14:37:12','2026-02-24 14:37:12'),(87,9,'refund_request','Refund Request','User #9 requested a refund for Order #81. Reason: asdasd',81,'order',1,'2026-02-24 14:37:12','2026-02-24 14:37:28'),(88,1,'refund_request','Refund Request','User #9 requested a refund for Order #81. Reason: asdasd',81,'order',0,'2026-02-24 14:37:54','2026-02-24 14:37:54'),(89,6,'refund_request','Refund Request','User #9 requested a refund for Order #81. Reason: asdasd',81,'order',0,'2026-02-24 14:37:54','2026-02-24 14:37:54'),(90,9,'refund_request','Refund Request','User #9 requested a refund for Order #81. Reason: asdasd',81,'order',1,'2026-02-24 14:37:54','2026-02-24 14:37:58'),(91,9,'order_delivered','Order Delivered','Your order #ORD-20260217-699481C has been delivered. Thank you for your purchase!',77,'order',1,'2026-02-24 14:39:05','2026-02-24 14:39:46'),(92,1,'refund_request','Refund Request','User #9 requested a refund for Order #77. Reason: asdasd',77,'order',0,'2026-02-24 14:39:32','2026-02-24 14:39:32'),(93,6,'refund_request','Refund Request','User #9 requested a refund for Order #77. Reason: asdasd',77,'order',0,'2026-02-24 14:39:32','2026-02-24 14:39:32'),(94,9,'refund_request','Refund Request','User #9 requested a refund for Order #77. Reason: asdasd',77,'order',1,'2026-02-24 14:39:32','2026-02-24 14:39:41'),(95,9,'order_delivered','Order Delivered','Your order #ORD-20260217-699481C has been delivered. Thank you for your purchase!',77,'order',1,'2026-02-24 14:39:36','2026-02-24 14:39:43'),(96,9,'preorder_ready_for_pickup','Pre-Order Ready for Pickup','Your pre-order for Lechon Sisig (1 kg) is ready for pickup!',15,'pre_order',1,'2026-02-24 14:59:29','2026-02-24 15:14:33'),(97,9,'preorder_ready_for_pickup','Pre-Order Ready for Pickup','Your pre-order for Dinuguan (1 kg) is ready for pickup!',17,'pre_order',1,'2026-02-24 14:59:46','2026-02-24 15:14:30'),(98,9,'refund_update','Refund Update','Your refund request for Order #77 has been APPROVED.',77,'order',1,'2026-02-24 15:01:43','2026-02-24 15:14:27'),(99,9,'refund_update','Refund Update','Your refund request for Order #81 has been REJECTED.',81,'order',1,'2026-02-24 15:02:00','2026-02-24 15:14:25'),(100,9,'refund_update','Refund Update','Your refund request for Order #84 has been APPROVED.',84,'order',1,'2026-02-24 15:12:41','2026-02-24 15:14:18'),(101,1,'preorder_cancelled','Pre-Order Cancelled by User','User #9 cancelled Pre-Order #34. A refund of ├â┬ó├óΓé¼┼í├é┬▒990.00 is pending.',34,'pre_order',0,'2026-02-24 15:59:21','2026-02-24 15:59:21'),(102,6,'preorder_cancelled','Pre-Order Cancelled by User','User #9 cancelled Pre-Order #34. A refund of ├â┬ó├óΓé¼┼í├é┬▒990.00 is pending.',34,'pre_order',0,'2026-02-24 15:59:21','2026-02-24 15:59:21'),(103,9,'preorder_cancelled','Pre-Order Cancelled by User','User #9 cancelled Pre-Order #34. A refund of ├â┬ó├óΓé¼┼í├é┬▒990.00 is pending.',34,'pre_order',1,'2026-02-24 15:59:21','2026-02-24 16:53:10'),(104,9,'order_delivered','Order Delivered','Your order #WALK-20260225-21F93E has been delivered. Thank you for your purchase!',85,'order',1,'2026-02-24 17:12:24','2026-02-24 17:13:33'),(105,9,'refund_update','Refund Update','Your refund request for Pre-Order #34 has been REJECTED.',34,'pre_order',1,'2026-02-24 17:13:22','2026-02-24 17:13:29'),(106,15,'attendance_approved','Attendance Request Update','Your manual attendance request for Feb 17, 2026 has been Approved.',23,'attendance',0,'2026-02-26 15:13:42','2026-02-26 15:13:42'),(107,1,'order_cancelled','Order Cancelled by User','User #9 cancelled Order #89. A refund may be required.',89,'order',0,'2026-03-13 03:32:22','2026-03-13 03:32:22'),(108,6,'order_cancelled','Order Cancelled by User','User #9 cancelled Order #89. A refund may be required.',89,'order',0,'2026-03-13 03:32:22','2026-03-13 03:32:22'),(109,9,'order_cancelled','Order Cancelled by User','User #9 cancelled Order #89. A refund may be required.',89,'order',1,'2026-03-13 03:32:22','2026-03-13 03:34:04'),(110,9,'order_cancelled','Order Cancelled','Your order #ORD-20260217-6994890 has been cancelled.',78,'order',1,'2026-03-13 03:34:16','2026-03-13 03:34:30'),(111,9,'refund_update','Refund Update','Your refund request for Order #89 has been APPROVED.',89,'order',1,'2026-03-13 03:40:10','2026-03-16 06:46:05'),(112,9,'order_assigned','Driver Assigned','A driver has been assigned to your order.',96,'order',1,'2026-03-16 07:13:56','2026-03-19 05:36:16'),(113,9,'order_assigned','Driver Assigned','A driver has been assigned to your order.',97,'order',1,'2026-03-16 07:33:10','2026-03-19 05:36:16'),(114,1,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260316-69B7C88 requires manual driver assignment. No drivers were available.',98,'order',0,'2026-03-16 09:08:45','2026-03-16 09:08:45'),(115,6,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260316-69B7C88 requires manual driver assignment. No drivers were available.',98,'order',0,'2026-03-16 09:08:45','2026-03-16 09:08:45'),(116,9,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260316-69B7C88 requires manual driver assignment. No drivers were available.',98,'order',1,'2026-03-16 09:08:45','2026-03-19 05:36:16'),(117,1,'order_assigned','Driver Assigned','A driver has been assigned to your order.',99,'order',0,'2026-03-17 05:45:43','2026-03-17 05:45:43'),(118,1,'order_on_the_way','Driver on the Way','Your driver is on the way to your location.',99,'order',0,'2026-03-17 05:45:54','2026-03-17 05:45:54'),(119,1,'order_arriving','Driver Arriving Soon','Your driver is arriving soon. Please be ready.',99,'order',0,'2026-03-17 05:45:56','2026-03-17 05:45:56'),(120,9,'order_cancelled','Order Cancelled','Your order delivery has been cancelled.',98,'order',1,'2026-03-17 07:35:34','2026-03-19 05:36:16'),(121,1,'order_assigned','Driver Assigned','A driver has been assigned to your order.',100,'order',0,'2026-03-17 07:37:05','2026-03-17 07:37:05'),(122,1,'order_on_the_way','Driver on the Way','Your driver is on the way to your location.',100,'order',0,'2026-03-17 07:37:38','2026-03-17 07:37:38'),(123,1,'order_arriving','Driver Arriving Soon','Your driver is arriving soon. Please be ready.',100,'order',0,'2026-03-17 07:37:40','2026-03-17 07:37:40'),(124,9,'order_cancelled','Order Cancelled','Your order delivery has been cancelled.',97,'order',1,'2026-03-17 07:41:19','2026-03-19 05:36:16'),(125,29,'attendance_approved','Attendance Request Update','Your manual attendance request for Mar 17, 2026 has been Approved.',24,'attendance',1,'2026-03-17 13:29:47','2026-03-17 13:32:10'),(126,9,'order_assigned','Driver Assigned','A driver has been assigned to your order.',101,'order',1,'2026-03-17 13:37:24','2026-03-19 05:36:16'),(127,9,'order_on_the_way','Driver on the Way','Your driver is on the way to your location.',101,'order',1,'2026-03-17 13:38:05','2026-03-19 05:36:16'),(128,9,'order_arriving','Driver Arriving Soon','Your driver is arriving soon. Please be ready.',101,'order',1,'2026-03-17 13:38:07','2026-03-19 05:36:16'),(129,30,'attendance_approved','Attendance Request Update','Your manual attendance request for Mar 17, 2026 has been Approved.',25,'attendance',1,'2026-03-17 13:50:42','2026-03-17 13:53:14'),(130,30,'payslip_generated','Payslip Available','Your payslip for the period Mar 01 - Mar 31, 2026 has been generated.',13,'payslip',1,'2026-03-17 13:53:30','2026-03-18 14:04:01'),(131,29,'payslip_generated','Payslip Available','Your payslip for the period Mar 01 - Mar 31, 2026 has been generated.',14,'payslip',0,'2026-03-17 13:53:34','2026-03-17 13:53:34'),(132,9,'order_assigned','Driver Assigned','A driver has been assigned to your order.',102,'order',1,'2026-03-17 13:57:24','2026-03-19 05:36:16'),(133,9,'order_on_the_way','Driver on the Way','Your driver is on the way to your location.',102,'order',1,'2026-03-17 13:58:15','2026-03-19 05:36:16'),(134,9,'order_arriving','Driver Arriving Soon','Your driver is arriving soon. Please be ready.',102,'order',1,'2026-03-17 13:58:18','2026-03-19 05:36:16'),(135,9,'order_assigned','Driver Assigned','A driver has been assigned to your order.',96,'order',1,'2026-03-18 14:49:42','2026-03-19 05:36:16'),(136,9,'order_assigned','Driver Assigned','A driver has been assigned to your order.',96,'order',1,'2026-03-18 14:51:22','2026-03-19 05:36:16'),(137,9,'order_assigned','Driver Assigned','A driver has been assigned to your order.',96,'order',1,'2026-03-18 14:51:39','2026-03-19 05:36:16'),(138,9,'order_assigned','Driver Assigned','A driver has been assigned to your order.',96,'order',1,'2026-03-18 14:59:50','2026-03-19 05:36:16'),(139,9,'order_assigned','Driver Assigned','A driver has been assigned to your order.',96,'order',1,'2026-03-18 15:00:01','2026-03-19 05:36:16'),(140,9,'order_assigned','Driver Assigned','A driver has been assigned to your order.',96,'order',1,'2026-03-18 15:02:05','2026-03-19 05:36:16'),(141,9,'order_assigned','Driver Assigned','A driver has been assigned to your order.',96,'order',1,'2026-03-18 15:02:11','2026-03-19 05:36:16'),(142,9,'order_assigned','Driver Assigned','A driver has been assigned to your order.',104,'order',1,'2026-03-23 17:04:16','2026-03-23 17:52:35'),(143,9,'order_on_the_way','Driver on the Way','Your driver is on the way to your location.',104,'order',1,'2026-03-23 17:05:12','2026-03-23 17:52:35'),(144,9,'order_arriving','Driver Arriving Soon','Your driver is arriving soon. Please be ready.',104,'order',1,'2026-03-23 17:05:23','2026-03-23 17:52:35'),(145,9,'order_assigned','Driver Assigned','A driver has been assigned to your order.',105,'order',1,'2026-03-23 17:43:35','2026-03-23 17:44:09'),(146,9,'order_assigned','Driver Assigned','A driver has been assigned to your order.',106,'order',1,'2026-03-23 17:45:13','2026-03-23 17:52:35'),(147,9,'order_on_the_way','Driver on the Way','Your driver is on the way to your location.',106,'order',1,'2026-03-23 17:46:11','2026-03-23 17:52:35'),(148,9,'order_arriving','Driver Arriving Soon','Your driver is arriving soon. Please be ready.',106,'order',1,'2026-03-23 17:46:16','2026-03-23 17:52:35'),(149,9,'order_assigned','Driver Assigned','A driver has been assigned to your order.',107,'order',1,'2026-03-23 17:53:03','2026-03-23 17:55:25'),(150,9,'order_on_the_way','Driver on the Way','Your driver is on the way to your location.',107,'order',1,'2026-03-23 17:53:42','2026-03-23 17:55:25'),(151,9,'order_arriving','Driver Arriving Soon','Your driver is arriving soon. Please be ready.',107,'order',1,'2026-03-23 17:54:30','2026-03-23 17:55:25'),(152,9,'order_assigned','Driver Assigned','A driver has been assigned to your order.',108,'order',1,'2026-03-23 18:02:14','2026-03-23 18:05:14'),(153,31,'order_assigned','Driver Assigned','A driver has been assigned to your order.',109,'order',1,'2026-03-23 18:07:14','2026-03-27 08:37:07'),(154,9,'order_on_the_way','Driver on the Way','Your driver is on the way to your location.',108,'order',1,'2026-03-23 18:17:19','2026-04-09 15:17:47'),(155,9,'order_on_the_way','Driver on the Way','Your driver is on the way to your location.',108,'order',1,'2026-03-23 18:17:19','2026-04-09 15:17:47'),(156,1,'franchise_submitted','New Franchise Application','justine business submitted application FR-20260325-000031-E7D2 (justine santos).',21,'franchise_application',0,'2026-03-25 06:02:09','2026-03-25 06:02:09'),(157,6,'franchise_submitted','New Franchise Application','justine business submitted application FR-20260325-000031-E7D2 (justine santos).',21,'franchise_application',0,'2026-03-25 06:02:09','2026-03-25 06:02:09'),(158,9,'franchise_submitted','New Franchise Application','justine business submitted application FR-20260325-000031-E7D2 (justine santos).',21,'franchise_application',1,'2026-03-25 06:02:09','2026-04-09 15:17:47'),(159,15,'franchise_submitted','New Franchise Application','justine business submitted application FR-20260325-000031-E7D2 (justine santos).',21,'franchise_application',0,'2026-03-25 06:02:09','2026-03-25 06:02:09'),(160,19,'franchise_submitted','New Franchise Application','justine business submitted application FR-20260325-000031-E7D2 (justine santos).',21,'franchise_application',0,'2026-03-25 06:02:09','2026-03-25 06:02:09'),(161,31,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for justine business has been approved. Our team will contact you shortly.',21,'franchise_application',1,'2026-03-25 06:02:44','2026-03-27 08:37:07'),(162,31,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for justine business has been approved. Our team will contact you shortly.',21,'franchise_application',1,'2026-03-25 06:02:46','2026-03-27 08:37:07'),(163,31,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for justine business has been approved. Our team will contact you shortly.',21,'franchise_application',1,'2026-03-25 06:02:48','2026-03-27 08:37:07'),(164,31,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for justine business has been approved. Our team will contact you shortly.',21,'franchise_application',1,'2026-03-25 06:02:51','2026-03-27 08:37:07'),(165,31,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for justine business has been approved. Our team will contact you shortly.',21,'franchise_application',1,'2026-03-25 06:02:53','2026-03-27 08:37:07'),(166,31,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for justine business has been approved. Our team will contact you shortly.',21,'franchise_application',1,'2026-03-25 06:03:06','2026-03-27 08:37:07'),(167,31,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for justine business has been approved. Our team will contact you shortly.',21,'franchise_application',1,'2026-03-25 06:03:08','2026-03-27 08:37:07'),(168,31,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for justine business has been approved. Our team will contact you shortly.',21,'franchise_application',1,'2026-03-25 06:03:10','2026-03-27 08:37:07'),(169,1,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260326-69C41C0 requires manual driver assignment. No drivers were available.',111,'order',0,'2026-03-25 17:36:39','2026-03-25 17:36:39'),(170,6,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260326-69C41C0 requires manual driver assignment. No drivers were available.',111,'order',0,'2026-03-25 17:36:39','2026-03-25 17:36:39'),(171,9,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260326-69C41C0 requires manual driver assignment. No drivers were available.',111,'order',1,'2026-03-25 17:36:39','2026-03-27 07:31:12'),(172,1,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260327-69C6328 requires manual driver assignment. No drivers were available.',113,'order',0,'2026-03-27 07:32:39','2026-03-27 07:32:39'),(173,6,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260327-69C6328 requires manual driver assignment. No drivers were available.',113,'order',0,'2026-03-27 07:32:39','2026-03-27 07:32:39'),(174,9,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260327-69C6328 requires manual driver assignment. No drivers were available.',113,'order',1,'2026-03-27 07:32:39','2026-04-09 15:17:47'),(175,10,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260327-69C6328 requires manual driver assignment. No drivers were available.',113,'order',0,'2026-03-27 07:32:39','2026-03-27 07:32:39'),(176,11,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260327-69C6328 requires manual driver assignment. No drivers were available.',113,'order',0,'2026-03-27 07:32:39','2026-03-27 07:32:39'),(177,31,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260327-69C6328 requires manual driver assignment. No drivers were available.',113,'order',1,'2026-03-27 07:32:39','2026-03-27 08:37:07'),(178,30,'payslip_generated','Payslip Available','Your payslip for the period Mar 01 - Mar 31, 2026 has been generated.',15,'payslip',0,'2026-03-27 09:19:10','2026-03-27 09:19:10'),(179,1,'order_cancelled','Order Cancelled by User','User #31 cancelled Order #115.',115,'order',0,'2026-03-27 12:01:46','2026-03-27 12:01:46'),(180,6,'order_cancelled','Order Cancelled by User','User #31 cancelled Order #115.',115,'order',0,'2026-03-27 12:01:46','2026-03-27 12:01:46'),(181,9,'order_cancelled','Order Cancelled by User','User #31 cancelled Order #115.',115,'order',1,'2026-03-27 12:01:46','2026-04-09 15:17:47'),(182,10,'order_cancelled','Order Cancelled by User','User #31 cancelled Order #115.',115,'order',0,'2026-03-27 12:01:46','2026-03-27 12:01:46'),(183,11,'order_cancelled','Order Cancelled by User','User #31 cancelled Order #115.',115,'order',0,'2026-03-27 12:01:46','2026-03-27 12:01:46'),(184,31,'order_cancelled','Order Cancelled by User','User #31 cancelled Order #115.',115,'order',1,'2026-03-27 12:01:46','2026-04-10 08:00:31'),(185,1,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260327-69C6739 requires manual driver assignment. No drivers were available.',117,'order',0,'2026-03-27 12:10:15','2026-03-27 12:10:15'),(186,6,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260327-69C6739 requires manual driver assignment. No drivers were available.',117,'order',0,'2026-03-27 12:10:15','2026-03-27 12:10:15'),(187,9,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260327-69C6739 requires manual driver assignment. No drivers were available.',117,'order',1,'2026-03-27 12:10:15','2026-04-09 15:17:47'),(188,10,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260327-69C6739 requires manual driver assignment. No drivers were available.',117,'order',0,'2026-03-27 12:10:15','2026-03-27 12:10:15'),(189,11,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260327-69C6739 requires manual driver assignment. No drivers were available.',117,'order',0,'2026-03-27 12:10:15','2026-03-27 12:10:15'),(190,31,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260327-69C6739 requires manual driver assignment. No drivers were available.',117,'order',1,'2026-03-27 12:10:15','2026-04-10 08:00:31'),(191,34,'attendance_approved','Attendance Request Update','Your manual attendance request for Mar 31, 2026 has been Approved.',27,'attendance',0,'2026-03-31 09:09:20','2026-03-31 09:09:20'),(192,34,'attendance_approved','Attendance Request Update','Your manual attendance request for Mar 31, 2026 has been Approved.',27,'attendance',0,'2026-03-31 09:10:12','2026-03-31 09:10:12'),(193,33,'attendance_approved','Attendance Request Update','Your manual attendance request for Mar 31, 2026 has been Approved.',26,'attendance',0,'2026-03-31 09:10:17','2026-03-31 09:10:17'),(194,1,'franchise_submitted','New Franchise Application','Janna Restaurant submitted application FR-20260331-000035-0822 (Janna Santos).',22,'franchise_application',0,'2026-03-31 09:29:17','2026-03-31 09:29:17'),(195,6,'franchise_submitted','New Franchise Application','Janna Restaurant submitted application FR-20260331-000035-0822 (Janna Santos).',22,'franchise_application',0,'2026-03-31 09:29:17','2026-03-31 09:29:17'),(196,9,'franchise_submitted','New Franchise Application','Janna Restaurant submitted application FR-20260331-000035-0822 (Janna Santos).',22,'franchise_application',1,'2026-03-31 09:29:17','2026-03-31 09:30:21'),(197,10,'franchise_submitted','New Franchise Application','Janna Restaurant submitted application FR-20260331-000035-0822 (Janna Santos).',22,'franchise_application',0,'2026-03-31 09:29:17','2026-03-31 09:29:17'),(198,11,'franchise_submitted','New Franchise Application','Janna Restaurant submitted application FR-20260331-000035-0822 (Janna Santos).',22,'franchise_application',0,'2026-03-31 09:29:17','2026-03-31 09:29:17'),(199,31,'franchise_submitted','New Franchise Application','Janna Restaurant submitted application FR-20260331-000035-0822 (Janna Santos).',22,'franchise_application',1,'2026-03-31 09:29:17','2026-04-10 08:00:31'),(200,15,'franchise_submitted','New Franchise Application','Janna Restaurant submitted application FR-20260331-000035-0822 (Janna Santos).',22,'franchise_application',0,'2026-03-31 09:29:17','2026-03-31 09:29:17'),(201,19,'franchise_submitted','New Franchise Application','Janna Restaurant submitted application FR-20260331-000035-0822 (Janna Santos).',22,'franchise_application',0,'2026-03-31 09:29:17','2026-03-31 09:29:17'),(202,35,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Janna Restaurant has been approved. You can now access the admin portal and manage your own store products only.',22,'franchise_application',1,'2026-03-31 09:30:27','2026-04-10 08:51:48'),(203,35,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Janna Restaurant has been approved. You can now access the admin portal and manage your own store products only.',22,'franchise_application',1,'2026-03-31 09:30:30','2026-04-10 08:51:48'),(204,35,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Janna Restaurant has been approved. You can now access the admin portal and manage your own store products only.',22,'franchise_application',1,'2026-03-31 09:30:32','2026-04-10 08:51:48'),(205,35,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Janna Restaurant has been approved. You can now access the admin portal and manage your own store products only.',22,'franchise_application',1,'2026-03-31 09:30:34','2026-04-10 08:51:48'),(206,35,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Janna Restaurant has been approved. You can now access the admin portal and manage your own store products only.',22,'franchise_application',1,'2026-03-31 09:30:36','2026-04-10 08:51:48'),(207,35,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Janna Restaurant has been approved. You can now access the admin portal and manage your own store products only.',22,'franchise_application',1,'2026-03-31 09:30:38','2026-04-10 08:51:48'),(208,35,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Janna Restaurant has been approved. You can now access the admin portal and manage your own store products only.',22,'franchise_application',1,'2026-03-31 09:30:40','2026-04-10 08:51:48'),(209,35,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Janna Restaurant has been approved. You can now access the admin portal and manage your own store products only.',22,'franchise_application',1,'2026-03-31 09:30:42','2026-04-10 08:51:48'),(210,35,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Janna Restaurant has been approved. You can now access the admin portal and manage your own store products only.',22,'franchise_application',1,'2026-03-31 09:30:44','2026-04-10 08:51:48'),(211,35,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Janna Restaurant has been approved. You can now access the admin portal and manage your own store products only.',22,'franchise_application',1,'2026-03-31 09:30:46','2026-04-10 08:51:48'),(212,35,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Janna Restaurant has been approved. You can now access the admin portal and manage your own store products only.',22,'franchise_application',1,'2026-03-31 09:30:48','2026-04-10 08:51:48'),(213,35,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Janna Restaurant has been approved. You can now access the admin portal and manage your own store products only.',22,'franchise_application',1,'2026-03-31 09:30:51','2026-04-10 08:51:48'),(214,35,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Janna Restaurant has been approved. You can now access the admin portal and manage your own store products only.',22,'franchise_application',1,'2026-03-31 09:30:53','2026-04-10 08:51:48'),(215,35,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Janna Restaurant has been approved. You can now access the admin portal and manage your own store products only.',22,'franchise_application',1,'2026-03-31 09:30:55','2026-04-10 08:51:48'),(216,35,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Janna Restaurant has been approved. You can now access the admin portal and manage your own store products only.',22,'franchise_application',1,'2026-03-31 09:30:57','2026-04-10 08:51:48'),(217,35,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Janna Restaurant has been approved. You can now access the admin portal and manage your own store products only.',22,'franchise_application',1,'2026-03-31 09:30:59','2026-04-10 08:51:48'),(218,35,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Janna Restaurant has been approved. You can now access the admin portal and manage your own store products only.',22,'franchise_application',1,'2026-03-31 09:31:01','2026-04-10 08:51:48'),(219,35,'franchise_approved','Franchise Application Approved!','Congratulations! Your franchise application for Janna Restaurant has been approved. You can now access the admin portal and manage your own store products only.',22,'franchise_application',1,'2026-03-31 09:31:03','2026-04-10 08:51:48'),(220,31,'order_cancelled','Order Cancelled','Your order #ORD-20260327-69C671C has been cancelled.',116,'order',1,'2026-03-31 10:03:07','2026-04-10 08:00:31'),(221,1,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260331-69CBD1C requires manual driver assignment. No drivers were available.',118,'order',0,'2026-03-31 13:53:33','2026-03-31 13:53:33'),(222,6,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260331-69CBD1C requires manual driver assignment. No drivers were available.',118,'order',0,'2026-03-31 13:53:33','2026-03-31 13:53:33'),(223,9,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260331-69CBD1C requires manual driver assignment. No drivers were available.',118,'order',1,'2026-03-31 13:53:33','2026-04-09 15:17:47'),(224,10,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260331-69CBD1C requires manual driver assignment. No drivers were available.',118,'order',0,'2026-03-31 13:53:33','2026-03-31 13:53:33'),(225,11,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260331-69CBD1C requires manual driver assignment. No drivers were available.',118,'order',0,'2026-03-31 13:53:33','2026-03-31 13:53:33'),(226,31,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260331-69CBD1C requires manual driver assignment. No drivers were available.',118,'order',1,'2026-03-31 13:53:33','2026-03-31 14:28:06'),(227,35,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260331-69CBD1C requires manual driver assignment. No drivers were available.',118,'order',1,'2026-03-31 13:53:33','2026-04-10 08:51:48'),(228,1,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260331-69CBDC6 requires manual driver assignment. No drivers were available.',120,'order',0,'2026-03-31 14:38:51','2026-03-31 14:38:51'),(229,6,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260331-69CBDC6 requires manual driver assignment. No drivers were available.',120,'order',0,'2026-03-31 14:38:51','2026-03-31 14:38:51'),(230,9,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260331-69CBDC6 requires manual driver assignment. No drivers were available.',120,'order',1,'2026-03-31 14:38:51','2026-04-09 15:17:47'),(231,10,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260331-69CBDC6 requires manual driver assignment. No drivers were available.',120,'order',0,'2026-03-31 14:38:51','2026-03-31 14:38:51'),(232,11,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260331-69CBDC6 requires manual driver assignment. No drivers were available.',120,'order',0,'2026-03-31 14:38:51','2026-03-31 14:38:51'),(233,31,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260331-69CBDC6 requires manual driver assignment. No drivers were available.',120,'order',1,'2026-03-31 14:38:51','2026-04-10 08:00:31'),(234,35,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260331-69CBDC6 requires manual driver assignment. No drivers were available.',120,'order',1,'2026-03-31 14:38:51','2026-04-10 08:51:48'),(235,9,'order_on_the_way','Driver on the Way','Your driver is on the way to your location.',105,'order',1,'2026-04-09 09:53:18','2026-04-09 15:17:47'),(236,4,'order_submitted','Order Submitted','Your order #ORD-20260409-69D77ABA6A3D4 was submitted. We will confirm it after payment verification.',122,'order',0,'2026-04-09 10:08:58','2026-04-09 10:08:58'),(237,1,'order_submitted','New Customer Order','Order #ORD-20260409-69D77ABA6A3D4 has been submitted by justine santos.',122,'order',0,'2026-04-09 10:08:58','2026-04-09 10:08:58'),(238,6,'order_submitted','New Customer Order','Order #ORD-20260409-69D77ABA6A3D4 has been submitted by justine santos.',122,'order',0,'2026-04-09 10:08:58','2026-04-09 10:08:58'),(239,9,'order_submitted','New Customer Order','Order #ORD-20260409-69D77ABA6A3D4 has been submitted by justine santos.',122,'order',1,'2026-04-09 10:08:58','2026-04-09 15:17:47'),(240,10,'order_submitted','New Customer Order','Order #ORD-20260409-69D77ABA6A3D4 has been submitted by justine santos.',122,'order',0,'2026-04-09 10:08:58','2026-04-09 10:08:58'),(241,11,'order_submitted','New Customer Order','Order #ORD-20260409-69D77ABA6A3D4 has been submitted by justine santos.',122,'order',0,'2026-04-09 10:08:58','2026-04-09 10:08:58'),(242,31,'order_submitted','New Customer Order','Order #ORD-20260409-69D77ABA6A3D4 has been submitted by justine santos.',122,'order',1,'2026-04-09 10:08:58','2026-04-10 08:00:31'),(243,35,'order_submitted','New Customer Order','Order #ORD-20260409-69D77ABA6A3D4 has been submitted by justine santos.',122,'order',1,'2026-04-09 10:08:58','2026-04-10 08:51:48'),(244,1,'order_paid','Order Payment Verified','Order #ORD-20260409-69D77AB has a verified PAID payment and is now confirmed.',122,'order',0,'2026-04-09 10:09:15','2026-04-09 10:09:15'),(245,6,'order_paid','Order Payment Verified','Order #ORD-20260409-69D77AB has a verified PAID payment and is now confirmed.',122,'order',0,'2026-04-09 10:09:15','2026-04-09 10:09:15'),(246,9,'order_paid','Order Payment Verified','Order #ORD-20260409-69D77AB has a verified PAID payment and is now confirmed.',122,'order',1,'2026-04-09 10:09:15','2026-04-09 15:17:47'),(247,10,'order_paid','Order Payment Verified','Order #ORD-20260409-69D77AB has a verified PAID payment and is now confirmed.',122,'order',0,'2026-04-09 10:09:15','2026-04-09 10:09:15'),(248,11,'order_paid','Order Payment Verified','Order #ORD-20260409-69D77AB has a verified PAID payment and is now confirmed.',122,'order',0,'2026-04-09 10:09:15','2026-04-09 10:09:15'),(249,31,'order_paid','Order Payment Verified','Order #ORD-20260409-69D77AB has a verified PAID payment and is now confirmed.',122,'order',1,'2026-04-09 10:09:15','2026-04-10 08:00:31'),(250,35,'order_paid','Order Payment Verified','Order #ORD-20260409-69D77AB has a verified PAID payment and is now confirmed.',122,'order',1,'2026-04-09 10:09:15','2026-04-10 08:51:48'),(251,1,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260409-69D77AB requires manual driver assignment. No drivers were available.',122,'order',0,'2026-04-09 10:09:15','2026-04-09 10:09:15'),(252,6,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260409-69D77AB requires manual driver assignment. No drivers were available.',122,'order',0,'2026-04-09 10:09:15','2026-04-09 10:09:15'),(253,9,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260409-69D77AB requires manual driver assignment. No drivers were available.',122,'order',1,'2026-04-09 10:09:15','2026-04-09 15:17:47'),(254,10,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260409-69D77AB requires manual driver assignment. No drivers were available.',122,'order',0,'2026-04-09 10:09:15','2026-04-09 10:09:15'),(255,11,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260409-69D77AB requires manual driver assignment. No drivers were available.',122,'order',0,'2026-04-09 10:09:15','2026-04-09 10:09:15'),(256,31,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260409-69D77AB requires manual driver assignment. No drivers were available.',122,'order',1,'2026-04-09 10:09:15','2026-04-10 03:22:11'),(257,35,'driver_assignment_needed','Driver Assignment Needed','Order #ORD-20260409-69D77AB requires manual driver assignment. No drivers were available.',122,'order',1,'2026-04-09 10:09:15','2026-04-10 08:51:48'),(258,1,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(259,4,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(260,5,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(261,6,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(262,8,'system_alert','Hello','There will be an update!',NULL,NULL,1,'2026-04-09 15:13:53','2026-09-24 08:52:58'),(263,9,'system_alert','Hello','There will be an update!',NULL,NULL,1,'2026-04-09 15:13:53','2026-04-09 15:17:46'),(264,10,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(265,11,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(266,12,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(267,13,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(268,14,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(269,15,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(270,17,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(271,18,'system_alert','Hello','There will be an update!',NULL,NULL,1,'2026-04-09 15:13:53','2026-09-16 13:52:23'),(272,19,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(273,26,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(274,27,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(275,28,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(276,29,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(277,30,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(278,31,'system_alert','Hello','There will be an update!',NULL,NULL,1,'2026-04-09 15:13:53','2026-04-10 03:22:11'),(279,32,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(280,33,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(281,34,'system_alert','Hello','There will be an update!',NULL,NULL,0,'2026-04-09 15:13:53','2026-04-09 15:13:53'),(282,35,'system_alert','Hello','There will be an update!',NULL,NULL,1,'2026-04-09 15:13:53','2026-04-10 08:51:48'),(283,31,'subscription_request_approved','Subscription request approved','Your request for the Growth plan has been approved. Notes: ok!',1,'partner_subscription_request',1,'2026-04-10 03:17:29','2026-04-10 03:22:09'),(284,9,'order_cancelled','Order Cancelled','Your order #ORD-20260331-69CBDC6 has been cancelled.',120,'order',1,'2026-04-10 08:01:31','2026-04-11 02:22:50'),(285,31,'order_cancelled','Order Cancelled','Your order #WALK-20260331-2E0917 has been cancelled.',119,'order',1,'2026-04-10 08:01:35','2026-04-10 08:04:31'),(286,4,'order_cancelled','Order Cancelled','Your order delivery has been cancelled.',118,'order',0,'2026-04-10 08:37:33','2026-04-10 08:37:33'),(287,31,'order_cancelled','Order Cancelled','Your order delivery has been cancelled.',117,'order',1,'2026-04-10 08:37:35','2026-04-10 13:13:42'),(288,9,'order_cancelled','Order Cancelled','Your order delivery has been cancelled.',113,'order',1,'2026-04-10 08:37:39','2026-04-11 02:22:50'),(289,9,'refund_update','Refund Update','Your refund request for Order #120 is now REJECTED. Remarks: asd',120,'order',1,'2026-04-10 13:13:12','2026-04-11 02:22:50'),(290,31,'refund_update','Refund Update','Your refund request for Order #119 is now REJECTED. Remarks: asd',119,'order',1,'2026-04-10 13:13:19','2026-04-10 13:13:35'),(291,31,'subscription_request_approved','Subscription request approved','Your request for the Pro plan has been approved. Notes: nice!',2,'partner_subscription_request',1,'2026-04-11 02:50:43','2026-04-11 02:51:53'),(292,4,'order_cancelled','Order Cancelled','Your order delivery has been cancelled.',122,'order',0,'2026-04-11 13:54:15','2026-04-11 13:54:15'),(293,32,'order_cancelled','Order Cancelled','Your order delivery has been cancelled.',111,'order',0,'2026-04-11 13:54:20','2026-04-11 13:54:20'),(294,31,'order_cancelled','Order Cancelled','Your order delivery has been cancelled.',109,'order',0,'2026-04-11 13:54:22','2026-04-11 13:54:22'),(295,9,'order_cancelled','Order Cancelled','Your order delivery has been cancelled.',108,'order',0,'2026-04-11 13:54:25','2026-04-11 13:54:25'),(296,9,'order_failed','Delivery Failed','Sorry, the delivery could not be completed. Our team will contact you soon.',105,'order',0,'2026-04-11 13:55:02','2026-04-11 13:55:02'),(297,36,'order_submitted','Order Submitted','Your order #ORD-20260804-E31E0F was submitted. We will confirm it after payment verification.',126,'order',0,'2026-08-04 14:22:54','2026-08-04 14:22:54'),(298,1,'order_submitted','New Customer Order','Order #ORD-20260804-E31E0F has been submitted by justine hero.',126,'order',0,'2026-08-04 14:22:54','2026-08-04 14:22:54'),(299,6,'order_submitted','New Customer Order','Order #ORD-20260804-E31E0F has been submitted by justine hero.',126,'order',0,'2026-08-04 14:22:54','2026-08-04 14:22:54'),(300,9,'order_submitted','New Customer Order','Order #ORD-20260804-E31E0F has been submitted by justine hero.',126,'order',0,'2026-08-04 14:22:54','2026-08-04 14:22:54'),(301,10,'order_submitted','New Customer Order','Order #ORD-20260804-E31E0F has been submitted by justine hero.',126,'order',0,'2026-08-04 14:22:54','2026-08-04 14:22:54'),(302,11,'order_submitted','New Customer Order','Order #ORD-20260804-E31E0F has been submitted by justine hero.',126,'order',0,'2026-08-04 14:22:54','2026-08-04 14:22:54'),(303,31,'order_submitted','New Customer Order','Order #ORD-20260804-E31E0F has been submitted by justine hero.',126,'order',0,'2026-08-04 14:22:54','2026-08-04 14:22:54'),(304,35,'order_submitted','New Customer Order','Order #ORD-20260804-E31E0F has been submitted by justine hero.',126,'order',0,'2026-08-04 14:22:54','2026-08-04 14:22:54'),(305,1,'order_submitted','Order Submitted','Your order #ORD-20260804-018C21 was submitted. We will confirm it after payment verification.',128,'order',0,'2026-08-04 14:24:48','2026-08-04 14:24:48'),(306,1,'order_submitted','New Customer Order','Order #ORD-20260804-018C21 has been submitted by Justine Test.',128,'order',0,'2026-08-04 14:24:48','2026-08-04 14:24:48'),(307,6,'order_submitted','New Customer Order','Order #ORD-20260804-018C21 has been submitted by Justine Test.',128,'order',0,'2026-08-04 14:24:48','2026-08-04 14:24:48'),(308,9,'order_submitted','New Customer Order','Order #ORD-20260804-018C21 has been submitted by Justine Test.',128,'order',0,'2026-08-04 14:24:48','2026-08-04 14:24:48'),(309,10,'order_submitted','New Customer Order','Order #ORD-20260804-018C21 has been submitted by Justine Test.',128,'order',0,'2026-08-04 14:24:48','2026-08-04 14:24:48'),(310,11,'order_submitted','New Customer Order','Order #ORD-20260804-018C21 has been submitted by Justine Test.',128,'order',0,'2026-08-04 14:24:48','2026-08-04 14:24:48'),(311,31,'order_submitted','New Customer Order','Order #ORD-20260804-018C21 has been submitted by Justine Test.',128,'order',0,'2026-08-04 14:24:48','2026-08-04 14:24:48'),(312,35,'order_submitted','New Customer Order','Order #ORD-20260804-018C21 has been submitted by Justine Test.',128,'order',0,'2026-08-04 14:24:48','2026-08-04 14:24:48'),(313,36,'order_submitted','Order Submitted','Your order #ORD-20260804-E88FEA was submitted. We will confirm it after payment verification.',129,'order',0,'2026-08-04 14:25:34','2026-08-04 14:25:34'),(314,1,'order_submitted','New Customer Order','Order #ORD-20260804-E88FEA has been submitted by justine hero.',129,'order',0,'2026-08-04 14:25:34','2026-08-04 14:25:34'),(315,6,'order_submitted','New Customer Order','Order #ORD-20260804-E88FEA has been submitted by justine hero.',129,'order',0,'2026-08-04 14:25:34','2026-08-04 14:25:34'),(316,9,'order_submitted','New Customer Order','Order #ORD-20260804-E88FEA has been submitted by justine hero.',129,'order',0,'2026-08-04 14:25:34','2026-08-04 14:25:34'),(317,10,'order_submitted','New Customer Order','Order #ORD-20260804-E88FEA has been submitted by justine hero.',129,'order',0,'2026-08-04 14:25:34','2026-08-04 14:25:34'),(318,11,'order_submitted','New Customer Order','Order #ORD-20260804-E88FEA has been submitted by justine hero.',129,'order',0,'2026-08-04 14:25:34','2026-08-04 14:25:34'),(319,31,'order_submitted','New Customer Order','Order #ORD-20260804-E88FEA has been submitted by justine hero.',129,'order',0,'2026-08-04 14:25:34','2026-08-04 14:25:34'),(320,35,'order_submitted','New Customer Order','Order #ORD-20260804-E88FEA has been submitted by justine hero.',129,'order',0,'2026-08-04 14:25:34','2026-08-04 14:25:34'),(321,36,'order_submitted','Order Submitted','Your order #ORD-20260804-70FA7C was submitted. We will confirm it after payment verification.',130,'order',0,'2026-08-04 14:26:15','2026-08-04 14:26:15'),(322,1,'order_submitted','New Customer Order','Order #ORD-20260804-70FA7C has been submitted by justine hero.',130,'order',0,'2026-08-04 14:26:15','2026-08-04 14:26:15'),(323,6,'order_submitted','New Customer Order','Order #ORD-20260804-70FA7C has been submitted by justine hero.',130,'order',0,'2026-08-04 14:26:15','2026-08-04 14:26:15'),(324,9,'order_submitted','New Customer Order','Order #ORD-20260804-70FA7C has been submitted by justine hero.',130,'order',0,'2026-08-04 14:26:15','2026-08-04 14:26:15'),(325,10,'order_submitted','New Customer Order','Order #ORD-20260804-70FA7C has been submitted by justine hero.',130,'order',0,'2026-08-04 14:26:15','2026-08-04 14:26:15'),(326,11,'order_submitted','New Customer Order','Order #ORD-20260804-70FA7C has been submitted by justine hero.',130,'order',0,'2026-08-04 14:26:15','2026-08-04 14:26:15'),(327,31,'order_submitted','New Customer Order','Order #ORD-20260804-70FA7C has been submitted by justine hero.',130,'order',0,'2026-08-04 14:26:15','2026-08-04 14:26:15'),(328,35,'order_submitted','New Customer Order','Order #ORD-20260804-70FA7C has been submitted by justine hero.',130,'order',0,'2026-08-04 14:26:15','2026-08-04 14:26:15'),(329,1,'order_submitted','Order Submitted','Your order #ORD-20260804-0739B9 was submitted. We will confirm it after payment verification.',131,'order',0,'2026-08-04 14:27:44','2026-08-04 14:27:44'),(330,1,'order_submitted','New Customer Order','Order #ORD-20260804-0739B9 has been submitted by Justine PayMongo Test.',131,'order',0,'2026-08-04 14:27:44','2026-08-04 14:27:44'),(331,6,'order_submitted','New Customer Order','Order #ORD-20260804-0739B9 has been submitted by Justine PayMongo Test.',131,'order',0,'2026-08-04 14:27:44','2026-08-04 14:27:44'),(332,9,'order_submitted','New Customer Order','Order #ORD-20260804-0739B9 has been submitted by Justine PayMongo Test.',131,'order',0,'2026-08-04 14:27:44','2026-08-04 14:27:44'),(333,10,'order_submitted','New Customer Order','Order #ORD-20260804-0739B9 has been submitted by Justine PayMongo Test.',131,'order',0,'2026-08-04 14:27:44','2026-08-04 14:27:44'),(334,11,'order_submitted','New Customer Order','Order #ORD-20260804-0739B9 has been submitted by Justine PayMongo Test.',131,'order',0,'2026-08-04 14:27:44','2026-08-04 14:27:44'),(335,31,'order_submitted','New Customer Order','Order #ORD-20260804-0739B9 has been submitted by Justine PayMongo Test.',131,'order',0,'2026-08-04 14:27:44','2026-08-04 14:27:44'),(336,35,'order_submitted','New Customer Order','Order #ORD-20260804-0739B9 has been submitted by Justine PayMongo Test.',131,'order',0,'2026-08-04 14:27:44','2026-08-04 14:27:44'),(337,1,'order_submitted','Order Submitted','Your order #ORD-20260804-B1EEB9 was submitted. We will confirm it after payment verification.',132,'order',0,'2026-08-04 14:27:55','2026-08-04 14:27:55'),(338,1,'order_submitted','New Customer Order','Order #ORD-20260804-B1EEB9 has been submitted by Justine PayMongo Test.',132,'order',0,'2026-08-04 14:27:55','2026-08-04 14:27:55'),(339,6,'order_submitted','New Customer Order','Order #ORD-20260804-B1EEB9 has been submitted by Justine PayMongo Test.',132,'order',0,'2026-08-04 14:27:55','2026-08-04 14:27:55'),(340,9,'order_submitted','New Customer Order','Order #ORD-20260804-B1EEB9 has been submitted by Justine PayMongo Test.',132,'order',0,'2026-08-04 14:27:55','2026-08-04 14:27:55'),(341,10,'order_submitted','New Customer Order','Order #ORD-20260804-B1EEB9 has been submitted by Justine PayMongo Test.',132,'order',0,'2026-08-04 14:27:55','2026-08-04 14:27:55'),(342,11,'order_submitted','New Customer Order','Order #ORD-20260804-B1EEB9 has been submitted by Justine PayMongo Test.',132,'order',0,'2026-08-04 14:27:55','2026-08-04 14:27:55'),(343,31,'order_submitted','New Customer Order','Order #ORD-20260804-B1EEB9 has been submitted by Justine PayMongo Test.',132,'order',0,'2026-08-04 14:27:55','2026-08-04 14:27:55'),(344,35,'order_submitted','New Customer Order','Order #ORD-20260804-B1EEB9 has been submitted by Justine PayMongo Test.',132,'order',0,'2026-08-04 14:27:55','2026-08-04 14:27:55'),(345,36,'order_submitted','Order Submitted','Your order #ORD-20260804-80078F was submitted. We will confirm it after payment verification.',133,'order',0,'2026-08-04 14:30:16','2026-08-04 14:30:16'),(346,1,'order_submitted','New Customer Order','Order #ORD-20260804-80078F has been submitted by justine hero.',133,'order',0,'2026-08-04 14:30:16','2026-08-04 14:30:16'),(347,6,'order_submitted','New Customer Order','Order #ORD-20260804-80078F has been submitted by justine hero.',133,'order',0,'2026-08-04 14:30:16','2026-08-04 14:30:16'),(348,9,'order_submitted','New Customer Order','Order #ORD-20260804-80078F has been submitted by justine hero.',133,'order',0,'2026-08-04 14:30:16','2026-08-04 14:30:16'),(349,10,'order_submitted','New Customer Order','Order #ORD-20260804-80078F has been submitted by justine hero.',133,'order',0,'2026-08-04 14:30:16','2026-08-04 14:30:16'),(350,11,'order_submitted','New Customer Order','Order #ORD-20260804-80078F has been submitted by justine hero.',133,'order',0,'2026-08-04 14:30:16','2026-08-04 14:30:16'),(351,31,'order_submitted','New Customer Order','Order #ORD-20260804-80078F has been submitted by justine hero.',133,'order',0,'2026-08-04 14:30:16','2026-08-04 14:30:16'),(352,35,'order_submitted','New Customer Order','Order #ORD-20260804-80078F has been submitted by justine hero.',133,'order',0,'2026-08-04 14:30:16','2026-08-04 14:30:16'),(353,36,'order_submitted','Order Submitted','Your order #ORD-20260804-6A71F7C15F7AA was submitted. We will confirm it after payment verification.',134,'order',0,'2026-08-04 14:31:29','2026-08-04 14:31:29'),(354,1,'order_submitted','New Customer Order','Order #ORD-20260804-6A71F7C15F7AA has been submitted by justine hero.',134,'order',0,'2026-08-04 14:31:29','2026-08-04 14:31:29'),(355,6,'order_submitted','New Customer Order','Order #ORD-20260804-6A71F7C15F7AA has been submitted by justine hero.',134,'order',0,'2026-08-04 14:31:29','2026-08-04 14:31:29'),(356,9,'order_submitted','New Customer Order','Order #ORD-20260804-6A71F7C15F7AA has been submitted by justine hero.',134,'order',0,'2026-08-04 14:31:29','2026-08-04 14:31:29'),(357,10,'order_submitted','New Customer Order','Order #ORD-20260804-6A71F7C15F7AA has been submitted by justine hero.',134,'order',0,'2026-08-04 14:31:29','2026-08-04 14:31:29'),(358,11,'order_submitted','New Customer Order','Order #ORD-20260804-6A71F7C15F7AA has been submitted by justine hero.',134,'order',0,'2026-08-04 14:31:29','2026-08-04 14:31:29'),(359,31,'order_submitted','New Customer Order','Order #ORD-20260804-6A71F7C15F7AA has been submitted by justine hero.',134,'order',0,'2026-08-04 14:31:29','2026-08-04 14:31:29'),(360,35,'order_submitted','New Customer Order','Order #ORD-20260804-6A71F7C15F7AA has been submitted by justine hero.',134,'order',0,'2026-08-04 14:31:29','2026-08-04 14:31:29'),(361,18,'order_submitted','Order Submitted','Your order #ORD-20260805-6A73425526047 was submitted. We will confirm it after payment verification.',135,'order',1,'2026-08-05 14:01:57','2026-09-16 13:52:23'),(362,1,'order_submitted','New Customer Order','Order #ORD-20260805-6A73425526047 has been submitted by justine santos.',135,'order',0,'2026-08-05 14:01:57','2026-08-05 14:01:57'),(363,6,'order_submitted','New Customer Order','Order #ORD-20260805-6A73425526047 has been submitted by justine santos.',135,'order',0,'2026-08-05 14:01:57','2026-08-05 14:01:57'),(364,9,'order_submitted','New Customer Order','Order #ORD-20260805-6A73425526047 has been submitted by justine santos.',135,'order',0,'2026-08-05 14:01:57','2026-08-05 14:01:57'),(365,10,'order_submitted','New Customer Order','Order #ORD-20260805-6A73425526047 has been submitted by justine santos.',135,'order',0,'2026-08-05 14:01:57','2026-08-05 14:01:57'),(366,11,'order_submitted','New Customer Order','Order #ORD-20260805-6A73425526047 has been submitted by justine santos.',135,'order',0,'2026-08-05 14:01:57','2026-08-05 14:01:57'),(367,31,'order_submitted','New Customer Order','Order #ORD-20260805-6A73425526047 has been submitted by justine santos.',135,'order',0,'2026-08-05 14:01:57','2026-08-05 14:01:57'),(368,35,'order_submitted','New Customer Order','Order #ORD-20260805-6A73425526047 has been submitted by justine santos.',135,'order',0,'2026-08-05 14:01:57','2026-08-05 14:01:57'),(369,18,'order_submitted','Order Submitted','Your order #ORD-20260805-6A734264A7ED9 was submitted. We will confirm it after payment verification.',136,'order',1,'2026-08-05 14:02:12','2026-09-16 13:52:23'),(370,1,'order_submitted','New Customer Order','Order #ORD-20260805-6A734264A7ED9 has been submitted by justine santos.',136,'order',0,'2026-08-05 14:02:12','2026-08-05 14:02:12'),(371,6,'order_submitted','New Customer Order','Order #ORD-20260805-6A734264A7ED9 has been submitted by justine santos.',136,'order',0,'2026-08-05 14:02:12','2026-08-05 14:02:12'),(372,9,'order_submitted','New Customer Order','Order #ORD-20260805-6A734264A7ED9 has been submitted by justine santos.',136,'order',0,'2026-08-05 14:02:12','2026-08-05 14:02:12'),(373,10,'order_submitted','New Customer Order','Order #ORD-20260805-6A734264A7ED9 has been submitted by justine santos.',136,'order',0,'2026-08-05 14:02:12','2026-08-05 14:02:12'),(374,11,'order_submitted','New Customer Order','Order #ORD-20260805-6A734264A7ED9 has been submitted by justine santos.',136,'order',0,'2026-08-05 14:02:12','2026-08-05 14:02:12'),(375,31,'order_submitted','New Customer Order','Order #ORD-20260805-6A734264A7ED9 has been submitted by justine santos.',136,'order',0,'2026-08-05 14:02:12','2026-08-05 14:02:12'),(376,35,'order_submitted','New Customer Order','Order #ORD-20260805-6A734264A7ED9 has been submitted by justine santos.',136,'order',0,'2026-08-05 14:02:12','2026-08-05 14:02:12'),(377,18,'order_submitted','Order Submitted','Your order #ORD-20260805-6A7343C00F18C was submitted. We will confirm it after payment verification.',137,'order',1,'2026-08-05 14:08:00','2026-09-16 13:52:23'),(378,1,'order_submitted','New Customer Order','Order #ORD-20260805-6A7343C00F18C has been submitted by justine santos.',137,'order',0,'2026-08-05 14:08:00','2026-08-05 14:08:00'),(379,6,'order_submitted','New Customer Order','Order #ORD-20260805-6A7343C00F18C has been submitted by justine santos.',137,'order',0,'2026-08-05 14:08:00','2026-08-05 14:08:00'),(380,9,'order_submitted','New Customer Order','Order #ORD-20260805-6A7343C00F18C has been submitted by justine santos.',137,'order',0,'2026-08-05 14:08:00','2026-08-05 14:08:00'),(381,10,'order_submitted','New Customer Order','Order #ORD-20260805-6A7343C00F18C has been submitted by justine santos.',137,'order',0,'2026-08-05 14:08:00','2026-08-05 14:08:00'),(382,11,'order_submitted','New Customer Order','Order #ORD-20260805-6A7343C00F18C has been submitted by justine santos.',137,'order',0,'2026-08-05 14:08:00','2026-08-05 14:08:00'),(383,31,'order_submitted','New Customer Order','Order #ORD-20260805-6A7343C00F18C has been submitted by justine santos.',137,'order',0,'2026-08-05 14:08:00','2026-08-05 14:08:00'),(384,35,'order_submitted','New Customer Order','Order #ORD-20260805-6A7343C00F18C has been submitted by justine santos.',137,'order',0,'2026-08-05 14:08:00','2026-08-05 14:08:00'),(385,18,'order_submitted','Order Submitted','Your order #ORD-20260805-6A73459E2FDC4 was submitted. We will confirm it after payment verification.',138,'order',1,'2026-08-05 14:15:58','2026-09-16 13:52:23'),(386,1,'order_submitted','New Customer Order','Order #ORD-20260805-6A73459E2FDC4 has been submitted by justine santos.',138,'order',0,'2026-08-05 14:15:58','2026-08-05 14:15:58'),(387,6,'order_submitted','New Customer Order','Order #ORD-20260805-6A73459E2FDC4 has been submitted by justine santos.',138,'order',0,'2026-08-05 14:15:58','2026-08-05 14:15:58'),(388,9,'order_submitted','New Customer Order','Order #ORD-20260805-6A73459E2FDC4 has been submitted by justine santos.',138,'order',0,'2026-08-05 14:15:58','2026-08-05 14:15:58'),(389,10,'order_submitted','New Customer Order','Order #ORD-20260805-6A73459E2FDC4 has been submitted by justine santos.',138,'order',0,'2026-08-05 14:15:58','2026-08-05 14:15:58'),(390,11,'order_submitted','New Customer Order','Order #ORD-20260805-6A73459E2FDC4 has been submitted by justine santos.',138,'order',0,'2026-08-05 14:15:58','2026-08-05 14:15:58'),(391,31,'order_submitted','New Customer Order','Order #ORD-20260805-6A73459E2FDC4 has been submitted by justine santos.',138,'order',0,'2026-08-05 14:15:58','2026-08-05 14:15:58'),(392,35,'order_submitted','New Customer Order','Order #ORD-20260805-6A73459E2FDC4 has been submitted by justine santos.',138,'order',0,'2026-08-05 14:15:58','2026-08-05 14:15:58'),(393,18,'order_submitted','Order Submitted','Your order #ORD-20260805-6A7345F79D25D was submitted. We will confirm it after payment verification.',139,'order',1,'2026-08-05 14:17:27','2026-09-16 13:52:23'),(394,1,'order_submitted','New Customer Order','Order #ORD-20260805-6A7345F79D25D has been submitted by justine santos.',139,'order',0,'2026-08-05 14:17:27','2026-08-05 14:17:27'),(395,6,'order_submitted','New Customer Order','Order #ORD-20260805-6A7345F79D25D has been submitted by justine santos.',139,'order',0,'2026-08-05 14:17:27','2026-08-05 14:17:27'),(396,9,'order_submitted','New Customer Order','Order #ORD-20260805-6A7345F79D25D has been submitted by justine santos.',139,'order',0,'2026-08-05 14:17:27','2026-08-05 14:17:27'),(397,10,'order_submitted','New Customer Order','Order #ORD-20260805-6A7345F79D25D has been submitted by justine santos.',139,'order',0,'2026-08-05 14:17:27','2026-08-05 14:17:27'),(398,11,'order_submitted','New Customer Order','Order #ORD-20260805-6A7345F79D25D has been submitted by justine santos.',139,'order',0,'2026-08-05 14:17:27','2026-08-05 14:17:27'),(399,31,'order_submitted','New Customer Order','Order #ORD-20260805-6A7345F79D25D has been submitted by justine santos.',139,'order',0,'2026-08-05 14:17:27','2026-08-05 14:17:27'),(400,35,'order_submitted','New Customer Order','Order #ORD-20260805-6A7345F79D25D has been submitted by justine santos.',139,'order',0,'2026-08-05 14:17:27','2026-08-05 14:17:27'),(401,1,'order_paid','Order Payment Verified','Order #ORD-20260805-6A7345F79D25D has a verified PAID payment and is now confirmed.',139,'order',0,'2026-08-05 14:18:20','2026-08-05 14:18:20'),(402,6,'order_paid','Order Payment Verified','Order #ORD-20260805-6A7345F79D25D has a verified PAID payment and is now confirmed.',139,'order',0,'2026-08-05 14:18:20','2026-08-05 14:18:20'),(403,9,'order_paid','Order Payment Verified','Order #ORD-20260805-6A7345F79D25D has a verified PAID payment and is now confirmed.',139,'order',0,'2026-08-05 14:18:20','2026-08-05 14:18:20'),(404,10,'order_paid','Order Payment Verified','Order #ORD-20260805-6A7345F79D25D has a verified PAID payment and is now confirmed.',139,'order',0,'2026-08-05 14:18:20','2026-08-05 14:18:20'),(405,11,'order_paid','Order Payment Verified','Order #ORD-20260805-6A7345F79D25D has a verified PAID payment and is now confirmed.',139,'order',0,'2026-08-05 14:18:20','2026-08-05 14:18:20'),(406,31,'order_paid','Order Payment Verified','Order #ORD-20260805-6A7345F79D25D has a verified PAID payment and is now confirmed.',139,'order',0,'2026-08-05 14:18:20','2026-08-05 14:18:20'),(407,35,'order_paid','Order Payment Verified','Order #ORD-20260805-6A7345F79D25D has a verified PAID payment and is now confirmed.',139,'order',0,'2026-08-05 14:18:20','2026-08-05 14:18:20'),(408,18,'order_assigned','Driver Assigned','A driver has been assigned to your order.',139,'order',1,'2026-08-05 14:18:20','2026-09-16 13:52:23'),(409,18,'order_submitted','Order Submitted','Your order #ORD-20260806-CDB481 was submitted. We will confirm it after payment verification.',140,'order',1,'2026-08-06 09:39:56','2026-09-16 13:52:23'),(410,1,'order_submitted','New Customer Order','Order #ORD-20260806-CDB481 has been submitted by justine santos.',140,'order',0,'2026-08-06 09:39:56','2026-08-06 09:39:56'),(411,6,'order_submitted','New Customer Order','Order #ORD-20260806-CDB481 has been submitted by justine santos.',140,'order',0,'2026-08-06 09:39:56','2026-08-06 09:39:56'),(412,9,'order_submitted','New Customer Order','Order #ORD-20260806-CDB481 has been submitted by justine santos.',140,'order',0,'2026-08-06 09:39:56','2026-08-06 09:39:56'),(413,10,'order_submitted','New Customer Order','Order #ORD-20260806-CDB481 has been submitted by justine santos.',140,'order',0,'2026-08-06 09:39:56','2026-08-06 09:39:56'),(414,11,'order_submitted','New Customer Order','Order #ORD-20260806-CDB481 has been submitted by justine santos.',140,'order',0,'2026-08-06 09:39:56','2026-08-06 09:39:56'),(415,31,'order_submitted','New Customer Order','Order #ORD-20260806-CDB481 has been submitted by justine santos.',140,'order',0,'2026-08-06 09:39:56','2026-08-06 09:39:56'),(416,35,'order_submitted','New Customer Order','Order #ORD-20260806-CDB481 has been submitted by justine santos.',140,'order',0,'2026-08-06 09:39:56','2026-08-06 09:39:56'),(417,1,'order_paid','Order Payment Verified','Order #ORD-20260806-CDB481 has a verified PAID payment and is now confirmed.',140,'order',0,'2026-08-06 09:40:21','2026-08-06 09:40:21'),(418,6,'order_paid','Order Payment Verified','Order #ORD-20260806-CDB481 has a verified PAID payment and is now confirmed.',140,'order',0,'2026-08-06 09:40:21','2026-08-06 09:40:21'),(419,9,'order_paid','Order Payment Verified','Order #ORD-20260806-CDB481 has a verified PAID payment and is now confirmed.',140,'order',0,'2026-08-06 09:40:21','2026-08-06 09:40:21'),(420,10,'order_paid','Order Payment Verified','Order #ORD-20260806-CDB481 has a verified PAID payment and is now confirmed.',140,'order',0,'2026-08-06 09:40:21','2026-08-06 09:40:21'),(421,11,'order_paid','Order Payment Verified','Order #ORD-20260806-CDB481 has a verified PAID payment and is now confirmed.',140,'order',0,'2026-08-06 09:40:21','2026-08-06 09:40:21'),(422,31,'order_paid','Order Payment Verified','Order #ORD-20260806-CDB481 has a verified PAID payment and is now confirmed.',140,'order',0,'2026-08-06 09:40:21','2026-08-06 09:40:21'),(423,35,'order_paid','Order Payment Verified','Order #ORD-20260806-CDB481 has a verified PAID payment and is now confirmed.',140,'order',0,'2026-08-06 09:40:21','2026-08-06 09:40:21'),(424,18,'order_assigned','Driver Assigned','A driver has been assigned to your order.',140,'order',1,'2026-08-06 09:40:21','2026-09-16 13:52:23'),(425,18,'order_submitted','Order Submitted','Your order #ORD-20260812-22EA22 was submitted. We will confirm it after payment verification.',141,'order',1,'2026-08-12 09:05:38','2026-09-16 13:52:23'),(426,1,'order_submitted','New Customer Order','Order #ORD-20260812-22EA22 has been submitted by justine santos.',141,'order',0,'2026-08-12 09:05:38','2026-08-12 09:05:38'),(427,6,'order_submitted','New Customer Order','Order #ORD-20260812-22EA22 has been submitted by justine santos.',141,'order',0,'2026-08-12 09:05:38','2026-08-12 09:05:38'),(428,9,'order_submitted','New Customer Order','Order #ORD-20260812-22EA22 has been submitted by justine santos.',141,'order',0,'2026-08-12 09:05:38','2026-08-12 09:05:38'),(429,10,'order_submitted','New Customer Order','Order #ORD-20260812-22EA22 has been submitted by justine santos.',141,'order',0,'2026-08-12 09:05:38','2026-08-12 09:05:38'),(430,11,'order_submitted','New Customer Order','Order #ORD-20260812-22EA22 has been submitted by justine santos.',141,'order',0,'2026-08-12 09:05:38','2026-08-12 09:05:38'),(431,31,'order_submitted','New Customer Order','Order #ORD-20260812-22EA22 has been submitted by justine santos.',141,'order',0,'2026-08-12 09:05:38','2026-08-12 09:05:38'),(432,35,'order_submitted','New Customer Order','Order #ORD-20260812-22EA22 has been submitted by justine santos.',141,'order',0,'2026-08-12 09:05:38','2026-08-12 09:05:38'),(433,1,'order_paid','Order Payment Verified','Order #ORD-20260812-22EA22 has a verified PAID payment and is now confirmed.',141,'order',0,'2026-08-12 09:05:58','2026-08-12 09:05:58'),(434,6,'order_paid','Order Payment Verified','Order #ORD-20260812-22EA22 has a verified PAID payment and is now confirmed.',141,'order',0,'2026-08-12 09:05:58','2026-08-12 09:05:58'),(435,9,'order_paid','Order Payment Verified','Order #ORD-20260812-22EA22 has a verified PAID payment and is now confirmed.',141,'order',0,'2026-08-12 09:05:58','2026-08-12 09:05:58'),(436,10,'order_paid','Order Payment Verified','Order #ORD-20260812-22EA22 has a verified PAID payment and is now confirmed.',141,'order',0,'2026-08-12 09:05:58','2026-08-12 09:05:58'),(437,11,'order_paid','Order Payment Verified','Order #ORD-20260812-22EA22 has a verified PAID payment and is now confirmed.',141,'order',0,'2026-08-12 09:05:58','2026-08-12 09:05:58'),(438,31,'order_paid','Order Payment Verified','Order #ORD-20260812-22EA22 has a verified PAID payment and is now confirmed.',141,'order',0,'2026-08-12 09:05:58','2026-08-12 09:05:58'),(439,35,'order_paid','Order Payment Verified','Order #ORD-20260812-22EA22 has a verified PAID payment and is now confirmed.',141,'order',0,'2026-08-12 09:05:58','2026-08-12 09:05:58'),(440,18,'order_assigned','Driver Assigned','A driver has been assigned to your order.',141,'order',1,'2026-08-12 09:05:58','2026-09-16 13:52:23'),(441,18,'order_submitted','Order Submitted','Your order #ORD-20260813-7DFE08 was submitted. We will confirm it after payment verification.',142,'order',1,'2026-08-13 03:56:23','2026-09-16 13:52:23'),(442,1,'order_submitted','New Customer Order','Order #ORD-20260813-7DFE08 has been submitted by justine santos.',142,'order',0,'2026-08-13 03:56:23','2026-08-13 03:56:23'),(443,6,'order_submitted','New Customer Order','Order #ORD-20260813-7DFE08 has been submitted by justine santos.',142,'order',0,'2026-08-13 03:56:23','2026-08-13 03:56:23'),(444,9,'order_submitted','New Customer Order','Order #ORD-20260813-7DFE08 has been submitted by justine santos.',142,'order',0,'2026-08-13 03:56:23','2026-08-13 03:56:23'),(445,10,'order_submitted','New Customer Order','Order #ORD-20260813-7DFE08 has been submitted by justine santos.',142,'order',0,'2026-08-13 03:56:23','2026-08-13 03:56:23'),(446,11,'order_submitted','New Customer Order','Order #ORD-20260813-7DFE08 has been submitted by justine santos.',142,'order',0,'2026-08-13 03:56:23','2026-08-13 03:56:23'),(447,31,'order_submitted','New Customer Order','Order #ORD-20260813-7DFE08 has been submitted by justine santos.',142,'order',0,'2026-08-13 03:56:23','2026-08-13 03:56:23'),(448,35,'order_submitted','New Customer Order','Order #ORD-20260813-7DFE08 has been submitted by justine santos.',142,'order',0,'2026-08-13 03:56:23','2026-08-13 03:56:23'),(449,18,'order_submitted','Order Submitted','Your order #ORD-20260826-1E51E9 was submitted. We will confirm it after payment verification.',143,'order',1,'2026-08-25 16:25:37','2026-09-16 13:52:23'),(450,1,'order_submitted','New Customer Order','Order #ORD-20260826-1E51E9 has been submitted by justine santos.',143,'order',0,'2026-08-25 16:25:37','2026-08-25 16:25:37'),(451,6,'order_submitted','New Customer Order','Order #ORD-20260826-1E51E9 has been submitted by justine santos.',143,'order',0,'2026-08-25 16:25:37','2026-08-25 16:25:37'),(452,9,'order_submitted','New Customer Order','Order #ORD-20260826-1E51E9 has been submitted by justine santos.',143,'order',0,'2026-08-25 16:25:37','2026-08-25 16:25:37'),(453,10,'order_submitted','New Customer Order','Order #ORD-20260826-1E51E9 has been submitted by justine santos.',143,'order',0,'2026-08-25 16:25:37','2026-08-25 16:25:37'),(454,11,'order_submitted','New Customer Order','Order #ORD-20260826-1E51E9 has been submitted by justine santos.',143,'order',0,'2026-08-25 16:25:37','2026-08-25 16:25:37'),(455,31,'order_submitted','New Customer Order','Order #ORD-20260826-1E51E9 has been submitted by justine santos.',143,'order',0,'2026-08-25 16:25:37','2026-08-25 16:25:37'),(456,35,'order_submitted','New Customer Order','Order #ORD-20260826-1E51E9 has been submitted by justine santos.',143,'order',0,'2026-08-25 16:25:37','2026-08-25 16:25:37'),(457,1,'order_paid','Order Payment Verified','Order #ORD-20260826-1E51E9 has a verified PAID payment and is now confirmed.',143,'order',0,'2026-08-25 16:25:52','2026-08-25 16:25:52'),(458,6,'order_paid','Order Payment Verified','Order #ORD-20260826-1E51E9 has a verified PAID payment and is now confirmed.',143,'order',0,'2026-08-25 16:25:52','2026-08-25 16:25:52'),(459,9,'order_paid','Order Payment Verified','Order #ORD-20260826-1E51E9 has a verified PAID payment and is now confirmed.',143,'order',0,'2026-08-25 16:25:52','2026-08-25 16:25:52'),(460,10,'order_paid','Order Payment Verified','Order #ORD-20260826-1E51E9 has a verified PAID payment and is now confirmed.',143,'order',0,'2026-08-25 16:25:52','2026-08-25 16:25:52'),(461,11,'order_paid','Order Payment Verified','Order #ORD-20260826-1E51E9 has a verified PAID payment and is now confirmed.',143,'order',0,'2026-08-25 16:25:52','2026-08-25 16:25:52'),(462,31,'order_paid','Order Payment Verified','Order #ORD-20260826-1E51E9 has a verified PAID payment and is now confirmed.',143,'order',0,'2026-08-25 16:25:52','2026-08-25 16:25:52'),(463,35,'order_paid','Order Payment Verified','Order #ORD-20260826-1E51E9 has a verified PAID payment and is now confirmed.',143,'order',0,'2026-08-25 16:25:52','2026-08-25 16:25:52'),(464,18,'order_assigned','Driver Assigned','A driver has been assigned to your order.',143,'order',1,'2026-08-25 16:25:52','2026-09-16 13:52:23'),(465,18,'order_on_the_way','Driver on the Way','Your driver is on the way to your location.',143,'order',1,'2026-08-25 16:30:52','2026-09-16 13:52:22'),(466,18,'order_arriving','Driver Arriving Soon','Your driver is arriving soon. Please be ready.',143,'order',1,'2026-08-25 16:31:07','2026-09-16 13:52:22'),(467,18,'order_arriving','Driver Arriving Soon','Your driver is arriving soon. Please be ready.',143,'order',1,'2026-08-25 16:31:08','2026-09-16 13:52:22'),(468,18,'order_arriving','Driver Arriving Soon','Your driver is arriving soon. Please be ready.',143,'order',1,'2026-08-25 16:31:08','2026-09-16 13:52:22'),(469,1,'franchise_submitted','New Franchise Application','ako budoy submitted application FR-20260827-000018-584E (justine santos).',23,'franchise_application',0,'2026-08-27 03:43:03','2026-08-27 03:43:03'),(470,6,'franchise_submitted','New Franchise Application','ako budoy submitted application FR-20260827-000018-584E (justine santos).',23,'franchise_application',0,'2026-08-27 03:43:03','2026-08-27 03:43:03'),(471,9,'franchise_submitted','New Franchise Application','ako budoy submitted application FR-20260827-000018-584E (justine santos).',23,'franchise_application',0,'2026-08-27 03:43:03','2026-08-27 03:43:03'),(472,15,'franchise_submitted','New Franchise Application','ako budoy submitted application FR-20260827-000018-584E (justine santos).',23,'franchise_application',0,'2026-08-27 03:43:03','2026-08-27 03:43:03'),(473,18,'order_submitted','Order Submitted','Your order #ORD-20260916-6E64B8 was submitted. We will confirm it after payment verification.',144,'order',1,'2026-09-16 07:54:46','2026-09-16 13:52:21'),(474,1,'order_submitted','New Customer Order','Order #ORD-20260916-6E64B8 has been submitted by justine santos.',144,'order',0,'2026-09-16 07:54:46','2026-09-16 07:54:46'),(475,6,'order_submitted','New Customer Order','Order #ORD-20260916-6E64B8 has been submitted by justine santos.',144,'order',0,'2026-09-16 07:54:46','2026-09-16 07:54:46'),(476,9,'order_submitted','New Customer Order','Order #ORD-20260916-6E64B8 has been submitted by justine santos.',144,'order',0,'2026-09-16 07:54:46','2026-09-16 07:54:46'),(477,10,'order_submitted','New Customer Order','Order #ORD-20260916-6E64B8 has been submitted by justine santos.',144,'order',0,'2026-09-16 07:54:46','2026-09-16 07:54:46'),(478,11,'order_submitted','New Customer Order','Order #ORD-20260916-6E64B8 has been submitted by justine santos.',144,'order',0,'2026-09-16 07:54:46','2026-09-16 07:54:46'),(479,31,'order_submitted','New Customer Order','Order #ORD-20260916-6E64B8 has been submitted by justine santos.',144,'order',0,'2026-09-16 07:54:46','2026-09-16 07:54:46'),(480,35,'order_submitted','New Customer Order','Order #ORD-20260916-6E64B8 has been submitted by justine santos.',144,'order',0,'2026-09-16 07:54:46','2026-09-16 07:54:46'),(481,18,'order_payment_cancelled','Payment Cancelled','Payment was cancelled for order #ORD-20260916-6E64B8.',144,'order',1,'2026-09-16 07:55:04','2026-09-16 13:52:21'),(482,1,'order_payment_cancelled','Customer Payment Cancelled','Customer cancelled payment for order #ORD-20260916-6E64B8.',144,'order',0,'2026-09-16 07:55:04','2026-09-16 07:55:04'),(483,6,'order_payment_cancelled','Customer Payment Cancelled','Customer cancelled payment for order #ORD-20260916-6E64B8.',144,'order',0,'2026-09-16 07:55:04','2026-09-16 07:55:04'),(484,9,'order_payment_cancelled','Customer Payment Cancelled','Customer cancelled payment for order #ORD-20260916-6E64B8.',144,'order',0,'2026-09-16 07:55:04','2026-09-16 07:55:04'),(485,10,'order_payment_cancelled','Customer Payment Cancelled','Customer cancelled payment for order #ORD-20260916-6E64B8.',144,'order',0,'2026-09-16 07:55:04','2026-09-16 07:55:04'),(486,11,'order_payment_cancelled','Customer Payment Cancelled','Customer cancelled payment for order #ORD-20260916-6E64B8.',144,'order',0,'2026-09-16 07:55:04','2026-09-16 07:55:04'),(487,31,'order_payment_cancelled','Customer Payment Cancelled','Customer cancelled payment for order #ORD-20260916-6E64B8.',144,'order',0,'2026-09-16 07:55:04','2026-09-16 07:55:04'),(488,35,'order_payment_cancelled','Customer Payment Cancelled','Customer cancelled payment for order #ORD-20260916-6E64B8.',144,'order',0,'2026-09-16 07:55:04','2026-09-16 07:55:04'),(489,18,'order_submitted','Order Submitted','Your order #ORD-20260916-9D0501 was submitted. We will confirm it after payment verification.',147,'order',1,'2026-09-16 13:19:37','2026-09-16 13:52:21'),(490,1,'order_submitted','New Customer Order','Order #ORD-20260916-9D0501 has been submitted by justine santos.',147,'order',0,'2026-09-16 13:19:37','2026-09-16 13:19:37'),(491,6,'order_submitted','New Customer Order','Order #ORD-20260916-9D0501 has been submitted by justine santos.',147,'order',0,'2026-09-16 13:19:37','2026-09-16 13:19:37'),(492,9,'order_submitted','New Customer Order','Order #ORD-20260916-9D0501 has been submitted by justine santos.',147,'order',0,'2026-09-16 13:19:37','2026-09-16 13:19:37'),(493,10,'order_submitted','New Customer Order','Order #ORD-20260916-9D0501 has been submitted by justine santos.',147,'order',0,'2026-09-16 13:19:37','2026-09-16 13:19:37'),(494,11,'order_submitted','New Customer Order','Order #ORD-20260916-9D0501 has been submitted by justine santos.',147,'order',0,'2026-09-16 13:19:37','2026-09-16 13:19:37'),(495,31,'order_submitted','New Customer Order','Order #ORD-20260916-9D0501 has been submitted by justine santos.',147,'order',0,'2026-09-16 13:19:37','2026-09-16 13:19:37'),(496,35,'order_submitted','New Customer Order','Order #ORD-20260916-9D0501 has been submitted by justine santos.',147,'order',0,'2026-09-16 13:19:37','2026-09-16 13:19:37'),(497,1,'order_paid','Order Payment Verified','Order #ORD-20260916-9D0501 has a verified PAID payment and is now confirmed.',147,'order',0,'2026-09-16 13:19:52','2026-09-16 13:19:52'),(498,6,'order_paid','Order Payment Verified','Order #ORD-20260916-9D0501 has a verified PAID payment and is now confirmed.',147,'order',0,'2026-09-16 13:19:52','2026-09-16 13:19:52'),(499,9,'order_paid','Order Payment Verified','Order #ORD-20260916-9D0501 has a verified PAID payment and is now confirmed.',147,'order',0,'2026-09-16 13:19:52','2026-09-16 13:19:52'),(500,10,'order_paid','Order Payment Verified','Order #ORD-20260916-9D0501 has a verified PAID payment and is now confirmed.',147,'order',0,'2026-09-16 13:19:52','2026-09-16 13:19:52'),(501,11,'order_paid','Order Payment Verified','Order #ORD-20260916-9D0501 has a verified PAID payment and is now confirmed.',147,'order',0,'2026-09-16 13:19:52','2026-09-16 13:19:52'),(502,31,'order_paid','Order Payment Verified','Order #ORD-20260916-9D0501 has a verified PAID payment and is now confirmed.',147,'order',0,'2026-09-16 13:19:52','2026-09-16 13:19:52'),(503,35,'order_paid','Order Payment Verified','Order #ORD-20260916-9D0501 has a verified PAID payment and is now confirmed.',147,'order',0,'2026-09-16 13:19:52','2026-09-16 13:19:52'),(504,18,'order_assigned','Driver Assigned','A driver has been assigned to your order.',147,'order',1,'2026-09-16 13:19:53','2026-09-16 13:52:21'),(505,18,'order_submitted','Order Submitted','Your order #ORD-20260916-2ABF12 was submitted. We will confirm it after payment verification.',148,'order',1,'2026-09-16 13:47:14','2026-09-16 13:52:20'),(506,1,'order_submitted','New Customer Order','Order #ORD-20260916-2ABF12 has been submitted by justine santos.',148,'order',0,'2026-09-16 13:47:14','2026-09-16 13:47:14'),(507,6,'order_submitted','New Customer Order','Order #ORD-20260916-2ABF12 has been submitted by justine santos.',148,'order',0,'2026-09-16 13:47:14','2026-09-16 13:47:14'),(508,9,'order_submitted','New Customer Order','Order #ORD-20260916-2ABF12 has been submitted by justine santos.',148,'order',0,'2026-09-16 13:47:14','2026-09-16 13:47:14'),(509,10,'order_submitted','New Customer Order','Order #ORD-20260916-2ABF12 has been submitted by justine santos.',148,'order',0,'2026-09-16 13:47:14','2026-09-16 13:47:14'),(510,11,'order_submitted','New Customer Order','Order #ORD-20260916-2ABF12 has been submitted by justine santos.',148,'order',0,'2026-09-16 13:47:14','2026-09-16 13:47:14'),(511,31,'order_submitted','New Customer Order','Order #ORD-20260916-2ABF12 has been submitted by justine santos.',148,'order',0,'2026-09-16 13:47:14','2026-09-16 13:47:14'),(512,35,'order_submitted','New Customer Order','Order #ORD-20260916-2ABF12 has been submitted by justine santos.',148,'order',0,'2026-09-16 13:47:14','2026-09-16 13:47:14'),(513,1,'order_paid','Order Payment Verified','Order #ORD-20260916-2ABF12 has a verified PAID payment and is now confirmed.',148,'order',0,'2026-09-16 13:47:30','2026-09-16 13:47:30'),(514,6,'order_paid','Order Payment Verified','Order #ORD-20260916-2ABF12 has a verified PAID payment and is now confirmed.',148,'order',0,'2026-09-16 13:47:30','2026-09-16 13:47:30'),(515,9,'order_paid','Order Payment Verified','Order #ORD-20260916-2ABF12 has a verified PAID payment and is now confirmed.',148,'order',0,'2026-09-16 13:47:30','2026-09-16 13:47:30'),(516,10,'order_paid','Order Payment Verified','Order #ORD-20260916-2ABF12 has a verified PAID payment and is now confirmed.',148,'order',0,'2026-09-16 13:47:30','2026-09-16 13:47:30'),(517,11,'order_paid','Order Payment Verified','Order #ORD-20260916-2ABF12 has a verified PAID payment and is now confirmed.',148,'order',0,'2026-09-16 13:47:30','2026-09-16 13:47:30'),(518,31,'order_paid','Order Payment Verified','Order #ORD-20260916-2ABF12 has a verified PAID payment and is now confirmed.',148,'order',0,'2026-09-16 13:47:30','2026-09-16 13:47:30'),(519,35,'order_paid','Order Payment Verified','Order #ORD-20260916-2ABF12 has a verified PAID payment and is now confirmed.',148,'order',0,'2026-09-16 13:47:30','2026-09-16 13:47:30'),(520,18,'order_assigned','Driver Assigned','A driver has been assigned to your order.',148,'order',1,'2026-09-16 13:47:30','2026-09-16 13:52:20'),(521,18,'order_cancelled','Order Cancelled','Your order delivery has been cancelled.',148,'order',0,'2026-09-16 13:52:52','2026-09-16 13:52:52'),(522,8,'order_submitted','Order Submitted','Your order #ORD-20260924-495477 was submitted. We will confirm it after payment verification.',149,'order',1,'2026-09-24 09:52:20','2026-09-24 15:03:18'),(523,1,'order_submitted','New Customer Order','Order #ORD-20260924-495477 has been submitted by Local Two.',149,'order',0,'2026-09-24 09:52:20','2026-09-24 09:52:20'),(524,6,'order_submitted','New Customer Order','Order #ORD-20260924-495477 has been submitted by Local Two.',149,'order',0,'2026-09-24 09:52:20','2026-09-24 09:52:20'),(525,9,'order_submitted','New Customer Order','Order #ORD-20260924-495477 has been submitted by Local Two.',149,'order',0,'2026-09-24 09:52:20','2026-09-24 09:52:20'),(526,10,'order_submitted','New Customer Order','Order #ORD-20260924-495477 has been submitted by Local Two.',149,'order',0,'2026-09-24 09:52:20','2026-09-24 09:52:20'),(527,11,'order_submitted','New Customer Order','Order #ORD-20260924-495477 has been submitted by Local Two.',149,'order',0,'2026-09-24 09:52:20','2026-09-24 09:52:20'),(528,31,'order_submitted','New Customer Order','Order #ORD-20260924-495477 has been submitted by Local Two.',149,'order',0,'2026-09-24 09:52:20','2026-09-24 09:52:20'),(529,35,'order_submitted','New Customer Order','Order #ORD-20260924-495477 has been submitted by Local Two.',149,'order',0,'2026-09-24 09:52:20','2026-09-24 09:52:20'),(530,38,'order_submitted','New Customer Order','Order #ORD-20260924-495477 has been submitted by Local Two.',149,'order',0,'2026-09-24 09:52:20','2026-09-24 09:52:20'),(531,42,'order_submitted','New Customer Order','Order #ORD-20260924-495477 has been submitted by Local Two.',149,'order',0,'2026-09-24 09:52:20','2026-09-24 09:52:20'),(532,43,'order_submitted','New Customer Order','Order #ORD-20260924-495477 has been submitted by Local Two.',149,'order',0,'2026-09-24 09:52:20','2026-09-24 09:52:20'),(533,44,'order_submitted','New Customer Order','Order #ORD-20260924-495477 has been submitted by Local Two.',149,'order',0,'2026-09-24 09:52:20','2026-09-24 09:52:20'),(534,45,'order_submitted','New Customer Order','Order #ORD-20260924-495477 has been submitted by Local Two.',149,'order',0,'2026-09-24 09:52:20','2026-09-24 09:52:20'),(535,46,'order_submitted','New Customer Order','Order #ORD-20260924-495477 has been submitted by Local Two.',149,'order',0,'2026-09-24 09:52:20','2026-09-24 09:52:20'),(536,1,'order_paid','Order Payment Verified','Order #ORD-20260924-495477 has a verified PAID payment and is now confirmed.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(537,6,'order_paid','Order Payment Verified','Order #ORD-20260924-495477 has a verified PAID payment and is now confirmed.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(538,9,'order_paid','Order Payment Verified','Order #ORD-20260924-495477 has a verified PAID payment and is now confirmed.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(539,10,'order_paid','Order Payment Verified','Order #ORD-20260924-495477 has a verified PAID payment and is now confirmed.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(540,11,'order_paid','Order Payment Verified','Order #ORD-20260924-495477 has a verified PAID payment and is now confirmed.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(541,31,'order_paid','Order Payment Verified','Order #ORD-20260924-495477 has a verified PAID payment and is now confirmed.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(542,35,'order_paid','Order Payment Verified','Order #ORD-20260924-495477 has a verified PAID payment and is now confirmed.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(543,38,'order_paid','Order Payment Verified','Order #ORD-20260924-495477 has a verified PAID payment and is now confirmed.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(544,42,'order_paid','Order Payment Verified','Order #ORD-20260924-495477 has a verified PAID payment and is now confirmed.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(545,43,'order_paid','Order Payment Verified','Order #ORD-20260924-495477 has a verified PAID payment and is now confirmed.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(546,44,'order_paid','Order Payment Verified','Order #ORD-20260924-495477 has a verified PAID payment and is now confirmed.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(547,45,'order_paid','Order Payment Verified','Order #ORD-20260924-495477 has a verified PAID payment and is now confirmed.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(548,46,'order_paid','Order Payment Verified','Order #ORD-20260924-495477 has a verified PAID payment and is now confirmed.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(549,1,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-495477 has been paid and is waiting for a delivery rider to accept and pick up.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(550,6,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-495477 has been paid and is waiting for a delivery rider to accept and pick up.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(551,9,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-495477 has been paid and is waiting for a delivery rider to accept and pick up.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(552,10,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-495477 has been paid and is waiting for a delivery rider to accept and pick up.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(553,11,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-495477 has been paid and is waiting for a delivery rider to accept and pick up.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(554,31,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-495477 has been paid and is waiting for a delivery rider to accept and pick up.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(555,35,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-495477 has been paid and is waiting for a delivery rider to accept and pick up.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(556,38,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-495477 has been paid and is waiting for a delivery rider to accept and pick up.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(557,42,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-495477 has been paid and is waiting for a delivery rider to accept and pick up.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(558,43,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-495477 has been paid and is waiting for a delivery rider to accept and pick up.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(559,44,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-495477 has been paid and is waiting for a delivery rider to accept and pick up.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(560,45,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-495477 has been paid and is waiting for a delivery rider to accept and pick up.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(561,46,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-495477 has been paid and is waiting for a delivery rider to accept and pick up.',149,'order',0,'2026-09-24 09:52:33','2026-09-24 09:52:33'),(562,1,'rider_arrived','Rider Arrived at Store','Rider justine santos (RDR-0011) has arrived at the store to pick up Order #ORD-20260924-495477. Please approve or reject handover.',149,'order',0,'2026-09-24 09:53:34','2026-09-24 09:53:34'),(563,1,'rider_arrived','Rider Arrived at Store','Rider justine santos (RDR-0011) has arrived at the store to pick up Order #ORD-20260924-495477. Please approve or reject handover.',149,'order',0,'2026-09-24 09:55:47','2026-09-24 09:55:47'),(564,1,'rider_arrived','Rider Arrived at Store','Rider justine santos (RDR-0011) has arrived at the store to pick up Order #ORD-20260924-495477. Please approve or reject handover.',149,'order',0,'2026-09-24 09:57:04','2026-09-24 09:57:04'),(565,9,'order_delivered','Order Delivered!','Your order #ORD-20260217-69946D8 has been successfully delivered. Photo verification has been submitted by your rider.',66,'order',0,'2026-09-24 15:03:49','2026-09-24 15:03:49'),(566,1,'order_delivered','Order Delivered with Photo Proof','Rider justine santos (RDR-0011) has completed delivery of Order #ORD-20260217-69946D8. Photo proof of delivery has been submitted and is ready for your review.',66,'order',0,'2026-09-24 15:03:49','2026-09-24 15:03:49'),(567,4,'order_submitted','Order Submitted','Your order #ORD-20260924-FE2F41 was submitted. We will confirm it after payment verification.',150,'order',0,'2026-09-24 15:26:55','2026-09-24 15:26:55'),(568,1,'order_submitted','New Customer Order','Order #ORD-20260924-FE2F41 has been submitted by justine santos.',150,'order',0,'2026-09-24 15:26:55','2026-09-24 15:26:55'),(569,6,'order_submitted','New Customer Order','Order #ORD-20260924-FE2F41 has been submitted by justine santos.',150,'order',0,'2026-09-24 15:26:55','2026-09-24 15:26:55'),(570,9,'order_submitted','New Customer Order','Order #ORD-20260924-FE2F41 has been submitted by justine santos.',150,'order',0,'2026-09-24 15:26:55','2026-09-24 15:26:55'),(571,10,'order_submitted','New Customer Order','Order #ORD-20260924-FE2F41 has been submitted by justine santos.',150,'order',0,'2026-09-24 15:26:55','2026-09-24 15:26:55'),(572,11,'order_submitted','New Customer Order','Order #ORD-20260924-FE2F41 has been submitted by justine santos.',150,'order',0,'2026-09-24 15:26:55','2026-09-24 15:26:55'),(573,31,'order_submitted','New Customer Order','Order #ORD-20260924-FE2F41 has been submitted by justine santos.',150,'order',0,'2026-09-24 15:26:55','2026-09-24 15:26:55'),(574,35,'order_submitted','New Customer Order','Order #ORD-20260924-FE2F41 has been submitted by justine santos.',150,'order',0,'2026-09-24 15:26:55','2026-09-24 15:26:55'),(575,38,'order_submitted','New Customer Order','Order #ORD-20260924-FE2F41 has been submitted by justine santos.',150,'order',0,'2026-09-24 15:26:55','2026-09-24 15:26:55'),(576,42,'order_submitted','New Customer Order','Order #ORD-20260924-FE2F41 has been submitted by justine santos.',150,'order',0,'2026-09-24 15:26:55','2026-09-24 15:26:55'),(577,43,'order_submitted','New Customer Order','Order #ORD-20260924-FE2F41 has been submitted by justine santos.',150,'order',0,'2026-09-24 15:26:55','2026-09-24 15:26:55'),(578,44,'order_submitted','New Customer Order','Order #ORD-20260924-FE2F41 has been submitted by justine santos.',150,'order',0,'2026-09-24 15:26:55','2026-09-24 15:26:55'),(579,45,'order_submitted','New Customer Order','Order #ORD-20260924-FE2F41 has been submitted by justine santos.',150,'order',0,'2026-09-24 15:26:55','2026-09-24 15:26:55'),(580,46,'order_submitted','New Customer Order','Order #ORD-20260924-FE2F41 has been submitted by justine santos.',150,'order',0,'2026-09-24 15:26:55','2026-09-24 15:26:55'),(581,1,'order_paid','Order Payment Verified','Order #ORD-20260924-FE2F41 has a verified PAID payment and is now confirmed.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(582,6,'order_paid','Order Payment Verified','Order #ORD-20260924-FE2F41 has a verified PAID payment and is now confirmed.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(583,9,'order_paid','Order Payment Verified','Order #ORD-20260924-FE2F41 has a verified PAID payment and is now confirmed.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(584,10,'order_paid','Order Payment Verified','Order #ORD-20260924-FE2F41 has a verified PAID payment and is now confirmed.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(585,11,'order_paid','Order Payment Verified','Order #ORD-20260924-FE2F41 has a verified PAID payment and is now confirmed.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(586,31,'order_paid','Order Payment Verified','Order #ORD-20260924-FE2F41 has a verified PAID payment and is now confirmed.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(587,35,'order_paid','Order Payment Verified','Order #ORD-20260924-FE2F41 has a verified PAID payment and is now confirmed.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(588,38,'order_paid','Order Payment Verified','Order #ORD-20260924-FE2F41 has a verified PAID payment and is now confirmed.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(589,42,'order_paid','Order Payment Verified','Order #ORD-20260924-FE2F41 has a verified PAID payment and is now confirmed.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(590,43,'order_paid','Order Payment Verified','Order #ORD-20260924-FE2F41 has a verified PAID payment and is now confirmed.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(591,44,'order_paid','Order Payment Verified','Order #ORD-20260924-FE2F41 has a verified PAID payment and is now confirmed.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(592,45,'order_paid','Order Payment Verified','Order #ORD-20260924-FE2F41 has a verified PAID payment and is now confirmed.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(593,46,'order_paid','Order Payment Verified','Order #ORD-20260924-FE2F41 has a verified PAID payment and is now confirmed.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(594,1,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-FE2F41 has been paid and is waiting for a delivery rider to accept and pick up.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(595,6,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-FE2F41 has been paid and is waiting for a delivery rider to accept and pick up.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(596,9,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-FE2F41 has been paid and is waiting for a delivery rider to accept and pick up.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(597,10,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-FE2F41 has been paid and is waiting for a delivery rider to accept and pick up.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(598,11,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-FE2F41 has been paid and is waiting for a delivery rider to accept and pick up.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(599,31,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-FE2F41 has been paid and is waiting for a delivery rider to accept and pick up.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(600,35,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-FE2F41 has been paid and is waiting for a delivery rider to accept and pick up.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(601,38,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-FE2F41 has been paid and is waiting for a delivery rider to accept and pick up.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(602,42,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-FE2F41 has been paid and is waiting for a delivery rider to accept and pick up.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(603,43,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-FE2F41 has been paid and is waiting for a delivery rider to accept and pick up.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(604,44,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-FE2F41 has been paid and is waiting for a delivery rider to accept and pick up.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(605,45,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-FE2F41 has been paid and is waiting for a delivery rider to accept and pick up.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(606,46,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260924-FE2F41 has been paid and is waiting for a delivery rider to accept and pick up.',150,'order',0,'2026-09-24 15:27:09','2026-09-24 15:27:09'),(607,38,'rider_arrived','Rider Arrived at Store','Rider justine santos (RDR-0011) has arrived at the store to pick up Order #ORD-20260924-FE2F41. Please approve or reject handover.',150,'order',0,'2026-09-24 15:28:17','2026-09-24 15:28:17'),(608,4,'order_delivered','Order Delivered!','Your order #ORD-20260924-FE2F41 has been successfully delivered. Photo verification has been submitted by your rider.',150,'order',0,'2026-09-24 15:28:27','2026-09-24 15:28:27'),(609,38,'order_delivered','Order Delivered with Photo Proof','Rider justine santos (RDR-0011) has completed delivery of Order #ORD-20260924-FE2F41. Photo proof of delivery has been submitted and is ready for your review.',150,'order',0,'2026-09-24 15:28:27','2026-09-24 15:28:27'),(610,9,'order_delivered','Order Delivered!','Your order #ORD-20260217-6994673 has been successfully delivered. Photo verification has been submitted by your rider.',64,'order',0,'2026-09-24 15:52:54','2026-09-24 15:52:54'),(611,1,'order_delivered','Order Delivered with Photo Proof','Rider justine santos (RDR-0011) has completed delivery of Order #ORD-20260217-6994673. Photo proof of delivery has been submitted and is ready for your review.',64,'order',0,'2026-09-24 15:52:54','2026-09-24 15:52:54'),(612,4,'order_submitted','Order Submitted','Your order #ORD-20260925-8144AD was submitted. We will confirm it after payment verification.',151,'order',0,'2026-09-24 16:49:12','2026-09-24 16:49:12'),(613,1,'order_submitted','New Customer Order','Order #ORD-20260925-8144AD has been submitted by justine santos.',151,'order',0,'2026-09-24 16:49:12','2026-09-24 16:49:12'),(614,6,'order_submitted','New Customer Order','Order #ORD-20260925-8144AD has been submitted by justine santos.',151,'order',0,'2026-09-24 16:49:12','2026-09-24 16:49:12'),(615,9,'order_submitted','New Customer Order','Order #ORD-20260925-8144AD has been submitted by justine santos.',151,'order',0,'2026-09-24 16:49:12','2026-09-24 16:49:12'),(616,10,'order_submitted','New Customer Order','Order #ORD-20260925-8144AD has been submitted by justine santos.',151,'order',0,'2026-09-24 16:49:12','2026-09-24 16:49:12'),(617,11,'order_submitted','New Customer Order','Order #ORD-20260925-8144AD has been submitted by justine santos.',151,'order',0,'2026-09-24 16:49:12','2026-09-24 16:49:12'),(618,31,'order_submitted','New Customer Order','Order #ORD-20260925-8144AD has been submitted by justine santos.',151,'order',0,'2026-09-24 16:49:12','2026-09-24 16:49:12'),(619,35,'order_submitted','New Customer Order','Order #ORD-20260925-8144AD has been submitted by justine santos.',151,'order',0,'2026-09-24 16:49:12','2026-09-24 16:49:12'),(620,38,'order_submitted','New Customer Order','Order #ORD-20260925-8144AD has been submitted by justine santos.',151,'order',0,'2026-09-24 16:49:12','2026-09-24 16:49:12'),(621,42,'order_submitted','New Customer Order','Order #ORD-20260925-8144AD has been submitted by justine santos.',151,'order',0,'2026-09-24 16:49:12','2026-09-24 16:49:12'),(622,43,'order_submitted','New Customer Order','Order #ORD-20260925-8144AD has been submitted by justine santos.',151,'order',0,'2026-09-24 16:49:12','2026-09-24 16:49:12'),(623,44,'order_submitted','New Customer Order','Order #ORD-20260925-8144AD has been submitted by justine santos.',151,'order',0,'2026-09-24 16:49:12','2026-09-24 16:49:12'),(624,45,'order_submitted','New Customer Order','Order #ORD-20260925-8144AD has been submitted by justine santos.',151,'order',0,'2026-09-24 16:49:12','2026-09-24 16:49:12'),(625,46,'order_submitted','New Customer Order','Order #ORD-20260925-8144AD has been submitted by justine santos.',151,'order',0,'2026-09-24 16:49:12','2026-09-24 16:49:12'),(626,1,'order_paid','Order Payment Verified','Order #ORD-20260925-8144AD has a verified PAID payment and is now confirmed.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(627,6,'order_paid','Order Payment Verified','Order #ORD-20260925-8144AD has a verified PAID payment and is now confirmed.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(628,9,'order_paid','Order Payment Verified','Order #ORD-20260925-8144AD has a verified PAID payment and is now confirmed.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(629,10,'order_paid','Order Payment Verified','Order #ORD-20260925-8144AD has a verified PAID payment and is now confirmed.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(630,11,'order_paid','Order Payment Verified','Order #ORD-20260925-8144AD has a verified PAID payment and is now confirmed.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(631,31,'order_paid','Order Payment Verified','Order #ORD-20260925-8144AD has a verified PAID payment and is now confirmed.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(632,35,'order_paid','Order Payment Verified','Order #ORD-20260925-8144AD has a verified PAID payment and is now confirmed.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(633,38,'order_paid','Order Payment Verified','Order #ORD-20260925-8144AD has a verified PAID payment and is now confirmed.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(634,42,'order_paid','Order Payment Verified','Order #ORD-20260925-8144AD has a verified PAID payment and is now confirmed.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(635,43,'order_paid','Order Payment Verified','Order #ORD-20260925-8144AD has a verified PAID payment and is now confirmed.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(636,44,'order_paid','Order Payment Verified','Order #ORD-20260925-8144AD has a verified PAID payment and is now confirmed.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(637,45,'order_paid','Order Payment Verified','Order #ORD-20260925-8144AD has a verified PAID payment and is now confirmed.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(638,46,'order_paid','Order Payment Verified','Order #ORD-20260925-8144AD has a verified PAID payment and is now confirmed.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(639,1,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260925-8144AD has been paid and is waiting for a delivery rider to accept and pick up.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(640,6,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260925-8144AD has been paid and is waiting for a delivery rider to accept and pick up.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(641,9,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260925-8144AD has been paid and is waiting for a delivery rider to accept and pick up.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(642,10,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260925-8144AD has been paid and is waiting for a delivery rider to accept and pick up.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(643,11,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260925-8144AD has been paid and is waiting for a delivery rider to accept and pick up.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(644,31,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260925-8144AD has been paid and is waiting for a delivery rider to accept and pick up.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(645,35,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260925-8144AD has been paid and is waiting for a delivery rider to accept and pick up.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(646,38,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260925-8144AD has been paid and is waiting for a delivery rider to accept and pick up.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(647,42,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260925-8144AD has been paid and is waiting for a delivery rider to accept and pick up.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(648,43,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260925-8144AD has been paid and is waiting for a delivery rider to accept and pick up.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(649,44,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260925-8144AD has been paid and is waiting for a delivery rider to accept and pick up.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(650,45,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260925-8144AD has been paid and is waiting for a delivery rider to accept and pick up.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(651,46,'delivery_waiting','Delivery Order Waiting for Rider','Order #ORD-20260925-8144AD has been paid and is waiting for a delivery rider to accept and pick up.',151,'order',0,'2026-09-24 16:49:26','2026-09-24 16:49:26'),(652,4,'order_submitted','Order Submitted','Your order #ORD-20260925-8B60AC was submitted. We will confirm it after payment verification.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(653,1,'order_submitted','New Customer Order','Order #ORD-20260925-8B60AC has been submitted by justine santos.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(654,6,'order_submitted','New Customer Order','Order #ORD-20260925-8B60AC has been submitted by justine santos.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(655,9,'order_submitted','New Customer Order','Order #ORD-20260925-8B60AC has been submitted by justine santos.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(656,10,'order_submitted','New Customer Order','Order #ORD-20260925-8B60AC has been submitted by justine santos.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(657,11,'order_submitted','New Customer Order','Order #ORD-20260925-8B60AC has been submitted by justine santos.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(658,31,'order_submitted','New Customer Order','Order #ORD-20260925-8B60AC has been submitted by justine santos.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(659,35,'order_submitted','New Customer Order','Order #ORD-20260925-8B60AC has been submitted by justine santos.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(660,38,'order_submitted','New Customer Order','Order #ORD-20260925-8B60AC has been submitted by justine santos.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(661,42,'order_submitted','New Customer Order','Order #ORD-20260925-8B60AC has been submitted by justine santos.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(662,43,'order_submitted','New Customer Order','Order #ORD-20260925-8B60AC has been submitted by justine santos.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(663,44,'order_submitted','New Customer Order','Order #ORD-20260925-8B60AC has been submitted by justine santos.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(664,45,'order_submitted','New Customer Order','Order #ORD-20260925-8B60AC has been submitted by justine santos.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(665,46,'order_submitted','New Customer Order','Order #ORD-20260925-8B60AC has been submitted by justine santos.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(666,1,'new_order','New COD Delivery Order Waiting for Rider','Order #ORD-20260925-8B60AC placed via Cash on Delivery (PHP 1,206.76) is confirmed.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(667,6,'new_order','New COD Delivery Order Waiting for Rider','Order #ORD-20260925-8B60AC placed via Cash on Delivery (PHP 1,206.76) is confirmed.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(668,9,'new_order','New COD Delivery Order Waiting for Rider','Order #ORD-20260925-8B60AC placed via Cash on Delivery (PHP 1,206.76) is confirmed.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(669,10,'new_order','New COD Delivery Order Waiting for Rider','Order #ORD-20260925-8B60AC placed via Cash on Delivery (PHP 1,206.76) is confirmed.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(670,11,'new_order','New COD Delivery Order Waiting for Rider','Order #ORD-20260925-8B60AC placed via Cash on Delivery (PHP 1,206.76) is confirmed.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(671,31,'new_order','New COD Delivery Order Waiting for Rider','Order #ORD-20260925-8B60AC placed via Cash on Delivery (PHP 1,206.76) is confirmed.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(672,35,'new_order','New COD Delivery Order Waiting for Rider','Order #ORD-20260925-8B60AC placed via Cash on Delivery (PHP 1,206.76) is confirmed.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(673,38,'new_order','New COD Delivery Order Waiting for Rider','Order #ORD-20260925-8B60AC placed via Cash on Delivery (PHP 1,206.76) is confirmed.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(674,42,'new_order','New COD Delivery Order Waiting for Rider','Order #ORD-20260925-8B60AC placed via Cash on Delivery (PHP 1,206.76) is confirmed.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(675,43,'new_order','New COD Delivery Order Waiting for Rider','Order #ORD-20260925-8B60AC placed via Cash on Delivery (PHP 1,206.76) is confirmed.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(676,44,'new_order','New COD Delivery Order Waiting for Rider','Order #ORD-20260925-8B60AC placed via Cash on Delivery (PHP 1,206.76) is confirmed.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(677,45,'new_order','New COD Delivery Order Waiting for Rider','Order #ORD-20260925-8B60AC placed via Cash on Delivery (PHP 1,206.76) is confirmed.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(678,46,'new_order','New COD Delivery Order Waiting for Rider','Order #ORD-20260925-8B60AC placed via Cash on Delivery (PHP 1,206.76) is confirmed.',152,'order',0,'2026-09-24 16:50:00','2026-09-24 16:50:00'),(679,38,'rider_arrived','Rider Arrived at Store','Rider justine santos (RDR-0011) has arrived at the store to pick up Order #ORD-20260925-8B60AC. Please approve or reject handover.',152,'order',0,'2026-09-24 16:50:40','2026-09-24 16:50:40'),(680,4,'order_delivered','Order Delivered!','Your order #ORD-20260925-8B60AC has been successfully delivered. Photo verification has been submitted by your rider.',152,'order',1,'2026-09-24 16:51:08','2026-09-24 16:51:50'),(681,38,'order_delivered','Order Delivered with Photo Proof','Rider justine santos (RDR-0011) has completed delivery of Order #ORD-20260925-8B60AC. Photo proof of delivery has been submitted and is ready for your review.',152,'order',0,'2026-09-24 16:51:08','2026-09-24 16:51:08');
+/*!40000 ALTER TABLE `notifications` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `operational_alerts`
+--
+
+DROP TABLE IF EXISTS `operational_alerts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `operational_alerts` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `owner_user_id` int NOT NULL DEFAULT '0',
+  `alert_type` varchar(60) COLLATE utf8mb4_general_ci NOT NULL,
+  `alert_key` varchar(120) COLLATE utf8mb4_general_ci NOT NULL,
+  `severity` enum('low','medium','high','critical') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'medium',
+  `title` varchar(180) COLLATE utf8mb4_general_ci NOT NULL,
+  `message` text COLLATE utf8mb4_general_ci,
+  `entity_type` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `entity_id` int DEFAULT NULL,
+  `is_acknowledged` tinyint(1) NOT NULL DEFAULT '0',
+  `acknowledged_by` int DEFAULT NULL,
+  `acknowledged_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_operational_alert_scope` (`alert_key`,`owner_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `operational_alerts`
+--
+
+LOCK TABLES `operational_alerts` WRITE;
+/*!40000 ALTER TABLE `operational_alerts` DISABLE KEYS */;
+/*!40000 ALTER TABLE `operational_alerts` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `operational_announcements`
+--
+
+DROP TABLE IF EXISTS `operational_announcements`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `operational_announcements` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `audience_type` enum('all','users','businesses','staff') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'all',
+  `title` varchar(180) COLLATE utf8mb4_general_ci NOT NULL,
+  `message` text COLLATE utf8mb4_general_ci NOT NULL,
+  `delivery_channel` varchar(30) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'in_app',
+  `status` enum('draft','scheduled','sent') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'draft',
+  `scheduled_at` datetime DEFAULT NULL,
+  `sent_at` datetime DEFAULT NULL,
+  `created_by` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `owner_user_id` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  KEY `idx_ops_announcements_owner` (`owner_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `operational_announcements`
+--
+
+LOCK TABLES `operational_announcements` WRITE;
+/*!40000 ALTER TABLE `operational_announcements` DISABLE KEYS */;
+/*!40000 ALTER TABLE `operational_announcements` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `operational_backup_log`
+--
+
+DROP TABLE IF EXISTS `operational_backup_log`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `operational_backup_log` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `backup_type` varchar(40) COLLATE utf8mb4_general_ci NOT NULL,
+  `file_name` varchar(180) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `storage_path` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `backup_status` enum('pending','success','failed') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'pending',
+  `file_size` bigint NOT NULL DEFAULT '0',
+  `checksum` varchar(120) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `notes` text COLLATE utf8mb4_general_ci,
+  `started_at` datetime DEFAULT NULL,
+  `completed_at` datetime DEFAULT NULL,
+  `created_by` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `owner_user_id` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  KEY `idx_ops_backup_owner` (`owner_user_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `operational_backup_log`
+--
+
+LOCK TABLES `operational_backup_log` WRITE;
+/*!40000 ALTER TABLE `operational_backup_log` DISABLE KEYS */;
+INSERT INTO `operational_backup_log` VALUES (1,'database','','','success',0,NULL,'','2026-04-09 18:20:30','2026-04-09 18:20:30',9,'2026-04-09 18:20:30',0);
+/*!40000 ALTER TABLE `operational_backup_log` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `operational_content_queue`
+--
+
+DROP TABLE IF EXISTS `operational_content_queue`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `operational_content_queue` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `content_type` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `content_id` int DEFAULT NULL,
+  `submitted_by` int DEFAULT NULL,
+  `shop_id` int DEFAULT NULL,
+  `review_status` enum('pending','approved','rejected') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'pending',
+  `risk_score` tinyint NOT NULL DEFAULT '0',
+  `flag_reason` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `review_notes` text COLLATE utf8mb4_general_ci,
+  `reviewed_by` int DEFAULT NULL,
+  `reviewed_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `owner_user_id` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  KEY `idx_ops_content_owner` (`owner_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `operational_content_queue`
+--
+
+LOCK TABLES `operational_content_queue` WRITE;
+/*!40000 ALTER TABLE `operational_content_queue` DISABLE KEYS */;
+/*!40000 ALTER TABLE `operational_content_queue` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `operational_incidents`
+--
+
+DROP TABLE IF EXISTS `operational_incidents`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `operational_incidents` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `incident_code` varchar(40) COLLATE utf8mb4_general_ci NOT NULL,
+  `category` enum('system','security','business','user','content','data') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'system',
+  `severity` enum('low','medium','high','critical') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'medium',
+  `title` varchar(180) COLLATE utf8mb4_general_ci NOT NULL,
+  `description` text COLLATE utf8mb4_general_ci,
+  `source_module` varchar(80) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `status` enum('open','investigating','resolved','closed') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'open',
+  `assigned_to` int DEFAULT NULL,
+  `detected_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `resolved_at` datetime DEFAULT NULL,
+  `created_by` int DEFAULT NULL,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `owner_user_id` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  KEY `idx_ops_incidents_owner` (`owner_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `operational_incidents`
+--
+
+LOCK TABLES `operational_incidents` WRITE;
+/*!40000 ALTER TABLE `operational_incidents` DISABLE KEYS */;
+/*!40000 ALTER TABLE `operational_incidents` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `operational_jobs`
+--
+
+DROP TABLE IF EXISTS `operational_jobs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `operational_jobs` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `job_name` varchar(120) COLLATE utf8mb4_general_ci NOT NULL,
+  `job_type` varchar(60) COLLATE utf8mb4_general_ci NOT NULL,
+  `status` enum('queued','running','completed','failed') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'queued',
+  `payload_json` longtext COLLATE utf8mb4_general_ci,
+  `result_json` longtext COLLATE utf8mb4_general_ci,
+  `error_message` text COLLATE utf8mb4_general_ci,
+  `started_at` datetime DEFAULT NULL,
+  `finished_at` datetime DEFAULT NULL,
+  `created_by` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `owner_user_id` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  KEY `idx_ops_jobs_owner` (`owner_user_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `operational_jobs`
+--
+
+LOCK TABLES `operational_jobs` WRITE;
+/*!40000 ALTER TABLE `operational_jobs` DISABLE KEYS */;
+INSERT INTO `operational_jobs` VALUES (1,'asd','approval_followup','queued','{\"source\":\"manual\",\"requested_at\":\"2026-04-09T23:16:34+08:00\"}',NULL,NULL,NULL,NULL,9,'2026-04-09 23:16:34',0);
+/*!40000 ALTER TABLE `operational_jobs` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `operational_metric_snapshots`
+--
+
+DROP TABLE IF EXISTS `operational_metric_snapshots`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `operational_metric_snapshots` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `snapshot_date` date NOT NULL,
+  `snapshot_hour` tinyint NOT NULL DEFAULT '0',
+  `active_users` int NOT NULL DEFAULT '0',
+  `transactions_count` int NOT NULL DEFAULT '0',
+  `gross_revenue` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `open_complaints` int NOT NULL DEFAULT '0',
+  `pending_businesses` int NOT NULL DEFAULT '0',
+  `system_errors` int NOT NULL DEFAULT '0',
+  `failed_logins` int NOT NULL DEFAULT '0',
+  `api_latency_ms` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `owner_user_id` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_operational_snapshot_scope` (`snapshot_date`,`snapshot_hour`,`owner_user_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `operational_metric_snapshots`
+--
+
+LOCK TABLES `operational_metric_snapshots` WRITE;
+/*!40000 ALTER TABLE `operational_metric_snapshots` DISABLE KEYS */;
+INSERT INTO `operational_metric_snapshots` VALUES (1,'2026-04-09',23,5,2,512.00,1,0,0,0,0.00,'2026-04-09 23:16:15',0);
+/*!40000 ALTER TABLE `operational_metric_snapshots` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `operational_rules`
+--
+
+DROP TABLE IF EXISTS `operational_rules`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `operational_rules` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `rule_name` varchar(120) COLLATE utf8mb4_general_ci NOT NULL,
+  `rule_type` enum('alert','automation','moderation','security') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'alert',
+  `conditions_json` longtext COLLATE utf8mb4_general_ci,
+  `actions_json` longtext COLLATE utf8mb4_general_ci,
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `last_run_at` datetime DEFAULT NULL,
+  `created_by` int DEFAULT NULL,
+  `owner_user_id` int NOT NULL DEFAULT '0',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_operational_rule_scope` (`rule_name`,`owner_user_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `operational_rules`
+--
+
+LOCK TABLES `operational_rules` WRITE;
+/*!40000 ALTER TABLE `operational_rules` DISABLE KEYS */;
+INSERT INTO `operational_rules` VALUES (1,'Complaint backlog threshold','alert','{\"metric\":\"open_complaints\",\"operator\":\">=\",\"value\":10}','{\"create_alert\":\"complaint_backlog\"}',1,NULL,NULL,0,'2026-04-09 18:19:52','2026-04-09 18:19:52'),(2,'Pending business approval threshold','automation','{\"metric\":\"pending_businesses\",\"operator\":\">=\",\"value\":5}','{\"notify_ops\":true}',1,NULL,NULL,0,'2026-04-09 18:19:52','2026-04-09 18:19:52'),(3,'Suspicious access threshold','security','{\"metric\":\"suspicious_events_24h\",\"operator\":\">=\",\"value\":8}','{\"create_alert\":\"suspicious_access\"}',1,NULL,NULL,0,'2026-04-09 18:19:52','2026-04-09 18:19:52'),(4,'Content moderation threshold','moderation','{\"metric\":\"pending_content\",\"operator\":\">=\",\"value\":5}','{\"notify_moderator\":true}',1,NULL,NULL,0,'2026-04-09 18:19:52','2026-04-09 18:19:52');
+/*!40000 ALTER TABLE `operational_rules` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `operational_watchlist`
+--
+
+DROP TABLE IF EXISTS `operational_watchlist`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `operational_watchlist` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `entity_type` enum('user','business','ip','device') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'user',
+  `entity_id` int DEFAULT NULL,
+  `reason` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `risk_level` enum('low','medium','high','critical') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'medium',
+  `watch_status` enum('active','cleared') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'active',
+  `created_by` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `owner_user_id` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  KEY `idx_ops_watchlist_owner` (`owner_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `operational_watchlist`
+--
+
+LOCK TABLES `operational_watchlist` WRITE;
+/*!40000 ALTER TABLE `operational_watchlist` DISABLE KEYS */;
+/*!40000 ALTER TABLE `operational_watchlist` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `order_items`
+--
+
+DROP TABLE IF EXISTS `order_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `order_items` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `order_id` int DEFAULT NULL,
+  `product_id` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `product_name` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `price` decimal(10,2) NOT NULL,
+  `quantity` int NOT NULL,
+  `size` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `addons` text COLLATE utf8mb4_general_ci,
+  `total` decimal(10,2) NOT NULL,
+  `is_reviewed` tinyint(1) NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=210 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `order_items`
+--
+
+LOCK TABLES `order_items` WRITE;
+/*!40000 ALTER TABLE `order_items` DISABLE KEYS */;
+INSERT INTO `order_items` VALUES (1,2,'od-003','Lechon Sisig (1 kg)',400.00,1,'Regular','[]',400.00,0),(2,3,'od-001','Lechon Paksiw (1 kg)',350.00,1,'Regular','[]',350.00,0),(3,4,'od-003','Lechon Sisig (1 kg)',400.00,1,'Regular','[]',400.00,0),(4,5,'od-003','Lechon Sisig (1 kg)',400.00,1,'Regular','[]',400.00,0),(5,6,'od-003','Lechon Sisig (1 kg)',400.00,1,'Regular','[]',400.00,0),(6,7,'od-003','Lechon Sisig (1 kg)',400.00,1,'Regular','[]',400.00,0),(7,8,'od-001','Lechon Paksiw (1 kg)',350.00,1,'Regular','[]',350.00,0),(8,9,'unknown-696a098016cc','HOUSE BIBIMBAP',600.00,1,'Regular','[]',600.00,0),(9,9,'od-003','Lechon Sisig (1 kg)',400.00,4,'Regular','[]',1600.00,0),(10,9,'lp-002','Quarter Lechon (2-3 kg)',1100.00,1,'Regular','[]',1100.00,0),(11,9,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(12,9,'sd-002','Plain Rice (1 kg)',100.00,1,'Regular','[]',100.00,0),(13,10,'unknown-696a09972d73','HOUSE BIBIMBAP',600.00,1,'Regular','[]',600.00,0),(14,10,'od-003','Lechon Sisig (1 kg)',400.00,4,'Regular','[]',1600.00,0),(15,10,'lp-002','Quarter Lechon (2-3 kg)',1100.00,1,'Regular','[]',1100.00,0),(16,10,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(17,10,'sd-002','Plain Rice (1 kg)',100.00,1,'Regular','[]',100.00,0),(18,11,'unknown-696a0adc8d59','HOUSE BIBIMBAP',600.00,1,'Regular','[]',600.00,0),(19,11,'od-003','Lechon Sisig (1 kg)',400.00,4,'Regular','[]',1600.00,0),(20,11,'lp-002','Quarter Lechon (2-3 kg)',1100.00,1,'Regular','[]',1100.00,0),(21,11,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(22,11,'sd-002','Plain Rice (1 kg)',100.00,1,'Regular','[]',100.00,0),(23,13,'unknown-696a0ae433ab','HOUSE BIBIMBAP',600.00,1,'Regular','[]',600.00,0),(24,13,'od-003','Lechon Sisig (1 kg)',400.00,4,'Regular','[]',1600.00,0),(25,13,'lp-002','Quarter Lechon (2-3 kg)',1100.00,1,'Regular','[]',1100.00,0),(26,13,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(27,13,'sd-002','Plain Rice (1 kg)',100.00,1,'Regular','[]',100.00,0),(28,14,'unknown-696a0b374e1e','HOUSE BIBIMBAP',600.00,1,'Regular','[]',600.00,0),(29,14,'od-003','Lechon Sisig (1 kg)',400.00,4,'Regular','[]',1600.00,0),(30,14,'lp-002','Quarter Lechon (2-3 kg)',1100.00,1,'Regular','[]',1100.00,0),(31,14,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(32,14,'sd-002','Plain Rice (1 kg)',100.00,1,'Regular','[]',100.00,0),(33,15,'unknown-696a0b7cb2b8','HOUSE BIBIMBAP',600.00,1,'Regular','[]',600.00,0),(34,15,'od-003','Lechon Sisig (1 kg)',400.00,4,'Regular','[]',1600.00,0),(35,15,'lp-002','Quarter Lechon (2-3 kg)',1100.00,1,'Regular','[]',1100.00,0),(36,15,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(37,15,'sd-002','Plain Rice (1 kg)',100.00,1,'Regular','[]',100.00,0),(38,16,'unknown-696a0b83367e','HOUSE BIBIMBAP',600.00,1,'Regular','[]',600.00,0),(39,16,'od-003','Lechon Sisig (1 kg)',400.00,4,'Regular','[]',1600.00,0),(40,16,'lp-002','Quarter Lechon (2-3 kg)',1100.00,1,'Regular','[]',1100.00,0),(41,16,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(42,16,'sd-002','Plain Rice (1 kg)',100.00,1,'Regular','[]',100.00,0),(43,17,'unknown-696a0bdba254','HOUSE BIBIMBAP',600.00,1,'Regular','[]',600.00,0),(44,17,'od-003','Lechon Sisig (1 kg)',400.00,4,'Regular','[]',1600.00,0),(45,17,'lp-002','Quarter Lechon (2-3 kg)',1100.00,1,'Regular','[]',1100.00,0),(46,17,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(47,17,'sd-002','Plain Rice (1 kg)',100.00,1,'Regular','[]',100.00,0),(48,18,'unknown-696a0e7a12d4','HOUSE BIBIMBAP',600.00,1,'Regular','[]',600.00,0),(49,18,'od-003','Lechon Sisig (1 kg)',400.00,4,'Regular','[]',1600.00,0),(50,18,'lp-002','Quarter Lechon (2-3 kg)',1100.00,1,'Regular','[]',1100.00,0),(51,18,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(52,18,'sd-002','Plain Rice (1 kg)',100.00,1,'Regular','[]',100.00,0),(53,19,'unknown-696a0f146f25','HOUSE BIBIMBAP',600.00,1,'Regular','[]',600.00,0),(54,19,'od-003','Lechon Sisig (1 kg)',400.00,4,'Regular','[]',1600.00,0),(55,19,'lp-002','Quarter Lechon (2-3 kg)',1100.00,1,'Regular','[]',1100.00,0),(56,19,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(57,19,'sd-002','Plain Rice (1 kg)',100.00,1,'Regular','[]',100.00,0),(58,21,'unknown-696a0f2c9928','HOUSE BIBIMBAP',600.00,1,'Regular','[]',600.00,0),(59,21,'od-003','Lechon Sisig (1 kg)',400.00,4,'Regular','[]',1600.00,0),(60,21,'lp-002','Quarter Lechon (2-3 kg)',1100.00,1,'Regular','[]',1100.00,0),(61,21,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(62,21,'sd-002','Plain Rice (1 kg)',100.00,1,'Regular','[]',100.00,0),(63,22,'unknown-696a0f4e35ac','HOUSE BIBIMBAP',600.00,1,'Regular','[]',600.00,0),(64,22,'od-003','Lechon Sisig (1 kg)',400.00,4,'Regular','[]',1600.00,0),(65,22,'lp-002','Quarter Lechon (2-3 kg)',1100.00,1,'Regular','[]',1100.00,0),(66,22,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(67,22,'sd-002','Plain Rice (1 kg)',100.00,1,'Regular','[]',100.00,0),(68,23,'unknown-696a0f7b8ed8','HOUSE BIBIMBAP',600.00,1,'Regular','[]',600.00,0),(69,23,'od-003','Lechon Sisig (1 kg)',400.00,4,'Regular','[]',1600.00,0),(70,23,'lp-002','Quarter Lechon (2-3 kg)',1100.00,1,'Regular','[]',1100.00,0),(71,23,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(72,23,'sd-002','Plain Rice (1 kg)',100.00,1,'Regular','[]',100.00,0),(73,24,'unknown-696a0fac3e4a','HOUSE BIBIMBAP',600.00,1,'Regular','[]',600.00,0),(74,24,'od-003','Lechon Sisig (1 kg)',400.00,4,'Regular','[]',1600.00,0),(75,24,'lp-002','Quarter Lechon (2-3 kg)',1100.00,1,'Regular','[]',1100.00,0),(76,24,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(77,24,'sd-002','Plain Rice (1 kg)',100.00,1,'Regular','[]',100.00,0),(78,25,'unknown-696a11434cb0','HOUSE BIBIMBAP',600.00,1,'Regular','[]',600.00,0),(79,25,'od-003','Lechon Sisig (1 kg)',400.00,4,'Regular','[]',1600.00,0),(80,25,'lp-002','Quarter Lechon (2-3 kg)',1100.00,1,'Regular','[]',1100.00,0),(81,25,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(82,25,'sd-002','Plain Rice (1 kg)',100.00,1,'Regular','[]',100.00,0),(83,26,'od-003','Lechon Sisig (1 kg)',400.00,1,'Regular','[]',400.00,0),(84,27,'lp-002','Quarter Lechon (2-3 kg)',1100.00,1,'Regular','[]',1100.00,0),(85,27,'od-003','Lechon Sisig (1 kg)',400.00,1,'Regular','[]',400.00,0),(86,28,'od-003','Lechon Sisig (1 kg)',400.00,1,'Regular','[]',400.00,0),(87,29,'unknown-6972630c5e4f','ely kain tae',1.00,1,'Regular','[]',1.00,0),(88,30,'od-002','Dinuguan (1 kg)',300.00,1,'Regular','[]',300.00,0),(89,30,'od-001','Lechon Paksiw (1 kg)',350.00,1,'Regular','[]',350.00,0),(90,31,'od-003','Lechon Sisig (1 kg)',400.00,1,'Regular','[]',400.00,0),(91,32,'od-001','Lechon Paksiw (1 kg)',350.00,12,'Regular','[]',4200.00,0),(92,33,'od-001','Lechon Paksiw (1 kg)',350.00,1,'Regular','[]',350.00,0),(93,34,'prod-7f209e','Lechong Kawali',200.00,1,'Regular','[]',200.00,0),(94,35,'prod-7f209e','Lechong Kawali',200.00,1,'Regular','[]',200.00,0),(95,36,'od-002','Dinuguan (1 kg)',300.00,1,'Regular','[]',300.00,0),(96,37,'unknown-698a1ffbde11','ely kain tae',1.00,1,'Regular','[]',1.00,0),(97,38,'wl-002','Boneless Whole Lechon',3800.00,1,'Regular','[]',3800.00,0),(98,39,'wl-002','Boneless Whole Lechon',3800.00,1,'Regular','[]',3800.00,0),(99,40,'wl-001','Whole Lechon (10-12 kg)',3500.00,1,'Regular','[]',3500.00,0),(100,41,'wl-001','Whole Lechon (10-12 kg)',3500.00,1,'Regular','[]',3500.00,0),(101,44,'wl-001','Whole Lechon (10-12 kg)',3500.00,1,'Regular','[]',3500.00,0),(102,45,'od-002','Dinuguan (1 kg)',300.00,1,'Regular','[]',300.00,0),(103,46,'od-002','Dinuguan (1 kg)',300.00,2,'Regular','[]',600.00,0),(104,47,'od-002','Dinuguan (1 kg)',300.00,1,'Regular','[]',300.00,0),(105,48,'od-002','Dinuguan (1 kg)',300.00,3,'Regular','[]',900.00,0),(106,49,'od-002','Dinuguan (1 kg)',300.00,3,'Regular','[]',900.00,0),(107,50,'wl-001','Whole Lechon (10-12 kg)',3500.00,1,'Regular','[]',3500.00,0),(108,51,'wl-001','Whole Lechon (10-12 kg)',3500.00,1,'Regular','[]',3500.00,0),(109,52,'od-002','Dinuguan (1 kg)',300.00,3,'Regular','[]',900.00,0),(110,53,'od-002','Dinuguan (1 kg)',300.00,3,'Regular','[]',900.00,0),(111,54,'od-002','Dinuguan (1 kg)',300.00,1,'Regular','[]',300.00,0),(112,55,'od-002','Dinuguan (1 kg)',300.00,1,'Regular','[]',300.00,0),(113,58,'od-002','Dinuguan (1 kg)',300.00,1,'Regular','[]',300.00,0),(114,60,'od-002','Dinuguan (1 kg)',300.00,1,'Regular','[]',300.00,0),(115,61,'od-002','Dinuguan (1 kg)',300.00,3,'Regular','[]',900.00,0),(116,62,'od-002','Dinuguan (1 kg)',300.00,1,'Regular','[]',300.00,0),(117,63,'od-002','Dinuguan (1 kg)',300.00,6,'Regular','[]',1800.00,0),(118,64,'od-002','Dinuguan (1 kg)',300.00,1,'Regular','[]',300.00,0),(119,65,'od-002','Dinuguan (1 kg)',300.00,2,'Regular','[]',600.00,0),(120,66,'od-002','Dinuguan (1 kg)',300.00,1,'Regular','[]',300.00,0),(121,67,'od-002','Dinuguan (1 kg)',300.00,2,'Regular','[]',600.00,0),(122,68,'od-002','Dinuguan (1 kg)',300.00,4,'Regular','[]',1200.00,0),(123,69,'od-002','Dinuguan (1 kg)',300.00,4,'Regular','[]',1200.00,0),(124,70,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(125,71,'od-002','Dinuguan (1 kg)',300.00,1,'Regular','[]',300.00,0),(126,72,'unknown-699474003bba','ely kain tae',120.00,15,'Regular','[]',1800.00,0),(127,73,'wl-002','Boneless Whole Lechon',3800.00,3,'Regular','[]',11400.00,0),(128,74,'sd-003','Atchara (500g)',120.00,19,'Regular','[]',2280.00,0),(129,75,'od-001','Lechon Paksiw (1 kg)',350.00,1,'Regular','[]',350.00,0),(130,76,'od-001','Lechon Paksiw (1 kg)',350.00,3,'Regular','[]',1050.00,0),(131,77,'wl-001','Whole Lechon (10-12 kg)',3500.00,4,'Regular','[]',14000.00,1),(132,78,'od-002','Dinuguan (1 kg)',300.00,1,'Regular','[]',300.00,0),(133,79,'sd-003','Atchara (500g)',120.00,4,'Regular','[]',480.00,1),(134,80,'sd-003','Atchara (500g)',120.00,2,'Regular','[]',240.00,0),(135,81,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,1),(136,82,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(137,82,'wl-002','Boneless Whole Lechon',3800.00,1,'Regular','[]',3800.00,0),(138,83,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(139,83,'wl-002','Boneless Whole Lechon',3800.00,1,'Regular','[]',3800.00,0),(140,84,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,0),(141,84,'wl-002','Boneless Whole Lechon',3800.00,1,'Regular','[]',3800.00,0),(142,85,'sd-003','Atchara (500g)',120.00,5,'Regular','[]',600.00,1),(143,86,'prod-1b8198','asd',123123.00,3,'Regular','[]',369369.00,0),(144,87,'prod-1b8198','asd',123123.00,1,'Regular','[]',123123.00,0),(145,88,'prod-1b8198','asd',123123.00,1,'Regular','[]',123123.00,0),(146,89,'prod-1b8198','asd',123123.00,1,'Regular','[]',123123.00,0),(147,90,'wl-002','Boneless Whole Lechon',3800.00,1,'Regular','[]',3800.00,0),(148,91,'wl-002','Boneless Whole Lechon',3800.00,3,'Regular','[]',11400.00,0),(149,92,'wl-002','Boneless Whole Lechon',3800.00,1,'Regular','[]',3800.00,0),(150,93,'wl-002','Boneless Whole Lechon',3800.00,1,'Regular','[]',3800.00,0),(151,94,'lp-001','Half Lechon (5-6 kg)',1900.00,1,'Regular','[]',1900.00,0),(152,95,'lp-001','Half Lechon (5-6 kg)',1900.00,2,'Regular','[]',3800.00,0),(153,96,'lp-001','Half Lechon (5-6 kg)',1900.00,1,'Regular','[]',1900.00,0),(154,97,'lp-001','Half Lechon (5-6 kg)',1900.00,1,'Regular','[]',1900.00,0),(155,98,'lp-001','Half Lechon (5-6 kg)',1900.00,3,'Regular','[]',5700.00,0),(156,99,'sd-003','Atchara (500g)',120.00,1,'Regular','[]',120.00,1),(157,100,'sd-003','Atchara',120.00,1,'Regular','[]',120.00,0),(158,101,'sd-003','Atchara',120.00,1,'Regular','[]',120.00,0),(159,102,'sd-003','Atchara',120.00,1,'Regular','[]',120.00,1),(160,103,'sd-003','Atchara',120.00,1,'Regular','[]',120.00,0),(161,104,'prod-1386b2','Cochinillo',10900.00,1,'Regular','[]',10900.00,1),(162,105,'prod-1386b2','Cochinillo',10900.00,1,'Regular','[]',10900.00,0),(163,106,'prod-1386b2','Cochinillo',10900.00,1,'Regular','[]',10900.00,1),(164,107,'prod-1386b2','Cochinillo',10900.00,1,'Regular','[]',10900.00,1),(165,108,'prod-1386b2','Cochinillo',10900.00,1,'Regular','[]',10900.00,1),(166,109,'prod-1386b2','Cochinillo',10900.00,1,'Regular','[]',10900.00,0),(167,110,'lp-003','Lechon Belly (1kg)',650.00,1,'Regular','[]',650.00,0),(168,111,'lp-003','Lechon Belly (1kg)',650.00,1,'Regular','[]',650.00,0),(169,112,'od-001','Lechon Paksiw (Tray)',998.00,10,'Regular','[]',9980.00,0),(170,113,'prod-beb0d2','Lechon Panis',100.00,1,'Regular','[]',100.00,0),(171,114,'prod-2904a3','Lechon Panis',10.00,10,'Regular','[]',100.00,0),(172,115,'prod-2904a3','Lechon Panis',10.00,10,'Regular','[]',100.00,0),(173,115,'prod-9690d7','Leche Plan',150.00,5,'Regular','[]',750.00,0),(174,116,'prod-2904a3','Lechon Panis',10.00,10,'Regular','[]',100.00,0),(175,116,'prod-9690d7','Leche Plan',150.00,5,'Regular','[]',750.00,0),(176,116,'prod-2904a3','Lechon Panis',10.00,10,'Regular','[]',100.00,0),(177,116,'prod-9690d7','Leche Plan',150.00,5,'Regular','[]',750.00,0),(178,117,'prod-2904a3','Lechon Panis',10.00,1,'Regular','[]',10.00,0),(179,118,'prod-2904a3','Lechon Panis',10.00,1,'Regular','[]',10.00,0),(180,119,'prod-aa74be','Lechon Paksiw',500.00,10,'Regular','[]',5000.00,0),(181,120,'prod-2904a3','Lechon Panis',10.00,1,'Regular','[]',10.00,0),(182,121,'prod-beb0d2','Lechon Panis',100.00,1,'Regular','[]',100.00,0),(183,122,'prod-477852','Graham Mango',150.00,1,'Regular','[]',150.00,0),(184,123,'prod-beb0d2','Lechon Panis',100.00,1,'Regular','[]',100.00,0),(185,124,'prod-aa74be','Lechon Paksiw',500.00,1,'Regular','[]',500.00,0),(186,126,'prod-477852','Graham Mango',150.00,1,'Regular','[]',150.00,0),(187,128,'unknown-6a71f6301a5df','Whole Lechon Test',1500.00,1,'Regular','[]',1500.00,0),(188,129,'prod-477852','Graham Mango',150.00,1,'Regular','[]',150.00,0),(189,130,'prod-9690d7','Leche Plan',150.00,1,'Regular','[]',150.00,0),(190,131,'unknown-6a71f6e0751ea','Lechon Package Test',2000.00,1,'Regular','[]',2000.00,0),(191,132,'unknown-6a71f6eb20c05','Lechon Package Test',2000.00,1,'Regular','[]',2000.00,0),(192,133,'prod-9690d7','Leche Plan',150.00,1,'Regular','[]',150.00,0),(193,134,'prod-9690d7','Leche Plan',150.00,1,'Regular','[]',150.00,0),(194,135,'prod-beb0d2','Lechon Panis',100.00,1,'Regular','[]',100.00,0),(195,136,'prod-beb0d2','Lechon Panis',100.00,1,'Regular','[]',100.00,0),(196,137,'prod-beb0d2','Lechon Panis',100.00,1,'Regular','[]',100.00,0),(197,138,'prod-beb0d2','Lechon Panis',100.00,1,'Regular','[]',100.00,0),(198,139,'prod-beb0d2','Lechon Panis',100.00,1,'Regular','[]',100.00,0),(199,140,'lp-003','Lechon Belly (1kg)',650.00,1,'Regular','[]',650.00,0),(200,141,'prod-beb0d2','Lechon Panis',100.00,1,'Regular','[]',100.00,0),(201,142,'prod-584793','Lechon Belly (500g)',550.00,1,'Regular','[]',550.00,0),(202,143,'prod-477852','Graham Mango',150.00,1,'Regular','[]',150.00,0),(203,144,'prod-042df3','Bananaqtie',50.00,1,'Regular','[]',50.00,0),(204,147,'prod-477852','Graham Mango',150.00,1,'Regular','[]',150.00,0),(205,148,'prod-477852','Graham Mango',150.00,1,'Regular','[]',150.00,0),(206,149,'prod-584793','Lechon Belly (500g)',550.00,1,'Regular','[]',550.00,0),(207,150,'prod-477852','Graham Mango',150.00,1,'Regular','[]',150.00,0),(208,151,'prod-477852','Graham Mango',150.00,1,'Regular','[]',150.00,0),(209,152,'od-001','Lechon Paksiw (Tray)',998.00,1,'Regular','[]',998.00,1);
+/*!40000 ALTER TABLE `order_items` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `orders`
+--
+
+DROP TABLE IF EXISTS `orders`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `orders` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `order_number` varchar(64) COLLATE utf8mb4_general_ci NOT NULL,
+  `user_id` int DEFAULT NULL,
+  `seller_id` int DEFAULT NULL,
+  `customer_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `customer_email` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `customer_phone` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
+  `delivery_address` text COLLATE utf8mb4_general_ci NOT NULL,
+  `delivery_date` date NOT NULL,
+  `delivery_time` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `estimated_delivery_time` datetime DEFAULT NULL,
+  `payment_method` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `subtotal` decimal(10,2) NOT NULL,
+  `delivery_fee` decimal(10,2) DEFAULT '0.00',
+  `voucher_id` int DEFAULT NULL,
+  `voucher_code` varchar(60) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `voucher_discount` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `total_amount` decimal(10,2) NOT NULL,
+  `platform_fee_rate_percent` decimal(6,2) NOT NULL DEFAULT '0.00',
+  `platform_fee_flat` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `platform_fee_amount` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `platform_fee_plan_name` varchar(80) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `net_seller_payout` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `status` enum('pending','confirmed','preparing','delivered','cancelled') COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `confirmed_at` datetime DEFAULT NULL,
+  `special_instructions` text COLLATE utf8mb4_general_ci,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `is_archived` tinyint(1) DEFAULT '0',
+  `delivery_option` enum('pickup','delivery') COLLATE utf8mb4_general_ci DEFAULT 'pickup',
+  `pickup_location` int DEFAULT NULL,
+  `delivery_location` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `latitude` decimal(10,8) DEFAULT NULL,
+  `longitude` decimal(11,8) DEFAULT NULL,
+  `delivery_instructions` text COLLATE utf8mb4_general_ci,
+  `payment_status` enum('pending','partial','paid','failed','cancelled') COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `delivery_pin` varchar(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `downpayment_amount` decimal(10,2) DEFAULT '0.00',
+  `remaining_balance` decimal(10,2) DEFAULT '0.00',
+  `payment_method_detail` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `transaction_id` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `receipt_sent` tinyint(1) DEFAULT '0',
+  `cancellation_reason` text COLLATE utf8mb4_general_ci,
+  `has_proof_of_delivery` tinyint(1) DEFAULT '0',
+  `actual_delivery_time` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=153 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `orders`
+--
+
+LOCK TABLES `orders` WRITE;
+/*!40000 ALTER TABLE `orders` DISABLE KEYS */;
+INSERT INTO `orders` VALUES (2,'ORD-20260116-6969E86',9,NULL,'asd asd','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue, Makati City','2026-08-04',NULL,NULL,'0',400.00,0.00,NULL,NULL,0.00,400.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,NULL,'2026-01-16 07:27:39','2026-08-04 14:03:11',1,'pickup',NULL,NULL,NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(3,'ORD-20260116-6969E8A',9,NULL,'asd asd','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue, Makati City','2026-08-04',NULL,NULL,'0',350.00,0.00,NULL,NULL,0.00,350.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,NULL,'2026-01-16 07:28:42','2026-08-04 14:03:11',1,'pickup',NULL,NULL,NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(4,'ORD-20260116-6969E8C',9,NULL,'asd asd','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue, Makati City','2026-08-04',NULL,NULL,'0',400.00,0.00,NULL,NULL,0.00,400.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,NULL,'2026-01-16 07:29:12','2026-08-04 14:03:11',1,'pickup',NULL,NULL,NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(5,'ORD-20260116-6969E90',9,NULL,'asd asd','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue, Makati City','2026-08-04',NULL,NULL,'0',400.00,0.00,NULL,NULL,0.00,400.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,NULL,'2026-01-16 07:30:09','2026-08-04 14:03:11',1,'pickup',NULL,NULL,NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(6,'ORD-20260116-6969F07',9,NULL,'asd asd','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue, Makati City','2026-08-04',NULL,NULL,'0',400.00,0.00,NULL,NULL,0.00,400.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,NULL,'2026-01-16 08:02:05','2026-08-04 14:03:11',0,'pickup',NULL,NULL,NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(7,'ORD-20260116-6969F11',9,NULL,'asd asd','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue, Makati City','2026-08-04',NULL,NULL,'0',400.00,0.00,NULL,NULL,0.00,400.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,NULL,'2026-01-16 08:04:46','2026-08-04 14:03:11',0,'pickup',NULL,NULL,NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(8,'ORD-20260116-6969FA3',9,NULL,'asd asd','asd@gmail.com','09917471283','asdads','2026-01-18','12:00-15:00',NULL,'cod',350.00,500.00,NULL,NULL,0.00,850.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'asd','2026-01-16 08:43:42','2026-03-23 18:16:35',1,'delivery',NULL,'0',0.00000000,0.00000000,'0','pending',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(9,'ORD-20260116-696A098',9,NULL,'asd asd','asd@gmail.com','09917471283','asd','2026-01-18','15:00-18:00',NULL,'gcash',3520.00,150.00,NULL,NULL,0.00,3670.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'asd','2026-01-16 09:48:48','2026-03-23 18:16:35',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial',NULL,1101.00,2569.00,NULL,NULL,0,NULL,0,NULL),(10,'ORD-20260116-696A099',9,NULL,'asd asd','asd@gmail.com','09917471283','asd','2026-01-18','15:00-18:00',NULL,'gcash',3520.00,150.00,NULL,NULL,0.00,3670.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'asd','2026-01-16 09:49:11','2026-03-23 18:16:35',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial',NULL,1101.00,2569.00,NULL,NULL,0,NULL,0,NULL),(11,'ORD-20260116-696A0AD',9,NULL,'asd asd','asd@gmail.com','09917471283','asd','2026-01-18','15:00-18:00',NULL,'gcash',3520.00,150.00,NULL,NULL,0.00,3670.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'asd','2026-01-16 09:54:36','2026-03-23 18:16:35',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial',NULL,1101.00,2569.00,NULL,NULL,0,NULL,0,NULL),(13,'ORD-20260116-696A0AE',9,NULL,'asd asd','asd@gmail.com','09917471283','asd','2026-01-18','15:00-18:00',NULL,'gcash',3520.00,150.00,NULL,NULL,0.00,3670.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'asd','2026-01-16 09:54:44','2026-03-23 18:16:35',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial',NULL,1101.00,2569.00,NULL,NULL,0,NULL,0,NULL),(14,'ORD-20260116-696A0B3',9,NULL,'asd asd','asd@gmail.com','09917471283','asd','2026-01-18','15:00-18:00',NULL,'gcash',3520.00,150.00,NULL,NULL,0.00,3670.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'asd','2026-01-16 09:56:07','2026-03-23 18:16:35',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial',NULL,1101.00,2569.00,NULL,NULL,0,NULL,0,NULL),(15,'ORD-20260116-696A0B7',9,NULL,'asd asd','asd@gmail.com','09917471283','asd','2026-01-18','15:00-18:00',NULL,'gcash',3520.00,150.00,NULL,NULL,0.00,3670.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'asd','2026-01-16 09:57:16','2026-03-23 18:16:35',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial',NULL,1101.00,2569.00,NULL,NULL,0,NULL,0,NULL),(16,'ORD-20260116-696A0B8',9,NULL,'asd asd','asd@gmail.com','09917471283','asd','2026-01-18','15:00-18:00',NULL,'gcash',3520.00,150.00,NULL,NULL,0.00,3670.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'asd','2026-01-16 09:57:23','2026-03-23 18:16:35',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial',NULL,1101.00,2569.00,NULL,NULL,0,NULL,0,NULL),(17,'ORD-20260116-696A0BD',9,NULL,'asd asd','asd@gmail.com','09917471283','asd','2026-01-18','15:00-18:00',NULL,'gcash',3520.00,150.00,NULL,NULL,0.00,3670.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'asd','2026-01-16 09:58:51','2026-03-23 18:16:35',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial',NULL,1101.00,2569.00,NULL,NULL,0,NULL,0,NULL),(18,'ORD-20260116-696A0E7',9,NULL,'asd asd','asd@gmail.com','09917471283','asdasd','2026-01-18','15:00-18:00',NULL,'gcash',3520.00,150.00,NULL,NULL,0.00,3670.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'asdsad','2026-01-16 10:10:02','2026-03-23 18:16:35',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial',NULL,1101.00,2569.00,NULL,NULL,0,NULL,0,NULL),(19,'ORD-20260116-696A0F1',9,NULL,'asd asd','asd@gmail.com','09917471283','asdasd','2026-01-18','15:00-18:00',NULL,'gcash',3520.00,150.00,NULL,NULL,0.00,3670.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'asdsad','2026-01-16 10:12:36','2026-03-23 18:16:35',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial',NULL,1101.00,2569.00,NULL,NULL,1,NULL,0,NULL),(21,'ORD-20260116-696A0F2',9,NULL,'asd asd','asd@gmail.com','09917471283','asd','2026-01-18','15:00-18:00',NULL,'gcash',3520.00,150.00,NULL,NULL,0.00,3670.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'asd','2026-01-16 10:13:00','2026-03-23 18:16:35',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial',NULL,1101.00,2569.00,NULL,NULL,1,NULL,0,NULL),(22,'ORD-20260116-696A0F4',9,NULL,'asd asd','asd@gmail.com','09917471283','asd','2026-01-18','15:00-18:00',NULL,'gcash',3520.00,150.00,NULL,NULL,0.00,3670.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'asd','2026-01-16 10:13:34','2026-03-23 18:16:35',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial',NULL,1101.00,2569.00,NULL,NULL,1,NULL,0,NULL),(23,'ORD-20260116-696A0F7',9,NULL,'asd asd','asd@gmail.com','09917471283','asd','2026-01-18','15:00-18:00',NULL,'gcash',3520.00,150.00,NULL,NULL,0.00,3670.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'asd','2026-01-16 10:14:19','2026-03-23 18:16:35',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial',NULL,1101.00,2569.00,NULL,NULL,1,NULL,0,NULL),(24,'ORD-20260116-696A0FA',9,NULL,'asd asd','asd@gmail.com','09917471283','asd','2026-01-18','15:00-18:00',NULL,'gcash',3520.00,150.00,NULL,NULL,0.00,3670.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'asd','2026-01-16 10:15:08','2026-03-23 18:16:35',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial',NULL,1101.00,2569.00,NULL,NULL,1,NULL,0,NULL),(25,'ORD-20260116-696A114',9,NULL,'asd asd','asd@gmail.com','09917471283','asd','2026-01-18','15:00-18:00',NULL,'gcash',3520.00,150.00,NULL,NULL,0.00,3670.00,0.00,0.00,0.00,NULL,0.00,'delivered',NULL,'asd','2026-01-16 10:21:55','2026-03-23 18:16:35',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial',NULL,1101.00,2569.00,NULL,NULL,1,NULL,0,NULL),(26,'ORD-20260122-6971CE3',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-01-24','15:00-18:00',NULL,'paymongo',400.00,150.00,NULL,NULL,0.00,550.00,0.00,0.00,0.00,NULL,0.00,'preparing',NULL,'123132','2026-01-22 07:14:06','2026-09-24 08:18:11',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid','4680',0.00,0.00,NULL,NULL,1,NULL,0,NULL),(27,'ORD-20260122-697243B',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-01-24','15:00-18:00',NULL,'paymongo',1500.00,150.00,NULL,NULL,0.00,1650.00,0.00,0.00,0.00,NULL,0.00,'preparing',NULL,'','2026-01-22 15:35:26','2026-09-24 08:18:47',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid','7703',0.00,0.00,NULL,NULL,1,NULL,0,NULL),(28,'ORD-20260122-6972493',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-01-24','15:00-18:00',NULL,'paymongo',400.00,0.00,NULL,NULL,0.00,400.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'','2026-01-22 15:58:43','2026-01-30 07:18:55',0,'pickup',1,NULL,NULL,NULL,NULL,'cancelled',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(29,'ORD-20260123-6972630',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-01-25','15:00-18:00',NULL,'paymongo',1.00,0.00,NULL,NULL,0.00,1.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-01-22 17:49:00','2026-01-22 17:49:17',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(30,'ORD-20260123-69731D5',10,NULL,'Local Account','useraccount@gmail.com','09123456789','Main Branch - Makati, 123 Ayala Avenue','2026-01-25','15:00-18:00',NULL,'paymongo',650.00,0.00,NULL,NULL,0.00,650.00,0.00,0.00,0.00,NULL,0.00,'delivered',NULL,'','2026-01-23 07:03:47','2026-03-23 18:16:35',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(31,'ORD-20260128-6978E69',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-01-29','15:00-18:00',NULL,'paymongo',400.00,150.00,NULL,NULL,0.00,550.00,0.00,0.00,0.00,NULL,0.00,'preparing',NULL,'','2026-01-27 16:23:46','2026-09-24 08:19:38',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid','5235',0.00,0.00,NULL,NULL,1,NULL,0,NULL),(32,'ORD-20260128-6979B65',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-01-30','15:00-18:00',NULL,'paymongo',4200.00,150.00,NULL,NULL,0.00,4350.00,0.00,0.00,0.00,NULL,0.00,'preparing',NULL,'asd','2026-01-28 07:10:17','2026-09-24 08:28:24',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid','2854',0.00,0.00,NULL,NULL,1,NULL,0,NULL),(33,'ORD-20260129-697B17D',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-01-31','15:00-18:00',NULL,'paymongo',350.00,0.00,NULL,NULL,0.00,350.00,0.00,0.00,0.00,NULL,0.00,'delivered',NULL,'','2026-01-29 08:18:29','2026-02-01 13:38:20',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(34,'ORD-20260210-698A1A3',17,NULL,'asdsad asdasd','asdasdasd@gmail.com','09926421200','Main Branch - Makati, 123 Ayala Avenue','2026-02-12','15:00-18:00',NULL,'paymongo',200.00,0.00,NULL,NULL,0.00,200.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'asd','2026-02-09 17:32:39','2026-02-09 17:32:43',0,'pickup',1,NULL,NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(35,'ORD-20260210-698A1A5',17,NULL,'asdsad asdasd','asdasdasd@gmail.com','09926421200','blk 14 lot 3 brunei st.','2026-02-11','15:00-18:00',NULL,'paymongo',200.00,150.00,NULL,NULL,0.00,350.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'asd','2026-02-09 17:33:18','2026-02-09 17:33:22',0,'delivery',NULL,'0',NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(36,'ORD-20260210-698A1A9',17,NULL,'asdsad asdasd','asdasdasd@gmail.com','09926421200','blk 14 lot 3 brunei st.','2026-02-11','15:00-18:00',NULL,'paymongo',300.00,150.00,NULL,NULL,0.00,450.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'','2026-02-09 17:34:14','2026-02-09 17:34:18',0,'delivery',NULL,'0',NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(37,'ORD-20260210-698A1FF',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-02-11','15:00-18:00',NULL,'paymongo',1.00,150.00,NULL,NULL,0.00,151.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'asd','2026-02-09 17:57:15','2026-02-09 17:57:20',0,'delivery',NULL,'0',NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(38,'ORD-20260216-69933C9',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-02-18','15:00-18:00',NULL,'paymongo',3800.00,150.00,NULL,NULL,0.00,3950.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'','2026-02-16 15:49:38','2026-02-16 15:49:42',0,'delivery',NULL,'0',NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(39,'ORD-20260216-69933CE',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-02-18','15:00-18:00',NULL,'paymongo',3800.00,150.00,NULL,NULL,0.00,3950.00,0.00,0.00,0.00,NULL,0.00,'preparing',NULL,'','2026-02-16 15:51:02','2026-09-24 08:28:45',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid','6340',0.00,0.00,NULL,NULL,1,NULL,0,NULL),(40,'ORD-20260217-6994423',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-02-19','15:00-18:00',NULL,'paymongo',3500.00,150.00,NULL,NULL,0.00,3650.00,0.00,0.00,0.00,NULL,0.00,'preparing',NULL,'','2026-02-17 10:26:03','2026-09-24 08:28:47',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid','8665',0.00,0.00,NULL,NULL,1,NULL,0,NULL),(41,'ORD-20260217-699443A',9,NULL,'justine santos','asd@gmail.com','09917471283','Alabang Branch, 789 Commerce Avenue','2026-02-19','15:00-18:00',NULL,'paymongo',3500.00,0.00,NULL,NULL,0.00,3500.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'','2026-02-17 10:32:04','2026-02-17 10:32:08',0,'pickup',3,NULL,NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(44,'ORD-20260217-699443B',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-02-19','15:00-18:00',NULL,'paymongo',3500.00,150.00,NULL,NULL,0.00,3650.00,0.00,0.00,0.00,NULL,0.00,'preparing',NULL,'','2026-02-17 10:32:23','2026-09-24 08:28:51',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid','7577',0.00,0.00,NULL,NULL,1,NULL,0,NULL),(45,'ORD-20260217-6994441',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-19','15:00-18:00',NULL,'paymongo',300.00,0.00,NULL,NULL,0.00,300.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-02-17 10:33:52','2026-02-17 10:34:05',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(46,'ORD-20260217-6994466',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-02-19','15:00-18:00',NULL,'paymongo',600.00,150.00,NULL,NULL,0.00,750.00,0.00,0.00,0.00,NULL,0.00,'preparing',NULL,'','2026-02-17 10:43:45','2026-09-24 08:31:06',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial','3357',225.00,525.00,NULL,NULL,1,NULL,0,NULL),(47,'ORD-20260217-6994484',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-19','15:00-18:00',NULL,'paymongo',300.00,0.00,NULL,NULL,0.00,300.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'','2026-02-17 10:51:54','2026-02-24 14:08:50',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(48,'ORD-20260217-69944AC',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-19','15:00-18:00',NULL,'paymongo',900.00,0.00,NULL,NULL,0.00,900.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-02-17 11:02:36','2026-02-17 11:02:54',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(49,'ORD-20260217-69944BD',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-19','15:00-18:00',NULL,'paymongo',900.00,0.00,NULL,NULL,0.00,900.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-02-17 11:06:59','2026-02-17 11:07:18',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(50,'ORD-20260217-69944F1',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-19','15:00-18:00',NULL,'paymongo',3500.00,0.00,NULL,NULL,0.00,3500.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-02-17 11:20:54','2026-02-17 11:21:08',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(51,'ORD-20260217-699450B',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-19','15:00-18:00',NULL,'paymongo',3500.00,0.00,NULL,NULL,0.00,3500.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-02-17 11:27:46','2026-02-17 11:28:06',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(52,'ORD-20260217-6994607',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-02-19','15:00-18:00',NULL,'paymongo',900.00,150.00,NULL,NULL,0.00,1050.00,0.00,0.00,0.00,NULL,0.00,'preparing',NULL,'','2026-02-17 12:35:10','2026-09-24 09:49:58',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid','8739',0.00,0.00,NULL,NULL,1,NULL,0,NULL),(53,'ORD-20260217-699461E',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-19','15:00-18:00',NULL,'paymongo',900.00,0.00,NULL,NULL,0.00,900.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-02-17 12:41:17','2026-02-17 12:41:30',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(54,'ORD-20260217-6994631',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-19','15:00-18:00',NULL,'paymongo',300.00,0.00,NULL,NULL,0.00,300.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'','2026-02-17 12:46:21','2026-02-17 12:46:25',0,'pickup',1,NULL,NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(55,'ORD-20260217-6994632',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-19','15:00-18:00',NULL,'paymongo',300.00,0.00,NULL,NULL,0.00,300.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'','2026-02-17 12:46:25','2026-02-17 12:46:29',0,'pickup',1,NULL,NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(58,'ORD-20260217-6994633',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-19','15:00-18:00',NULL,'paymongo',300.00,0.00,NULL,NULL,0.00,300.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'','2026-02-17 12:46:41','2026-02-17 12:46:45',0,'pickup',1,NULL,NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(60,'ORD-20260217-6994636',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-02-19','15:00-18:00',NULL,'paymongo',300.00,150.00,NULL,NULL,0.00,450.00,0.00,0.00,0.00,NULL,0.00,'preparing',NULL,'','2026-02-17 12:47:35','2026-09-24 10:00:33',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid','9634',0.00,0.00,NULL,NULL,1,NULL,0,NULL),(61,'ORD-20260217-6994661',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-19','15:00-18:00',NULL,'paymongo',900.00,0.00,NULL,NULL,0.00,900.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-02-17 12:58:57','2026-02-17 12:59:11',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(62,'ORD-20260217-6994669',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-18','15:00-18:00',NULL,'paymongo',300.00,0.00,NULL,NULL,0.00,300.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-02-17 13:01:15','2026-02-17 13:01:30',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(63,'ORD-20260217-699466D',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-18','15:00-18:00',NULL,'paymongo',1800.00,0.00,NULL,NULL,0.00,1800.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-02-17 13:02:09','2026-02-17 13:02:23',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(64,'ORD-20260217-6994673',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-02-18','15:00-18:00',NULL,'paymongo',300.00,150.00,NULL,NULL,0.00,450.00,0.00,0.00,0.00,NULL,0.00,'delivered',NULL,'','2026-02-17 13:03:49','2026-09-24 15:52:54',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid','2151',0.00,0.00,NULL,NULL,1,NULL,1,'2026-09-24 23:52:54'),(65,'ORD-20260217-699469A',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-19','15:00-18:00',NULL,'paymongo',600.00,0.00,NULL,NULL,0.00,600.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-02-17 13:14:08','2026-02-17 13:14:26',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(66,'ORD-20260217-69946D8',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-02-17','ASAP',NULL,'paymongo',300.00,150.00,NULL,NULL,0.00,450.00,0.00,0.00,0.00,NULL,0.00,'delivered',NULL,'asd','2026-02-17 13:30:44','2026-09-24 15:03:49',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid','4249',0.00,0.00,NULL,NULL,1,NULL,1,'2026-09-24 23:03:49'),(67,'ORD-20260217-69946E3',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-17','ASAP',NULL,'paymongo',600.00,0.00,NULL,NULL,0.00,600.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-02-17 13:33:42','2026-02-17 13:33:57',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(68,'ORD-20260217-69946E7',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-17','ASAP',NULL,'paymongo',1200.00,0.00,NULL,NULL,0.00,1200.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'','2026-02-17 13:34:43','2026-02-17 13:34:46',0,'pickup',1,NULL,NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(69,'ORD-20260217-69946E9',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-17','ASAP',NULL,'paymongo',1200.00,0.00,NULL,NULL,0.00,1200.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-02-17 13:35:25','2026-02-17 13:35:54',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(70,'ORD-20260217-69946F9',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-17','ASAP',NULL,'paymongo',120.00,0.00,NULL,NULL,0.00,120.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-02-17 13:39:41','2026-02-17 13:39:56',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(71,'ORD-20260217-699472F',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-17','ASAP',NULL,'paymongo',300.00,0.00,NULL,NULL,0.00,300.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-02-17 13:54:02','2026-02-17 13:54:22',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(72,'ORD-20260217-6994740',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-17','ASAP',NULL,'paymongo',1800.00,0.00,NULL,NULL,0.00,1800.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-02-17 13:58:24','2026-02-17 13:58:38',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(73,'ORD-20260217-6994743',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-17','ASAP',NULL,'paymongo',11400.00,0.00,NULL,NULL,0.00,11400.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-02-17 13:59:19','2026-02-17 13:59:37',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(74,'ORD-20260217-6994747',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-17','ASAP',NULL,'paymongo',2280.00,0.00,NULL,NULL,0.00,2280.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-02-17 14:00:20','2026-02-17 14:00:35',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(75,'ORD-20260217-69947E0',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-17','ASAP',NULL,'paymongo',350.00,0.00,NULL,NULL,0.00,350.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-02-17 14:41:07','2026-02-17 14:42:10',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(76,'ORD-20260217-69947E6',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-17','ASAP',NULL,'paymongo',1050.00,0.00,NULL,NULL,0.00,1050.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'','2026-02-17 14:42:45','2026-02-24 13:45:44',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,'asd',0,NULL),(77,'ORD-20260217-699481C',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-17','ASAP',NULL,'paymongo',14000.00,0.00,NULL,NULL,0.00,14000.00,0.00,0.00,0.00,NULL,0.00,'delivered',NULL,'','2026-02-17 14:57:15','2026-02-24 14:39:36',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,'asd',0,NULL),(78,'ORD-20260217-6994890',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-17','ASAP',NULL,'paymongo',300.00,0.00,NULL,NULL,0.00,300.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'','2026-02-17 15:28:15','2026-03-13 03:34:16',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,'asd',0,NULL),(79,'ORD-20260224-699D971',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-24','ASAP',NULL,'paymongo',480.00,0.00,NULL,NULL,0.00,480.00,0.00,0.00,0.00,NULL,0.00,'delivered',NULL,'','2026-02-24 12:18:38','2026-02-24 12:26:29',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(80,'ORD-20260224-699D99C',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-02-24','ASAP',NULL,'paymongo',240.00,150.00,NULL,NULL,0.00,390.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'asd','2026-02-24 12:30:01','2026-02-24 12:52:17',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(81,'ORD-20260224-699D9A0',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-24','ASAP',NULL,'paymongo',120.00,0.00,NULL,NULL,0.00,120.00,0.00,0.00,0.00,NULL,0.00,'delivered',NULL,'','2026-02-24 12:31:05','2026-02-24 12:36:12',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(82,'ORD-20260224-699DA79',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-24','ASAP',NULL,'paymongo',3920.00,0.00,NULL,NULL,0.00,3920.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'','2026-02-24 13:29:01','2026-02-24 13:29:35',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,'asdasd',0,NULL),(83,'ORD-20260224-699DAC0',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-24','ASAP',NULL,'paymongo',3920.00,0.00,NULL,NULL,0.00,3920.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'','2026-02-24 13:47:56','2026-02-24 13:48:25',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,'asd',0,NULL),(84,'ORD-20260224-699DB0B',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-02-24','ASAP',NULL,'paymongo',3920.00,0.00,NULL,NULL,0.00,3920.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'','2026-02-24 14:07:49','2026-02-24 14:22:01',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,'',0,NULL),(85,'WALK-20260225-21F93E',9,NULL,'Walk-in Customer','','','In-store Pickup','2026-02-25','01:08:21',NULL,'Cash',600.00,0.00,NULL,NULL,0.00,600.00,0.00,0.00,0.00,NULL,0.00,'delivered',NULL,'Walk-in order (kiosk)','2026-02-24 17:08:21','2026-02-24 17:12:24',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(86,'WALK-20260311-14D15A',9,NULL,'Walk-in Customer','','','In-store Pickup','2026-03-11','10:17:29',NULL,'Cash',369369.00,0.00,NULL,NULL,0.00,369369.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'Walk-in order (kiosk)','2026-03-11 02:17:29','2026-03-11 02:17:29',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(87,'WALK-20260311-8309CE',9,NULL,'Walk-in Customer','','','In-store Pickup','2026-03-11','10:17:49',NULL,'Cash',123123.00,0.00,NULL,NULL,0.00,123123.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'Walk-in order (kiosk)','2026-03-11 02:17:49','2026-03-11 02:17:49',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(88,'ORD-20260313-69B37B9',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-03-13','ASAP',NULL,'paymongo',123123.00,0.00,NULL,NULL,0.00,123123.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-03-13 02:51:06','2026-03-13 02:51:35',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(89,'ORD-20260313-69B3851',9,NULL,'justine santos','asd@gmail.com','09917471283','Antipolo Branch, 101 Sumulong Highway','2026-03-13','ASAP',NULL,'paymongo',123123.00,0.00,NULL,NULL,0.00,123123.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'','2026-03-13 03:31:43','2026-03-13 03:32:22',0,'pickup',4,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,'asd',0,NULL),(90,'ORD-20260316-69B7993',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-03-16','ASAP',NULL,'paymongo',3800.00,0.00,NULL,NULL,0.00,3800.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-03-16 05:46:29','2026-03-16 05:46:47',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(91,'ORD-20260316-69B79F3',9,NULL,'justine santos','asd@gmail.com','09917471283','Quezon City Branch, 456 Tomas Morato Avenue','2026-03-16','ASAP',NULL,'paymongo',11400.00,0.00,NULL,NULL,0.00,11400.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'','2026-03-16 06:12:01','2026-03-16 06:12:05',0,'pickup',2,NULL,NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(92,'ORD-20260316-69B79F4',9,NULL,'justine santos','asd@gmail.com','09917471283','Quezon City Branch, 456 Tomas Morato Avenue','2026-03-16','ASAP',NULL,'paymongo',3800.00,0.00,NULL,NULL,0.00,3800.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-03-16 06:12:25','2026-03-16 06:12:42',0,'pickup',2,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(93,'ORD-20260316-69B7A2C',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-03-16','ASAP',NULL,'paymongo',3800.00,0.00,NULL,NULL,0.00,3800.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-03-16 06:27:25','2026-03-16 06:33:25',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(94,'ORD-20260316-69B7A8C',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-03-16','ASAP',NULL,'paymongo',1900.00,0.00,NULL,NULL,0.00,1900.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-03-16 06:52:53','2026-03-16 06:53:08',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(95,'ORD-20260316-69B7AA8',9,NULL,'justine santos','asd@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-03-16','ASAP',NULL,'paymongo',3800.00,0.00,NULL,NULL,0.00,3800.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-03-16 07:00:23','2026-03-16 07:00:38',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(96,'ORD-20260316-69B7ADA',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-03-16','ASAP',NULL,'paymongo',1900.00,200.00,NULL,NULL,0.00,2100.00,0.00,0.00,0.00,NULL,0.00,'preparing',NULL,'','2026-03-16 07:13:39','2026-03-16 07:13:56',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(97,'ORD-20260316-69B7B22',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-03-16','ASAP',NULL,'paymongo',1900.00,200.00,NULL,NULL,0.00,2100.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'','2026-03-16 07:32:56','2026-03-17 07:41:19',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial',NULL,630.00,1470.00,NULL,NULL,1,NULL,0,NULL),(98,'ORD-20260316-69B7C88',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-03-16','ASAP',NULL,'paymongo',5700.00,200.00,NULL,NULL,0.00,5900.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'','2026-03-16 09:08:30','2026-03-17 07:35:34',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial',NULL,1770.00,4130.00,NULL,NULL,1,NULL,0,NULL),(99,'ORD-20260317-69B8EA7',1,NULL,'Admin User','admin@lechondelights.com','09171234567','asdd','2026-03-17','ASAP',NULL,'paymongo',120.00,0.00,NULL,NULL,0.00,120.00,0.00,0.00,0.00,NULL,0.00,'delivered',NULL,'','2026-03-17 05:45:30','2026-03-17 07:30:03',0,'delivery',NULL,'0',NULL,NULL,NULL,'partial',NULL,36.00,84.00,NULL,NULL,1,NULL,1,'2026-03-17 15:30:03'),(100,'ORD-20260317-69B9049',1,NULL,'Admin User','admin@lechondelights.com','09171234567','asdasd','2026-03-17','ASAP',NULL,'paymongo',120.00,0.00,NULL,NULL,0.00,120.00,0.00,0.00,0.00,NULL,0.00,'delivered',NULL,'asd','2026-03-17 07:36:51','2026-03-17 13:23:10',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,1,'2026-03-17 21:23:10'),(101,'ORD-20260317-69B958F',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-03-17','ASAP',NULL,'paymongo',120.00,0.00,NULL,NULL,0.00,120.00,0.00,0.00,0.00,NULL,0.00,'delivered',NULL,'','2026-03-17 13:37:01','2026-03-17 13:38:24',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,1,'2026-03-17 21:38:24'),(102,'ORD-20260317-69B95DB',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-03-17','ASAP',NULL,'paymongo',120.00,0.00,NULL,NULL,0.00,120.00,0.00,0.00,0.00,NULL,0.00,'delivered',NULL,'asd','2026-03-17 13:57:11','2026-03-17 13:58:33',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,1,'2026-03-17 21:58:33'),(103,'WALK-20260317-A2FF52',9,NULL,'Walk-in Customer','','','In-store Pickup','2026-03-17','22:48:00',NULL,'Cash',120.00,0.00,NULL,NULL,0.00,120.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'Walk-in order (kiosk)','2026-03-17 14:48:00','2026-03-17 14:48:00',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(104,'ORD-20260324-69C1728',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-03-24','ASAP',NULL,'paymongo',10900.00,200.00,NULL,NULL,0.00,12408.00,0.00,0.00,0.00,NULL,0.00,'delivered',NULL,'','2026-03-23 17:04:00','2026-03-23 17:05:37',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,1,'2026-03-24 01:05:37'),(105,'ORD-20260324-69C17BB',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-03-24','ASAP',NULL,'paymongo',10900.00,0.00,NULL,NULL,0.00,12208.00,0.00,0.00,0.00,NULL,0.00,'',NULL,'','2026-03-23 17:43:22','2026-04-11 13:55:02',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(106,'ORD-20260324-69C17C1',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-03-24','ASAP',NULL,'paymongo',10900.00,200.00,NULL,NULL,0.00,12408.00,0.00,0.00,0.00,NULL,0.00,'delivered',NULL,'','2026-03-23 17:44:59','2026-03-23 17:46:54',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,1,'2026-03-24 01:46:54'),(107,'ORD-20260324-69C17DF',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-03-24','ASAP',NULL,'paymongo',10900.00,0.00,NULL,NULL,0.00,12208.00,0.00,0.00,0.00,NULL,0.00,'delivered',NULL,'','2026-03-23 17:52:50','2026-03-23 17:54:35',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,1,'2026-03-24 01:54:35'),(108,'ORD-20260324-69C17FE',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss.','2026-03-24','ASAP',NULL,'paymongo',10900.00,0.00,NULL,NULL,0.00,12208.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'','2026-03-23 18:01:19','2026-04-11 13:54:25',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(109,'ORD-20260324-69C1814',31,NULL,'justine santos','justinehero033@gmail.com','09917471283','asdasd','2026-03-24','ASAP',NULL,'paymongo',10900.00,0.00,NULL,NULL,0.00,12208.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'','2026-03-23 18:07:01','2026-04-11 13:54:22',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(110,'ORD-20260325-69C3F2C',28,NULL,'asd asd','asd123@gmail.com','09917471283','Alabang Branch, 789 Commerce Avenue','2026-03-25','ASAP',NULL,'paymongo',650.00,0.00,NULL,NULL,0.00,728.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'','2026-03-25 14:35:58','2026-03-25 14:36:12',0,'pickup',3,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(111,'ORD-20260326-69C41C0',32,NULL,'Justine asd asd','asdasd222@gmail.com','09917471281','blk 14 lot 3 brunei st., Salawag, City of Dasmariñas, Cavite, CALABARZON, Salawag, City of Dasmariñas, Cavite, CALABARZON','2026-03-26','ASAP',NULL,'paymongo',650.00,244.00,NULL,NULL,0.00,972.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'asd\nDelivery Distance: 12.89 km','2026-03-25 17:31:44','2026-04-11 13:54:20',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(112,'WALK-20260327-117A33',9,NULL,'Walk-in Customer','','','In-store Pickup','2026-03-27','11:54:08',NULL,'Cash',9980.00,0.00,NULL,NULL,0.00,9980.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'Walk-in order (kiosk)','2026-03-27 03:54:08','2026-03-27 03:54:08',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(113,'ORD-20260327-69C6328',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss., Salawag, City of Dasmariñas, Cavite, CALABARZON','2026-03-27','ASAP',NULL,'paymongo',100.00,244.00,NULL,NULL,0.00,356.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'asd\nDelivery Distance: 12.89 km','2026-03-27 07:32:26','2026-04-10 08:37:39',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(114,'WALK-20260327-0DDBA7',31,NULL,'Walk-in Customer','','','In-store Pickup','2026-03-27','16:21:06',NULL,'Cash',100.00,0.00,NULL,NULL,0.00,100.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'Walk-in order (kiosk)','2026-03-27 08:21:06','2026-03-27 08:21:06',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(115,'ORD-20260327-69C6711',31,NULL,'justine santos','justinehero033@gmail.com','09917471283','Main Branch - Makati, 123 Ayala Avenue','2026-03-27','ASAP',NULL,'paymongo',850.00,0.00,NULL,NULL,0.00,952.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'','2026-03-27 11:59:26','2026-03-27 12:01:46',0,'pickup',1,NULL,NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,'asd',0,NULL),(116,'ORD-20260327-69C671C',31,NULL,'justine santos','justinehero033@gmail.com','09917471283','asdasd, Salawag, City of Dasmariñas, Cavite, CALABARZON','2026-03-27','ASAP',NULL,'paymongo',1700.00,244.00,NULL,NULL,0.00,2148.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'asd\nDelivery Distance: 12.89 km','2026-03-27 12:02:12','2026-03-31 10:03:07',0,'delivery',NULL,'0',NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(117,'ORD-20260327-69C6739',31,NULL,'justine santos','justinehero033@gmail.com','09917471283','asdasd, Salawag, City of Dasmariñas, Cavite, CALABARZON','2026-03-27','ASAP',NULL,'paymongo',10.00,244.00,NULL,NULL,0.00,255.20,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'asd\nDelivery Distance: 12.89 km','2026-03-27 12:09:58','2026-04-10 08:37:35',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(118,'ORD-20260331-69CBD1C',4,NULL,'justine santos','justineher0@gmail.com','09917471283','Lat 14.324788, Salawag, City of Dasmariñas, Cavite, CALABARZON','2026-03-31','ASAP',NULL,'paymongo',10.00,244.00,1,'JAKOL10',1.00,254.20,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'asd\nDelivery Distance: 12.89 km','2026-03-31 13:53:15','2026-04-10 08:37:33',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(119,'WALK-20260331-2E0917',31,NULL,'Walk-in Customer','','','In-store Pickup','2026-03-31','22:34:26',NULL,'Cash',5000.00,0.00,NULL,NULL,0.00,5000.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'Walk-in order (kiosk)','2026-03-31 14:34:26','2026-04-10 08:01:35',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(120,'ORD-20260331-69CBDC6',9,NULL,'justine santos','asd@gmail.com','09917471283','taga dito lang sa tabi tabi boss., Salawag, City of Dasmariñas, Cavite, CALABARZON','2026-03-31','ASAP',NULL,'paymongo',10.00,244.00,NULL,NULL,0.00,255.20,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'asd\nDelivery Distance: 12.89 km','2026-03-31 14:38:37','2026-04-10 08:01:31',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(121,'WALK-20260409-0D806E',31,NULL,'Walk-in Customer','','','In-store Pickup','2026-04-09','17:55:04',NULL,'Cash',100.00,0.00,NULL,NULL,0.00,100.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'Walk-in order (kiosk)','2026-04-09 09:55:04','2026-04-09 09:55:04',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(122,'ORD-20260409-69D77AB',4,NULL,'justine santos','justineher0@gmail.com','09917471283','Lat 14.324788, Salawag, City of Dasmariñas, Cavite, CALABARZON','2026-04-09','ASAP',NULL,'paymongo',150.00,244.00,NULL,NULL,0.00,412.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'asd\nDelivery Distance: 12.89 km','2026-04-09 10:08:58','2026-04-11 13:54:15',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(123,'WALK-20260410-2A0525',31,NULL,'Walk-in Customer','','','In-store Pickup','2026-04-10','16:24:45',NULL,'Cash',100.00,0.00,NULL,NULL,0.00,112.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'Walk-in order (kiosk)','2026-04-10 08:24:45','2026-04-10 08:24:45',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(124,'WALK-20260411-6F384E',31,NULL,'Walk-in Customer','','','In-store Pickup','2026-04-11','17:12:59',NULL,'Cash',500.00,0.00,NULL,NULL,0.00,560.00,0.00,0.00,0.00,NULL,0.00,'confirmed',NULL,'Walk-in order (kiosk)','2026-04-11 09:12:59','2026-08-04 14:04:08',0,'pickup',1,NULL,NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(126,'ORD-20260804-E31E0F',36,NULL,'justine hero','santos.justinehero1@ncst.edu.ph','09917478967','El Salvador Street, Salawag, City of Dasmariñas 4114, Cavite, CALABARZON','2026-08-04','ASAP',NULL,'paymongo',150.00,244.00,NULL,NULL,0.00,412.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'Nearest fulfillment store: Alabang Branch | Delivery Distance: 12.88 km | Estimated delivery: 55 - 70 minutes','2026-08-04 14:22:54','2026-08-04 14:31:29',0,'delivery',NULL,'0',NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(128,'ORD-20260804-018C21',1,NULL,'Justine Test','admin@lechondelights.com','09123456789','Sample Street, Dasmariñas, Cavite','2026-08-05','12:00 PM',NULL,'cod',1500.00,100.00,NULL,NULL,0.00,1780.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'Delivery Distance: 5.20 km','2026-08-04 14:24:48','2026-08-04 14:27:55',0,'delivery',NULL,'0',NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(129,'ORD-20260804-E88FEA',36,NULL,'justine hero','santos.justinehero1@ncst.edu.ph','09917478967','El Salvador Street, Salawag, City of Dasmariñas 4114, Cavite, CALABARZON','2026-08-04','ASAP',NULL,'paymongo',150.00,244.00,NULL,NULL,0.00,412.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'Nearest fulfillment store: Alabang Branch | Delivery Distance: 12.88 km | Estimated delivery: 55 - 70 minutes','2026-08-04 14:25:34','2026-08-04 14:31:29',0,'delivery',NULL,'0',NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(130,'ORD-20260804-70FA7C',36,NULL,'justine hero','santos.justinehero1@ncst.edu.ph','09917478967','Hanoi Street, Salawag, City of Dasmariñas 4114, Cavite, CALABARZON','2026-08-04','ASAP',NULL,'paymongo',150.00,244.00,NULL,NULL,0.00,412.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'Nearest fulfillment store: Alabang Branch | Delivery Distance: 12.89 km | Estimated delivery: 55 - 70 minutes','2026-08-04 14:26:15','2026-08-04 14:31:29',0,'delivery',NULL,'0',NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(131,'ORD-20260804-0739B9',1,NULL,'Justine Test','admin@lechondelights.com','09123456789','Sample Street, Dasmariñas, Cavite','2026-08-05','12:00 PM',NULL,'gcash',2000.00,100.00,NULL,NULL,0.00,2340.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'Delivery Distance: 5.20 km','2026-08-04 14:27:44','2026-08-04 14:27:55',0,'delivery',NULL,'0',NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(132,'ORD-20260804-B1EEB9',1,NULL,'Justine Test','admin@lechondelights.com','09123456789','Sample Street, Dasmariñas, Cavite','2026-08-05','12:00 PM',NULL,'gcash',2000.00,100.00,NULL,NULL,0.00,2340.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'Delivery Distance: 5.20 km','2026-08-04 14:27:55','2026-08-04 14:27:58',0,'delivery',NULL,'0',NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(133,'ORD-20260804-80078F',36,NULL,'justine hero','santos.justinehero1@ncst.edu.ph','09917478967','El Salvador Street, Salawag, City of Dasmariñas 4114, Cavite, CALABARZON','2026-08-04','ASAP',NULL,'paymongo',150.00,244.00,NULL,NULL,0.00,412.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'Nearest fulfillment store: Alabang Branch | Delivery Distance: 12.87 km | Estimated delivery: 55 - 70 minutes','2026-08-04 14:30:16','2026-08-04 14:31:29',0,'delivery',NULL,'0',NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(134,'ORD-20260804-6A71F7C15F7AA',36,NULL,'justine hero','santos.justinehero1@ncst.edu.ph','09917478967','El Salvador Street, Salawag, City of Dasmariñas 4114, Cavite, CALABARZON','2026-08-04','ASAP',NULL,'paymongo',150.00,244.00,NULL,NULL,0.00,412.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'Nearest fulfillment store: Alabang Branch | Delivery Distance: 12.88 km | Estimated delivery: 55 - 70 minutes','2026-08-04 14:31:29','2026-08-04 14:31:29',0,'delivery',NULL,'0',NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(135,'ORD-20260805-6A73425526047',18,NULL,'justine santos','justinehero03@gmail.com','09917471283','El Salvador Street, Salawag, City of Dasmariñas 4114, Cavite, CALABARZON','2026-08-05','ASAP',NULL,'paymongo',100.00,244.00,NULL,NULL,0.00,356.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'Nearest fulfillment store: Alabang Branch | Delivery Distance: 12.88 km | Estimated delivery: 55 - 70 minutes','2026-08-05 14:01:57','2026-09-16 13:47:14',0,'delivery',NULL,'0',NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(136,'ORD-20260805-6A734264A7ED9',18,NULL,'justine santos','justinehero03@gmail.com','09917471283','El Salvador Street, Salawag, City of Dasmariñas 4114, Cavite, CALABARZON','2026-08-05','ASAP',NULL,'paymongo',100.00,244.00,NULL,NULL,0.00,356.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'Nearest fulfillment store: Alabang Branch | Delivery Distance: 12.88 km | Estimated delivery: 55 - 70 minutes','2026-08-05 14:02:12','2026-09-16 13:47:14',0,'delivery',NULL,'0',NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(137,'ORD-20260805-6A7343C00F18C',18,NULL,'justine santos','justinehero03@gmail.com','09917471283','El Salvador Street, Salawag, City of Dasmariñas 4114, Cavite, CALABARZON','2026-08-05','ASAP',NULL,'paymongo',100.00,244.00,NULL,NULL,0.00,356.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'Nearest fulfillment store: Alabang Branch | Delivery Distance: 12.88 km | Estimated delivery: 55 - 70 minutes','2026-08-05 14:08:00','2026-09-16 13:47:14',0,'delivery',NULL,'0',NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,0,NULL,0,NULL),(138,'ORD-20260805-6A73459E2FDC4',18,NULL,'justine santos','justinehero03@gmail.com','09917471283','Hanoi Street, Salawag, City of Dasmariñas 4114, Cavite, CALABARZON','2026-08-05','ASAP',NULL,'paymongo',100.00,244.00,NULL,NULL,0.00,356.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'Nearest fulfillment store: Alabang Branch | Delivery Distance: 12.89 km | Estimated delivery: 55 - 70 minutes','2026-08-05 14:15:58','2026-09-16 13:47:14',0,'delivery',NULL,'0',NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(139,'ORD-20260805-6A7345F79D25D',18,NULL,'justine santos','justinehero03@gmail.com','09917471283','El Salvador Street, Salawag, City of Dasmariñas 4114, Cavite, CALABARZON','2026-08-05','ASAP',NULL,'paymongo',100.00,244.00,NULL,NULL,0.00,356.00,0.00,0.00,0.00,NULL,0.00,'preparing',NULL,'Nearest fulfillment store: Alabang Branch | Delivery Distance: 12.88 km | Estimated delivery: 55 - 70 minutes','2026-08-05 14:17:27','2026-09-16 13:47:14',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(140,'ORD-20260806-CDB481',18,NULL,'justine santos','justinehero03@gmail.com','09917471283','El Salvador Street, Salawag, City of Dasmariñas 4114, Cavite, CALABARZON','2026-08-06','ASAP',NULL,'paymongo',650.00,244.00,NULL,NULL,0.00,972.00,0.00,0.00,0.00,NULL,0.00,'preparing',NULL,'Nearest fulfillment store: Alabang Branch | Delivery Distance: 12.88 km | Estimated delivery: 55 - 70 minutes','2026-08-06 09:39:56','2026-09-16 13:47:14',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(141,'ORD-20260812-22EA22',18,NULL,'justine santos','justinehero03@gmail.com','09917471283','El Salvador Street, Salawag, City of Dasmariñas 4114, Cavite, CALABARZON','2026-08-12','ASAP',NULL,'paymongo',100.00,200070.00,NULL,NULL,0.00,200182.00,0.00,0.00,0.00,NULL,0.00,'preparing',NULL,'Nearest fulfillment store: Quezon City Branch | Delivery Distance: 13,334.66 km | Estimated delivery: 32025 - 32040 minutes','2026-08-12 09:05:38','2026-09-16 13:47:14',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(142,'ORD-20260813-7DFE08',18,NULL,'justine santos','justinehero03@gmail.com','09917471283','El Salvador Street, Salawag, City of Dasmariñas 4114, Cavite, CALABARZON','2026-08-13','ASAP',NULL,'paymongo',550.00,1738.00,NULL,NULL,0.00,2354.00,0.00,0.00,0.00,NULL,0.00,'pending',NULL,'Nearest fulfillment store: Alabang Branch | Delivery Distance: 112.53 km | Estimated delivery: 295 - 310 minutes','2026-08-13 03:56:23','2026-09-16 13:47:14',0,'delivery',NULL,'0',NULL,NULL,NULL,'pending',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(143,'ORD-20260826-1E51E9',18,NULL,'justine santos','justinehero03@gmail.com','09917471283','El Salvador Street, Dasmariñas 4114','2026-08-26','ASAP',NULL,'paymongo',150.00,1738.00,NULL,NULL,0.00,1906.00,0.00,0.00,0.00,NULL,0.00,'delivered',NULL,'Nearest fulfillment store: Alabang Branch | Delivery Distance: 112.52 km | Estimated delivery: 295 - 310 minutes','2026-08-25 16:25:37','2026-08-25 16:35:15',0,'delivery',NULL,'0',NULL,NULL,NULL,'paid',NULL,0.00,0.00,NULL,NULL,1,NULL,1,'2026-08-26 00:35:15'),(144,'ORD-20260916-6E64B8',18,NULL,'justine santos','justinehero03@gmail.com','09917471283','El Salvador Street, Dasmariñas 4114','2026-09-16','ASAP',NULL,'paymongo',50.00,1478.00,NULL,NULL,0.00,1534.00,0.00,0.00,0.00,NULL,0.00,'cancelled',NULL,'Nearest fulfillment store: General Trias Branch | Delivery Distance: 95.14 km | Estimated delivery: 250 - 265 minutes','2026-09-16 07:54:46','2026-09-16 07:55:04',0,'delivery',NULL,'0',NULL,NULL,NULL,'cancelled',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(147,'ORD-20260916-9D0501',18,1,'justine santos','justinehero03@gmail.com','09917471283','El Salvador Street, Dasmariñas 4114','2026-09-16','ASAP','2026-09-16 22:09:37','paymongo',150.00,122.00,NULL,NULL,0.00,290.00,6.00,2.00,11.00,'Standard Rate',139.00,'preparing',NULL,'Nearest fulfillment store: Dasmariñas Branch | Delivery Distance: 4.76 km | Estimated delivery: 35 - 50 minutes','2026-09-16 13:19:37','2026-09-16 13:47:14',0,'delivery',NULL,NULL,14.32496700,120.98060800,'','paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(148,'ORD-20260916-2ABF12',18,1,'justine santos','justinehero03@gmail.com','09917471283','El Salvador Street, Dasmariñas 4114','2026-09-16','ASAP','2026-09-16 22:37:14','paymongo',150.00,122.00,5,'BELLY50',50.00,240.00,6.00,2.00,11.00,'Standard Rate',139.00,'cancelled',NULL,'Nearest fulfillment store: Dasmariñas Branch | Delivery Distance: 4.76 km | Estimated delivery: 35 - 50 minutes','2026-09-16 13:47:14','2026-09-16 13:52:52',0,'delivery',NULL,NULL,14.32496700,120.98060800,'','paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(149,'ORD-20260924-495477',8,42,'Local Two','useraccount2@gmail.com','09123456789','asd','2026-09-24','ASAP','2026-09-24 18:37:20','paymongo',550.00,89.00,2,'WELCOME100',100.00,605.00,6.00,2.00,35.00,'Standard Rate',515.00,'preparing',NULL,'Nearest fulfillment store: jm lechon | Delivery Distance: 2.58 km | Estimated delivery: 30 - 45 minutes','2026-09-24 09:52:20','2026-09-24 10:19:49',0,'delivery',1,NULL,14.32436220,120.97727640,'','paid','7267',0.00,0.00,NULL,NULL,1,NULL,0,NULL),(150,'ORD-20260924-FE2F41',4,38,'justine santos','justineher0@gmail.com','09917471283','El Salvador Street, Salawag, City of Dasmariñas 324788, Cavite, CALABARZON','2026-09-24','ASAP','2026-09-25 00:11:55','paymongo',150.00,89.00,5,'BELLY50',50.00,207.00,6.00,2.00,11.00,'Standard Rate',139.00,'delivered',NULL,'Nearest fulfillment store: jm lechon | Delivery Distance: 2.58 km | Estimated delivery: 30 - 45 minutes','2026-09-24 15:26:55','2026-09-24 15:28:27',0,'delivery',7,NULL,14.32437190,120.97728250,'','paid','1922',0.00,0.00,NULL,NULL,1,NULL,1,'2026-09-24 23:28:27'),(151,'ORD-20260925-8144AD',4,38,'justine santos','justineher0@gmail.com','09917471283','El Salvador Street, Dasmariñas 4114','2026-09-25','ASAP','2026-09-25 01:34:12','paymongo',150.00,89.00,7,'DELIGHT25',25.00,232.00,6.00,2.00,11.00,'Standard Rate',139.00,'confirmed',NULL,'Nearest fulfillment store: jm lechon | Delivery Distance: 2.58 km | Estimated delivery: 30 - 45 minutes','2026-09-24 16:49:12','2026-09-24 16:50:00',0,'delivery',7,NULL,14.32436220,120.97727640,'','paid',NULL,0.00,0.00,NULL,NULL,1,NULL,0,NULL),(152,'ORD-20260925-8B60AC',4,38,'justine santos','justineher0@gmail.com','09917471283','El Salvador Street, Dasmariñas 4114','2026-09-25','ASAP','2026-09-25 01:35:00','cod',998.00,89.00,NULL,NULL,0.00,1206.76,6.00,2.00,61.88,'Standard Rate',936.12,'delivered',NULL,'Nearest fulfillment store: jm lechon | Delivery Distance: 2.58 km | Estimated delivery: 30 - 45 minutes','2026-09-24 16:50:00','2026-09-24 16:52:32',1,'delivery',7,NULL,14.32436220,120.97727640,'','paid','6679',0.00,1206.76,NULL,NULL,1,NULL,1,'2026-09-25 00:51:08');
+/*!40000 ALTER TABLE `orders` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `partner_advertisements`
+--
+
+DROP TABLE IF EXISTS `partner_advertisements`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `partner_advertisements` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `seller_id` int NOT NULL,
+  `title` varchar(150) NOT NULL,
+  `subtitle` varchar(255) DEFAULT NULL,
+  `promo_code` varchar(60) DEFAULT NULL,
+  `discount_tag` varchar(60) DEFAULT NULL,
+  `banner_image` varchar(255) DEFAULT NULL,
+  `target_url` varchar(255) DEFAULT NULL,
+  `bg_theme` varchar(80) NOT NULL DEFAULT 'gradient-red',
+  `status` enum('active','inactive','expired') NOT NULL DEFAULT 'active',
+  `start_date` date DEFAULT NULL,
+  `end_date` date DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_seller_status` (`seller_id`,`status`),
+  KEY `idx_active_dates` (`status`,`start_date`,`end_date`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `partner_advertisements`
+--
+
+LOCK TABLES `partner_advertisements` WRITE;
+/*!40000 ALTER TABLE `partner_advertisements` DISABLE KEYS */;
+INSERT INTO `partner_advertisements` VALUES (1,10,'Weekend Lechon Feast 20% OFF','Order any whole or half lechon belly and save 20% on checkout!','FEAST20','20% OFF',NULL,'menu.php?seller_id=10','gradient-red','active',NULL,NULL,'2026-08-05 14:47:01','2026-08-05 14:47:01'),(2,10,'Free Delivery Special Deal','Free delivery on all Cavite orders over Γé▒1,500. Limited time promo!','FREEDEL','FREE DELIVERY',NULL,'index.php#marketplaceStores','gradient-orange','active',NULL,NULL,'2026-08-05 14:47:01','2026-08-05 14:47:01'),(3,11,'Crispy Lechon Belly Combo Deal','Get 1kg Roasted Lechon Belly + 2 Liters Drinks at a special discounted price.','BELLYCOMBO','SPECIAL COMBO',NULL,'menu.php?seller_id=11','gradient-dark','active',NULL,NULL,'2026-08-05 14:47:01','2026-08-05 14:47:01');
+/*!40000 ALTER TABLE `partner_advertisements` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `partner_billing_invoices`
+--
+
+DROP TABLE IF EXISTS `partner_billing_invoices`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `partner_billing_invoices` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `invoice_number` varchar(60) COLLATE utf8mb4_general_ci NOT NULL,
+  `partner_user_id` int NOT NULL,
+  `subscription_id` int DEFAULT NULL,
+  `invoice_type` enum('subscription','platform_fee','combined','manual') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'combined',
+  `period_start` date NOT NULL,
+  `period_end` date NOT NULL,
+  `subscription_amount` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `order_fee_amount` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `subtotal_amount` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `tax_amount` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `total_amount` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `currency_code` varchar(10) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'PHP',
+  `invoice_status` enum('draft','issued','paid','overdue','void') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'issued',
+  `issued_at` datetime DEFAULT NULL,
+  `due_at` datetime DEFAULT NULL,
+  `paid_at` datetime DEFAULT NULL,
+  `payment_reference` varchar(120) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `payment_channel` varchar(60) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `line_items_json` longtext COLLATE utf8mb4_general_ci,
+  `notes` text COLLATE utf8mb4_general_ci,
+  `created_by` int DEFAULT NULL,
+  `updated_by` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `partner_billing_invoices`
+--
+
+LOCK TABLES `partner_billing_invoices` WRITE;
+/*!40000 ALTER TABLE `partner_billing_invoices` DISABLE KEYS */;
+INSERT INTO `partner_billing_invoices` VALUES (1,'SUB-20260825-815740',10,NULL,'subscription','2026-08-25','2026-09-25',500.00,0.00,500.00,0.00,500.00,'PHP','overdue','2026-08-25 09:01:26','2026-08-28 23:59:59',NULL,NULL,NULL,'[{\"label\":\"Starter Subscription (Monthly)\",\"amount\":500}]','Instant subscription checkout: Starter (Monthly). Non-refundable; 1-month continued access upon cancellation.',10,10,'2026-08-25 09:01:26','2026-09-01 12:28:24'),(2,'SUB-20260901-EAD7D6',38,NULL,'subscription','2026-09-01','2026-10-01',1199.00,0.00,1199.00,0.00,1199.00,'PHP','overdue','2026-09-01 12:37:25','2026-09-04 23:59:59',NULL,NULL,NULL,'[{\"label\":\"Pro Subscription (Monthly)\",\"amount\":1199}]','Instant subscription checkout: Pro (Monthly). Non-refundable; 1-month continued access upon cancellation.',38,38,'2026-09-01 12:37:25','2026-09-24 16:58:25'),(3,'SUB-20260924-F01DD9',42,NULL,'subscription','2026-09-24','2026-10-24',1000.00,0.00,1000.00,0.00,1000.00,'PHP','paid','2026-09-24 16:58:36','2026-09-27 23:59:59','2026-09-24 16:58:50','cs_187ecc3580bd32510b80b010','gcash','[{\"label\":\"Growth Subscription (Monthly)\",\"amount\":1000}]','Instant subscription checkout: Growth (Monthly). Non-refundable; 1-month continued access upon cancellation.\nPaid online via PayMongo on Sep 24, 2026 04:58 PM.',42,42,'2026-09-24 16:58:36','2026-09-24 16:58:50'),(4,'SUB-20260924-8774CE',42,NULL,'subscription','2026-09-24','2026-10-24',1199.00,0.00,1199.00,0.00,1199.00,'PHP','paid','2026-09-24 17:15:15','2026-09-27 23:59:59','2026-09-24 17:15:28','cs_4fa10a63f80287a428d23610','gcash','[{\"label\":\"Pro Subscription (Monthly)\",\"amount\":1199}]','Instant subscription checkout: Pro (Monthly). Non-refundable; 1-month continued access upon cancellation.\nPaid online via PayMongo on Sep 24, 2026 05:15 PM.',42,42,'2026-09-24 17:15:15','2026-09-24 17:15:28');
+/*!40000 ALTER TABLE `partner_billing_invoices` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `partner_billing_notifications`
+--
+
+DROP TABLE IF EXISTS `partner_billing_notifications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `partner_billing_notifications` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `invoice_id` int NOT NULL,
+  `partner_user_id` int NOT NULL,
+  `reminder_type` enum('invoice_issued','due_soon','overdue','manual') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'manual',
+  `delivery_channel` enum('in_app','email','both') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'both',
+  `delivery_status` enum('sent','partial','failed') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'sent',
+  `sent_to_email` varchar(190) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `subject` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `message` text COLLATE utf8mb4_general_ci,
+  `sent_by` int DEFAULT NULL,
+  `sent_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `partner_billing_notifications`
+--
+
+LOCK TABLES `partner_billing_notifications` WRITE;
+/*!40000 ALTER TABLE `partner_billing_notifications` DISABLE KEYS */;
+/*!40000 ALTER TABLE `partner_billing_notifications` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `partner_invoice_payment_sessions`
+--
+
+DROP TABLE IF EXISTS `partner_invoice_payment_sessions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `partner_invoice_payment_sessions` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `invoice_id` int NOT NULL,
+  `partner_user_id` int NOT NULL,
+  `provider` varchar(40) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'paymongo',
+  `session_id` varchar(120) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `checkout_url` text COLLATE utf8mb4_general_ci,
+  `payment_status` enum('pending','paid','failed','cancelled','expired') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'pending',
+  `amount` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `currency_code` varchar(10) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'PHP',
+  `payment_method` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `transaction_reference` varchar(120) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `provider_payload` longtext COLLATE utf8mb4_general_ci,
+  `paid_at` datetime DEFAULT NULL,
+  `created_by` int DEFAULT NULL,
+  `updated_by` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `partner_invoice_payment_sessions`
+--
+
+LOCK TABLES `partner_invoice_payment_sessions` WRITE;
+/*!40000 ALTER TABLE `partner_invoice_payment_sessions` DISABLE KEYS */;
+INSERT INTO `partner_invoice_payment_sessions` VALUES (1,1,10,'paymongo','cs_4265c657bfc1df17281928c5','https://checkout.paymongo.com/4265c657bfc1df17281928c5','pending',500.00,'PHP','gcash',NULL,'{\"success\":true,\"checkout_url\":\"https:\\/\\/checkout.paymongo.com\\/4265c657bfc1df17281928c5\",\"session_id\":\"cs_4265c657bfc1df17281928c5\"}',NULL,10,10,'2026-08-25 09:01:27','2026-08-25 09:01:27'),(2,2,38,'paymongo','cs_5cf3846b76b8d33b8a8c85ec','https://checkout.paymongo.com/5cf3846b76b8d33b8a8c85ec','pending',1199.00,'PHP','gcash',NULL,'{\"success\":true,\"checkout_url\":\"https:\\/\\/checkout.paymongo.com\\/5cf3846b76b8d33b8a8c85ec\",\"session_id\":\"cs_5cf3846b76b8d33b8a8c85ec\"}',NULL,38,38,'2026-09-01 12:37:26','2026-09-01 12:37:26'),(3,3,42,'paymongo','cs_187ecc3580bd32510b80b010','https://checkout.paymongo.com/187ecc3580bd32510b80b010','paid',1000.00,'PHP','gcash','cs_187ecc3580bd32510b80b010','{\"success\":true,\"status\":\"paid\",\"session_data\":{\"id\":\"cs_187ecc3580bd32510b80b010\",\"type\":\"checkout_session\",\"attributes\":{\"billing\":{\"address\":{\"city\":null,\"country\":null,\"line1\":null,\"line2\":null,\"postal_code\":null,\"state\":null},\"email\":\"dasma@lechondelights.com\",\"name\":\"Dasmari\\u251c\\u2592as Central Branch\",\"phone\":\"0917-123-4567\"},\"billing_information_fields_editable\":\"enabled\",\"cancel_url\":\"http:\\/\\/localhost\\/lechonsystem\\/billing_invoice_payment_cancel.php?invoice_id=3\",\"checkout_url\":\"https:\\/\\/checkout.paymongo.com\\/187ecc3580bd32510b80b010\",\"client_key\":\"cs_187ecc3580bd32510b80b010_client_c1618f4f548c9bde0890ee74\",\"collection\":{\"customer_info\":{\"email\":{\"state\":\"auto\"},\"name\":{\"state\":\"auto\"},\"mobile_phone\":{\"state\":\"auto\"},\"address\":{\"state\":\"auto\"}}},\"branding\":{\"logo_url\":null,\"icon_url\":null,\"prefer_logo_over_icon\":true,\"brand_color\":\"#144037\",\"accent_color\":\"#16a34a\",\"header_alignment\":\"left\",\"show_paymongo_badge\":true},\"customer_email\":null,\"customer_id\":null,\"description\":\"Platform Invoice SUB-20260924-F01DD9\",\"line_items\":[{\"amount\":100000,\"currency\":\"PHP\",\"description\":null,\"images\":[],\"name\":\"Platform Invoice SUB-20260924-F01DD9\",\"quantity\":1}],\"livemode\":false,\"merchant\":\"justine hero santos\",\"metadata\":null,\"organization_id\":\"org_9HpkWCHtPtFPpf8YjbkrrkYt\",\"paid_at\":1790240323,\"pass_on_fees\":false,\"payment_intent\":{\"id\":\"pi_TJER1MtA8LDHBdGxvdxTVC82\",\"type\":\"payment_intent\",\"attributes\":{\"amount\":100000,\"capture_type\":\"automatic\",\"client_key\":\"pi_TJER1MtA8LDHBdGxvdxTVC82_client_sGu6yUFC92n2itjtWYvMYeUb\",\"currency\":\"PHP\",\"description\":\"Platform Invoice SUB-20260924-F01DD9\",\"last_payment_error\":null,\"livemode\":false,\"metadata\":null,\"next_action\":null,\"original_amount\":100000,\"payment_method_allowed\":[\"gcash\"],\"payment_method_options\":null,\"payments\":[{\"id\":\"pay_cjvd5gpMVB1sXM5t8C2PXcEX\",\"type\":\"payment\",\"attributes\":{\"access_url\":null,\"amount\":100000,\"available_at\":1790586000,\"balance_transaction_id\":\"bal_txn_Q3hDA9ZoV5Cd8SU5Ek85koj8\",\"billing\":{\"address\":{\"city\":null,\"country\":null,\"line1\":null,\"line2\":null,\"postal_code\":null,\"state\":null},\"email\":\"dasma@lechondelights.com\",\"name\":\"Dasmari\\u251c\\u2592as Central Branch\",\"phone\":\"0917-123-4567\"},\"checkout_session_id\":null,\"credited_at\":1790730000,\"currency\":\"PHP\",\"description\":\"Platform Invoice SUB-20260924-F01DD9\",\"digital_withholding_vat_amount\":0,\"disputed\":false,\"external_reference_number\":null,\"fee\":2500,\"instant_settlement\":null,\"livemode\":false,\"metadata\":null,\"net_amount\":97500,\"origin\":\"api\",\"paid_at\":1790240323,\"payment_intent_id\":\"pi_TJER1MtA8LDHBdGxvdxTVC82\",\"payout\":null,\"promotion\":null,\"refunds\":[],\"source\":{\"id\":\"src_BwZsMt8tR1zrQX1WEu1hARaA\",\"provider\":{\"id\":null},\"provider_id\":null,\"type\":\"gcash\"},\"statement_descriptor\":\"justine hero santos\",\"status\":\"paid\",\"tax_amount\":null,\"taxes\":[],\"created_at\":1790240323,\"updated_at\":1790240323}}],\"setup_future_usage\":null,\"statement_descriptor\":\"justine hero santos\",\"status\":\"succeeded\",\"created_at\":1790240316,\"updated_at\":1790240323}},\"payment_method_types\":[\"gcash\"],\"payment_method_used\":\"gcash\",\"payments\":[{\"id\":\"pay_cjvd5gpMVB1sXM5t8C2PXcEX\",\"type\":\"payment\",\"attributes\":{\"access_url\":null,\"amount\":100000,\"available_at\":1790586000,\"balance_transaction_id\":\"bal_txn_Q3hDA9ZoV5Cd8SU5Ek85koj8\",\"billing\":{\"address\":{\"city\":null,\"country\":null,\"line1\":null,\"line2\":null,\"postal_code\":null,\"state\":null},\"email\":\"dasma@lechondelights.com\",\"name\":\"Dasmari\\u251c\\u2592as Central Branch\",\"phone\":\"0917-123-4567\"},\"checkout_session_id\":null,\"credited_at\":1790730000,\"currency\":\"PHP\",\"description\":\"Platform Invoice SUB-20260924-F01DD9\",\"digital_withholding_vat_amount\":0,\"disputed\":false,\"external_reference_number\":null,\"fee\":2500,\"instant_settlement\":null,\"livemode\":false,\"metadata\":null,\"net_amount\":97500,\"origin\":\"api\",\"paid_at\":1790240323,\"payment_intent_id\":\"pi_TJER1MtA8LDHBdGxvdxTVC82\",\"payout\":null,\"promotion\":null,\"refunds\":[],\"source\":{\"id\":\"src_BwZsMt8tR1zrQX1WEu1hARaA\",\"provider\":{\"id\":null},\"provider_id\":null,\"type\":\"gcash\"},\"statement_descriptor\":\"justine hero santos\",\"status\":\"paid\",\"tax_amount\":null,\"taxes\":[],\"created_at\":1790240323,\"updated_at\":1790240323}}],\"public_key\":\"pk_test_EWShiJ5ipDeM8o1TpY8DQfLx\",\"reference_number\":\"invoice-3\",\"send_email_receipt\":false,\"show_description\":true,\"show_line_items\":true,\"status\":\"active\",\"success_url\":\"http:\\/\\/localhost\\/lechonsystem\\/billing_invoice_payment_success.php?invoice_id=3\",\"created_at\":1790240316,\"updated_at\":1790240320}}}','2026-09-24 16:58:50',42,42,'2026-09-24 16:58:37','2026-09-24 16:58:50'),(4,4,42,'paymongo','cs_4fa10a63f80287a428d23610','https://checkout.paymongo.com/4fa10a63f80287a428d23610','paid',1199.00,'PHP','gcash','cs_4fa10a63f80287a428d23610','{\"success\":true,\"status\":\"paid\",\"session_data\":{\"id\":\"cs_4fa10a63f80287a428d23610\",\"type\":\"checkout_session\",\"attributes\":{\"billing\":{\"address\":{\"city\":null,\"country\":null,\"line1\":null,\"line2\":null,\"postal_code\":null,\"state\":null},\"email\":\"dasma@lechondelights.com\",\"name\":\"Dasmari\\u251c\\u2592as Central Branch\",\"phone\":\"0917-123-4567\"},\"billing_information_fields_editable\":\"enabled\",\"cancel_url\":\"http:\\/\\/localhost\\/lechonsystem\\/billing_invoice_payment_cancel.php?invoice_id=4\",\"checkout_url\":\"https:\\/\\/checkout.paymongo.com\\/4fa10a63f80287a428d23610\",\"client_key\":\"cs_4fa10a63f80287a428d23610_client_3e7b4be772c8ca555d3bd140\",\"collection\":{\"customer_info\":{\"email\":{\"state\":\"auto\"},\"name\":{\"state\":\"auto\"},\"mobile_phone\":{\"state\":\"auto\"},\"address\":{\"state\":\"auto\"}}},\"branding\":{\"logo_url\":null,\"icon_url\":null,\"prefer_logo_over_icon\":true,\"brand_color\":\"#144037\",\"accent_color\":\"#16a34a\",\"header_alignment\":\"left\",\"show_paymongo_badge\":true},\"customer_email\":null,\"customer_id\":null,\"description\":\"Platform Invoice SUB-20260924-8774CE\",\"line_items\":[{\"amount\":119900,\"currency\":\"PHP\",\"description\":null,\"images\":[],\"name\":\"Platform Invoice SUB-20260924-8774CE\",\"quantity\":1}],\"livemode\":false,\"merchant\":\"justine hero santos\",\"metadata\":null,\"organization_id\":\"org_9HpkWCHtPtFPpf8YjbkrrkYt\",\"paid_at\":1790241320,\"pass_on_fees\":false,\"payment_intent\":{\"id\":\"pi_mVcprXuUenVr7W81KRaNPZT4\",\"type\":\"payment_intent\",\"attributes\":{\"amount\":119900,\"capture_type\":\"automatic\",\"client_key\":\"pi_mVcprXuUenVr7W81KRaNPZT4_client_f9zZTP567UEJ5tkFXQQU9rci\",\"currency\":\"PHP\",\"description\":\"Platform Invoice SUB-20260924-8774CE\",\"last_payment_error\":null,\"livemode\":false,\"metadata\":null,\"next_action\":null,\"original_amount\":119900,\"payment_method_allowed\":[\"gcash\"],\"payment_method_options\":null,\"payments\":[{\"id\":\"pay_cwNRXe3AjkV7vvviqhdCU491\",\"type\":\"payment\",\"attributes\":{\"access_url\":null,\"amount\":119900,\"available_at\":1790672400,\"balance_transaction_id\":\"bal_txn_jVoCDaRr1j8wSiQn8F42RU5R\",\"billing\":{\"address\":{\"city\":null,\"country\":null,\"line1\":null,\"line2\":null,\"postal_code\":null,\"state\":null},\"email\":\"dasma@lechondelights.com\",\"name\":\"Dasmari\\u251c\\u2592as Central Branch\",\"phone\":\"0917-123-4567\"},\"checkout_session_id\":null,\"credited_at\":1790730000,\"currency\":\"PHP\",\"description\":\"Platform Invoice SUB-20260924-8774CE\",\"digital_withholding_vat_amount\":0,\"disputed\":false,\"external_reference_number\":null,\"fee\":2998,\"instant_settlement\":null,\"livemode\":false,\"metadata\":null,\"net_amount\":116902,\"origin\":\"api\",\"paid_at\":1790241320,\"payment_intent_id\":\"pi_mVcprXuUenVr7W81KRaNPZT4\",\"payout\":null,\"promotion\":null,\"refunds\":[],\"source\":{\"id\":\"src_qYG9BYhpPT5YNCp9h8MPjexr\",\"provider\":{\"id\":null},\"provider_id\":null,\"type\":\"gcash\"},\"statement_descriptor\":\"justine hero santos\",\"status\":\"paid\",\"tax_amount\":null,\"taxes\":[],\"created_at\":1790241321,\"updated_at\":1790241321}}],\"setup_future_usage\":null,\"statement_descriptor\":\"justine hero santos\",\"status\":\"succeeded\",\"created_at\":1790241315,\"updated_at\":1790241321}},\"payment_method_types\":[\"gcash\"],\"payment_method_used\":\"gcash\",\"payments\":[{\"id\":\"pay_cwNRXe3AjkV7vvviqhdCU491\",\"type\":\"payment\",\"attributes\":{\"access_url\":null,\"amount\":119900,\"available_at\":1790672400,\"balance_transaction_id\":\"bal_txn_jVoCDaRr1j8wSiQn8F42RU5R\",\"billing\":{\"address\":{\"city\":null,\"country\":null,\"line1\":null,\"line2\":null,\"postal_code\":null,\"state\":null},\"email\":\"dasma@lechondelights.com\",\"name\":\"Dasmari\\u251c\\u2592as Central Branch\",\"phone\":\"0917-123-4567\"},\"checkout_session_id\":null,\"credited_at\":1790730000,\"currency\":\"PHP\",\"description\":\"Platform Invoice SUB-20260924-8774CE\",\"digital_withholding_vat_amount\":0,\"disputed\":false,\"external_reference_number\":null,\"fee\":2998,\"instant_settlement\":null,\"livemode\":false,\"metadata\":null,\"net_amount\":116902,\"origin\":\"api\",\"paid_at\":1790241320,\"payment_intent_id\":\"pi_mVcprXuUenVr7W81KRaNPZT4\",\"payout\":null,\"promotion\":null,\"refunds\":[],\"source\":{\"id\":\"src_qYG9BYhpPT5YNCp9h8MPjexr\",\"provider\":{\"id\":null},\"provider_id\":null,\"type\":\"gcash\"},\"statement_descriptor\":\"justine hero santos\",\"status\":\"paid\",\"tax_amount\":null,\"taxes\":[],\"created_at\":1790241321,\"updated_at\":1790241321}}],\"public_key\":\"pk_test_EWShiJ5ipDeM8o1TpY8DQfLx\",\"reference_number\":\"invoice-4\",\"send_email_receipt\":false,\"show_description\":true,\"show_line_items\":true,\"status\":\"active\",\"success_url\":\"http:\\/\\/localhost\\/lechonsystem\\/billing_invoice_payment_success.php?invoice_id=4\",\"created_at\":1790241315,\"updated_at\":1790241318}}}','2026-09-24 17:15:28',42,42,'2026-09-24 17:15:15','2026-09-24 17:15:28');
+/*!40000 ALTER TABLE `partner_invoice_payment_sessions` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `partner_order_policy_settings`
+--
+
+DROP TABLE IF EXISTS `partner_order_policy_settings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `partner_order_policy_settings` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `partner_user_id` int NOT NULL,
+  `allow_customer_cancel_pending` tinyint(1) NOT NULL DEFAULT '1',
+  `allow_customer_cancel_confirmed` tinyint(1) NOT NULL DEFAULT '1',
+  `allow_customer_cancel_preparing` tinyint(1) NOT NULL DEFAULT '0',
+  `downpayment_refundable` tinyint(1) NOT NULL DEFAULT '0',
+  `require_refund_photo_for_damage` tinyint(1) NOT NULL DEFAULT '1',
+  `cancellation_terms` text COLLATE utf8mb4_unicode_ci,
+  `refund_terms` text COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `partner_order_policy_settings`
+--
+
+LOCK TABLES `partner_order_policy_settings` WRITE;
+/*!40000 ALTER TABLE `partner_order_policy_settings` DISABLE KEYS */;
+/*!40000 ALTER TABLE `partner_order_policy_settings` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `partner_payout_accounts`
+--
+
+DROP TABLE IF EXISTS `partner_payout_accounts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `partner_payout_accounts` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `partner_user_id` int NOT NULL,
+  `payout_method` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'bank_transfer',
+  `account_holder` varchar(180) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `financial_institution` varchar(180) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `account_type` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `account_number` varchar(140) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `account_number_masked` varchar(140) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `branch_name` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `routing_reference` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `updated_by` int DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_partner_user_id` (`partner_user_id`),
+  KEY `idx_payout_method` (`payout_method`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `partner_payout_accounts`
+--
+
+LOCK TABLES `partner_payout_accounts` WRITE;
+/*!40000 ALTER TABLE `partner_payout_accounts` DISABLE KEYS */;
+/*!40000 ALTER TABLE `partner_payout_accounts` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `partner_plan_subscriptions`
+--
+
+DROP TABLE IF EXISTS `partner_plan_subscriptions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `partner_plan_subscriptions` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `partner_user_id` int NOT NULL,
+  `plan_id` int NOT NULL,
+  `billing_cycle` enum('monthly','annual') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'monthly',
+  `subscription_status` enum('trial','active','past_due','paused','cancelled') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'active',
+  `price_override` decimal(12,2) DEFAULT NULL,
+  `started_at` date DEFAULT NULL,
+  `renews_at` date DEFAULT NULL,
+  `ended_at` date DEFAULT NULL,
+  `notes` text COLLATE utf8mb4_general_ci,
+  `created_by` int DEFAULT NULL,
+  `updated_by` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `partner_plan_subscriptions`
+--
+
+LOCK TABLES `partner_plan_subscriptions` WRITE;
+/*!40000 ALTER TABLE `partner_plan_subscriptions` DISABLE KEYS */;
+INSERT INTO `partner_plan_subscriptions` VALUES (1,31,3,'monthly','active',NULL,'2026-04-11','2026-05-11','2026-04-11','nice!',9,9,'2026-04-10 11:17:29','2026-04-11 10:50:43'),(2,10,1,'monthly','trial',NULL,'2026-08-25','2026-09-25',NULL,NULL,10,10,'2026-08-25 09:01:26','2026-08-25 09:01:26'),(3,38,3,'monthly','cancelled',NULL,'2026-09-01','2026-10-01','2026-10-01','Automatic one-month platform trial after franchise approval.\nCancelled on 2026-09-01 12:36:27. Full active access retained until Oct 01, 2026. Non-refundable.',9,38,'2026-09-01 12:28:24','2026-09-01 12:37:25'),(4,42,3,'monthly','active',NULL,'2026-09-24','2026-12-24',NULL,NULL,42,42,'2026-09-24 16:58:36','2026-09-24 17:15:28');
+/*!40000 ALTER TABLE `partner_plan_subscriptions` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `partner_receipt_settings`
+--
+
+DROP TABLE IF EXISTS `partner_receipt_settings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `partner_receipt_settings` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `partner_user_id` int NOT NULL,
+  `store_display_name` varchar(180) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `branch_name` varchar(180) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `vat_tin` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `business_style` varchar(180) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `permit_no` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `ptu_no` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `accreditation_no` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `serial_no` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `footer_text` text COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `partner_receipt_settings`
+--
+
+LOCK TABLES `partner_receipt_settings` WRITE;
+/*!40000 ALTER TABLE `partner_receipt_settings` DISABLE KEYS */;
+INSERT INTO `partner_receipt_settings` VALUES (1,31,'','','','','','','','','','2026-04-11 03:13:10','2026-04-11 03:13:14');
+/*!40000 ALTER TABLE `partner_receipt_settings` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `partner_settlements`
+--
+
+DROP TABLE IF EXISTS `partner_settlements`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `partner_settlements` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `partner_user_id` int NOT NULL,
+  `commission_rule_id` int DEFAULT NULL,
+  `period_start` date NOT NULL,
+  `period_end` date NOT NULL,
+  `order_count` int NOT NULL DEFAULT '0',
+  `gross_sales` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `refund_deductions` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `net_sales` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `commission_percent` decimal(5,2) NOT NULL DEFAULT '10.00',
+  `commission_amount` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `partner_payout_amount` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `settlement_status` enum('draft','generated','approved','paid','cancelled') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'generated',
+  `generated_at` datetime DEFAULT NULL,
+  `approved_at` datetime DEFAULT NULL,
+  `paid_at` datetime DEFAULT NULL,
+  `notes` text COLLATE utf8mb4_general_ci,
+  `created_by` int DEFAULT NULL,
+  `updated_by` int DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `partner_settlements`
+--
+
+LOCK TABLES `partner_settlements` WRITE;
+/*!40000 ALTER TABLE `partner_settlements` DISABLE KEYS */;
+INSERT INTO `partner_settlements` VALUES (1,31,1,'2026-03-01','2026-03-31',2,200.00,0.00,200.00,10.00,20.00,180.00,'approved','2026-03-27 18:13:44','2026-03-27 18:13:44',NULL,'Backfilled from historical approved partner sales by tenant scope migration.',9,9,'2026-03-27 10:13:44','2026-03-27 10:13:44'),(2,31,1,'2026-04-01','2026-04-30',2,200.00,0.00,200.00,10.00,20.00,180.00,'approved','2026-04-11 10:23:22','2026-04-11 10:23:22',NULL,'Backfilled from historical approved partner sales by tenant scope migration.',9,9,'2026-04-11 02:23:22','2026-04-11 02:23:22');
+/*!40000 ALTER TABLE `partner_settlements` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `partner_subscription_requests`
+--
+
+DROP TABLE IF EXISTS `partner_subscription_requests`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `partner_subscription_requests` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `partner_user_id` int NOT NULL,
+  `current_subscription_id` int DEFAULT NULL,
+  `requested_plan_id` int NOT NULL,
+  `requested_billing_cycle` enum('monthly','annual') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'monthly',
+  `request_type` enum('new','renew','upgrade','downgrade','change_plan') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'new',
+  `request_status` enum('pending','approved','rejected','cancelled') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'pending',
+  `partner_notes` text COLLATE utf8mb4_general_ci,
+  `review_notes` text COLLATE utf8mb4_general_ci,
+  `requested_by` int DEFAULT NULL,
+  `reviewed_by` int DEFAULT NULL,
+  `reviewed_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `partner_subscription_requests`
+--
+
+LOCK TABLES `partner_subscription_requests` WRITE;
+/*!40000 ALTER TABLE `partner_subscription_requests` DISABLE KEYS */;
+INSERT INTO `partner_subscription_requests` VALUES (1,31,NULL,2,'monthly','upgrade','approved','','ok!',31,9,'2026-04-10 11:17:29','2026-04-10 11:08:29','2026-04-10 11:17:29'),(2,31,1,3,'monthly','change_plan','approved','I want to upgrade','nice!',31,9,'2026-04-11 10:50:43','2026-04-11 10:49:48','2026-04-11 10:50:43'),(3,10,NULL,3,'monthly','change_plan','pending','',NULL,10,NULL,NULL,'2026-08-25 08:56:37','2026-08-25 08:56:37');
+/*!40000 ALTER TABLE `partner_subscription_requests` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `partner_user_links`
+--
+
+DROP TABLE IF EXISTS `partner_user_links`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `partner_user_links` (
+  `owner_user_id` int NOT NULL,
+  `managed_user_id` int NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `partner_user_links`
+--
+
+LOCK TABLES `partner_user_links` WRITE;
+/*!40000 ALTER TABLE `partner_user_links` DISABLE KEYS */;
+INSERT INTO `partner_user_links` VALUES (31,34,'2026-03-31 09:08:38'),(31,33,'2026-08-06 06:22:01'),(31,34,'2026-03-31 09:08:38');
+/*!40000 ALTER TABLE `partner_user_links` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `partner_voucher_redemptions`
+--
+
+DROP TABLE IF EXISTS `partner_voucher_redemptions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `partner_voucher_redemptions` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `voucher_id` int NOT NULL,
+  `order_id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `seller_id` int NOT NULL,
+  `voucher_code` varchar(60) COLLATE utf8mb4_general_ci NOT NULL,
+  `discount_amount` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `order_subtotal` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `partner_voucher_redemptions`
+--
+
+LOCK TABLES `partner_voucher_redemptions` WRITE;
+/*!40000 ALTER TABLE `partner_voucher_redemptions` DISABLE KEYS */;
+INSERT INTO `partner_voucher_redemptions` VALUES (1,1,118,4,31,'JAKOL10',1.00,10.00,'2026-03-31 13:53:15'),(2,5,148,18,1,'BELLY50',50.00,150.00,'2026-09-16 13:47:14'),(3,2,149,8,1,'WELCOME100',100.00,550.00,'2026-09-24 09:52:20'),(4,5,150,4,1,'BELLY50',50.00,150.00,'2026-09-24 15:26:55'),(5,7,151,4,1,'DELIGHT25',25.00,150.00,'2026-09-24 16:49:12');
+/*!40000 ALTER TABLE `partner_voucher_redemptions` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `partner_vouchers`
+--
+
+DROP TABLE IF EXISTS `partner_vouchers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `partner_vouchers` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `seller_id` int NOT NULL,
+  `code` varchar(60) COLLATE utf8mb4_general_ci NOT NULL,
+  `name` varchar(120) COLLATE utf8mb4_general_ci NOT NULL,
+  `description` text COLLATE utf8mb4_general_ci,
+  `discount_type` enum('percent','fixed') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'fixed',
+  `discount_value` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `min_order_amount` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `max_discount_amount` decimal(10,2) DEFAULT NULL,
+  `start_at` datetime DEFAULT NULL,
+  `end_at` datetime DEFAULT NULL,
+  `usage_limit` int DEFAULT NULL,
+  `usage_count` int NOT NULL DEFAULT '0',
+  `per_user_limit` int NOT NULL DEFAULT '1',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `partner_vouchers`
+--
+
+LOCK TABLES `partner_vouchers` WRITE;
+/*!40000 ALTER TABLE `partner_vouchers` DISABLE KEYS */;
+INSERT INTO `partner_vouchers` VALUES (2,0,'WELCOME100','New User Welcome Γé▒100 OFF','Get Γé▒100 flat discount on your first order.','fixed',100.00,200.00,100.00,NULL,NULL,NULL,1,1,1,'2026-08-27 03:30:06','2026-09-24 09:52:20'),(3,0,'FREESHIP','First Order Free Delivery','Free shipping discount on whole or half lechon pre-orders.','fixed',150.00,600.00,150.00,NULL,NULL,NULL,0,1,1,'2026-08-27 03:30:06','2026-09-16 13:29:24'),(4,0,'LECHON15','15% OFF Celebration Pre-order','Save 15% on advance celebrations up to Γé▒300.','percent',15.00,400.00,300.00,NULL,NULL,NULL,0,1,1,'2026-08-27 03:30:06','2026-09-16 13:29:24'),(5,0,'BELLY50','Γé▒50 OFF Crispy Lechon Belly','Save Γé▒50 on lechon belly rolls and meal boxes.','fixed',50.00,150.00,50.00,NULL,NULL,NULL,2,1,1,'2026-08-27 03:30:06','2026-09-24 15:26:55'),(6,1,'MAIN10','Lechon Delights 10% OFF','Exclusive 10% store discount on freshly roasted lechon and party platters.','percent',10.00,200.00,200.00,NULL,NULL,NULL,0,1,1,'2026-09-16 13:29:24','2026-09-16 13:29:24'),(7,1,'DELIGHT25','Γé▒25 OFF Daily Special','Direct Γé▒25 discount on lechon meals and extra rice packages.','fixed',25.00,150.00,25.00,NULL,NULL,NULL,1,1,1,'2026-09-16 13:29:24','2026-09-24 16:49:12'),(8,10,'LYDIA20','Lydias 20% OFF Lechon Roll','Special 20% store discount on crispy lechon belly rolls.','percent',20.00,200.00,300.00,NULL,NULL,NULL,0,1,1,'2026-09-16 13:29:24','2026-09-16 13:29:24'),(9,31,'JUSTINE50','Γé▒50 OFF Justine Specialty','Enjoy Γé▒50 flat store discount on all specialty lechon packages.','fixed',50.00,200.00,50.00,NULL,NULL,NULL,0,1,1,'2026-09-16 13:29:24','2026-09-16 13:29:24'),(10,35,'JANNA15','Janna 15% OFF Feast Discount','Save 15% on signature whole lechon and family feast combos.','percent',15.00,250.00,250.00,NULL,NULL,NULL,0,1,1,'2026-09-16 13:29:24','2026-09-16 13:29:24');
+/*!40000 ALTER TABLE `partner_vouchers` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `partner_warnings`
+--
+
+DROP TABLE IF EXISTS `partner_warnings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `partner_warnings` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `partner_user_id` int unsigned NOT NULL,
+  `warning_subject` varchar(180) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `warning_message` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `severity` enum('low','medium','high','critical') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'medium',
+  `warning_status` enum('active','resolved') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
+  `issued_by` int unsigned DEFAULT NULL,
+  `issued_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `resolved_at` datetime DEFAULT NULL,
+  `resolved_by` int unsigned DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `partner_warnings`
+--
+
+LOCK TABLES `partner_warnings` WRITE;
+/*!40000 ALTER TABLE `partner_warnings` DISABLE KEYS */;
+/*!40000 ALTER TABLE `partner_warnings` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `payments`
+--
+
+DROP TABLE IF EXISTS `payments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `payments` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `order_id` int NOT NULL,
+  `payment_type` enum('downpayment','full','balance') COLLATE utf8mb4_general_ci DEFAULT 'full',
+  `amount` decimal(10,2) NOT NULL,
+  `payment_method` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `transaction_id` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `checkout_session_id` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `status` enum('pending','processing','paid','failed','cancelled') COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `paymongo_data` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `paid_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `payments_chk_1` CHECK (json_valid(`paymongo_data`))
+) ENGINE=InnoDB AUTO_INCREMENT=124 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `payments`
+--
+
+LOCK TABLES `payments` WRITE;
+/*!40000 ALTER TABLE `payments` DISABLE KEYS */;
+INSERT INTO `payments` VALUES (1,9,'downpayment',1101.00,'gcash',NULL,NULL,'pending',NULL,NULL,'2026-01-16 09:48:48'),(2,10,'downpayment',1101.00,'gcash',NULL,NULL,'pending',NULL,NULL,'2026-01-16 09:49:11'),(3,11,'downpayment',1101.00,'gcash',NULL,NULL,'pending',NULL,NULL,'2026-01-16 09:54:36'),(4,13,'downpayment',1101.00,'gcash',NULL,NULL,'pending',NULL,NULL,'2026-01-16 09:54:44'),(5,14,'downpayment',1101.00,'gcash',NULL,NULL,'pending',NULL,NULL,'2026-01-16 09:56:07'),(6,15,'downpayment',1101.00,'gcash',NULL,NULL,'pending',NULL,NULL,'2026-01-16 09:57:16'),(7,16,'downpayment',1101.00,'gcash',NULL,NULL,'pending',NULL,NULL,'2026-01-16 09:57:23'),(8,17,'downpayment',1101.00,'gcash',NULL,NULL,'pending',NULL,NULL,'2026-01-16 09:58:51'),(9,18,'downpayment',1101.00,'gcash',NULL,NULL,'pending',NULL,NULL,'2026-01-16 10:10:02'),(10,19,'downpayment',1101.00,'gcash',NULL,NULL,'pending',NULL,NULL,'2026-01-16 10:12:36'),(11,21,'downpayment',1101.00,'gcash',NULL,NULL,'pending',NULL,NULL,'2026-01-16 10:13:00'),(12,22,'downpayment',1101.00,'gcash',NULL,NULL,'pending',NULL,NULL,'2026-01-16 10:13:34'),(13,23,'downpayment',1101.00,'gcash',NULL,NULL,'pending',NULL,NULL,'2026-01-16 10:14:19'),(14,24,'downpayment',1101.00,'gcash',NULL,NULL,'pending',NULL,NULL,'2026-01-16 10:15:08'),(15,25,'downpayment',1101.00,'gcash',NULL,NULL,'pending',NULL,NULL,'2026-01-16 10:21:55'),(16,26,'full',550.00,'paymongo','cs_Zr28vLAUFgDmRaz588aehSvR','cs_Zr28vLAUFgDmRaz588aehSvR','paid',NULL,'2026-01-22 07:14:26','2026-01-22 07:14:06'),(17,27,'full',1650.00,'paymongo','cs_Hg22t2i2HKNr1aHogZiD128f','cs_Hg22t2i2HKNr1aHogZiD128f','paid',NULL,'2026-01-22 15:35:47','2026-01-22 15:35:26'),(18,28,'full',400.00,'paymongo',NULL,'cs_PFkpB7X9sVZXMqe57HmXr6qy','cancelled',NULL,NULL,'2026-01-22 15:58:43'),(19,29,'full',1.00,'paymongo','cs_MU3AAasH9xDUUSkA9wsDmAEU','cs_MU3AAasH9xDUUSkA9wsDmAEU','paid',NULL,'2026-01-22 17:49:22','2026-01-22 17:49:00'),(20,30,'full',650.00,'paymongo','cs_dqjqMxyb6t5Gwstn26pBLbS4','cs_dqjqMxyb6t5Gwstn26pBLbS4','paid',NULL,'2026-01-23 07:04:18','2026-01-23 07:03:47'),(21,31,'full',550.00,'paymongo','cs_5PY2BZyYvFyyJVVCwe7b5DEs','cs_5PY2BZyYvFyyJVVCwe7b5DEs','paid',NULL,'2026-01-27 16:24:06','2026-01-27 16:23:46'),(22,32,'full',4350.00,'paymongo','cs_FnQW1pDov9798rb8smBMzKsz','cs_FnQW1pDov9798rb8smBMzKsz','paid',NULL,'2026-01-28 07:10:37','2026-01-28 07:10:17'),(23,33,'full',350.00,'paymongo','cs_1jSEWBHV3YqphbXxfKuUPLsY','cs_1jSEWBHV3YqphbXxfKuUPLsY','paid',NULL,'2026-01-29 08:18:42','2026-01-29 08:18:29'),(24,34,'full',200.00,'paymongo',NULL,'cs_41af48b0ef979c7ecac14637','pending',NULL,NULL,'2026-02-09 17:32:39'),(25,35,'full',350.00,'paymongo',NULL,'cs_fb94a88d8339cfe14a09db1f','pending',NULL,NULL,'2026-02-09 17:33:18'),(26,36,'full',450.00,'paymongo',NULL,'cs_ca977eb6c3af15843d672912','pending',NULL,NULL,'2026-02-09 17:34:14'),(27,37,'full',151.00,'paymongo',NULL,'cs_456ec06b474d208316a26a11','pending',NULL,NULL,'2026-02-09 17:57:15'),(28,38,'full',3950.00,'paymongo',NULL,'cs_b6877a86278c09680f64e015','pending',NULL,NULL,'2026-02-16 15:49:38'),(29,39,'full',3950.00,'paymongo','cs_7f0a7e7f6e547a9971fa6e7a','cs_7f0a7e7f6e547a9971fa6e7a','paid',NULL,'2026-02-16 15:52:27','2026-02-16 15:51:02'),(30,40,'full',3650.00,'paymongo','cs_46703a098a70e14119fadea2','cs_46703a098a70e14119fadea2','paid',NULL,'2026-02-17 10:26:20','2026-02-17 10:26:03'),(31,41,'full',3500.00,'paymongo',NULL,NULL,'pending',NULL,NULL,'2026-02-17 10:32:04'),(32,44,'full',3650.00,'paymongo','cs_ecb122b90e9f874680ccc62a','cs_ecb122b90e9f874680ccc62a','paid',NULL,'2026-02-17 10:32:36','2026-02-17 10:32:23'),(33,45,'full',300.00,'paymongo','cs_90f22e88b36275664d4a496e','cs_90f22e88b36275664d4a496e','paid',NULL,'2026-02-17 10:34:05','2026-02-17 10:33:52'),(34,46,'downpayment',225.00,'paymongo','cs_61bec8cffa12fda69d6373b9','cs_61bec8cffa12fda69d6373b9','paid',NULL,'2026-02-17 10:44:03','2026-02-17 10:43:45'),(35,47,'full',300.00,'paymongo','cs_003db62d76161f58005e0e81','cs_003db62d76161f58005e0e81','paid',NULL,'2026-02-17 10:52:24','2026-02-17 10:51:54'),(36,48,'full',900.00,'paymongo','cs_506c1dfa053dc511e4195a7a','cs_506c1dfa053dc511e4195a7a','paid',NULL,'2026-02-17 11:02:54','2026-02-17 11:02:36'),(37,49,'full',900.00,'paymongo','cs_ae2b54d7628273d3d65a5171','cs_ae2b54d7628273d3d65a5171','paid',NULL,'2026-02-17 11:07:18','2026-02-17 11:06:59'),(38,50,'full',3500.00,'paymongo','cs_9001e679849e590c6ff2d6bd','cs_9001e679849e590c6ff2d6bd','paid',NULL,'2026-02-17 11:21:08','2026-02-17 11:20:54'),(39,51,'full',3500.00,'paymongo','cs_ab17e60403cc48d9f875c8f7','cs_ab17e60403cc48d9f875c8f7','paid',NULL,'2026-02-17 11:28:06','2026-02-17 11:27:46'),(40,52,'full',1050.00,'paymongo','cs_288ae27f8f4b8e1d1fa01237','cs_288ae27f8f4b8e1d1fa01237','paid',NULL,'2026-02-17 12:35:31','2026-02-17 12:35:10'),(41,53,'full',900.00,'paymongo','cs_41d20c97ff3b526a9e0f86bb','cs_41d20c97ff3b526a9e0f86bb','paid',NULL,'2026-02-17 12:41:30','2026-02-17 12:41:17'),(42,54,'full',300.00,'paymongo',NULL,NULL,'pending',NULL,NULL,'2026-02-17 12:46:21'),(43,55,'full',300.00,'paymongo',NULL,NULL,'pending',NULL,NULL,'2026-02-17 12:46:25'),(44,58,'full',300.00,'paymongo',NULL,NULL,'pending',NULL,NULL,'2026-02-17 12:46:41'),(45,60,'full',450.00,'paymongo','cs_25e3d72ca7ee253b438a3f2e','cs_25e3d72ca7ee253b438a3f2e','paid',NULL,'2026-02-17 12:47:51','2026-02-17 12:47:35'),(46,61,'full',900.00,'paymongo','cs_53d9b476e8a4abcfd632786a','cs_53d9b476e8a4abcfd632786a','paid',NULL,'2026-02-17 12:59:11','2026-02-17 12:58:57'),(47,62,'full',300.00,'paymongo','cs_fdcc7e691ca995406c179f22','cs_fdcc7e691ca995406c179f22','paid',NULL,'2026-02-17 13:01:30','2026-02-17 13:01:15'),(48,63,'full',1800.00,'paymongo','cs_ef241fa9aa075b2358635519','cs_ef241fa9aa075b2358635519','paid',NULL,'2026-02-17 13:02:23','2026-02-17 13:02:09'),(49,64,'full',450.00,'paymongo','cs_7cb9413f8932bbfab110f201','cs_7cb9413f8932bbfab110f201','paid',NULL,'2026-02-17 13:04:15','2026-02-17 13:03:49'),(50,65,'full',600.00,'paymongo','cs_1b76f0ccc85c7296feab61c4','cs_1b76f0ccc85c7296feab61c4','paid',NULL,'2026-02-17 13:14:26','2026-02-17 13:14:08'),(51,66,'full',450.00,'paymongo','cs_89aca8367e7623ac1bc16e47','cs_89aca8367e7623ac1bc16e47','paid',NULL,'2026-02-17 13:30:59','2026-02-17 13:30:44'),(52,67,'full',600.00,'paymongo','cs_8cc87ba6b357786be8cbe443','cs_8cc87ba6b357786be8cbe443','paid',NULL,'2026-02-17 13:33:57','2026-02-17 13:33:42'),(53,68,'full',1200.00,'paymongo',NULL,NULL,'pending',NULL,NULL,'2026-02-17 13:34:43'),(54,69,'full',1200.00,'paymongo','cs_7f841eb2d00b896c382c455f','cs_7f841eb2d00b896c382c455f','paid',NULL,'2026-02-17 13:35:54','2026-02-17 13:35:25'),(55,70,'full',120.00,'paymongo','cs_6f4314a835e6fa06c66202be','cs_6f4314a835e6fa06c66202be','paid',NULL,'2026-02-17 13:39:56','2026-02-17 13:39:41'),(56,71,'full',300.00,'paymongo','cs_6fda9da3934a113ab7eba0ac','cs_6fda9da3934a113ab7eba0ac','paid',NULL,'2026-02-17 13:54:22','2026-02-17 13:54:02'),(57,72,'full',1800.00,'paymongo','cs_3ea1ea3215b8f9bc14469ec5','cs_3ea1ea3215b8f9bc14469ec5','paid',NULL,'2026-02-17 13:58:38','2026-02-17 13:58:24'),(58,73,'full',11400.00,'paymongo','cs_17c8ca878708485745663771','cs_17c8ca878708485745663771','paid',NULL,'2026-02-17 13:59:37','2026-02-17 13:59:19'),(59,74,'full',2280.00,'paymongo','cs_8811548d3eb8a694520d73dc','cs_8811548d3eb8a694520d73dc','paid',NULL,'2026-02-17 14:00:35','2026-02-17 14:00:20'),(60,75,'full',350.00,'paymongo','cs_74ee4f58c1f5cdb94166e01d','cs_74ee4f58c1f5cdb94166e01d','paid',NULL,'2026-02-17 14:42:10','2026-02-17 14:41:07'),(61,76,'full',1050.00,'paymongo','cs_4e2f7bc2b8a00205bc519b02','cs_4e2f7bc2b8a00205bc519b02','paid',NULL,'2026-02-17 14:43:07','2026-02-17 14:42:45'),(62,77,'full',14000.00,'paymongo','cs_bf9f4e6cde7676cf4163f550','cs_bf9f4e6cde7676cf4163f550','paid',NULL,'2026-02-17 14:57:29','2026-02-17 14:57:15'),(63,78,'full',300.00,'paymongo','cs_26c7ee90d4e62d8a0c388655','cs_26c7ee90d4e62d8a0c388655','paid',NULL,'2026-02-17 15:28:34','2026-02-17 15:28:15'),(64,79,'full',480.00,'paymongo','cs_02dceec3e292a9ca280f2336','cs_02dceec3e292a9ca280f2336','paid',NULL,'2026-02-24 12:18:52','2026-02-24 12:18:38'),(65,80,'full',390.00,'paymongo','cs_52c3c91e3015b5980423396b','cs_52c3c91e3015b5980423396b','paid',NULL,'2026-02-24 12:30:23','2026-02-24 12:30:01'),(66,81,'full',120.00,'paymongo','cs_82673a56e76546b2d996e5f8','cs_82673a56e76546b2d996e5f8','paid',NULL,'2026-02-24 12:31:18','2026-02-24 12:31:05'),(67,82,'full',3920.00,'paymongo','cs_28efc4f0c6ce63950f0e4a3b','cs_28efc4f0c6ce63950f0e4a3b','paid',NULL,'2026-02-24 13:29:14','2026-02-24 13:29:01'),(68,83,'full',3920.00,'paymongo','cs_dec876c198dcb43cad516b26','cs_dec876c198dcb43cad516b26','paid',NULL,'2026-02-24 13:48:11','2026-02-24 13:47:56'),(69,84,'full',3920.00,'paymongo','cs_d27f63e0b8d5eba642e811ca','cs_d27f63e0b8d5eba642e811ca','paid',NULL,'2026-02-24 14:08:09','2026-02-24 14:07:49'),(70,88,'full',123123.00,'paymongo','cs_a01440d2bca77123c6c0e824','cs_a01440d2bca77123c6c0e824','paid',NULL,'2026-03-13 02:51:35','2026-03-13 02:51:06'),(71,89,'full',123123.00,'paymongo','cs_64c58f9c2dfbe822c3781ffd','cs_64c58f9c2dfbe822c3781ffd','paid',NULL,'2026-03-13 03:32:06','2026-03-13 03:31:43'),(72,90,'full',3800.00,'paymongo','cs_962c63c00cff7e448740138e','cs_962c63c00cff7e448740138e','paid',NULL,'2026-03-16 05:46:47','2026-03-16 05:46:29'),(73,91,'full',11400.00,'paymongo',NULL,NULL,'pending',NULL,NULL,'2026-03-16 06:12:01'),(74,92,'full',3800.00,'paymongo','cs_9571dfa06372a8c995177279','cs_9571dfa06372a8c995177279','paid',NULL,'2026-03-16 06:12:42','2026-03-16 06:12:25'),(75,93,'full',3800.00,'paymongo','cs_d41a0f938e08eebf10febd5e','cs_d41a0f938e08eebf10febd5e','paid',NULL,'2026-03-16 06:33:26','2026-03-16 06:27:25'),(76,94,'full',1900.00,'paymongo','cs_67d1e33c78d4d79e7e1fb1d5','cs_67d1e33c78d4d79e7e1fb1d5','paid',NULL,'2026-03-16 06:53:08','2026-03-16 06:52:53'),(77,95,'full',3800.00,'paymongo','cs_dc280bd7e0ecaa1952dff204','cs_dc280bd7e0ecaa1952dff204','paid',NULL,'2026-03-16 07:00:38','2026-03-16 07:00:23'),(78,96,'full',2100.00,'paymongo','cs_e7682cafbf4ba21ccf395ca8','cs_e7682cafbf4ba21ccf395ca8','paid',NULL,'2026-03-16 07:13:56','2026-03-16 07:13:39'),(79,97,'downpayment',630.00,'paymongo','cs_4e1c992fa4badf26107be9ba','cs_4e1c992fa4badf26107be9ba','paid',NULL,'2026-03-16 07:33:10','2026-03-16 07:32:56'),(80,98,'downpayment',1770.00,'paymongo','cs_fef65623c8f18b6accd69373','cs_fef65623c8f18b6accd69373','paid',NULL,'2026-03-16 09:08:45','2026-03-16 09:08:30'),(81,99,'downpayment',36.00,'paymongo','cs_17ce665b0b65147da46f7a0e','cs_17ce665b0b65147da46f7a0e','paid',NULL,'2026-03-17 05:45:43','2026-03-17 05:45:30'),(82,100,'full',120.00,'paymongo','cs_35435c637d95972eb59478a3','cs_35435c637d95972eb59478a3','paid',NULL,'2026-03-17 07:37:05','2026-03-17 07:36:51'),(83,101,'full',120.00,'paymongo','cs_4ebc366348c7c26e2d37259d','cs_4ebc366348c7c26e2d37259d','paid',NULL,'2026-03-17 13:37:23','2026-03-17 13:37:01'),(84,102,'full',120.00,'paymongo','cs_c8f249e12a8723bc8201739b','cs_c8f249e12a8723bc8201739b','paid',NULL,'2026-03-17 13:57:24','2026-03-17 13:57:11'),(85,104,'full',12408.00,'paymongo','cs_4573bf5607cb9e027e0a52f5','cs_4573bf5607cb9e027e0a52f5','paid',NULL,'2026-03-23 17:04:16','2026-03-23 17:04:00'),(86,105,'full',12208.00,'paymongo','cs_284663065991f637c89faed6','cs_284663065991f637c89faed6','paid',NULL,'2026-03-23 17:43:35','2026-03-23 17:43:22'),(87,106,'full',12408.00,'paymongo','cs_a661a61dae120c4139fbfb48','cs_a661a61dae120c4139fbfb48','paid',NULL,'2026-03-23 17:45:13','2026-03-23 17:44:59'),(88,107,'full',12208.00,'paymongo','cs_b618d71397fa8f6f254f6664','cs_b618d71397fa8f6f254f6664','paid',NULL,'2026-03-23 17:53:03','2026-03-23 17:52:50'),(89,108,'full',12208.00,'paymongo','cs_709b0307844c15a2322a5940','cs_709b0307844c15a2322a5940','paid',NULL,'2026-03-23 18:02:14','2026-03-23 18:01:19'),(90,109,'full',12208.00,'paymongo','cs_c4e19b054d7e757e5348ecef','cs_c4e19b054d7e757e5348ecef','paid',NULL,'2026-03-23 18:07:14','2026-03-23 18:07:01'),(91,110,'full',728.00,'paymongo','cs_9d3cc9258ba3f1478ad90482','cs_9d3cc9258ba3f1478ad90482','paid',NULL,'2026-03-25 14:36:12','2026-03-25 14:35:58'),(92,111,'full',972.00,'paymongo','cs_a8c7d7efe3b1aee130fc93be','cs_a8c7d7efe3b1aee130fc93be','paid',NULL,'2026-03-25 17:36:39','2026-03-25 17:31:44'),(93,113,'full',356.00,'paymongo','cs_e210e0a5a2ba67413353f2b7','cs_e210e0a5a2ba67413353f2b7','paid',NULL,'2026-03-27 07:32:39','2026-03-27 07:32:26'),(94,115,'full',952.00,'paymongo',NULL,'cs_a28c3b130fcf2863ddf33d0e','pending',NULL,NULL,'2026-03-27 11:59:26'),(95,116,'full',2148.00,'paymongo',NULL,'cs_46643d0dce272d531d89a42b','pending',NULL,NULL,'2026-03-27 12:02:12'),(96,117,'full',255.20,'paymongo','cs_e753869e4f96b637c00d6dcc','cs_e753869e4f96b637c00d6dcc','paid',NULL,'2026-03-27 12:10:15','2026-03-27 12:09:58'),(97,118,'full',254.20,'paymongo','cs_ad2b2261c3c2bfcef072b368','cs_ad2b2261c3c2bfcef072b368','paid',NULL,'2026-03-31 13:53:33','2026-03-31 13:53:15'),(98,120,'full',255.20,'paymongo','cs_36bffb9669fa3a958bce3170','cs_36bffb9669fa3a958bce3170','paid',NULL,'2026-03-31 14:38:51','2026-03-31 14:38:37'),(99,122,'full',412.00,'paymongo','cs_9b80c2aadba8831ace7ecb66','cs_9b80c2aadba8831ace7ecb66','paid',NULL,'2026-04-09 10:09:15','2026-04-09 10:08:58'),(100,126,'full',412.00,'paymongo',NULL,NULL,'pending',NULL,NULL,'2026-08-04 14:22:54'),(101,128,'full',1780.00,'cod',NULL,NULL,'pending',NULL,NULL,'2026-08-04 14:24:48'),(102,129,'full',412.00,'paymongo',NULL,NULL,'pending',NULL,NULL,'2026-08-04 14:25:34'),(103,130,'full',412.00,'paymongo',NULL,NULL,'pending',NULL,NULL,'2026-08-04 14:26:15'),(104,131,'full',2340.00,'gcash',NULL,NULL,'pending',NULL,NULL,'2026-08-04 14:27:44'),(105,132,'full',2340.00,'gcash',NULL,NULL,'pending',NULL,NULL,'2026-08-04 14:27:55'),(106,133,'full',412.00,'paymongo',NULL,NULL,'pending',NULL,NULL,'2026-08-04 14:30:16'),(107,134,'full',412.00,'paymongo',NULL,NULL,'pending',NULL,NULL,'2026-08-04 14:31:29'),(108,135,'full',356.00,'paymongo',NULL,NULL,'pending',NULL,NULL,'2026-08-05 14:01:57'),(109,136,'full',356.00,'paymongo',NULL,NULL,'pending',NULL,NULL,'2026-08-05 14:02:12'),(110,137,'full',356.00,'paymongo',NULL,NULL,'pending',NULL,NULL,'2026-08-05 14:08:00'),(111,138,'full',356.00,'paymongo',NULL,'cs_0d7b8d8fdcdf889ca8c86d07','pending',NULL,NULL,'2026-08-05 14:15:58'),(112,139,'full',356.00,'paymongo','cs_2fec0e03fb888370ced152e1','cs_2fec0e03fb888370ced152e1','paid',NULL,'2026-08-05 14:18:20','2026-08-05 14:17:27'),(113,140,'full',972.00,'paymongo','cs_14783a78424ce020cb6b42e0','cs_14783a78424ce020cb6b42e0','paid',NULL,'2026-08-06 09:40:21','2026-08-06 09:39:56'),(114,141,'full',200182.00,'paymongo','cs_79952d582dfd2374c8b7400d','cs_79952d582dfd2374c8b7400d','paid',NULL,'2026-08-12 09:05:58','2026-08-12 09:05:38'),(115,142,'full',2354.00,'paymongo',NULL,'cs_53894fd2a2ce3b6c3b582167','pending',NULL,NULL,'2026-08-13 03:56:23'),(116,143,'full',1906.00,'paymongo','cs_1b2a05164ad369c69c19a4c7','cs_1b2a05164ad369c69c19a4c7','paid',NULL,'2026-08-25 16:25:52','2026-08-25 16:25:37'),(117,144,'full',1534.00,'paymongo',NULL,'cs_e7fee7f0966ccd56ee547e77','cancelled',NULL,NULL,'2026-09-16 07:54:46'),(118,147,'full',290.00,'paymongo','cs_0ff31a3475e96cccb6830e0e','cs_0ff31a3475e96cccb6830e0e','paid',NULL,'2026-09-16 13:19:52','2026-09-16 13:19:37'),(119,148,'full',240.00,'paymongo','cs_beceb8e6cd3e4cd8b0649356','cs_beceb8e6cd3e4cd8b0649356','paid',NULL,'2026-09-16 13:47:30','2026-09-16 13:47:14'),(120,149,'full',605.00,'paymongo','cs_fadf8363d47f192c6ce77035','cs_fadf8363d47f192c6ce77035','paid',NULL,'2026-09-24 09:52:33','2026-09-24 09:52:20'),(121,150,'full',207.00,'paymongo','cs_2a455999ad96add20a9f9996','cs_2a455999ad96add20a9f9996','paid',NULL,'2026-09-24 15:27:09','2026-09-24 15:26:55'),(122,151,'full',232.00,'paymongo','cs_8490e1f90dd8f153d2d4b4a7','cs_8490e1f90dd8f153d2d4b4a7','paid',NULL,'2026-09-24 16:49:26','2026-09-24 16:49:12'),(123,152,'full',1206.76,'cod',NULL,NULL,'pending',NULL,NULL,'2026-09-24 16:50:00');
+/*!40000 ALTER TABLE `payments` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `payroll`
+--
+
+DROP TABLE IF EXISTS `payroll`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `payroll` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `employee_id` int NOT NULL,
+  `pay_period_start` date NOT NULL,
+  `pay_period_end` date NOT NULL,
+  `base_salary` decimal(12,2) NOT NULL,
+  `overtime_hours` decimal(5,2) DEFAULT '0.00',
+  `overtime_pay` decimal(12,2) DEFAULT '0.00',
+  `bonuses` decimal(12,2) DEFAULT '0.00',
+  `deductions` decimal(12,2) DEFAULT '0.00',
+  `gross_pay` decimal(12,2) NOT NULL,
+  `net_pay` decimal(12,2) NOT NULL,
+  `payment_method` enum('bank_transfer','cash','check') COLLATE utf8mb4_general_ci DEFAULT 'bank_transfer',
+  `payment_date` date DEFAULT NULL,
+  `payment_proof_path` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `status` enum('pending','approved','processed','paid','rejected','cancelled') COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `approved_by` int DEFAULT NULL COMMENT 'ID of admin who approved/rejected',
+  `approved_at` datetime DEFAULT NULL,
+  `rejection_reason` text COLLATE utf8mb4_general_ci,
+  `notes` text COLLATE utf8mb4_general_ci,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `holiday_pay` decimal(10,2) DEFAULT '0.00',
+  `late_deductions` decimal(12,2) DEFAULT '0.00',
+  `other_deductions_breakdown` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT 'JSON array of other deduction details',
+  PRIMARY KEY (`id`),
+  CONSTRAINT `payroll_chk_1` CHECK (json_valid(`other_deductions_breakdown`))
+) ENGINE=InnoDB AUTO_INCREMENT=34 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `payroll`
+--
+
+LOCK TABLES `payroll` WRITE;
+/*!40000 ALTER TABLE `payroll` DISABLE KEYS */;
+INSERT INTO `payroll` VALUES (4,3,'2026-01-01','2026-01-31',10000.00,0.00,1500.00,0.00,0.00,12000.00,11100.00,'bank_transfer',NULL,NULL,'paid',NULL,NULL,NULL,NULL,'2026-01-30 08:36:32','2026-01-30 08:36:32',0.00,0.00,NULL),(5,3,'2026-01-01','2026-01-31',10000.00,0.00,1500.00,0.00,0.00,12000.00,11100.00,'bank_transfer',NULL,NULL,'paid',NULL,NULL,NULL,NULL,'2026-01-30 08:36:35','2026-01-30 08:36:35',0.00,0.00,NULL),(6,3,'2026-01-01','2026-01-31',10000.00,0.00,1500.00,0.00,0.00,12000.00,11100.00,'bank_transfer',NULL,NULL,'paid',NULL,NULL,NULL,NULL,'2026-01-30 08:36:37','2026-01-30 08:36:37',0.00,0.00,NULL),(7,3,'2026-01-01','2026-01-31',10000.00,0.00,1500.00,0.00,0.00,12000.00,11100.00,'bank_transfer',NULL,NULL,'paid',NULL,NULL,NULL,NULL,'2026-01-30 08:36:44','2026-01-30 08:36:44',0.00,0.00,NULL),(8,3,'2026-02-01','2026-02-28',11000.00,0.00,2000.00,0.00,500.00,13500.00,12030.00,'bank_transfer',NULL,NULL,'rejected',9,'2026-02-17 19:34:07','',NULL,'2026-02-01 11:02:12','2026-02-17 11:34:07',0.00,0.00,NULL),(9,2,'2026-01-20','2026-01-31',0.00,0.00,0.00,0.00,0.00,0.00,-250.00,'bank_transfer',NULL,NULL,'',9,'2026-02-10 22:44:41','',NULL,'2026-02-01 13:43:28','2026-02-10 14:44:41',0.00,0.00,NULL),(11,2,'2026-01-25','2026-02-02',0.00,0.00,0.00,0.00,548.95,0.00,-548.95,'bank_transfer',NULL,NULL,'',9,'2026-02-10 22:44:39','',NULL,'2026-02-02 07:41:27','2026-02-10 14:44:39',0.00,0.00,NULL),(12,2,'2026-02-10','2026-02-12',0.00,0.00,0.00,0.00,548.95,0.00,-548.95,'bank_transfer',NULL,NULL,'',9,'2026-02-10 22:44:35','',NULL,'2026-02-09 18:10:55','2026-02-10 14:44:35',0.00,0.00,NULL),(13,2,'2026-02-10','2026-02-12',0.00,0.00,0.00,0.00,548.95,0.00,-548.95,'bank_transfer',NULL,NULL,'',9,'2026-02-10 22:44:33','',NULL,'2026-02-09 18:10:57','2026-02-10 14:44:33',0.00,0.00,NULL),(14,7,'2026-02-01','2026-02-14',0.00,0.00,0.00,0.00,250.00,0.00,-250.00,'bank_transfer',NULL,NULL,'rejected',9,'2026-02-16 23:07:44','',NULL,'2026-02-10 12:37:27','2026-02-16 15:07:44',0.00,0.00,NULL),(15,7,'2026-02-01','2026-02-14',0.00,0.00,0.00,0.00,250.00,0.00,-250.00,'bank_transfer',NULL,NULL,'rejected',9,'2026-02-16 23:07:42','',NULL,'2026-02-10 12:37:32','2026-02-16 15:07:42',0.00,0.00,NULL),(16,7,'2026-02-01','2026-02-14',0.00,0.00,0.00,0.00,250.00,0.00,-250.00,'bank_transfer',NULL,NULL,'rejected',9,'2026-02-16 23:07:39','',NULL,'2026-02-10 12:37:54','2026-02-16 15:07:39',0.00,0.00,NULL),(17,2,'2026-02-01','2026-02-15',0.00,0.00,0.00,0.00,0.00,0.00,0.00,'bank_transfer',NULL,NULL,'',9,'2026-02-10 22:44:30','',NULL,'2026-02-10 14:06:10','2026-02-10 14:44:30',0.00,0.00,NULL),(18,11,'2026-02-01','2026-02-28',0.00,0.00,0.00,0.00,0.00,0.00,0.00,'bank_transfer',NULL,NULL,'',9,'2026-02-10 22:34:53',NULL,NULL,'2026-02-10 14:24:07','2026-02-10 14:34:53',0.00,0.00,NULL),(19,7,'2026-02-01','2026-02-10',0.00,0.00,0.00,0.00,0.00,1137.50,1137.50,'bank_transfer',NULL,NULL,'',9,'2026-02-10 22:35:52',NULL,NULL,'2026-02-10 14:35:40','2026-02-10 14:35:52',0.00,0.00,NULL),(20,7,'2026-02-01','2026-02-14',0.00,0.00,0.00,0.00,0.00,1137.50,1137.50,'bank_transfer',NULL,NULL,'',9,'2026-02-10 22:37:07',NULL,NULL,'2026-02-10 14:36:58','2026-02-10 14:37:07',0.00,0.00,NULL),(21,11,'2026-02-01','2026-02-28',0.00,0.00,0.00,0.00,0.00,99.38,99.38,'bank_transfer',NULL,NULL,'',9,'2026-02-10 22:42:52',NULL,NULL,'2026-02-10 14:42:32','2026-02-10 14:42:52',0.00,0.00,NULL),(22,7,'2026-02-01','2026-02-28',0.00,0.00,0.00,0.00,0.00,1137.50,1137.50,'bank_transfer',NULL,NULL,'',9,'2026-02-10 22:47:58',NULL,NULL,'2026-02-10 14:45:25','2026-02-10 14:47:58',0.00,0.00,NULL),(23,7,'2026-02-01','2026-02-28',0.00,0.00,0.00,0.00,0.00,1137.50,1137.50,'bank_transfer',NULL,NULL,'',9,'2026-02-10 22:59:19',NULL,NULL,'2026-02-10 14:48:58','2026-02-10 14:59:19',0.00,0.00,NULL),(24,7,'2026-02-01','2026-02-28',0.00,0.00,0.00,0.00,0.00,1137.50,1137.50,'bank_transfer',NULL,NULL,'',9,'2026-02-10 23:34:33',NULL,NULL,'2026-02-10 15:31:46','2026-02-10 15:34:33',0.00,0.00,NULL),(25,16,'2026-02-01','2026-02-15',0.00,0.00,0.00,0.00,0.00,693.75,693.75,'bank_transfer',NULL,NULL,'',6,'2026-02-12 14:54:56',NULL,NULL,'2026-02-12 06:54:10','2026-02-12 06:54:56',0.00,0.00,NULL),(26,17,'2026-02-01','2026-02-15',0.00,0.00,0.00,0.00,0.00,693.75,693.75,'bank_transfer',NULL,NULL,'approved',6,'2026-02-12 15:22:20',NULL,NULL,'2026-02-12 07:15:15','2026-02-12 07:22:20',0.00,0.00,NULL),(27,7,'2026-02-01','2026-02-28',0.00,0.00,0.00,0.00,0.00,1137.50,1137.50,'bank_transfer',NULL,NULL,'approved',9,'2026-02-16 22:53:35',NULL,NULL,'2026-02-16 14:53:24','2026-02-16 14:53:35',0.00,0.00,NULL),(28,7,'2026-02-17','2026-02-17',0.00,0.00,0.00,0.00,0.00,0.00,0.00,'bank_transfer',NULL,NULL,'approved',9,'2026-02-17 20:13:14',NULL,NULL,'2026-02-17 11:42:35','2026-02-17 12:13:14',0.00,0.00,NULL),(29,7,'2026-02-01','2026-02-28',0.00,0.00,0.00,0.00,0.00,1137.50,1137.50,'bank_transfer',NULL,NULL,'approved',9,'2026-02-17 19:48:07',NULL,NULL,'2026-02-17 11:48:00','2026-02-17 11:48:07',0.00,0.00,NULL),(30,7,'2026-02-01','2026-02-28',0.00,0.00,0.00,0.00,75.83,1946.88,1871.04,'bank_transfer',NULL,NULL,'approved',9,'2026-02-17 20:13:55',NULL,NULL,'2026-02-17 12:13:48','2026-02-17 12:13:55',0.00,0.00,NULL),(31,18,'2026-03-01','2026-03-31',0.00,0.00,0.00,0.00,0.00,0.00,0.00,'bank_transfer',NULL,NULL,'approved',9,'2026-03-17 21:53:34',NULL,NULL,'2026-03-17 13:30:26','2026-03-17 13:53:34',0.00,0.00,'[]'),(32,19,'2026-03-01','2026-03-31',0.00,0.00,0.00,0.00,0.00,1293.75,1293.75,'bank_transfer',NULL,NULL,'approved',9,'2026-03-17 21:53:30',NULL,NULL,'2026-03-17 13:51:21','2026-03-17 13:53:30',0.00,0.00,'[]'),(33,19,'2026-03-01','2026-03-31',1012.50,2.00,281.25,0.00,0.00,1293.75,1293.75,'bank_transfer',NULL,NULL,'approved',9,'2026-03-27 17:19:10',NULL,'Approved in finance module.','2026-03-27 09:18:56','2026-03-27 09:19:10',0.00,0.00,'[]');
+/*!40000 ALTER TABLE `payroll` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `payslips`
+--
+
+DROP TABLE IF EXISTS `payslips`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `payslips` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `employee_id` int NOT NULL,
+  `payroll_id` int DEFAULT NULL,
+  `payslip_number` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `pay_period_start` date NOT NULL,
+  `pay_period_end` date NOT NULL,
+  `base_salary` decimal(12,2) NOT NULL,
+  `overtime_hours` decimal(5,2) DEFAULT '0.00',
+  `overtime_pay` decimal(12,2) DEFAULT '0.00',
+  `bonuses` decimal(12,2) DEFAULT '0.00',
+  `allowances` decimal(12,2) DEFAULT '0.00',
+  `gross_pay` decimal(12,2) NOT NULL,
+  `sss_contribution` decimal(12,2) DEFAULT '0.00',
+  `philhealth_contribution` decimal(12,2) DEFAULT '0.00',
+  `pagibig_contribution` decimal(12,2) DEFAULT '0.00',
+  `bir_tax` decimal(12,2) DEFAULT '0.00',
+  `other_deductions` decimal(12,2) DEFAULT '0.00',
+  `total_deductions` decimal(12,2) NOT NULL,
+  `net_pay` decimal(12,2) NOT NULL,
+  `generated_at` timestamp NULL DEFAULT NULL,
+  `sent_at` timestamp NULL DEFAULT NULL,
+  `viewed_at` timestamp NULL DEFAULT NULL,
+  `status` enum('draft','generated','sent','viewed') COLLATE utf8mb4_general_ci DEFAULT 'draft',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `payslips`
+--
+
+LOCK TABLES `payslips` WRITE;
+/*!40000 ALTER TABLE `payslips` DISABLE KEYS */;
+INSERT INTO `payslips` VALUES (1,3,8,'PS-20260209-00008','2026-02-01','0000-00-00',11000.00,0.00,2000.00,0.00,0.00,13000.00,495.00,275.00,50.00,0.00,500.00,1320.00,11680.00,'2026-02-09 14:41:30',NULL,NULL,'generated','2026-02-09 14:41:30','2026-02-09 14:41:30'),(4,17,26,'PS-20260212-EMP-20260212-7349-26','2026-02-01','2026-02-15',0.00,0.00,0.00,0.00,0.00,693.75,31.22,13.88,13.88,0.00,0.00,0.00,693.75,'2026-02-12 07:22:20',NULL,NULL,'generated','2026-02-12 07:22:20','2026-02-12 07:22:20'),(5,7,27,'PS-20260216-EMP-20260210-2435-27','2026-02-01','2026-02-28',0.00,0.00,0.00,0.00,0.00,1137.50,51.19,22.75,22.75,0.00,0.00,0.00,1137.50,'2026-02-16 14:53:35',NULL,NULL,'generated','2026-02-16 14:53:35','2026-02-16 14:53:35'),(6,7,29,'PS-20260217-EMP-20260210-2435-29','2026-02-01','2026-02-28',0.00,0.00,0.00,0.00,0.00,1137.50,51.19,22.75,22.75,0.00,0.00,0.00,1137.50,'2026-02-17 11:48:07',NULL,NULL,'generated','2026-02-17 11:48:07','2026-02-17 11:48:07'),(7,7,28,'PS-20260217-EMP-20260210-2435-28','2026-02-17','2026-02-17',0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,'2026-02-17 12:13:14',NULL,NULL,'generated','2026-02-17 12:13:14','2026-02-17 12:13:14'),(8,7,30,'PS-20260217-EMP-20260210-2435-30','2026-02-01','2026-02-28',0.00,0.00,0.00,0.00,0.00,1946.88,87.61,38.94,38.94,0.00,0.00,75.83,1871.04,'2026-02-17 12:13:55',NULL,NULL,'generated','2026-02-17 12:13:55','2026-02-17 12:13:55'),(9,7,24,'PS-20260312-00024','2026-02-01','0000-00-00',0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,'2026-03-12 06:37:40',NULL,NULL,'generated','2026-03-12 06:37:40','2026-03-12 06:37:40'),(10,11,18,'PS-20260312-00018','2026-02-01','0000-00-00',0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,'2026-03-12 06:37:42',NULL,NULL,'generated','2026-03-12 06:37:42','2026-03-12 06:37:42'),(11,11,21,'PS-20260313-00021','2026-02-01','0000-00-00',0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,'2026-03-13 02:40:38',NULL,NULL,'generated','2026-03-13 02:40:38','2026-03-13 02:40:38'),(12,18,31,'PS-20260317-00031','2026-03-01','0000-00-00',0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,'2026-03-17 13:43:52',NULL,NULL,'generated','2026-03-17 13:43:52','2026-03-17 13:43:52'),(13,19,32,'PS-20260317-EMP-20260317-3382-32','2026-03-01','2026-03-31',0.00,0.00,0.00,0.00,0.00,1293.75,58.22,25.88,25.88,0.00,0.00,0.00,1293.75,'2026-03-17 13:53:30',NULL,NULL,'generated','2026-03-17 13:53:30','2026-03-17 13:53:30'),(14,18,31,'PS-20260317-EMP-20260317-2059-31','2026-03-01','2026-03-31',0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,'2026-03-17 13:53:34',NULL,NULL,'generated','2026-03-17 13:53:34','2026-03-17 13:53:34'),(15,19,33,'PS-20260327-EMP-20260317-3382-33','2026-03-01','2026-03-31',1012.50,2.00,281.25,0.00,0.00,1293.75,58.22,25.88,25.88,0.00,0.00,0.00,1293.75,'2026-03-27 09:19:10',NULL,NULL,'generated','2026-03-27 09:19:10','2026-03-27 09:19:10');
+/*!40000 ALTER TABLE `payslips` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `performance_reviews`
+--
+
+DROP TABLE IF EXISTS `performance_reviews`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `performance_reviews` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `employee_id` int NOT NULL,
+  `reviewer_id` int NOT NULL,
+  `review_date` date NOT NULL,
+  `period_start` date NOT NULL,
+  `period_end` date NOT NULL,
+  `attendance_rating` int DEFAULT '0',
+  `performance_rating` int DEFAULT '0',
+  `teamwork_rating` int DEFAULT '0',
+  `communication_rating` int DEFAULT '0',
+  `overall_rating` int DEFAULT '0',
+  `strengths` text COLLATE utf8mb4_general_ci,
+  `areas_for_improvement` text COLLATE utf8mb4_general_ci,
+  `goals_for_next_period` text COLLATE utf8mb4_general_ci,
+  `comments` text COLLATE utf8mb4_general_ci,
+  `status` enum('draft','submitted','acknowledged') COLLATE utf8mb4_general_ci DEFAULT 'draft',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `performance_reviews`
+--
+
+LOCK TABLES `performance_reviews` WRITE;
+/*!40000 ALTER TABLE `performance_reviews` DISABLE KEYS */;
+INSERT INTO `performance_reviews` VALUES (2,7,9,'0000-00-00','2026-03-01','2026-03-07',5,5,5,5,5,'asd','asd','ads','asd','','2026-03-12 06:37:01','2026-03-12 06:37:01');
+/*!40000 ALTER TABLE `performance_reviews` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `permissions`
+--
+
+DROP TABLE IF EXISTS `permissions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `permissions` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `module` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `action` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `description` text COLLATE utf8mb4_general_ci,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=74 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `permissions`
+--
+
+LOCK TABLES `permissions` WRITE;
+/*!40000 ALTER TABLE `permissions` DISABLE KEYS */;
+INSERT INTO `permissions` VALUES (1,'dashboard.view','dashboard','view','View Dashboard','2026-02-06 09:11:09'),(2,'dashboard.analytics','dashboard','view','View Analytics and Reports','2026-02-06 09:11:09'),(3,'orders.view','orders','view','View Orders','2026-02-06 09:11:09'),(4,'orders.create','orders','create','Create Orders','2026-02-06 09:11:09'),(5,'orders.edit','orders','edit','Edit Orders','2026-02-06 09:11:09'),(6,'orders.delete','orders','delete','Delete Orders','2026-02-06 09:11:09'),(7,'orders.export','orders','export','Export Orders','2026-02-06 09:11:09'),(8,'preorders.view','preorders','view','View Pre-Orders','2026-02-06 09:11:09'),(9,'preorders.create','preorders','create','Create Pre-Orders','2026-02-06 09:11:09'),(10,'preorders.edit','preorders','edit','Edit Pre-Orders','2026-02-06 09:11:09'),(11,'preorders.delete','preorders','delete','Delete Pre-Orders','2026-02-06 09:11:09'),(12,'preorders.export','preorders','export','Export Pre-Orders','2026-02-06 09:11:09'),(13,'logistics.view','logistics','view','View Deliveries','2026-02-06 09:11:09'),(14,'logistics.assign','logistics','create','Assign Drivers','2026-02-06 09:11:09'),(15,'logistics.update','logistics','edit','Update Delivery Status','2026-02-06 09:11:09'),(16,'logistics.settings','logistics','manage','Manage Logistics Settings','2026-02-06 09:11:09'),(17,'inventory.view','inventory','view','View Inventory','2026-02-06 09:11:09'),(18,'inventory.create','inventory','create','Create Materials','2026-02-06 09:11:09'),(19,'inventory.edit','inventory','edit','Edit Materials','2026-02-06 09:11:09'),(20,'inventory.delete','inventory','delete','Delete Materials','2026-02-06 09:11:09'),(21,'inventory.view_bom','inventory','view','View Bill of Materials','2026-02-06 09:11:09'),(22,'inventory.manage_bom','inventory','edit','Manage Bill of Materials','2026-02-06 09:11:09'),(23,'products.view','products','view','View Products','2026-02-06 09:11:09'),(24,'products.create','products','create','Create Products','2026-02-06 09:11:09'),(25,'products.edit','products','edit','Edit Products','2026-02-06 09:11:09'),(26,'products.delete','products','delete','Delete Products','2026-02-06 09:11:09'),(27,'mrp.view','mrp','view','View MRP','2026-02-06 09:11:09'),(28,'mrp.manage','mrp','manage','Manage MRP','2026-02-06 09:11:09'),(29,'hr.view','hr','view','View HR Module','2026-02-06 09:11:09'),(30,'employees.view','hr','view','View Employees','2026-02-06 09:11:09'),(31,'employees.create','hr','create','Create Employees','2026-02-06 09:11:09'),(32,'employees.edit','hr','edit','Edit Employees','2026-02-06 09:11:09'),(33,'employees.delete','hr','delete','Delete Employees','2026-02-06 09:11:09'),(34,'attendance.view','hr','view','View Attendance','2026-02-06 09:11:09'),(35,'attendance.manage','hr','edit','Manage Attendance','2026-02-06 09:11:09'),(37,'payroll.view','payroll','view','View Payroll','2026-02-06 09:11:09'),(38,'payroll.manage','payroll','manage','Manage Payroll','2026-02-06 09:11:09'),(39,'payslip.view','payroll','view','View Payslips','2026-02-06 09:11:09'),(40,'payslip.generate','payroll','create','Generate Payslips','2026-02-06 09:11:09'),(41,'leave.view','hr','view','View Leave Requests','2026-02-06 09:11:09'),(42,'leave.approve','hr','manage','Approve Leave Requests','2026-02-06 09:11:09'),(43,'performance.view','hr','view','View Performance Data','2026-02-06 09:11:09'),(44,'performance.manage','hr','manage','Manage Performance','2026-02-06 09:11:09'),(45,'finance.view','finance','view','View Finance','2026-02-06 09:11:09'),(46,'finance.manage','finance','manage','Manage Finance','2026-02-06 09:11:09'),(47,'expenses.view','finance','view','View Expenses','2026-02-06 09:11:09'),(48,'expenses.manage','finance','manage','Manage Expenses','2026-02-06 09:11:09'),(49,'users.view','admin','view','View Users','2026-02-06 09:11:09'),(50,'users.create','admin','create','Create Users','2026-02-06 09:11:09'),(51,'users.edit','admin','edit','Edit Users','2026-02-06 09:11:09'),(52,'users.delete','admin','delete','Delete Users','2026-02-06 09:11:09'),(53,'roles.manage','admin','manage','Manage Roles and Permissions','2026-02-06 09:11:09'),(54,'franchise.view','admin','view','View Franchise Applications','2026-02-06 09:11:09'),(55,'franchise.manage','admin','manage','Manage Franchise Applications','2026-02-06 09:11:09'),(56,'audit.view','admin','view','View Audit Logs','2026-02-06 09:11:09'),(57,'departments.view','hr','view','View Departments','2026-03-12 16:08:30'),(58,'departments.create','hr','create','Create Departments','2026-03-12 16:08:30'),(59,'departments.edit','hr','edit','Edit Departments','2026-03-12 16:08:30'),(60,'departments.delete','hr','delete','Delete Departments','2026-03-12 16:08:30'),(61,'deductions.view','payroll','view','View Employee Deductions','2026-03-12 16:08:30'),(62,'deductions.manage','payroll','manage','Manage Employee Deductions','2026-03-12 16:08:30'),(63,'operations.view','operations','view','View operations dashboard','2026-04-09 10:19:52'),(64,'operations.incidents','operations','incidents','Manage incidents and alerts','2026-04-09 10:19:52'),(65,'operations.monitoring','operations','monitoring','View monitoring signals','2026-04-09 10:19:52'),(66,'operations.users_business','operations','users_business','Review users and businesses','2026-04-09 10:19:52'),(67,'operations.content','operations','content','Moderate content queue','2026-04-09 10:19:52'),(68,'operations.decision_support','operations','decision_support','View decision support insights','2026-04-09 10:19:52'),(69,'operations.notifications','operations','notifications','Manage announcements and notices','2026-04-09 10:19:52'),(70,'operations.automation','operations','automation','Manage automation rules and jobs','2026-04-09 10:19:52'),(71,'operations.logs','operations','logs','Review audit, logs, and backups','2026-04-09 10:19:52'),(72,'billing.view','billing','view','View partner billing pages and invoices','2026-04-10 02:54:24'),(73,'billing.manage','billing','manage','Manage partner billing workflows and invoice actions','2026-04-10 02:54:24');
+/*!40000 ALTER TABLE `permissions` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `platform_fee_rules`
+--
+
+DROP TABLE IF EXISTS `platform_fee_rules`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `platform_fee_rules` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `partner_user_id` int DEFAULT NULL,
+  `rule_scope` enum('global','partner') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'global',
+  `rule_name` varchar(150) COLLATE utf8mb4_general_ci NOT NULL,
+  `fee_percent` decimal(6,2) NOT NULL DEFAULT '0.00',
+  `fee_flat_per_order` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `effective_from` date NOT NULL,
+  `effective_to` date DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `notes` text COLLATE utf8mb4_general_ci,
+  `created_by` int DEFAULT NULL,
+  `updated_by` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `platform_fee_rules`
+--
+
+LOCK TABLES `platform_fee_rules` WRITE;
+/*!40000 ALTER TABLE `platform_fee_rules` DISABLE KEYS */;
+INSERT INTO `platform_fee_rules` VALUES (1,NULL,'global','Default platform fee',6.00,2.00,'2026-04-09',NULL,1,'Default marketplace fee for all approved partners.',9,9,'2026-04-09 23:11:59','2026-04-09 23:11:59');
+/*!40000 ALTER TABLE `platform_fee_rules` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `platform_subscription_plans`
+--
+
+DROP TABLE IF EXISTS `platform_subscription_plans`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `platform_subscription_plans` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `plan_code` varchar(80) COLLATE utf8mb4_general_ci NOT NULL,
+  `plan_name` varchar(120) COLLATE utf8mb4_general_ci NOT NULL,
+  `description` text COLLATE utf8mb4_general_ci,
+  `monthly_price` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `annual_price` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `included_order_fee_percent` decimal(6,2) NOT NULL DEFAULT '0.00',
+  `included_order_fee_flat` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `max_staff_accounts` int NOT NULL DEFAULT '1',
+  `includes_ai_automation` tinyint(1) NOT NULL DEFAULT '0',
+  `includes_priority_support` tinyint(1) NOT NULL DEFAULT '0',
+  `includes_featured_placement` tinyint(1) NOT NULL DEFAULT '0',
+  `includes_custom_branding` tinyint(1) NOT NULL DEFAULT '0',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `created_by` int DEFAULT NULL,
+  `updated_by` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `platform_subscription_plans`
+--
+
+LOCK TABLES `platform_subscription_plans` WRITE;
+/*!40000 ALTER TABLE `platform_subscription_plans` DISABLE KEYS */;
+INSERT INTO `platform_subscription_plans` VALUES (1,'starter','Starter','Marketplace storefront, online orders, live chat, product stock alerts, and POS for single-stall lechon shops.',500.00,5000.00,7.50,5.00,2,0,0,0,0,1,9,9,'2026-04-09 23:11:59','2026-09-16 21:49:26'),(2,'growth','Growth','MRP batch yield calculator, AI demand forecasting, chatbot FAQ replies, DSS financial reports, and multi-staff accounts.',1000.00,10000.00,6.00,3.00,6,1,1,0,0,1,9,9,'2026-04-09 23:11:59','2026-09-16 21:49:26'),(3,'pro','Pro','Complete enterprise suite with full HR payroll management, featured marketplace homepage spotlight, custom store branding, and 24/7 hotline.',1199.00,11990.00,4.50,2.00,15,1,1,1,1,1,9,9,'2026-04-09 23:11:59','2026-09-16 21:49:26');
+/*!40000 ALTER TABLE `platform_subscription_plans` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `pre_order_notifications`
+--
+
+DROP TABLE IF EXISTS `pre_order_notifications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pre_order_notifications` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `pre_order_id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `notification_type` enum('confirmation','payment_reminder','ready_for_pickup','cancellation','completion') COLLATE utf8mb4_general_ci NOT NULL,
+  `title` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `message` text COLLATE utf8mb4_general_ci,
+  `email_sent` tinyint(1) DEFAULT '0',
+  `sms_sent` tinyint(1) DEFAULT '0',
+  `sent_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `pre_order_notifications`
+--
+
+LOCK TABLES `pre_order_notifications` WRITE;
+/*!40000 ALTER TABLE `pre_order_notifications` DISABLE KEYS */;
+INSERT INTO `pre_order_notifications` VALUES (1,1,9,'confirmation','Pre-Order Confirmation','Your pre-order for Whole Lechon (10-12 kg) has been received. Total: ├â┬ó├óΓé¼┼í├é┬▒3,500.00',0,0,NULL,'2026-01-22 16:38:17'),(2,2,9,'confirmation','Pre-Order Confirmation','Your pre-order for Whole Lechon (10-12 kg) has been received. Total: ├â┬ó├óΓé¼┼í├é┬▒3,500.00',0,0,NULL,'2026-01-22 16:38:34'),(3,3,9,'confirmation','Pre-Order Confirmation','Your pre-order for Whole Lechon (10-12 kg) has been received. Total: ├â┬ó├óΓé¼┼í├é┬▒3,500.00',0,0,NULL,'2026-01-22 16:39:33'),(4,4,9,'confirmation','Pre-Order Confirmation','Your pre-order for Whole Lechon (10-12 kg) has been received. Total: ├â┬ó├óΓé¼┼í├é┬▒3,500.00',0,0,NULL,'2026-01-22 16:40:24'),(5,5,9,'confirmation','Pre-Order Confirmation','Your pre-order for Whole Lechon (10-12 kg) has been received. Total: ├â┬ó├óΓé¼┼í├é┬▒3,500.00',0,0,NULL,'2026-01-22 16:43:30'),(6,6,9,'confirmation','Pre-Order Confirmation','Your pre-order for Dinuguan (1 kg) has been received. Total: ├â┬ó├óΓé¼┼í├é┬▒300.00',0,0,NULL,'2026-01-22 16:53:21'),(7,7,9,'confirmation','Pre-Order Confirmation','Your pre-order for Dinuguan (1 kg) has been received. Total: ├â┬ó├óΓé¼┼í├é┬▒300.00',0,0,NULL,'2026-01-22 16:55:51');
+/*!40000 ALTER TABLE `pre_order_notifications` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `pre_order_payments`
+--
+
+DROP TABLE IF EXISTS `pre_order_payments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pre_order_payments` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `pre_order_id` int NOT NULL,
+  `payment_type` enum('downpayment','final_payment') COLLATE utf8mb4_general_ci NOT NULL,
+  `amount` decimal(10,2) NOT NULL,
+  `payment_method` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `transaction_id` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `payment_status` enum('pending','paid','failed','refunded') COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `payment_gateway` enum('paymongo','bank_transfer','cash') COLLATE utf8mb4_general_ci DEFAULT 'paymongo',
+  `paid_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `pre_order_payments`
+--
+
+LOCK TABLES `pre_order_payments` WRITE;
+/*!40000 ALTER TABLE `pre_order_payments` DISABLE KEYS */;
+INSERT INTO `pre_order_payments` VALUES (1,4,'final_payment',3500.00,NULL,'cs_r1KaMEmMCVwjQ13VLSp4HJzK','pending','paymongo',NULL,'2026-01-22 16:40:36','2026-01-22 16:40:36'),(2,4,'final_payment',3500.00,NULL,'cs_DRrTgWKRytGSrU4mvKUSAgLF','pending','paymongo',NULL,'2026-01-22 16:41:17','2026-01-22 16:41:17'),(3,4,'final_payment',3500.00,'cash','CASH-4-1769100195','paid','cash','2026-01-23 00:43:15','2026-01-22 16:43:15','2026-01-22 16:43:15'),(4,5,'final_payment',3500.00,NULL,'cs_QvPBoa2VwsigsEEeYbrKsBBJ','paid','paymongo','2026-01-23 00:43:46','2026-01-22 16:43:36','2026-01-22 16:43:46'),(5,7,'final_payment',300.00,NULL,'cs_5HeAPZef8cTYnsqhHD7daHNS','paid','paymongo','2026-01-23 01:04:34','2026-01-22 16:56:04','2026-01-22 17:04:34'),(6,6,'final_payment',300.00,NULL,'cs_SKJnJFt4VvfTg5Wpniht5Naq','paid','paymongo','2026-01-23 01:21:34','2026-01-22 17:21:24','2026-01-22 17:21:34'),(7,23,'final_payment',300.00,NULL,'cs_Qq4RWsfwUhH45tBx2JG1471z','paid','paymongo','2026-01-27 23:48:41','2026-01-27 15:48:33','2026-01-27 15:48:41'),(8,42,'final_payment',49800.00,NULL,'cs_571f4ce314031bae99054e99','paid','paymongo','2026-03-17 22:19:54','2026-03-17 14:19:41','2026-03-17 14:19:54');
+/*!40000 ALTER TABLE `pre_order_payments` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `pre_orders`
+--
+
+DROP TABLE IF EXISTS `pre_orders`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pre_orders` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `product_id` int NOT NULL,
+  `product_name` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `quantity` int NOT NULL DEFAULT '1',
+  `unit_price` decimal(10,2) NOT NULL,
+  `total_price` decimal(10,2) NOT NULL,
+  `reservation_date` date NOT NULL,
+  `preferred_pickup_date` date NOT NULL,
+  `preferred_pickup_time` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `pickup_location` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `delivery_address` text COLLATE utf8mb4_general_ci,
+  `delivery_method` enum('pickup','delivery') COLLATE utf8mb4_general_ci DEFAULT 'pickup',
+  `special_instructions` text COLLATE utf8mb4_general_ci,
+  `payment_type` enum('full_payment','downpayment') COLLATE utf8mb4_general_ci DEFAULT 'full_payment',
+  `downpayment_amount` decimal(10,2) DEFAULT NULL,
+  `remaining_amount` decimal(10,2) DEFAULT NULL,
+  `downpayment_status` enum('pending','paid','overdue') COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `final_payment_status` enum('pending','paid','overdue') COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `downpayment_paid_at` datetime DEFAULT NULL,
+  `final_payment_paid_at` datetime DEFAULT NULL,
+  `reservation_status` enum('pending','confirmed','in_preparation','ready_for_pickup','completed','cancelled') COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `cancellation_reason` text COLLATE utf8mb4_general_ci,
+  `cancelled_at` datetime DEFAULT NULL,
+  `notes` text COLLATE utf8mb4_general_ci,
+  `admin_notes` text COLLATE utf8mb4_general_ci,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `latitude` decimal(10,8) DEFAULT NULL,
+  `longitude` decimal(11,8) DEFAULT NULL,
+  `paymongo_session_id` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `paymongo_payment_id` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=45 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `pre_orders`
+--
+
+LOCK TABLES `pre_orders` WRITE;
+/*!40000 ALTER TABLE `pre_orders` DISABLE KEYS */;
+INSERT INTO `pre_orders` VALUES (1,9,1,'Whole Lechon (10-12 kg)',1,3500.00,3500.00,'2026-01-23','2026-01-24','9:00 AM - 12:00 PM','Main Branch - Makati','','pickup','asd','full_payment',3500.00,0.00,'pending','pending',NULL,NULL,'cancelled','Payment not completed','2026-02-16 23:15:32',NULL,'test','2026-01-22 16:38:17','2026-02-16 15:15:32',NULL,NULL,NULL,NULL),(2,9,1,'Whole Lechon (10-12 kg)',1,3500.00,3500.00,'2026-01-23','2026-01-24','9:00 AM - 12:00 PM','Quezon City Branch','','pickup','asd','full_payment',3500.00,0.00,'pending','pending',NULL,NULL,'in_preparation',NULL,NULL,NULL,'','2026-01-22 16:38:34','2026-01-22 19:08:36',NULL,NULL,NULL,NULL),(3,9,1,'Whole Lechon (10-12 kg)',1,3500.00,3500.00,'2026-01-23','2026-01-24','9:00 AM - 12:00 PM','Quezon City Branch','','pickup','asd','full_payment',3500.00,0.00,'pending','pending',NULL,NULL,'confirmed',NULL,NULL,NULL,'','2026-01-22 16:39:33','2026-01-22 17:20:54',NULL,NULL,NULL,NULL),(4,9,1,'Whole Lechon (10-12 kg)',1,3500.00,3500.00,'2026-01-23','2026-01-24','9:00 AM - 12:00 PM','Quezon City Branch','','pickup','asd','full_payment',3500.00,0.00,'pending','paid',NULL,'2026-01-23 00:43:15','completed',NULL,NULL,NULL,NULL,'2026-01-22 16:40:24','2026-01-22 16:43:15',NULL,NULL,NULL,NULL),(5,9,1,'Whole Lechon (10-12 kg)',1,3500.00,3500.00,'2026-01-23','2026-01-24','9:00 AM - 12:00 PM','Main Branch - Makati','','pickup','asd','full_payment',3500.00,0.00,'pending','paid',NULL,NULL,'in_preparation',NULL,NULL,NULL,'','2026-01-22 16:43:30','2026-01-22 16:44:21',NULL,NULL,NULL,NULL),(6,9,7,'Dinuguan (1 kg)',1,300.00,300.00,'2026-01-23','2026-01-24','9:00 AM - 12:00 PM','Main Branch - Makati','','pickup','','full_payment',300.00,0.00,'pending','paid',NULL,NULL,'confirmed',NULL,NULL,NULL,'','2026-01-22 16:53:21','2026-01-22 17:21:34',NULL,NULL,NULL,NULL),(7,9,7,'Dinuguan (1 kg)',1,300.00,300.00,'2026-01-23','2026-01-24','9:00 AM - 12:00 PM','Main Branch - Makati','','pickup','','full_payment',300.00,0.00,'pending','paid',NULL,NULL,'confirmed',NULL,NULL,NULL,'okui','2026-01-22 16:55:51','2026-01-22 17:13:14',NULL,NULL,NULL,NULL),(15,9,8,'Lechon Sisig (1 kg)',1,400.00,400.00,'0000-00-00','0000-00-00',NULL,NULL,'asd, Paliparan III, Dasmariñas, Cavite','delivery',NULL,'full_payment',400.00,0.00,'pending','pending',NULL,NULL,'ready_for_pickup',NULL,NULL,NULL,'','2026-01-27 14:48:04','2026-02-24 14:59:29',NULL,NULL,NULL,NULL),(16,9,19,'Linda Lechon tie',1,160.00,160.00,'0000-00-00','0000-00-00',NULL,NULL,'123, Poblacion 1B, Carmona, Cavite','delivery',NULL,'full_payment',160.00,0.00,'pending','pending',NULL,NULL,'confirmed',NULL,NULL,NULL,'','2026-01-27 14:48:44','2026-01-27 14:57:52',NULL,NULL,NULL,NULL),(17,9,7,'Dinuguan (1 kg)',1,300.00,300.00,'0000-00-00','0000-00-00',NULL,NULL,'asd, Poblacion II, Alfonso, Cavite','delivery',NULL,'full_payment',300.00,0.00,'pending','pending',NULL,NULL,'ready_for_pickup',NULL,NULL,NULL,'','2026-01-27 15:03:17','2026-02-24 14:59:46',NULL,NULL,NULL,NULL),(18,9,6,'Lechon Paksiw (1 kg)',1,350.00,350.00,'0000-00-00','0000-00-00',NULL,NULL,'asd, Poblacion 1C, Carmona, Cavite','delivery',NULL,'full_payment',350.00,0.00,'pending','pending',NULL,NULL,'pending',NULL,NULL,NULL,NULL,'2026-01-27 15:03:47','2026-01-27 15:03:47',NULL,NULL,NULL,NULL),(19,9,6,'Lechon Paksiw (1 kg)',1,350.00,350.00,'0000-00-00','0000-00-00',NULL,NULL,'123, Poblacion 1B, Carmona, Cavite','delivery',NULL,'full_payment',350.00,0.00,'pending','pending',NULL,NULL,'pending',NULL,NULL,NULL,NULL,'2026-01-27 15:11:21','2026-01-27 15:11:21',NULL,NULL,NULL,NULL),(20,9,6,'Lechon Paksiw (1 kg)',1,350.00,350.00,'0000-00-00','0000-00-00',NULL,NULL,'123, Sulsugin, Alfonso, Cavite','delivery',NULL,'full_payment',350.00,0.00,'pending','pending',NULL,NULL,'pending',NULL,NULL,NULL,NULL,'2026-01-27 15:17:31','2026-01-27 15:17:31',NULL,NULL,NULL,NULL),(21,9,7,'Dinuguan (1 kg)',2,300.00,600.00,'0000-00-00','0000-00-00',NULL,NULL,'123, Taywanak, Alfonso, Cavite','delivery',NULL,'full_payment',600.00,0.00,'pending','pending',NULL,NULL,'pending',NULL,NULL,NULL,NULL,'2026-01-27 15:20:23','2026-01-27 15:20:23',NULL,NULL,NULL,NULL),(22,9,7,'Dinuguan (1 kg)',1,300.00,300.00,'0000-00-00','0000-00-00',NULL,NULL,'123, Daine II, Indang, Cavite','delivery',NULL,'full_payment',300.00,0.00,'pending','pending',NULL,NULL,'ready_for_pickup',NULL,NULL,NULL,'Oki na po.','2026-01-27 15:22:55','2026-02-01 11:11:22',NULL,NULL,NULL,NULL),(23,9,7,'Dinuguan (1 kg)',1,300.00,300.00,'0000-00-00','0000-00-00',NULL,NULL,'123, Daine II, Indang, Cavite','delivery',NULL,'full_payment',300.00,0.00,'pending','paid',NULL,NULL,'confirmed',NULL,NULL,NULL,'asd','2026-01-27 15:23:07','2026-01-30 08:56:20',NULL,NULL,NULL,NULL),(24,9,7,'Dinuguan (1 kg)',1,300.00,300.00,'0000-00-00','0000-00-00',NULL,NULL,'123, Poblacion 1C, Carmona, Cavite','delivery',NULL,'full_payment',300.00,0.00,'pending','pending',NULL,NULL,'completed',NULL,NULL,NULL,'','2026-01-27 15:26:58','2026-01-28 07:07:30',NULL,NULL,NULL,NULL),(25,9,7,'Dinuguan (1 kg)',1,300.00,300.00,'0000-00-00','0000-00-00',NULL,NULL,'asd, Poblacion 1B, Carmona, Cavite','delivery',NULL,'full_payment',300.00,0.00,'pending','pending',NULL,NULL,'completed',NULL,NULL,NULL,'','2026-01-27 15:31:39','2026-01-28 07:07:27',NULL,NULL,NULL,NULL),(26,9,7,'Dinuguan (1 kg)',1,300.00,300.00,'0000-00-00','0000-00-00',NULL,NULL,'123, Taywanak, Alfonso, Cavite','delivery',NULL,'full_payment',300.00,0.00,'pending','paid',NULL,'2026-01-27 23:39:09','confirmed',NULL,NULL,NULL,NULL,'2026-01-27 15:38:54','2026-01-27 15:39:09',NULL,NULL,'cs_Mk1nrZuPJb7Bt9TX29GeNBdx',NULL),(27,9,6,'Lechon Paksiw (1 kg)',1,350.00,350.00,'0000-00-00','0000-00-00',NULL,NULL,'asd, Kapitan Kua, General Mariano Alvarez, Cavite','delivery',NULL,'full_payment',350.00,0.00,'pending','paid',NULL,'2026-01-27 23:45:15','cancelled','asd','2026-01-27 23:47:44',NULL,NULL,'2026-01-27 15:44:59','2026-01-27 15:47:44',NULL,NULL,'cs_XpCNJeQXu9iSqg9ySbpfwC4t',NULL),(28,9,1,'Whole Lechon (10-12 kg)',1,3500.00,3500.00,'0000-00-00','0000-00-00',NULL,NULL,'123, Makina, Naic, Cavite','delivery',NULL,'full_payment',3500.00,0.00,'pending','paid',NULL,'2026-01-28 15:04:02','cancelled','lkj','2026-01-28 15:06:15',NULL,'','2026-01-28 07:03:49','2026-02-01 11:32:18',NULL,NULL,'cs_cjzMtxBb6MHqJC1668iY5drX',NULL),(29,10,20,'Lechong Kawali',1,200.00,200.00,'0000-00-00','0000-00-00',NULL,NULL,'asddsa, Burol I, Dasmariñas, Cavite','delivery',NULL,'full_payment',200.00,0.00,'pending','paid',NULL,'2026-02-01 21:48:00','confirmed',NULL,NULL,NULL,NULL,'2026-02-01 13:47:26','2026-02-01 13:48:00',NULL,NULL,'cs_WWtBiz6xSUSQGQ56HebCaUJ6',NULL),(30,10,20,'Lechong Kawali',1,200.00,200.00,'0000-00-00','0000-00-00',NULL,NULL,'asddsa, Burol I, Dasmariñas, Cavite','delivery',NULL,'full_payment',200.00,0.00,'pending','paid',NULL,'2026-02-01 21:51:41','confirmed',NULL,NULL,NULL,NULL,'2026-02-01 13:50:39','2026-02-01 13:51:41',NULL,NULL,'cs_96nhFcNZPy9eiCM7o2WPbZ4N',NULL),(31,10,20,'Lechong Kawali',1,200.00,200.00,'0000-00-00','0000-00-00',NULL,NULL,'asddsa, Burol I, Dasmariñas, Cavite','delivery',NULL,'full_payment',200.00,0.00,'pending','pending',NULL,NULL,'pending',NULL,NULL,NULL,NULL,'2026-02-01 13:53:22','2026-02-01 13:53:22',NULL,NULL,'cs_zj9h66cCK5epBrUjjFKCXUp6',NULL),(32,6,20,'Lechong Kawali',1,200.00,200.00,'0000-00-00','0000-00-00',NULL,NULL,'asddsa, Burol I, Dasmariñas, Cavite','delivery',NULL,'full_payment',200.00,0.00,'pending','paid',NULL,'2026-02-01 21:57:12','confirmed',NULL,NULL,NULL,NULL,'2026-02-01 13:55:52','2026-02-01 13:57:12',NULL,NULL,'cs_c6BW89XxcrwTfN1S8KTpLUFT',NULL),(33,9,1,'Whole Lechon (10-12 kg)',1,3500.00,3500.00,'0000-00-00','0000-00-00',NULL,NULL,'123, Taywanak, Alfonso, Cavite','delivery',NULL,'full_payment',3500.00,0.00,'pending','paid',NULL,'2026-02-16 23:16:07','confirmed',NULL,NULL,NULL,'','2026-02-16 15:15:55','2026-02-17 11:29:20',NULL,NULL,'cs_589eacc403798487076d456d',NULL),(34,9,4,'Quarter Lechon (2-3 kg)',3,1100.00,3300.00,'0000-00-00','0000-00-00',NULL,NULL,'123, Bancal, Carmona, Cavite','delivery',NULL,'downpayment',990.00,2310.00,'paid','pending','2026-02-17 20:45:48',NULL,'cancelled','asdasd','2026-02-24 23:59:21',NULL,NULL,'2026-02-17 12:45:36','2026-02-24 15:59:21',NULL,NULL,'cs_8da513ce1f92b9dce6f0102c',NULL),(35,9,7,'Dinuguan (1 kg)',1,300.00,300.00,'0000-00-00','0000-00-00',NULL,NULL,'123, Poblacion 1A, Carmona, Cavite','delivery',NULL,'full_payment',300.00,0.00,'pending','paid',NULL,'2026-02-17 20:48:55','confirmed',NULL,NULL,NULL,NULL,'2026-02-17 12:48:42','2026-02-17 12:48:55',NULL,NULL,'cs_e7b66d60810a88bc9358c83f',NULL),(36,9,6,'Lechon Paksiw (1 kg)',3,350.00,1050.00,'0000-00-00','0000-00-00',NULL,NULL,'123, Macario Dacon, General Mariano Alvarez, Cavite','delivery',NULL,'full_payment',1050.00,0.00,'pending','paid',NULL,'2026-02-17 22:02:03','confirmed',NULL,NULL,NULL,NULL,'2026-02-17 14:01:53','2026-02-17 14:02:03',NULL,NULL,'cs_3297a59dbaccd717444550b6',NULL),(37,9,1,'Whole Lechon (10-12 kg)',3,3500.00,10500.00,'0000-00-00','0000-00-00',NULL,NULL,'123, Poblacion 1C, Carmona, Cavite','delivery',NULL,'full_payment',10500.00,0.00,'pending','paid',NULL,'2026-02-17 22:06:53','confirmed',NULL,NULL,NULL,NULL,'2026-02-17 14:06:39','2026-02-17 14:06:53',NULL,NULL,'cs_843aa8e379a3e115966880cb',NULL),(38,9,3,'Half Lechon (5-6 kg)',2,1900.00,3800.00,'0000-00-00','0000-00-00',NULL,NULL,'123, Taywanak, Alfonso, Cavite','delivery',NULL,'full_payment',3800.00,0.00,'pending','paid',NULL,'2026-02-17 22:10:27','confirmed',NULL,NULL,NULL,NULL,'2026-02-17 14:10:17','2026-02-17 14:10:27',NULL,NULL,'cs_b3312ae1196d85d3d9855aa0',NULL),(39,9,1,'Whole Lechon (10-12 kg)',2,3500.00,7000.00,'0000-00-00','2026-02-19','6:00 PM',NULL,'123, Koronel Jose P. Elises, General Mariano Alvarez, Cavite','delivery',NULL,'full_payment',7000.00,0.00,'pending','paid',NULL,'2026-02-17 22:27:38','confirmed',NULL,NULL,NULL,NULL,'2026-02-17 14:27:29','2026-02-17 14:27:38',NULL,NULL,'cs_722a78fdc64e96f11ce48758',NULL),(40,9,7,'Dinuguan (1 kg)',2,300.00,600.00,'0000-00-00','2026-02-19','12:00 PM',NULL,'123, Taywanak, Alfonso, Cavite','delivery',NULL,'full_payment',600.00,0.00,'pending','paid',NULL,'2026-02-17 22:45:31','completed',NULL,NULL,NULL,'','2026-02-17 14:45:20','2026-02-17 15:01:52',NULL,NULL,'cs_938fc6d6594762bcbaeeb025',NULL),(41,9,1,'Whole Lechon (10-12 kg)',1,3500.00,3500.00,'0000-00-00','2026-02-19','7:00 PM',NULL,'123, Upli, Alfonso, Cavite','delivery',NULL,'full_payment',3500.00,0.00,'pending','paid',NULL,'2026-02-17 22:54:07','cancelled','kjh','2026-02-24 20:41:35',NULL,NULL,'2026-02-17 14:53:57','2026-02-24 12:41:35',NULL,NULL,'cs_111ca9127574bd58e6644fc6',NULL),(42,9,4,'Whole Lechon (X-Large)',2,24900.00,49800.00,'0000-00-00','2026-03-20','12:00 PM',NULL,'san marino city, Salawag, Dasmariñas, Cavite','delivery',NULL,'downpayment',14940.00,34860.00,'paid','paid','2026-03-17 22:16:27',NULL,'pending',NULL,NULL,NULL,NULL,'2026-03-17 14:16:16','2026-03-17 14:19:54',NULL,NULL,'cs_f69dd6b756e38b250ddc3d27',NULL),(43,9,27,'Whole Lechon (Jumbo)',1,30900.00,30900.00,'0000-00-00','2026-03-18','12:00 PM',NULL,'san marino city, Salawag, Dasmariñas, Cavite','delivery',NULL,'downpayment',9270.00,21630.00,'paid','pending','2026-03-18 10:00:11',NULL,'pending',NULL,NULL,NULL,NULL,'2026-03-18 01:59:59','2026-03-18 02:00:11',NULL,NULL,'cs_d5168965c2eb60502ce00616',NULL),(44,9,4,'Whole Lechon (X-Large)',1,24900.00,24900.00,'0000-00-00','2026-03-18','6:00 PM',NULL,'san marino city, Sulsugin, Alfonso, Cavite','delivery',NULL,'full_payment',24900.00,0.00,'pending','paid',NULL,'2026-03-18 10:44:11','confirmed',NULL,NULL,NULL,NULL,'2026-03-18 02:43:57','2026-03-18 02:44:11',NULL,NULL,'cs_4b13a4790fc1c1286f4e376b',NULL);
+/*!40000 ALTER TABLE `pre_orders` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `procurement_budget_requests`
+--
+
+DROP TABLE IF EXISTS `procurement_budget_requests`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `procurement_budget_requests` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `owner_user_id` int NOT NULL,
+  `budget_date` date NOT NULL,
+  `amount_requested` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `amount_approved` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `notes` text COLLATE utf8mb4_general_ci,
+  `status` enum('pending','approved','rejected') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'pending',
+  `requested_by` int NOT NULL,
+  `approved_by` int DEFAULT NULL,
+  `approved_at` datetime DEFAULT NULL,
+  `finance_notes` text COLLATE utf8mb4_general_ci,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `procurement_budget_requests`
+--
+
+LOCK TABLES `procurement_budget_requests` WRITE;
+/*!40000 ALTER TABLE `procurement_budget_requests` DISABLE KEYS */;
+/*!40000 ALTER TABLE `procurement_budget_requests` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `product_demand_forecasts`
+--
+
+DROP TABLE IF EXISTS `product_demand_forecasts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `product_demand_forecasts` (
+  `forecast_id` int NOT NULL,
+  `product_id` int NOT NULL,
+  `forecast_date` date NOT NULL,
+  `predicted_quantity` decimal(10,2) DEFAULT NULL,
+  `predicted_revenue` decimal(10,2) DEFAULT NULL,
+  `confidence_level` decimal(5,2) DEFAULT '0.80',
+  `trend` enum('up','down','stable') COLLATE utf8mb4_unicode_ci DEFAULT 'stable',
+  `trend_strength` decimal(5,2) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `product_demand_forecasts`
+--
+
+LOCK TABLES `product_demand_forecasts` WRITE;
+/*!40000 ALTER TABLE `product_demand_forecasts` DISABLE KEYS */;
+/*!40000 ALTER TABLE `product_demand_forecasts` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `product_reviews`
+--
+
+DROP TABLE IF EXISTS `product_reviews`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `product_reviews` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `order_id` int NOT NULL,
+  `product_id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `rating` tinyint(1) NOT NULL COMMENT 'Overall rating 1-5',
+  `comment` text COLLATE utf8mb4_general_ci,
+  `seller_reply` text COLLATE utf8mb4_general_ci,
+  `seller_reply_at` datetime DEFAULT NULL,
+  `seller_reply_by` int DEFAULT NULL,
+  `is_approved` tinyint(1) NOT NULL DEFAULT '0',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_product_reviews_reply_by` (`seller_reply_by`)
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `product_reviews`
+--
+
+LOCK TABLES `product_reviews` WRITE;
+/*!40000 ALTER TABLE `product_reviews` DISABLE KEYS */;
+INSERT INTO `product_reviews` VALUES (1,79,11,9,5,'123',NULL,NULL,NULL,1,'2026-02-24 12:19:44'),(2,81,11,9,5,'asd',NULL,NULL,NULL,1,'2026-02-24 12:36:26'),(3,77,1,9,5,'sarap tol!',NULL,NULL,NULL,1,'2026-02-24 14:39:54'),(4,85,11,9,5,'',NULL,NULL,NULL,1,'2026-02-26 15:15:49'),(5,99,11,1,5,'sarapppp',NULL,NULL,NULL,1,'2026-03-17 06:52:49'),(6,102,11,9,5,'sarap',NULL,NULL,NULL,1,'2026-03-17 13:58:49'),(7,104,26,9,5,'',NULL,NULL,NULL,1,'2026-03-23 17:07:12'),(8,106,26,9,5,'',NULL,NULL,NULL,1,'2026-03-23 17:47:11'),(9,107,26,9,5,'',NULL,NULL,NULL,1,'2026-03-23 17:54:42'),(10,108,26,9,5,'',NULL,NULL,NULL,1,'2026-03-27 07:31:30'),(11,152,6,4,5,'',NULL,NULL,NULL,1,'2026-09-24 16:52:08');
+/*!40000 ALTER TABLE `product_reviews` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `product_view_events`
+--
+
+DROP TABLE IF EXISTS `product_view_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `product_view_events` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `product_id` int NOT NULL,
+  `seller_id` int DEFAULT NULL,
+  `viewer_user_id` int DEFAULT NULL,
+  `session_token` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `view_date` date NOT NULL,
+  `first_viewed_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `last_viewed_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `view_count` int NOT NULL DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_pve_product_session_day` (`product_id`,`session_token`,`view_date`),
+  KEY `idx_pve_seller_date` (`seller_id`,`view_date`),
+  KEY `idx_pve_viewer_date` (`viewer_user_id`,`view_date`),
+  KEY `idx_pve_product_date` (`product_id`,`view_date`)
+) ENGINE=InnoDB AUTO_INCREMENT=1289 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `product_view_events`
+--
+
+LOCK TABLES `product_view_events` WRITE;
+/*!40000 ALTER TABLE `product_view_events` DISABLE KEYS */;
+INSERT INTO `product_view_events` VALUES (1,28,31,4,'5d57dd4c3a14054688ca7a28895aa49f3832','2026-08-04','2026-08-04 21:23:16','2026-08-04 21:24:26',1,'2026-08-04 13:23:16','2026-08-04 13:24:26'),(2,29,31,4,'5d57dd4c3a14054688ca7a28895aa49f3832','2026-08-04','2026-08-04 21:23:16','2026-08-04 21:24:26',1,'2026-08-04 13:23:16','2026-08-04 13:24:26'),(3,30,31,4,'5d57dd4c3a14054688ca7a28895aa49f3832','2026-08-04','2026-08-04 21:23:16','2026-08-04 21:24:26',1,'2026-08-04 13:23:16','2026-08-04 13:24:26'),(19,28,31,0,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:25:29','2026-08-04 21:34:07',1,'2026-08-04 13:25:29','2026-08-04 13:34:07'),(20,29,31,0,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:25:29','2026-08-04 21:34:07',1,'2026-08-04 13:25:29','2026-08-04 13:34:07'),(21,30,31,0,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:25:29','2026-08-04 21:34:07',1,'2026-08-04 13:25:29','2026-08-04 13:34:07'),(25,31,35,0,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:27:00','2026-08-04 21:34:07',1,'2026-08-04 13:27:00','2026-08-04 13:34:07'),(26,1,1,0,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:27:17','2026-08-04 21:34:07',1,'2026-08-04 13:27:17','2026-08-04 13:34:07'),(27,2,1,0,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:27:17','2026-08-04 21:34:07',1,'2026-08-04 13:27:17','2026-08-04 13:34:07'),(28,3,1,0,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:27:17','2026-08-04 21:34:07',1,'2026-08-04 13:27:17','2026-08-04 13:34:07'),(29,4,1,0,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:27:17','2026-08-04 21:34:07',1,'2026-08-04 13:27:17','2026-08-04 13:34:07'),(30,5,1,0,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:27:17','2026-08-04 21:34:07',1,'2026-08-04 13:27:17','2026-08-04 13:34:07'),(31,6,1,0,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:27:17','2026-08-04 21:34:07',1,'2026-08-04 13:27:17','2026-08-04 13:34:07'),(32,7,1,0,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:27:17','2026-08-04 21:34:07',1,'2026-08-04 13:27:17','2026-08-04 13:34:07'),(33,8,1,0,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:27:17','2026-08-04 21:34:07',1,'2026-08-04 13:27:17','2026-08-04 13:34:07'),(34,9,1,0,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:27:17','2026-08-04 21:34:07',1,'2026-08-04 13:27:17','2026-08-04 13:34:07'),(35,11,1,0,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:27:17','2026-08-04 21:34:07',1,'2026-08-04 13:27:17','2026-08-04 13:34:07'),(36,12,1,0,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:27:17','2026-08-04 21:34:07',1,'2026-08-04 13:27:17','2026-08-04 13:34:07'),(37,13,1,0,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:27:17','2026-08-04 21:34:07',1,'2026-08-04 13:27:17','2026-08-04 13:34:07'),(38,14,1,0,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:27:17','2026-08-04 21:34:07',1,'2026-08-04 13:27:17','2026-08-04 13:34:07'),(56,21,0,18,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:33:51','2026-08-04 21:34:07',1,'2026-08-04 13:33:51','2026-08-04 13:34:07'),(57,22,0,18,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:33:51','2026-08-04 21:34:07',1,'2026-08-04 13:33:51','2026-08-04 13:34:07'),(58,23,0,18,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:33:51','2026-08-04 21:34:07',1,'2026-08-04 13:33:51','2026-08-04 13:34:07'),(59,24,0,18,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:33:51','2026-08-04 21:34:07',1,'2026-08-04 13:33:51','2026-08-04 13:34:07'),(60,25,0,18,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:33:51','2026-08-04 21:34:07',1,'2026-08-04 13:33:51','2026-08-04 13:34:07'),(61,26,0,18,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:33:51','2026-08-04 21:34:07',1,'2026-08-04 13:33:51','2026-08-04 13:34:07'),(62,27,0,18,'eab6e637e1f204ace221bb7a835c3b802bea','2026-08-04','2026-08-04 21:33:51','2026-08-04 21:34:07',1,'2026-08-04 13:33:51','2026-08-04 13:34:07'),(91,28,31,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:34:50','2026-08-04 21:38:46',1,'2026-08-04 13:34:50','2026-08-04 13:38:46'),(92,29,31,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:34:50','2026-08-04 21:38:46',1,'2026-08-04 13:34:50','2026-08-04 13:38:46'),(93,30,31,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:34:50','2026-08-04 21:38:46',1,'2026-08-04 13:34:50','2026-08-04 13:38:46'),(94,1,1,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(95,2,1,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(96,3,1,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(97,4,1,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(98,5,1,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(99,6,1,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(100,7,1,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(101,8,1,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(102,9,1,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(103,11,1,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(104,12,1,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(105,13,1,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(106,14,1,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(107,21,0,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(108,22,0,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(109,23,0,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(110,24,0,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(111,25,0,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(112,26,0,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(113,27,0,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:35',1,'2026-08-04 13:35:56','2026-08-04 13:38:35'),(117,31,35,0,'13a9f186e108b8cc0cd45ce653419303d65d','2026-08-04','2026-08-04 21:35:56','2026-08-04 21:38:44',1,'2026-08-04 13:35:56','2026-08-04 13:38:44'),(173,28,31,0,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:47:11','2026-08-04 21:52:15',1,'2026-08-04 13:47:11','2026-08-04 13:52:15'),(174,29,31,0,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:47:11','2026-08-04 21:52:15',1,'2026-08-04 13:47:11','2026-08-04 13:52:15'),(175,30,31,0,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:47:11','2026-08-04 21:52:15',1,'2026-08-04 13:47:11','2026-08-04 13:52:15'),(176,1,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:14','2026-08-04 21:52:14',1,'2026-08-04 13:52:14','2026-08-04 13:52:14'),(177,2,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:14','2026-08-04 21:52:14',1,'2026-08-04 13:52:14','2026-08-04 13:52:14'),(178,3,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:14','2026-08-04 21:52:14',1,'2026-08-04 13:52:14','2026-08-04 13:52:14'),(179,4,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:14','2026-08-04 21:52:14',1,'2026-08-04 13:52:14','2026-08-04 13:52:14'),(180,5,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:14','2026-08-04 21:52:14',1,'2026-08-04 13:52:14','2026-08-04 13:52:14'),(181,6,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:14','2026-08-04 21:52:14',1,'2026-08-04 13:52:14','2026-08-04 13:52:14'),(182,7,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:14','2026-08-04 21:52:14',1,'2026-08-04 13:52:14','2026-08-04 13:52:14'),(183,8,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:15','2026-08-04 21:52:15',1,'2026-08-04 13:52:15','2026-08-04 13:52:15'),(184,9,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:15','2026-08-04 21:52:15',1,'2026-08-04 13:52:15','2026-08-04 13:52:15'),(185,11,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:15','2026-08-04 21:52:15',1,'2026-08-04 13:52:15','2026-08-04 13:52:15'),(186,12,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:15','2026-08-04 21:52:15',1,'2026-08-04 13:52:15','2026-08-04 13:52:15'),(187,13,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:15','2026-08-04 21:52:15',1,'2026-08-04 13:52:15','2026-08-04 13:52:15'),(188,14,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:15','2026-08-04 21:52:15',1,'2026-08-04 13:52:15','2026-08-04 13:52:15'),(189,21,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:15','2026-08-04 21:52:15',1,'2026-08-04 13:52:15','2026-08-04 13:52:15'),(190,22,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:15','2026-08-04 21:52:15',1,'2026-08-04 13:52:15','2026-08-04 13:52:15'),(191,23,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:15','2026-08-04 21:52:15',1,'2026-08-04 13:52:15','2026-08-04 13:52:15'),(192,24,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:15','2026-08-04 21:52:15',1,'2026-08-04 13:52:15','2026-08-04 13:52:15'),(193,25,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:15','2026-08-04 21:52:15',1,'2026-08-04 13:52:15','2026-08-04 13:52:15'),(194,26,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:15','2026-08-04 21:52:15',1,'2026-08-04 13:52:15','2026-08-04 13:52:15'),(195,27,1,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:15','2026-08-04 21:52:15',1,'2026-08-04 13:52:15','2026-08-04 13:52:15'),(199,31,35,18,'43e3b5496b38347fa4aed5556fe644949477','2026-08-04','2026-08-04 21:52:15','2026-08-04 21:52:15',1,'2026-08-04 13:52:15','2026-08-04 13:52:15'),(200,31,35,36,'20e617ba90c1cb2e0ff30ee19b70ffe5e01e','2026-08-04','2026-08-04 22:00:23','2026-08-04 22:00:23',1,'2026-08-04 14:00:23','2026-08-04 14:00:23'),(201,28,31,36,'20e617ba90c1cb2e0ff30ee19b70ffe5e01e','2026-08-04','2026-08-04 22:00:27','2026-08-04 22:00:27',1,'2026-08-04 14:00:27','2026-08-04 14:00:27'),(202,29,31,36,'20e617ba90c1cb2e0ff30ee19b70ffe5e01e','2026-08-04','2026-08-04 22:00:27','2026-08-04 22:00:27',1,'2026-08-04 14:00:27','2026-08-04 14:00:27'),(203,30,31,36,'20e617ba90c1cb2e0ff30ee19b70ffe5e01e','2026-08-04','2026-08-04 22:00:27','2026-08-04 22:00:27',1,'2026-08-04 14:00:27','2026-08-04 14:00:27'),(204,1,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(205,2,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(206,3,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(207,4,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(208,5,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(209,6,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(210,7,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(211,8,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(212,9,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(213,11,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(214,12,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(215,13,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(216,14,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(217,21,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(218,22,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(219,23,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(220,24,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(221,25,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(222,26,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(223,27,1,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(224,28,31,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(225,29,31,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(226,30,31,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(227,31,35,36,'204e4a02d34452f20193cbd79f907d5f24b6','2026-08-04','2026-08-04 22:18:52','2026-08-04 22:31:04',1,'2026-08-04 14:18:52','2026-08-04 14:31:04'),(348,28,31,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:00:52','2026-08-05 22:47:10',1,'2026-08-05 14:00:52','2026-08-05 14:47:10'),(349,29,31,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:00:52','2026-08-05 22:47:10',1,'2026-08-05 14:00:52','2026-08-05 14:47:10'),(350,30,31,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:00:52','2026-08-05 22:47:10',1,'2026-08-05 14:00:52','2026-08-05 14:47:10'),(351,31,35,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:37:48','2026-08-05 22:47:10',1,'2026-08-05 14:37:48','2026-08-05 14:47:10'),(353,1,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(354,2,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(355,3,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(356,4,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(357,5,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(358,6,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(359,7,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(360,8,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(361,9,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(362,11,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(363,12,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(364,13,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(365,14,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(366,21,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(367,22,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(368,23,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(369,24,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(370,25,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(371,26,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(372,27,1,18,'b137a696b96277fb4968280a7168a2528760','2026-08-05','2026-08-05 22:47:10','2026-08-05 22:47:10',1,'2026-08-05 14:47:10','2026-08-05 14:47:10'),(377,1,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(378,2,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(379,3,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(380,4,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(381,5,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(382,6,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(383,7,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(384,8,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(385,9,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(386,11,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(387,12,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(388,13,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(389,14,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(390,21,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(391,22,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(392,23,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(393,24,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(394,25,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(395,26,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(396,27,1,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(397,28,31,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(398,29,31,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(399,30,31,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 17:40:40',1,'2026-08-06 09:39:13','2026-08-06 09:40:40'),(400,31,35,18,'abf22db6221af576d10c507da35d08ab6e14','2026-08-06','2026-08-06 17:39:13','2026-08-06 18:18:05',1,'2026-08-06 09:39:13','2026-08-06 10:18:05'),(428,28,31,0,'4b2a45b730b8e2ded5d41bdaa18856f93413','2026-08-06','2026-08-06 19:10:30','2026-08-06 19:10:30',1,'2026-08-06 11:10:30','2026-08-06 11:10:30'),(429,29,31,0,'4b2a45b730b8e2ded5d41bdaa18856f93413','2026-08-06','2026-08-06 19:10:30','2026-08-06 19:10:30',1,'2026-08-06 11:10:30','2026-08-06 11:10:30'),(430,30,31,0,'4b2a45b730b8e2ded5d41bdaa18856f93413','2026-08-06','2026-08-06 19:10:30','2026-08-06 19:10:30',1,'2026-08-06 11:10:30','2026-08-06 11:10:30'),(431,31,35,0,'4b2a45b730b8e2ded5d41bdaa18856f93413','2026-08-06','2026-08-06 19:10:35','2026-08-06 19:10:35',1,'2026-08-06 11:10:35','2026-08-06 11:10:35'),(432,31,35,0,'815ac996b9bd1f26ec48a980df6aa111fa3a','2026-08-06','2026-08-06 19:48:33','2026-08-06 19:48:33',1,'2026-08-06 11:48:33','2026-08-06 11:48:33'),(433,1,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(434,2,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(435,3,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(436,4,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(437,5,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(438,6,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(439,7,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(440,8,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(441,9,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(442,11,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(443,12,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(444,13,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(445,14,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(446,21,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(447,22,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(448,23,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(449,24,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(450,25,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(451,26,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(452,27,1,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(453,28,31,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(454,29,31,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(455,30,31,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(456,31,35,18,'11ad61607b7df7945390f4e6180a8971dc87','2026-08-06','2026-08-06 19:54:39','2026-08-06 20:02:47',1,'2026-08-06 11:54:39','2026-08-06 12:02:47'),(535,1,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(536,2,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(537,3,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(538,4,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(539,5,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(540,6,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(541,7,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(542,8,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(543,9,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(544,11,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(545,12,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(546,13,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(547,14,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(548,21,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(549,22,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(550,23,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(551,24,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(552,25,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(553,26,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(554,27,1,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(555,28,31,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(556,29,31,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(557,30,31,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(558,31,35,0,'905422e14752a5bd388559f1c0c663340454','2026-08-06','2026-08-06 22:33:23','2026-08-06 22:33:23',1,'2026-08-06 14:33:23','2026-08-06 14:33:23'),(559,1,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(560,2,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(561,3,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(562,4,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(563,5,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(564,6,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(565,7,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(566,8,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(567,9,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(568,11,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(569,12,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(570,13,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(571,14,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(572,21,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(573,22,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(574,23,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(575,24,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(576,25,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(577,26,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(578,27,1,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:38',1,'2026-08-12 08:58:39','2026-08-12 09:04:38'),(579,28,31,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:56',1,'2026-08-12 08:58:39','2026-08-12 09:04:56'),(580,29,31,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:56',1,'2026-08-12 08:58:39','2026-08-12 09:04:56'),(581,30,31,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:56',1,'2026-08-12 08:58:39','2026-08-12 09:04:56'),(582,31,35,0,'340342b961474d9868b546983da3fe47eb24','2026-08-12','2026-08-12 16:58:39','2026-08-12 17:04:54',1,'2026-08-12 08:58:39','2026-08-12 09:04:54'),(611,1,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(612,2,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(613,3,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(614,4,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(615,5,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(616,6,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(617,7,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(618,8,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(619,9,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(620,11,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(621,12,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(622,13,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(623,14,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(624,21,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(625,22,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(626,23,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(627,24,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(628,25,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(629,26,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(630,27,1,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(631,28,31,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(632,29,31,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(633,30,31,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(634,31,35,0,'a9adda50778d749abf843e0befc0e9ea4560','2026-08-13','2026-08-13 11:54:20','2026-08-13 11:55:16',1,'2026-08-13 03:54:20','2026-08-13 03:55:16'),(662,1,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(663,2,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(664,3,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(665,4,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(666,5,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(667,6,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(668,7,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(669,8,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(670,9,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(671,11,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(672,12,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(673,13,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(674,14,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(675,21,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(676,22,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(677,23,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(678,24,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(679,25,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(680,26,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(681,27,1,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(682,28,31,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:29:38',1,'2026-08-25 16:19:57','2026-08-25 16:29:38'),(683,29,31,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:29:38',1,'2026-08-25 16:19:57','2026-08-25 16:29:38'),(684,30,31,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:29:38',1,'2026-08-25 16:19:57','2026-08-25 16:29:38'),(685,31,35,0,'65b668849b046bfe2385b01b0fc88ff9b330','2026-08-26','2026-08-26 00:19:57','2026-08-26 00:26:08',1,'2026-08-25 16:19:57','2026-08-25 16:26:08'),(737,1,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(738,2,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(739,3,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(740,4,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(741,5,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(742,6,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(743,7,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(744,8,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(745,9,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(746,11,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(747,12,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(748,13,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(749,14,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(750,21,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(751,22,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(752,23,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(753,24,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(754,25,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(755,26,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(756,27,1,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(757,28,31,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(758,29,31,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(759,30,31,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(760,31,35,0,'04e68ae52f6c778df03abcdb3f4aaf65edcf','2026-08-27','2026-08-27 11:28:34','2026-08-27 12:41:56',1,'2026-08-27 03:28:34','2026-08-27 04:41:56'),(959,31,35,0,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:48:02','2026-09-16 15:48:02',1,'2026-09-16 07:48:02','2026-09-16 07:48:02'),(960,28,31,0,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:48:13','2026-09-16 15:49:33',1,'2026-09-16 07:48:13','2026-09-16 07:49:33'),(961,29,31,0,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:48:13','2026-09-16 15:49:33',1,'2026-09-16 07:48:13','2026-09-16 07:49:33'),(962,30,31,0,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:48:13','2026-09-16 15:49:33',1,'2026-09-16 07:48:13','2026-09-16 07:49:33'),(969,1,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(970,2,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(971,3,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(972,4,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(973,5,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(974,6,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(975,7,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(976,8,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(977,9,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(978,11,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(979,12,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(980,13,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(981,14,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(982,21,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(983,22,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(984,23,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(985,24,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(986,25,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(987,26,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(988,27,1,18,'a6058f2977346cf8fa50701d26dfd382c789','2026-09-16','2026-09-16 15:54:09','2026-09-16 15:54:09',1,'2026-09-16 07:54:09','2026-09-16 07:54:09'),(989,28,31,18,'dbe16a07718501f166539ab9b05064af8637','2026-09-16','2026-09-16 16:37:45','2026-09-16 17:13:58',1,'2026-09-16 08:37:45','2026-09-16 09:13:58'),(990,29,31,18,'dbe16a07718501f166539ab9b05064af8637','2026-09-16','2026-09-16 16:37:45','2026-09-16 17:13:58',1,'2026-09-16 08:37:45','2026-09-16 09:13:58'),(991,30,31,18,'dbe16a07718501f166539ab9b05064af8637','2026-09-16','2026-09-16 16:37:45','2026-09-16 17:13:58',1,'2026-09-16 08:37:45','2026-09-16 09:13:58'),(1001,1,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1002,2,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1003,3,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1004,4,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1005,5,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1006,6,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1007,7,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1008,8,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1009,9,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1010,11,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1011,12,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1012,13,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1013,14,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1014,21,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1015,22,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1016,23,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1017,24,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1018,25,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1019,26,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1020,27,1,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 20:56:59','2026-09-16 21:48:59',1,'2026-09-16 12:56:59','2026-09-16 13:48:59'),(1141,31,35,18,'8e898efab450492e77db44b38d965f1e2d74','2026-09-16','2026-09-16 21:49:12','2026-09-16 21:49:12',1,'2026-09-16 13:49:12','2026-09-16 13:49:12'),(1142,1,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1143,2,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1144,3,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1145,4,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1146,5,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1147,6,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1148,7,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1149,8,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1150,9,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1151,11,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1152,12,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1153,13,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1154,14,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1155,21,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1156,22,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1157,23,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1158,24,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1159,25,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1160,26,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1161,27,1,0,'db80772f29f1972723b6f1ef8975a977aee7','2026-09-16','2026-09-16 22:48:08','2026-09-16 22:48:08',1,'2026-09-16 14:48:08','2026-09-16 14:48:08'),(1162,31,35,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:02','2026-09-24 17:51:02',1,'2026-09-24 09:51:02','2026-09-24 09:51:02'),(1163,28,31,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:08','2026-09-24 17:51:08',1,'2026-09-24 09:51:08','2026-09-24 09:51:08'),(1164,29,31,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:08','2026-09-24 17:51:08',1,'2026-09-24 09:51:08','2026-09-24 09:51:08'),(1165,30,31,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:08','2026-09-24 17:51:08',1,'2026-09-24 09:51:08','2026-09-24 09:51:08'),(1166,1,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:13','2026-09-24 17:51:13',1,'2026-09-24 09:51:13','2026-09-24 09:51:13'),(1167,2,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:13','2026-09-24 17:51:13',1,'2026-09-24 09:51:13','2026-09-24 09:51:13'),(1168,3,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:13','2026-09-24 17:51:13',1,'2026-09-24 09:51:13','2026-09-24 09:51:13'),(1169,4,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:13','2026-09-24 17:51:13',1,'2026-09-24 09:51:13','2026-09-24 09:51:13'),(1170,5,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:13','2026-09-24 17:51:13',1,'2026-09-24 09:51:13','2026-09-24 09:51:13'),(1171,6,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:13','2026-09-24 17:51:13',1,'2026-09-24 09:51:13','2026-09-24 09:51:13'),(1172,7,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:13','2026-09-24 17:51:13',1,'2026-09-24 09:51:13','2026-09-24 09:51:13'),(1173,8,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:13','2026-09-24 17:51:13',1,'2026-09-24 09:51:13','2026-09-24 09:51:13'),(1174,9,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:13','2026-09-24 17:51:13',1,'2026-09-24 09:51:13','2026-09-24 09:51:13'),(1175,11,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:13','2026-09-24 17:51:13',1,'2026-09-24 09:51:13','2026-09-24 09:51:13'),(1176,12,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:13','2026-09-24 17:51:13',1,'2026-09-24 09:51:13','2026-09-24 09:51:13'),(1177,13,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:13','2026-09-24 17:51:13',1,'2026-09-24 09:51:13','2026-09-24 09:51:13'),(1178,14,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:13','2026-09-24 17:51:13',1,'2026-09-24 09:51:13','2026-09-24 09:51:13'),(1179,21,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:13','2026-09-24 17:51:13',1,'2026-09-24 09:51:13','2026-09-24 09:51:13'),(1180,22,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:13','2026-09-24 17:51:13',1,'2026-09-24 09:51:13','2026-09-24 09:51:13'),(1181,23,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:13','2026-09-24 17:51:13',1,'2026-09-24 09:51:13','2026-09-24 09:51:13'),(1182,24,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:14','2026-09-24 17:51:14',1,'2026-09-24 09:51:14','2026-09-24 09:51:14'),(1183,25,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:14','2026-09-24 17:51:14',1,'2026-09-24 09:51:14','2026-09-24 09:51:14'),(1184,26,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:14','2026-09-24 17:51:14',1,'2026-09-24 09:51:14','2026-09-24 09:51:14'),(1185,27,1,8,'89f0ed5711dfd272ee07b0483dc3b1338086','2026-09-24','2026-09-24 17:51:14','2026-09-24 17:51:14',1,'2026-09-24 09:51:14','2026-09-24 09:51:14'),(1186,1,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1187,2,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1188,3,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1189,4,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1190,5,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1191,6,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1192,7,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1193,8,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1194,9,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1195,11,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1196,12,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1197,13,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1198,14,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1199,21,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1200,22,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1201,23,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1202,24,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1203,25,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1204,26,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1205,27,1,8,'4e50d5c796cac39dbd64e826bb1d4d87eb59','2026-09-24','2026-09-24 17:54:38','2026-09-24 17:54:38',1,'2026-09-24 09:54:38','2026-09-24 09:54:38'),(1206,31,35,0,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:23:12','2026-09-24 23:25:41',1,'2026-09-24 15:23:12','2026-09-24 15:25:41'),(1209,1,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1210,2,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1211,3,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1212,4,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1213,5,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1214,6,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1215,7,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1216,8,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1217,9,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1218,11,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1219,12,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1220,13,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1221,14,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1222,21,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1223,22,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1224,23,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1225,24,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1226,25,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1227,26,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1228,27,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-24','2026-09-24 23:25:57','2026-09-24 23:44:47',1,'2026-09-24 15:25:57','2026-09-24 15:44:47'),(1249,1,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1250,2,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1251,3,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1252,4,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1253,5,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1254,6,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1255,7,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1256,8,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1257,9,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1258,11,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1259,12,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1260,13,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1261,14,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1262,21,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1263,22,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1264,23,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1265,24,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1266,25,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1267,26,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40'),(1268,27,1,4,'719153f4b15f225e219dba03e1b9288c515a','2026-09-25','2026-09-25 00:19:55','2026-09-25 00:49:40',1,'2026-09-24 16:19:55','2026-09-24 16:49:40');
+/*!40000 ALTER TABLE `product_view_events` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `products`
+--
+
+DROP TABLE IF EXISTS `products`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `products` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `product_id` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
+  `seller_id` int DEFAULT NULL,
+  `name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `description` text COLLATE utf8mb4_general_ci,
+  `price` decimal(10,2) NOT NULL,
+  `stock` int NOT NULL DEFAULT '0' COMMENT 'Master stock count',
+  `labor_cost` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `category` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `image` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `sizes` text COLLATE utf8mb4_general_ci,
+  `addons` text COLLATE utf8mb4_general_ci,
+  `weight_info` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `pax_info` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `lead_time_hours` int NOT NULL DEFAULT '24' COMMENT 'Minimum hours notice required for pre-order',
+  `is_active` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `is_archived` tinyint(1) DEFAULT '0',
+  `avg_rating` decimal(3,2) NOT NULL DEFAULT '0.00',
+  `review_count` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  KEY `seller_id_idx` (`seller_id`),
+  CONSTRAINT `fk_products_seller` FOREIGN KEY (`seller_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=32 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `products`
+--
+
+LOCK TABLES `products` WRITE;
+/*!40000 ALTER TABLE `products` DISABLE KEYS */;
+INSERT INTO `products` VALUES (1,'wl-001',1,'Whole Lechon (Large)','Perfect for large gatherings and celebrations. Serves 50+ people.',21900.00,10,0.00,'Whole Lechon','uploads/products/1773731101_69b8fd1d0eb94.jpg',NULL,NULL,'16-20 kg','50+ pax',24,1,'2026-01-15 08:42:00','2026-03-25 14:23:05',0,5.00,1),(2,'wl-002',1,'Whole Lechon (Medium)','',17900.00,10,5.00,'Whole Lechon','uploads/products/1773731348_69b8fe14369af.jpg',NULL,NULL,'12-15 kg','30-50 pax',24,1,'2026-01-15 08:42:00','2026-03-25 14:23:05',0,0.00,0),(3,'lp-001',1,'Whole Lechon (Small)','',14900.00,10,0.00,'Whole Lechon','uploads/products/1773731393_69b8fe4196f72.jpg',NULL,NULL,'8-11 kg','20-25 pax',24,1,'2026-01-15 08:42:00','2026-03-25 14:23:05',0,0.00,0),(4,'lp-002',1,'Whole Lechon (X-Large)','',24900.00,10,0.00,'Whole Lechon','uploads/products/1773731442_69b8fe725a855.jpg',NULL,NULL,'21-25 kg','50+ pax',24,1,'2026-01-15 08:42:00','2026-03-25 14:23:05',0,0.00,0),(5,'lp-003',1,'Lechon Belly (1kg)','Crispy skin with tender meat. Serves 4-6 people.',650.00,10,0.00,'Lechon Belly','uploads/products/1773731574_69b8fef6a5cc3.jpg',NULL,NULL,'1 kg','4-6 pax',24,1,'2026-01-15 08:42:00','2026-03-25 14:23:05',0,0.00,0),(6,'od-001',1,'Lechon Paksiw (Tray)','Savory lechon cooked in vinegar and spices.',998.00,10,0.00,'Platters','uploads/products/1773731700_69b8ff743fde7.jpg',NULL,NULL,'1-2 kg','8-10 pax',24,1,'2026-01-15 08:42:00','2026-09-24 16:52:08',0,5.00,1),(7,'od-002',1,'Lechon Dinuguan (Tray)','Rich pork blood stew with vinegar and chili.',998.00,10,0.00,'Platters','uploads/products/1773731748_69b8ffa47a3a5.jpg',NULL,NULL,'1-2 kg','8-10 pax',24,1,'2026-01-15 08:42:00','2026-03-25 14:23:05',0,0.00,0),(8,'od-003',1,'Lechon Sisig (Tray)','Sizzling chopped lechon with onions and chili.',898.00,10,0.00,'Platters','uploads/products/1773731810_69b8ffe20dddb.jpg',NULL,NULL,'1kg','8-10 pax',24,1,'2026-01-15 08:42:00','2026-03-25 14:23:05',0,0.00,0),(9,'sd-001',1,'Rice','Steamed Rice.',35.00,10,0.00,'Rice Meals','uploads/products/1773731903_69b9003f4cded.jpg',NULL,NULL,'150g','1 pax',24,1,'2026-01-15 08:42:00','2026-03-25 14:23:05',0,0.00,0),(10,'sd-002',1,'Plain Rice (1 kg)','Steamed white rice.',100.00,0,0.00,'Rice & Side Dishes','rice.jpg',NULL,NULL,'1 kg','Serves 4-6 people',24,0,'2026-01-15 08:42:00','2026-03-17 07:18:30',1,0.00,0),(11,'sd-003',1,'Atchara','Pickled green papaya side dish.',120.00,10,5.00,'Sides','uploads/products/1773731950_69b9006e2e472.jpg',NULL,NULL,'200g','2-3 pax',24,1,'2026-01-15 08:42:00','2026-03-25 14:23:05',0,5.00,5),(12,'ex-001',1,'Lechon Sauce (250ml)','Our signature sweet and savory liver sauce.',50.00,10,0.00,'Sides','uploads/products/1773732052_69b900d4cab20.jpg',NULL,NULL,'250ml','',24,1,'2026-01-15 08:42:00','2026-03-25 14:23:05',0,0.00,0),(13,'ex-002',1,'Soy Sauce with Calamansi','Perfect dipping sauce for lechon.',30.00,10,0.00,'Sides','uploads/products/1773732069_69b900e50a3d4.jpg',NULL,NULL,'250ml','',24,1,'2026-01-15 08:42:00','2026-03-25 14:23:05',0,0.00,0),(14,'',1,'Lechon Kawali (Tray)','sarap to promise.',850.00,10,0.00,'Whole Lechon','uploads/products/1773730979_69b8fca383ac6.jpg',NULL,NULL,'1kg','4-6 pax',24,1,'2026-01-22 16:16:49','2026-03-25 14:23:05',0,0.00,0),(17,'prod-9ae2e9',1,'Lechon Leg','asdasd asder',240.00,0,0.00,'Pork','uploads/products/1769409384_69770b6876b4d.png',NULL,NULL,'2kg','2',24,0,'2026-01-26 06:36:24','2026-02-01 11:55:42',1,0.00,0),(18,'prod-8dc623',10,'Lydia Pork Chao','asdasd',240.00,0,0.00,'Pork','uploads/products/1769411913_697715493b093.png',NULL,NULL,'2kg','2',24,0,'2026-01-26 07:18:33','2026-02-01 11:55:09',1,0.00,0),(19,'prod-70ff44',11,'Linda Lechon tie','1pc of Lechon tie with Rice',160.00,0,0.00,'Tie','uploads/products/1769515327_6978a93fe72cf.png',NULL,NULL,'1','1',24,0,'2026-01-27 12:02:07','2026-02-01 11:55:37',1,0.00,0),(20,'prod-7f209e',1,'Lechong Kawali','Masarap to pramis.',200.00,0,0.00,'Fried','uploads/products/1769945320_697f38e89482e.png',NULL,NULL,'100g','Serves 1-2 persons',24,0,'2026-02-01 11:28:40','2026-08-04 13:36:30',1,0.00,0),(21,'prod-1b8198',1,'Lechon Panis (Tray)','Sarap to promise.',850.00,10,0.00,'Whole Lechon','uploads/products/1773730928_69b8fc70a8a4a.jpg',NULL,NULL,'1kg','4-6 pax',24,1,'2026-02-26 15:14:44','2026-08-04 13:36:30',0,0.00,0),(22,'prod-584793',1,'Lechon Belly (500g)','',550.00,10,0.00,'Lechon Belly','uploads/products/1773731604_69b8ff1499f12.jpg',NULL,NULL,'500g','2-3 pax',24,1,'2026-03-17 07:13:24','2026-08-04 13:36:30',0,0.00,0),(23,'prod-9690d7',1,'Leche Plan','',150.00,10,0.00,'Desserts','uploads/products/1773732149_69b90135798b7.jpg',NULL,NULL,'250g','2-3 pax',24,1,'2026-03-17 07:22:29','2026-08-04 13:36:30',0,0.00,0),(24,'prod-477852',1,'Graham Mango','',150.00,10,0.00,'Desserts','uploads/products/1773732179_69b90153be426.jpg',NULL,NULL,'100g','2-3 pax',24,1,'2026-03-17 07:22:59','2026-08-04 13:36:30',0,0.00,0),(25,'prod-042df3',1,'Bananaqtie','',50.00,10,0.00,'Desserts','uploads/products/1773732211_69b90173be8df.jpg',NULL,NULL,'100g','2-3 pax',24,1,'2026-03-17 07:23:31','2026-08-04 13:36:30',0,0.00,0),(26,'prod-1386b2',1,'Cochinillo','',10900.00,10,0.00,'Whole Lechon','uploads/products/1773732340_69b901f4980cc.jpg',NULL,NULL,'2-3 kg','8-10 pax',24,1,'2026-03-17 07:25:40','2026-08-04 13:36:30',0,5.00,4),(27,'prod-0aed6c',1,'Whole Lechon (Jumbo)','',30900.00,10,0.00,'Whole Lechon','uploads/products/1773732387_69b90223c584c.jpg',NULL,NULL,'26-30 kg','50+ pax',24,1,'2026-03-17 07:26:27','2026-08-04 13:36:30',0,0.00,0),(28,'prod-beb0d2',31,'Lechon Panis','asd',100.00,10,0.00,'lechon parts','uploads/products/1774595707_69c62e7b4270e.png',NULL,NULL,'10-12 kg','1',24,1,'2026-03-27 07:15:07','2026-03-27 07:15:07',0,0.00,0),(29,'prod-2904a3',31,'Lechon Panis','asdasd',10.00,0,0.00,'Platters','uploads/products/1774596528_69c631b091c44.jpg',NULL,NULL,'10-12 kg','2-3 pax',24,1,'2026-03-27 07:28:48','2026-03-27 07:28:48',0,0.00,0),(30,'prod-aa74be',31,'Lechon Paksiw','asd',500.00,0,0.00,'Platters','uploads/products/1774605199_69c6538f9fe99.jpg',NULL,NULL,'500g','2-3 pax',24,1,'2026-03-27 09:53:19','2026-04-10 08:38:48',0,0.00,0),(31,'prod-1438a2',35,'ely kain tae','sarap!',16000.00,0,0.00,'Whole Lechon','uploads/products/1774949619_69cb94f301d52.jpg',NULL,NULL,'10-12 kg','10-15 pax',24,1,'2026-03-31 09:33:39','2026-03-31 09:33:39',0,0.00,0);
+/*!40000 ALTER TABLE `products` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `proof_of_delivery`
+--
+
+DROP TABLE IF EXISTS `proof_of_delivery`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `proof_of_delivery` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `tracking_id` int NOT NULL,
+  `order_id` int NOT NULL,
+  `driver_id` int NOT NULL,
+  `photo_path` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `signature_path` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `location_latitude` decimal(10,8) DEFAULT NULL,
+  `location_longitude` decimal(11,8) DEFAULT NULL,
+  `delivery_condition` varchar(50) COLLATE utf8mb4_general_ci DEFAULT 'good',
+  `delivery_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `proof_of_delivery`
+--
+
+LOCK TABLES `proof_of_delivery` WRITE;
+/*!40000 ALTER TABLE `proof_of_delivery` DISABLE KEYS */;
+INSERT INTO `proof_of_delivery` VALUES (1,4,99,18,'proof_of_delivery/POD_ORD-20260317-69B8EA7_eed154542951afbd8eab27b3d9628b5f.jpg','proof_of_delivery/SIG_99_326ebd5da48a4166c162d1de20525c8a.png',14.32470875,120.98059100,'good','2026-03-17 07:30:03'),(2,5,100,18,'proof_of_delivery/POD_ORD-20260317-69B9049_5a87fa2fdc8ba8c05fc1702160473ca8.jpg','proof_of_delivery/SIG_100_bc6c331d45ad1135059bab9dccbeaa8b.png',14.32470875,120.98059100,'good','2026-03-17 13:23:10'),(3,6,101,18,'proof_of_delivery/POD_ORD-20260317-69B958F_fc0ea574e74fb98dde2b4142489da3a2.jpg','proof_of_delivery/SIG_101_d0d4ab947959f53a061c47aff0848c35.png',14.32477650,120.98059100,'good','2026-03-17 13:38:24'),(4,7,102,19,'proof_of_delivery/POD_ORD-20260317-69B95DB_2dee74a68b354746aeb9bf27086c9d15.jpg','proof_of_delivery/SIG_102_be808fc56da1f7584b62ae794c579e36.png',14.32478267,120.98060014,'good','2026-03-17 13:58:33'),(5,8,104,19,'proof_of_delivery/POD_ORD-20260324-69C1728_df42289d9a98a2b5c7b06d920ed63c0b.jpg','proof_of_delivery/SIG_104_7bbfbf9e9feca90f1daf765dc8487381.png',14.32477625,120.98059450,'good','2026-03-23 17:05:37'),(6,10,106,19,'proof_of_delivery/POD_ORD-20260324-69C17C1_42c18f08828197dcf44819f98eb2f523.jpg','proof_of_delivery/SIG_106_19d7ff1306c545505fff5d6c5ec1dc2b.png',14.32477600,120.98059800,'good','2026-03-23 17:46:54'),(7,11,107,19,'proof_of_delivery/POD_ORD-20260324-69C17DF_37b38310fce4eab558d41c04847e8799.jpg','proof_of_delivery/SIG_107_5d3556f8874d445d0e066613be4ac4f2.png',14.32477600,120.98059800,'good','2026-03-23 17:54:35'),(8,23,143,11,'proof_of_delivery/POD_ORD-20260826-1E51E9_a8b9fee1d6971f8e72ac128a74042a99.png','proof_of_delivery/SIG_143_ad9ee65614b65cb35dbf6f753804a1ef.png',14.32473526,120.98055876,'good','2026-08-25 16:35:15'),(9,38,66,5,'uploads/proof_of_delivery/POD_66_1790262229_f35ccc2840.png',NULL,14.32470550,120.98057050,'good','2026-09-24 15:03:49'),(10,39,150,5,'uploads/proof_of_delivery/POD_150_1790263707_019e56ae20.jpg',NULL,14.32470550,120.98057050,'good','2026-09-24 15:28:27'),(11,37,64,5,'uploads/proof_of_delivery/POD_64_1790265174_dd90d66ab5.jpg',NULL,14.32470550,120.98057050,'good','2026-09-24 15:52:54'),(12,41,152,5,'uploads/proof_of_delivery/POD_152_1790268668_e5d1cfe26a.jpg',NULL,14.32470550,120.98057050,'good','2026-09-24 16:51:08');
+/*!40000 ALTER TABLE `proof_of_delivery` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `purchase_order_items`
+--
+
+DROP TABLE IF EXISTS `purchase_order_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `purchase_order_items` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `purchase_order_id` int NOT NULL,
+  `material_id` int NOT NULL,
+  `quantity_ordered` decimal(10,2) NOT NULL,
+  `quantity_received` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `unit_cost` decimal(10,2) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `purchase_order_items`
+--
+
+LOCK TABLES `purchase_order_items` WRITE;
+/*!40000 ALTER TABLE `purchase_order_items` DISABLE KEYS */;
+INSERT INTO `purchase_order_items` VALUES (1,1,3,50.00,0.00,10.00),(2,2,3,5.00,0.00,0.00),(3,2,3,2.00,0.00,0.00);
+/*!40000 ALTER TABLE `purchase_order_items` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `purchase_orders`
+--
+
+DROP TABLE IF EXISTS `purchase_orders`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `purchase_orders` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `po_number` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `supplier_id` int DEFAULT NULL,
+  `order_date` date NOT NULL,
+  `expected_delivery_date` date DEFAULT NULL,
+  `total_amount` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `status` enum('draft','ordered','partially_received','completed','cancelled') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'draft',
+  `notes` text COLLATE utf8mb4_general_ci,
+  `created_by` int DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `pr_id` int DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `purchase_orders`
+--
+
+LOCK TABLES `purchase_orders` WRITE;
+/*!40000 ALTER TABLE `purchase_orders` DISABLE KEYS */;
+INSERT INTO `purchase_orders` VALUES (1,'PO-20260226-D591',1,'2026-02-26','2026-02-27',500.00,'partially_received','asdasd',9,'2026-02-26 14:41:16',NULL),(2,'PO-20260226-F13F',1,'2026-02-26',NULL,0.00,'ordered','',9,'2026-02-26 15:01:53',1);
+/*!40000 ALTER TABLE `purchase_orders` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `purchase_requisition_items`
+--
+
+DROP TABLE IF EXISTS `purchase_requisition_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `purchase_requisition_items` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `pr_id` int NOT NULL,
+  `material_id` int NOT NULL,
+  `quantity_requested` decimal(10,2) NOT NULL,
+  `estimated_cost` decimal(10,2) DEFAULT '0.00',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `purchase_requisition_items`
+--
+
+LOCK TABLES `purchase_requisition_items` WRITE;
+/*!40000 ALTER TABLE `purchase_requisition_items` DISABLE KEYS */;
+INSERT INTO `purchase_requisition_items` VALUES (1,1,3,5.00,0.00),(2,1,3,2.00,0.00),(3,2,3,1000.00,0.00);
+/*!40000 ALTER TABLE `purchase_requisition_items` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `purchase_requisitions`
+--
+
+DROP TABLE IF EXISTS `purchase_requisitions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `purchase_requisitions` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `pr_number` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `requested_by` int NOT NULL,
+  `request_date` date NOT NULL,
+  `status` enum('pending','approved','rejected','po_created') COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `approved_by` int DEFAULT NULL,
+  `approval_date` datetime DEFAULT NULL,
+  `notes` text COLLATE utf8mb4_general_ci,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `purchase_requisitions`
+--
+
+LOCK TABLES `purchase_requisitions` WRITE;
+/*!40000 ALTER TABLE `purchase_requisitions` DISABLE KEYS */;
+INSERT INTO `purchase_requisitions` VALUES (1,'PR-20260226-C3D9',9,'2026-02-26','po_created',9,'2026-02-26 23:01:42','asd','2026-02-26 15:00:07'),(2,'PR-20260327-5277',9,'2026-03-27','approved',9,'2026-03-27 15:48:45','','2026-03-27 07:48:41');
+/*!40000 ALTER TABLE `purchase_requisitions` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `refunds`
+--
+
+DROP TABLE IF EXISTS `refunds`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `refunds` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `cancellation_id` bigint unsigned NOT NULL,
+  `refund_amount` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `currency` char(3) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PHP',
+  `refund_status` enum('Refund Pending','Refund Approved','Refund Rejected','Refund Completed') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Refund Pending',
+  `computed_rule` enum('FULL','PARTIAL','NONE') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `percentage` decimal(5,2) DEFAULT NULL,
+  `processed_by` bigint unsigned DEFAULT NULL,
+  `processed_date` datetime DEFAULT NULL,
+  `remarks` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `refund_reason` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `customer_evidence_path` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `payout_channel` varchar(40) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `payout_reference` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `payout_account_name` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `payout_account_masked` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `payout_proof` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `payout_finance_signature` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `payout_sent_at` datetime DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `refunds_reason` text COLLATE utf8mb4_unicode_ci,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `refunds`
+--
+
+LOCK TABLES `refunds` WRITE;
+/*!40000 ALTER TABLE `refunds` DISABLE KEYS */;
+INSERT INTO `refunds` VALUES (1,1,120.00,'PHP','Refund Pending',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-02-24 13:44:59','2026-02-24 13:44:59',NULL),(2,2,120.00,'PHP','Refund Pending',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-02-24 13:45:08','2026-02-24 13:45:08',NULL),(3,3,120.00,'PHP','Refund Pending',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-02-24 13:45:23','2026-02-24 13:45:23',NULL),(4,4,1050.00,'PHP','Refund Pending',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-02-24 13:45:44','2026-02-24 13:45:44',NULL),(5,5,3920.00,'PHP','Refund Pending',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-02-24 13:48:25','2026-02-24 13:48:25',NULL),(6,6,3920.00,'PHP','Refund Approved',NULL,NULL,9,'2026-02-24 23:12:41',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-02-24 14:08:27','2026-02-24 15:12:41',NULL),(7,7,120.00,'PHP','Refund Pending',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-02-24 14:22:21','2026-02-24 14:22:21',NULL),(8,8,120.00,'PHP','Refund Pending',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-02-24 14:22:25','2026-02-24 14:22:25',NULL),(9,9,120.00,'PHP','Refund Pending',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-02-24 14:36:40','2026-02-24 14:36:40',NULL),(10,10,120.00,'PHP','Refund Pending',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-02-24 14:36:44','2026-02-24 14:36:44',NULL),(11,11,120.00,'PHP','Refund Pending',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-02-24 14:37:12','2026-02-24 14:37:12',NULL),(12,12,120.00,'PHP','Refund Rejected',NULL,NULL,9,'2026-02-24 23:02:00',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-02-24 14:37:54','2026-02-24 15:02:00',NULL),(13,13,14000.00,'PHP','Refund Approved',NULL,NULL,9,'2026-02-24 23:01:43',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-02-24 14:39:32','2026-02-24 15:01:43',NULL),(14,14,990.00,'PHP','Refund Rejected',NULL,NULL,9,'2026-02-25 01:13:22',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-02-24 15:59:21','2026-02-24 17:13:22',NULL),(15,15,123123.00,'PHP','Refund Approved',NULL,NULL,9,'2026-03-13 11:40:10',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-03-13 03:32:22','2026-03-13 03:40:10',NULL),(16,18,255.20,'PHP','Refund Rejected',NULL,NULL,31,'2026-04-10 21:13:12','asd',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-04-10 08:01:31','2026-04-10 13:13:12',NULL),(17,19,5000.00,'PHP','Refund Rejected',NULL,NULL,31,'2026-04-10 21:13:19','asd',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-04-10 08:01:35','2026-04-10 13:13:19',NULL);
+/*!40000 ALTER TABLE `refunds` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `rider_earnings`
+--
+
+DROP TABLE IF EXISTS `rider_earnings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `rider_earnings` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `order_id` int NOT NULL,
+  `tracking_id` int DEFAULT NULL,
+  `rider_id` int NOT NULL,
+  `base_delivery_fee` decimal(10,2) NOT NULL DEFAULT '50.00',
+  `distance_bonus` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `customer_tip` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `total_earnings` decimal(10,2) NOT NULL DEFAULT '50.00',
+  `payout_status` enum('pending','credited','paid_out') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'credited',
+  `earned_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_earn_order` (`order_id`),
+  KEY `idx_earn_rider` (`rider_id`),
+  KEY `idx_earn_date` (`earned_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `rider_earnings`
+--
+
+LOCK TABLES `rider_earnings` WRITE;
+/*!40000 ALTER TABLE `rider_earnings` DISABLE KEYS */;
+INSERT INTO `rider_earnings` VALUES (1,66,38,5,150.00,15.00,0.00,165.00,'credited','2026-09-24 23:03:49'),(2,150,39,5,89.00,15.00,0.00,104.00,'credited','2026-09-24 23:28:27'),(3,64,37,5,150.00,15.00,0.00,165.00,'credited','2026-09-24 23:52:54'),(4,152,41,5,89.00,15.00,0.00,104.00,'credited','2026-09-25 00:51:08');
+/*!40000 ALTER TABLE `rider_earnings` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `rider_notifications`
+--
+
+DROP TABLE IF EXISTS `rider_notifications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `rider_notifications` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `rider_id` int NOT NULL,
+  `title` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `message` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `type` enum('delivery_request','order_ready','instruction_update','earnings','cod_remittance','system') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'system',
+  `order_id` int DEFAULT NULL,
+  `is_read` tinyint(1) NOT NULL DEFAULT '0',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_notif_rider` (`rider_id`),
+  KEY `idx_notif_read` (`is_read`)
+) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `rider_notifications`
+--
+
+LOCK TABLES `rider_notifications` WRITE;
+/*!40000 ALTER TABLE `rider_notifications` DISABLE KEYS */;
+INSERT INTO `rider_notifications` VALUES (1,5,'Delivery Accepted','You have accepted Order #ORD-20260122-6971CE3. Proceed to the restaurant.','delivery_request',26,1,'2026-09-24 16:18:11'),(2,5,'Delivery Accepted','You have accepted Order #ORD-20260122-697243B. Proceed to the restaurant.','delivery_request',27,1,'2026-09-24 16:18:47'),(3,5,'Delivery Accepted','You have accepted Order #ORD-20260128-6978E69. Proceed to the restaurant.','delivery_request',31,1,'2026-09-24 16:19:38'),(4,5,'Delivery Accepted','You have accepted Order #ORD-20260128-6979B65. Proceed to the restaurant.','delivery_request',32,1,'2026-09-24 16:28:24'),(5,5,'Delivery Accepted','You have accepted Order #ORD-20260216-69933CE. Proceed to the restaurant.','delivery_request',39,1,'2026-09-24 16:28:45'),(6,5,'Delivery Accepted','You have accepted Order #ORD-20260217-6994423. Proceed to the restaurant.','delivery_request',40,1,'2026-09-24 16:28:47'),(7,5,'Delivery Accepted','You have accepted Order #ORD-20260217-699443B. Proceed to the restaurant.','delivery_request',44,1,'2026-09-24 16:28:51'),(8,5,'Delivery Accepted','You have accepted Order #ORD-20260217-6994466. Proceed to the restaurant.','delivery_request',46,1,'2026-09-24 16:31:06'),(9,5,'Delivery Accepted','You have accepted Order #ORD-20260217-6994607. Proceed to the restaurant.','delivery_request',52,1,'2026-09-24 17:49:58'),(10,5,'Delivery Accepted','You have accepted Order #ORD-20260924-495477. Proceed to the restaurant.','delivery_request',149,1,'2026-09-24 17:53:32'),(11,5,'Delivery Accepted','You have accepted Order #ORD-20260217-6994636. Proceed to the restaurant.','delivery_request',60,1,'2026-09-24 18:00:33'),(12,5,'Delivery Accepted','You have accepted Order #ORD-20260217-6994673. Proceed to the restaurant.','delivery_request',64,1,'2026-09-24 18:00:36'),(13,5,'Delivery Accepted','You have accepted Order #ORD-20260217-69946D8. Proceed to the restaurant.','delivery_request',66,1,'2026-09-24 18:00:38'),(14,5,'Earnings Credited','Γé▒165 credited to your earnings for Order #ORD-20260217-69946D8.','earnings',66,1,'2026-09-24 23:03:49'),(15,5,'Delivery Accepted','You have accepted Order #ORD-20260924-FE2F41. Proceed to the restaurant.','delivery_request',150,0,'2026-09-24 23:28:15'),(16,5,'Earnings Credited','Γé▒104 credited to your earnings for Order #ORD-20260924-FE2F41.','earnings',150,0,'2026-09-24 23:28:27'),(17,5,'Earnings Credited','Γé▒165 credited to your earnings for Order #ORD-20260217-6994673.','earnings',64,0,'2026-09-24 23:52:54'),(18,5,'Delivery Accepted','You have accepted Order #ORD-20260925-8B60AC. Proceed to the restaurant.','delivery_request',152,0,'2026-09-25 00:50:38'),(19,5,'Earnings Credited','Γé▒104 credited to your earnings for Order #ORD-20260925-8B60AC.','earnings',152,0,'2026-09-25 00:51:08');
+/*!40000 ALTER TABLE `rider_notifications` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `rider_payouts`
+--
+
+DROP TABLE IF EXISTS `rider_payouts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `rider_payouts` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `rider_id` int NOT NULL,
+  `period_start` date NOT NULL,
+  `period_end` date NOT NULL,
+  `total_amount` decimal(10,2) NOT NULL,
+  `payout_status` enum('pending','processing','completed','failed') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'completed',
+  `payment_reference` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `paid_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_payout_rider` (`rider_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `rider_payouts`
+--
+
+LOCK TABLES `rider_payouts` WRITE;
+/*!40000 ALTER TABLE `rider_payouts` DISABLE KEYS */;
+/*!40000 ALTER TABLE `rider_payouts` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `rider_support_tickets`
+--
+
+DROP TABLE IF EXISTS `rider_support_tickets`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `rider_support_tickets` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `rider_id` int NOT NULL,
+  `order_id` int DEFAULT NULL,
+  `issue_category` enum('customer_unavailable','restaurant_problem','wrong_address','damaged_food','vehicle_problem','emergency','payment_problem','cod_problem','other') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` enum('open','in_progress','resolved','closed') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'open',
+  `admin_response` text COLLATE utf8mb4_unicode_ci,
+  `waiting_time_minutes` int NOT NULL DEFAULT '0',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_ticket_rider` (`rider_id`),
+  KEY `idx_ticket_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `rider_support_tickets`
+--
+
+LOCK TABLES `rider_support_tickets` WRITE;
+/*!40000 ALTER TABLE `rider_support_tickets` DISABLE KEYS */;
+/*!40000 ALTER TABLE `rider_support_tickets` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `riders`
+--
+
+DROP TABLE IF EXISTS `riders`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `riders` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `employee_id` int DEFAULT NULL,
+  `rider_code` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `rider_type` enum('shop_rider','platform_rider') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'platform_rider',
+  `store_id` int DEFAULT NULL,
+  `vehicle_type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Motorcycle',
+  `vehicle_plate` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `license_number` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `verification_status` enum('pending','verified','rejected') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'verified',
+  `duty_status` enum('offline','online','busy') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'offline',
+  `current_latitude` decimal(10,8) DEFAULT NULL,
+  `current_longitude` decimal(11,8) DEFAULT NULL,
+  `last_location_update` datetime DEFAULT NULL,
+  `rating` decimal(3,2) NOT NULL DEFAULT '5.00',
+  `total_completed_deliveries` int NOT NULL DEFAULT '0',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `user_id` (`user_id`),
+  UNIQUE KEY `rider_code` (`rider_code`),
+  KEY `idx_duty_status` (`duty_status`),
+  KEY `idx_rider_type` (`rider_type`),
+  KEY `idx_store_id` (`store_id`),
+  KEY `idx_verification` (`verification_status`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `riders`
+--
+
+LOCK TABLES `riders` WRITE;
+/*!40000 ALTER TABLE `riders` DISABLE KEYS */;
+INSERT INTO `riders` VALUES (1,29,18,'RDR-0018','platform_rider',NULL,'Motorcycle',NULL,NULL,'verified','online',NULL,NULL,NULL,4.90,15,'2026-09-24 16:14:55','2026-09-24 16:14:55'),(2,30,19,'RDR-0019','platform_rider',NULL,'Motorcycle',NULL,NULL,'verified','online',NULL,NULL,NULL,4.90,15,'2026-09-24 16:14:55','2026-09-24 16:14:55'),(3,33,20,'RDR-0020','platform_rider',NULL,'Motorcycle',NULL,NULL,'verified','online',NULL,NULL,NULL,4.90,15,'2026-09-24 16:14:55','2026-09-24 16:14:55'),(4,34,21,'RDR-0021','platform_rider',NULL,'Motorcycle',NULL,NULL,'verified','online',NULL,NULL,NULL,4.90,15,'2026-09-24 16:14:55','2026-09-24 16:14:55'),(5,18,11,'RDR-0011','platform_rider',NULL,'Honda Click 125i',NULL,NULL,'verified','online',14.32470550,120.98057050,'2026-09-25 00:51:08',4.95,32,'2026-09-24 16:14:55','2026-09-25 00:51:08');
+/*!40000 ALTER TABLE `riders` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `role_permissions`
+--
+
+DROP TABLE IF EXISTS `role_permissions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `role_permissions` (
+  `role_id` int NOT NULL,
+  `permission_id` int NOT NULL,
+  `assigned_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `role_permissions`
+--
+
+LOCK TABLES `role_permissions` WRITE;
+/*!40000 ALTER TABLE `role_permissions` DISABLE KEYS */;
+INSERT INTO `role_permissions` VALUES (1,1,'2026-03-27 09:31:49'),(1,2,'2026-03-27 09:31:49'),(1,3,'2026-03-27 09:31:49'),(1,4,'2026-03-27 09:31:49'),(1,5,'2026-03-27 09:31:49'),(1,6,'2026-03-27 09:31:49'),(1,7,'2026-03-27 09:31:49'),(1,8,'2026-03-27 09:31:49'),(1,9,'2026-03-27 09:31:49'),(1,10,'2026-03-27 09:31:49'),(1,11,'2026-03-27 09:31:49'),(1,12,'2026-03-27 09:31:49'),(1,13,'2026-03-27 09:31:49'),(1,14,'2026-03-27 09:31:49'),(1,15,'2026-03-27 09:31:49'),(1,16,'2026-03-27 09:31:49'),(1,17,'2026-03-27 09:31:49'),(1,18,'2026-03-27 09:31:49'),(1,19,'2026-03-27 09:31:49'),(1,20,'2026-03-27 09:31:49'),(1,21,'2026-03-27 09:31:49'),(1,22,'2026-03-27 09:31:49'),(1,23,'2026-03-27 09:31:49'),(1,24,'2026-03-27 09:31:49'),(1,25,'2026-03-27 09:31:49'),(1,26,'2026-03-27 09:31:49'),(1,27,'2026-03-27 09:31:49'),(1,28,'2026-03-27 09:31:49'),(1,29,'2026-03-27 09:31:49'),(1,30,'2026-03-27 09:31:49'),(1,31,'2026-03-27 09:31:49'),(1,32,'2026-03-27 09:31:49'),(1,33,'2026-03-27 09:31:49'),(1,34,'2026-03-27 09:31:49'),(1,35,'2026-03-27 09:31:49'),(1,37,'2026-03-27 09:31:49'),(1,38,'2026-03-27 09:31:49'),(1,39,'2026-03-27 09:31:49'),(1,40,'2026-03-27 09:31:49'),(1,41,'2026-03-27 09:31:49'),(1,42,'2026-03-27 09:31:49'),(1,43,'2026-03-27 09:31:49'),(1,44,'2026-03-27 09:31:49'),(1,45,'2026-03-27 09:31:49'),(1,46,'2026-03-27 09:31:49'),(1,47,'2026-03-27 09:31:49'),(1,48,'2026-03-27 09:31:49'),(1,49,'2026-03-27 09:31:49'),(1,50,'2026-03-27 09:31:49'),(1,51,'2026-03-27 09:31:49'),(1,52,'2026-03-27 09:31:49'),(1,53,'2026-03-27 09:31:49'),(1,54,'2026-03-27 09:31:49'),(1,55,'2026-03-27 09:31:49'),(1,56,'2026-03-27 09:31:49'),(1,57,'2026-03-27 09:31:49'),(1,58,'2026-03-27 09:31:49'),(1,59,'2026-03-27 09:31:49'),(1,60,'2026-03-27 09:31:49'),(1,61,'2026-03-27 09:31:49'),(1,62,'2026-03-27 09:31:49'),(1,72,'2026-04-10 02:54:24'),(1,73,'2026-04-10 02:54:24'),(2,1,'2026-02-06 09:11:09'),(2,2,'2026-02-06 09:11:09'),(2,3,'2026-02-06 09:11:09'),(2,4,'2026-02-06 09:11:09'),(2,5,'2026-02-06 09:11:09'),(2,8,'2026-02-06 09:11:09'),(2,9,'2026-02-06 09:11:09'),(2,10,'2026-02-06 09:11:09'),(2,13,'2026-02-06 09:11:09'),(2,14,'2026-02-06 09:11:09'),(2,15,'2026-02-06 09:11:09'),(2,17,'2026-02-06 09:11:09'),(2,18,'2026-02-06 09:11:09'),(2,19,'2026-02-06 09:11:09'),(2,23,'2026-02-06 09:11:09'),(2,24,'2026-02-06 09:11:09'),(2,25,'2026-02-06 09:11:09'),(2,26,'2026-02-06 09:11:09'),(2,27,'2026-02-06 09:11:09'),(2,28,'2026-02-06 09:11:09'),(2,30,'2026-02-06 09:11:09'),(2,37,'2026-02-06 09:11:09'),(2,45,'2026-02-06 09:11:09'),(2,47,'2026-02-06 09:11:09'),(2,49,'2026-02-06 09:11:09'),(2,50,'2026-02-06 09:11:09'),(2,51,'2026-02-06 09:11:09'),(2,72,'2026-04-10 02:54:24'),(2,73,'2026-04-10 02:54:24'),(3,1,'2026-02-06 09:11:09'),(3,30,'2026-02-06 09:11:09'),(3,31,'2026-02-06 09:11:09'),(3,32,'2026-02-06 09:11:09'),(3,33,'2026-02-06 09:11:09'),(3,34,'2026-02-06 09:11:09'),(3,35,'2026-02-06 09:11:09'),(3,37,'2026-02-06 09:11:09'),(3,38,'2026-02-06 09:11:09'),(3,39,'2026-02-06 09:11:09'),(3,40,'2026-02-06 09:11:09'),(3,41,'2026-02-06 09:11:09'),(3,42,'2026-02-06 09:11:09'),(3,43,'2026-02-06 09:11:09'),(3,44,'2026-02-06 09:11:09'),(4,1,'2026-02-06 09:11:09'),(4,3,'2026-02-06 09:11:09'),(4,4,'2026-02-06 09:11:09'),(4,5,'2026-02-06 09:11:09'),(4,7,'2026-02-06 09:11:09'),(4,8,'2026-02-06 09:11:09'),(4,9,'2026-02-06 09:11:09'),(4,10,'2026-02-06 09:11:09'),(4,12,'2026-02-06 09:11:09'),(4,13,'2026-02-06 09:11:09'),(4,14,'2026-02-06 09:11:09'),(4,15,'2026-02-06 09:11:09'),(4,16,'2026-02-06 09:11:09'),(5,1,'2026-02-06 09:11:09'),(5,3,'2026-02-06 09:11:09'),(5,45,'2026-02-06 09:11:09'),(5,46,'2026-02-06 09:11:09'),(5,47,'2026-02-06 09:11:09'),(5,48,'2026-02-06 09:11:09'),(5,72,'2026-04-10 02:54:24'),(5,73,'2026-04-10 02:54:24'),(6,1,'2026-02-06 09:11:09'),(6,17,'2026-02-06 09:11:09'),(6,18,'2026-02-06 09:11:09'),(6,19,'2026-02-06 09:11:09'),(6,20,'2026-02-06 09:11:09'),(6,21,'2026-02-06 09:11:09'),(6,22,'2026-02-06 09:11:09'),(6,23,'2026-02-06 09:11:09'),(6,27,'2026-02-06 09:11:09'),(7,13,'2026-02-06 09:11:09'),(7,15,'2026-02-06 09:11:09'),(8,1,'2026-02-06 09:11:09'),(8,2,'2026-02-06 09:11:09'),(8,3,'2026-02-06 09:11:09'),(8,8,'2026-02-06 09:11:09'),(8,13,'2026-02-06 09:11:09'),(8,17,'2026-02-06 09:11:09'),(8,21,'2026-02-06 09:11:09'),(8,23,'2026-02-06 09:11:09'),(8,27,'2026-02-06 09:11:09'),(8,29,'2026-02-06 09:11:09'),(8,30,'2026-02-06 09:11:09'),(8,34,'2026-02-06 09:11:09'),(8,37,'2026-02-06 09:11:09'),(8,39,'2026-02-06 09:11:09'),(8,41,'2026-02-06 09:11:09'),(8,43,'2026-02-06 09:11:09'),(8,45,'2026-02-06 09:11:09'),(8,47,'2026-02-06 09:11:09'),(8,49,'2026-02-06 09:11:09'),(8,54,'2026-02-06 09:11:09'),(8,56,'2026-02-06 09:11:09'),(8,72,'2026-04-10 02:54:24'),(9,1,'2026-03-27 09:29:24'),(9,2,'2026-03-27 09:29:24'),(9,3,'2026-03-27 09:29:24'),(9,4,'2026-03-27 09:29:24'),(9,5,'2026-03-27 09:29:24'),(9,6,'2026-03-27 09:29:24'),(9,7,'2026-03-27 09:29:24'),(9,8,'2026-03-27 09:29:24'),(9,9,'2026-03-27 09:29:24'),(9,10,'2026-03-27 09:29:24'),(9,11,'2026-03-27 09:29:24'),(9,12,'2026-03-27 09:29:24'),(9,13,'2026-03-27 09:29:24'),(9,14,'2026-03-27 09:29:24'),(9,15,'2026-03-27 09:29:24'),(9,16,'2026-03-27 09:29:24'),(9,17,'2026-03-27 09:29:24'),(9,18,'2026-03-27 09:29:24'),(9,19,'2026-03-27 09:29:24'),(9,20,'2026-03-27 09:29:24'),(9,21,'2026-03-27 09:29:24'),(9,22,'2026-03-27 09:29:24'),(9,23,'2026-03-27 09:29:24'),(9,24,'2026-03-27 09:29:24'),(9,25,'2026-03-27 09:29:24'),(9,26,'2026-03-27 09:29:24'),(9,27,'2026-03-27 09:29:24'),(9,28,'2026-03-27 09:29:24'),(9,29,'2026-03-27 09:29:24'),(9,30,'2026-03-27 09:29:24'),(9,31,'2026-03-27 09:29:24'),(9,32,'2026-03-27 09:29:24'),(9,33,'2026-03-27 09:29:24'),(9,34,'2026-03-27 09:29:24'),(9,35,'2026-03-27 09:29:24'),(9,37,'2026-03-27 09:29:24'),(9,38,'2026-03-27 09:29:24'),(9,39,'2026-03-27 09:29:24'),(9,40,'2026-03-27 09:29:24'),(9,41,'2026-03-27 09:29:24'),(9,42,'2026-03-27 09:29:24'),(9,43,'2026-03-27 09:29:24'),(9,44,'2026-03-27 09:29:24'),(9,45,'2026-03-27 09:29:24'),(9,46,'2026-03-27 09:29:24'),(9,47,'2026-03-27 09:29:24'),(9,48,'2026-03-27 09:29:24'),(9,57,'2026-03-27 09:29:24'),(9,58,'2026-03-27 09:29:24'),(9,59,'2026-03-27 09:29:24'),(9,60,'2026-03-27 09:29:24'),(9,61,'2026-03-27 09:29:24'),(9,62,'2026-03-27 09:29:24'),(9,72,'2026-04-10 02:54:24'),(9,73,'2026-04-10 02:54:24'),(10,1,'2026-04-10 02:36:03'),(10,2,'2026-04-10 02:36:03'),(10,3,'2026-04-10 02:36:03'),(10,4,'2026-04-10 02:36:03'),(10,5,'2026-04-10 02:36:03'),(10,6,'2026-04-10 02:36:03'),(10,7,'2026-04-10 02:36:03'),(10,8,'2026-04-10 02:36:03'),(10,9,'2026-04-10 02:36:03'),(10,10,'2026-04-10 02:36:03'),(10,11,'2026-04-10 02:36:03'),(10,12,'2026-04-10 02:36:03'),(10,13,'2026-04-10 02:36:03'),(10,14,'2026-04-10 02:36:03'),(10,15,'2026-04-10 02:36:03'),(10,16,'2026-04-10 02:36:03'),(10,17,'2026-04-10 02:36:03'),(10,18,'2026-04-10 02:36:03'),(10,19,'2026-04-10 02:36:03'),(10,20,'2026-04-10 02:36:03'),(10,21,'2026-04-10 02:36:03'),(10,22,'2026-04-10 02:36:03'),(10,23,'2026-04-10 02:36:03'),(10,24,'2026-04-10 02:36:03'),(10,25,'2026-04-10 02:36:03'),(10,26,'2026-04-10 02:36:03'),(10,27,'2026-04-10 02:36:03'),(10,28,'2026-04-10 02:36:03'),(10,29,'2026-04-10 02:36:03'),(10,30,'2026-04-10 02:36:03'),(10,31,'2026-04-10 02:36:03'),(10,32,'2026-04-10 02:36:03'),(10,33,'2026-04-10 02:36:03'),(10,34,'2026-04-10 02:36:03'),(10,35,'2026-04-10 02:36:03'),(10,37,'2026-04-10 02:36:03'),(10,38,'2026-04-10 02:36:03'),(10,39,'2026-04-10 02:36:03'),(10,40,'2026-04-10 02:36:03'),(10,41,'2026-04-10 02:36:03'),(10,42,'2026-04-10 02:36:03'),(10,43,'2026-04-10 02:36:03'),(10,44,'2026-04-10 02:36:03'),(10,45,'2026-04-10 02:36:03'),(10,46,'2026-04-10 02:36:03'),(10,47,'2026-04-10 02:36:03'),(10,48,'2026-04-10 02:36:03'),(10,57,'2026-04-10 02:36:03'),(10,58,'2026-04-10 02:36:03'),(10,59,'2026-04-10 02:36:03'),(10,60,'2026-04-10 02:36:03'),(10,61,'2026-04-10 02:36:03'),(10,62,'2026-04-10 02:36:03'),(10,72,'2026-04-10 02:54:24'),(10,73,'2026-04-10 02:54:24'),(12,63,'2026-04-09 10:19:52'),(12,64,'2026-04-09 10:19:52'),(12,65,'2026-04-09 10:19:52'),(12,66,'2026-04-09 10:19:52'),(12,67,'2026-04-09 10:19:52'),(12,68,'2026-04-09 10:19:52'),(12,69,'2026-04-09 10:19:52'),(12,70,'2026-04-09 10:19:52'),(12,71,'2026-04-09 10:19:52'),(13,63,'2026-04-09 10:19:52'),(13,64,'2026-04-09 10:19:52'),(13,65,'2026-04-09 10:19:52'),(13,66,'2026-04-09 10:19:52'),(13,67,'2026-04-09 10:19:52'),(13,68,'2026-04-09 10:19:52'),(13,69,'2026-04-09 10:19:52'),(2,6,'2026-08-04 13:27:27'),(2,7,'2026-08-04 13:27:27'),(2,11,'2026-08-04 13:27:27'),(2,12,'2026-08-04 13:27:27'),(2,16,'2026-08-04 13:27:27'),(2,20,'2026-08-04 13:27:27'),(2,21,'2026-08-04 13:27:27'),(2,22,'2026-08-04 13:27:27'),(2,29,'2026-08-04 13:27:27'),(2,31,'2026-08-04 13:27:27'),(2,32,'2026-08-04 13:27:27'),(2,33,'2026-08-04 13:27:27'),(2,34,'2026-08-04 13:27:27'),(2,35,'2026-08-04 13:27:27'),(2,38,'2026-08-04 13:27:27'),(2,39,'2026-08-04 13:27:27'),(2,40,'2026-08-04 13:27:27'),(2,41,'2026-08-04 13:27:27'),(2,42,'2026-08-04 13:27:27'),(2,43,'2026-08-04 13:27:27'),(2,44,'2026-08-04 13:27:27'),(2,46,'2026-08-04 13:27:27'),(2,48,'2026-08-04 13:27:27'),(2,52,'2026-08-04 13:27:27'),(2,53,'2026-08-04 13:27:27'),(2,54,'2026-08-04 13:27:27'),(2,55,'2026-08-04 13:27:27'),(2,56,'2026-08-04 13:27:27'),(2,57,'2026-08-04 13:27:27'),(2,58,'2026-08-04 13:27:27'),(2,59,'2026-08-04 13:27:27'),(2,60,'2026-08-04 13:27:27'),(2,61,'2026-08-04 13:27:27'),(2,62,'2026-08-04 13:27:27'),(2,63,'2026-08-04 13:27:27'),(2,64,'2026-08-04 13:27:27'),(2,65,'2026-08-04 13:27:27'),(2,66,'2026-08-04 13:27:27'),(2,67,'2026-08-04 13:27:27'),(2,68,'2026-08-04 13:27:27'),(2,69,'2026-08-04 13:27:27'),(2,70,'2026-08-04 13:27:27'),(2,71,'2026-08-04 13:27:27');
+/*!40000 ALTER TABLE `role_permissions` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `roles`
+--
+
+DROP TABLE IF EXISTS `roles`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `roles` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `description` text COLLATE utf8mb4_general_ci,
+  `is_active` tinyint(1) DEFAULT '1',
+  `level` int DEFAULT '0',
+  `department_id` int DEFAULT NULL,
+  `owner_user_id` int DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `roles`
+--
+
+LOCK TABLES `roles` WRITE;
+/*!40000 ALTER TABLE `roles` DISABLE KEYS */;
+INSERT INTO `roles` VALUES (1,'super_admin','System Owner - Full Access',1,100,NULL,NULL,'2026-02-06 09:11:09','2026-02-06 09:11:09'),(2,'business_owner','Shop Owner - Can manage their business operations',1,80,NULL,NULL,'2026-02-06 09:11:09','2026-02-06 09:11:09'),(3,'hr_manager','HR Manager - Manage employees, attendance, payroll',1,60,NULL,NULL,'2026-02-06 09:11:09','2026-02-06 09:11:09'),(4,'operations_manager','Operations Manager - Manage orders, preorders, logistics',1,60,NULL,NULL,'2026-02-06 09:11:09','2026-02-06 09:11:09'),(5,'finance_manager','Finance Manager - Manage finances and expenses',1,60,NULL,NULL,'2026-02-06 09:11:09','2026-02-06 09:11:09'),(6,'inventory_manager','Inventory Manager - Manage inventory and materials',1,60,NULL,NULL,'2026-02-06 09:11:09','2026-02-06 09:11:09'),(7,'driver','Delivery Driver - Assigned deliveries and status updates',1,20,NULL,NULL,'2026-02-06 09:11:09','2026-02-06 09:11:09'),(8,'viewer','View-Only Access - Can view reports and data only',1,10,NULL,NULL,'2026-02-06 09:11:09','2026-02-06 09:11:09'),(9,'partner_31_hr_manager','Hr Manager!',1,60,NULL,31,'2026-03-27 08:51:31','2026-03-27 08:51:31'),(10,'partner_31_system_owner','asd',1,100,NULL,31,'2026-03-27 09:47:56','2026-03-27 09:47:56'),(11,'dept_delivery_riders','Role for members of the Delivery Riders department.',1,20,6,31,'2026-03-31 08:40:35','2026-03-31 08:40:35'),(12,'operational_manager','Operational Manager',1,85,NULL,NULL,'2026-04-09 10:19:52','2026-04-09 10:19:52'),(13,'operations_staff','Operations Staff',1,70,NULL,NULL,'2026-04-09 10:19:52','2026-04-09 10:19:52'),(14,'partner_31_operational_staff','Employees modules-access only.',1,20,NULL,31,'2026-04-10 02:36:58','2026-04-10 02:36:58');
+/*!40000 ALTER TABLE `roles` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `schedules`
+--
+
+DROP TABLE IF EXISTS `schedules`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `schedules` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `employee_id` int NOT NULL,
+  `schedule_date` date NOT NULL,
+  `start_time` time NOT NULL,
+  `end_time` time NOT NULL,
+  `shift_type` enum('morning','afternoon','evening','night','full_day') COLLATE utf8mb4_general_ci DEFAULT 'full_day',
+  `created_by` int DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `schedules`
+--
+
+LOCK TABLES `schedules` WRITE;
+/*!40000 ALTER TABLE `schedules` DISABLE KEYS */;
+INSERT INTO `schedules` VALUES (1,7,'2026-02-11','11:16:00','23:16:00','',9,'2026-02-10 15:16:30','2026-02-10 15:16:30');
+/*!40000 ALTER TABLE `schedules` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `shop_preorder_schedules`
+--
+
+DROP TABLE IF EXISTS `shop_preorder_schedules`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `shop_preorder_schedules` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `seller_id` int NOT NULL,
+  `lead_time_days` int NOT NULL DEFAULT '1',
+  `cutoff_time` time NOT NULL DEFAULT '18:00:00',
+  `max_advance_days` int NOT NULL DEFAULT '30',
+  `operating_days` varchar(50) COLLATE utf8mb4_general_ci NOT NULL DEFAULT '1,2,3,4,5,6,7',
+  `slot_start_time` time NOT NULL DEFAULT '08:00:00',
+  `slot_end_time` time NOT NULL DEFAULT '20:00:00',
+  `slot_interval_minutes` int NOT NULL DEFAULT '60',
+  `max_orders_per_slot` int NOT NULL DEFAULT '3',
+  `max_orders_per_day` int NOT NULL DEFAULT '15',
+  `blackout_dates` text COLLATE utf8mb4_general_ci,
+  `custom_slots_json` text COLLATE utf8mb4_general_ci,
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_seller` (`seller_id`),
+  KEY `idx_seller_active` (`seller_id`,`is_active`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `shop_preorder_schedules`
+--
+
+LOCK TABLES `shop_preorder_schedules` WRITE;
+/*!40000 ALTER TABLE `shop_preorder_schedules` DISABLE KEYS */;
+INSERT INTO `shop_preorder_schedules` VALUES (1,31,2,'17:00:00',45,'2,3,4,5,6,7','09:00:00','19:00:00',60,3,12,'2026-09-01, 2026-09-06',NULL,1,'2026-08-27 02:50:41','2026-08-27 02:50:41'),(2,0,1,'18:00:00',30,'1,3,5','00:00:00','14:00:00',120,3,6,'2026-08-30',NULL,1,'2026-08-27 03:05:35','2026-08-27 03:05:35');
+/*!40000 ALTER TABLE `shop_preorder_schedules` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `store_locations`
+--
+
+DROP TABLE IF EXISTS `store_locations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `store_locations` (
+  `store_id` int NOT NULL,
+  `owner_user_id` int DEFAULT NULL,
+  `store_name` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `address` text COLLATE utf8mb4_general_ci NOT NULL,
+  `city` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `province` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `phone` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
+  `email` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `opening_hours` text COLLATE utf8mb4_general_ci NOT NULL,
+  `opening_time` time DEFAULT NULL,
+  `closing_time` time DEFAULT NULL,
+  `operating_days` varchar(40) COLLATE utf8mb4_general_ci NOT NULL DEFAULT '1,2,3,4,5,6,7',
+  `availability_mode` enum('schedule','manual') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'schedule',
+  `manual_status` enum('open','away','closed') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'closed',
+  `latitude` decimal(10,8) DEFAULT NULL,
+  `longitude` decimal(11,8) DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY `idx_owner_user_id` (`owner_user_id`),
+  KEY `idx_store_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `store_locations`
+--
+
+LOCK TABLES `store_locations` WRITE;
+/*!40000 ALTER TABLE `store_locations` DISABLE KEYS */;
+INSERT INTO `store_locations` VALUES (1,42,'Dasmariñas Branch','Governor Drive, Sampaloc 1','Dasmariñas','Cavite','(046) 416-1234','Dasmariñas@lechondelights.com','8:00 AM - 10:00 PM','08:00:00','00:00:22','1,2,3,4,5,6,7','schedule','closed',14.32940000,120.93670000,1,'2026-04-11 02:36:20','2026-09-24 10:19:49'),(2,44,'Imus Branch','Nueno Avenue, Poblacion','Imus','Cavite','(046) 471-5678','imus@lechondelights.com','8:00 AM - 10:00 PM','08:00:00','00:00:22','1,2,3,4,5,6,7','schedule','closed',14.42970000,120.93670000,1,'2026-04-11 02:36:20','2026-09-24 10:19:49'),(3,NULL,'General Trias Branch','Arnaldo Highway, San Francisco','General Trias','Cavite','(046) 509-9012','gentrias@lechondelights.com','8:00 AM - 10:00 PM','08:00:00','00:00:22','1,2,3,4,5,6,7','schedule','closed',14.38690000,120.88090000,1,'2026-04-11 02:36:20','2026-08-27 03:32:46'),(4,43,'Bacoor Branch','Aguinaldo Highway, Talaba','Bacoor','Cavite','(046) 417-3456','bacoor@lechondelights.com','8:00 AM - 10:00 PM','08:00:00','00:00:22','1,2,3,4,5,6,7','schedule','closed',14.46040000,120.96340000,1,'2026-04-11 02:36:20','2026-09-24 10:19:49'),(5,45,'Tagaytay Branch','Emilio Aguinaldo Hwy, Silang Junction South','Tagaytay','Cavite','(046) 483-7890','tagaytay@lechondelights.com','8:00 AM - 10:00 PM','08:00:00','00:00:22','1,2,3,4,5,6,7','schedule','closed',14.11530000,120.96210000,1,'2026-04-11 02:36:20','2026-09-24 10:19:49'),(6,31,'Silang Branch','J.P. Rizal St, Poblacion','Silang','Cavite','(046) 414-9988','silang@lechondelights.com','8:00 AM - 8:00 PM','08:00:00','00:00:20','1,2,3,4,5,6,7','schedule','closed',14.23070000,120.97490000,1,'2026-04-11 02:36:20','2026-08-27 03:32:46'),(7,38,'jm lechon','Blk 42 lot 32 50st metrogate, Salawag, City of Dasmariñas, Cavite (Partnership Scope), CALABARZON','City of Dasmariñas','Cavite (Partnership Scope)','09055657350','jm@gmail.com','Daily | 8:00 AM - 8:00 PM','08:00:00','20:00:00','1,2,3,4,5,6,7','schedule','closed',14.34680000,120.97120000,1,'2026-09-01 04:28:24','2026-09-01 13:43:51');
+/*!40000 ALTER TABLE `store_locations` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `supplier_payment_records`
+--
+
+DROP TABLE IF EXISTS `supplier_payment_records`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `supplier_payment_records` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `purchase_order_id` int NOT NULL,
+  `owner_user_id` int NOT NULL,
+  `payment_date` date NOT NULL,
+  `amount_paid` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `payment_method` varchar(60) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'Cash',
+  `payment_reference` varchar(120) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `notes` text COLLATE utf8mb4_general_ci,
+  `recorded_by` int NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `supplier_payment_records`
+--
+
+LOCK TABLES `supplier_payment_records` WRITE;
+/*!40000 ALTER TABLE `supplier_payment_records` DISABLE KEYS */;
+/*!40000 ALTER TABLE `supplier_payment_records` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `suppliers`
+--
+
+DROP TABLE IF EXISTS `suppliers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `suppliers` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `contact_person` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `email` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `phone` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `address` text COLLATE utf8mb4_general_ci,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `suppliers`
+--
+
+LOCK TABLES `suppliers` WRITE;
+/*!40000 ALTER TABLE `suppliers` DISABLE KEYS */;
+INSERT INTO `suppliers` VALUES (1,'Onion ni bai','si bai','bai@gmail.com','123123123','asd','2026-02-26 14:32:48');
+/*!40000 ALTER TABLE `suppliers` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `user_name_change_locks`
+--
+
+DROP TABLE IF EXISTS `user_name_change_locks`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `user_name_change_locks` (
+  `user_id` int NOT NULL,
+  `last_changed_at` datetime NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `user_name_change_locks`
+--
+
+LOCK TABLES `user_name_change_locks` WRITE;
+/*!40000 ALTER TABLE `user_name_change_locks` DISABLE KEYS */;
+INSERT INTO `user_name_change_locks` VALUES (1,'2026-08-04 22:24:48','2026-08-04 14:24:48','2026-08-04 14:24:48');
+/*!40000 ALTER TABLE `user_name_change_locks` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `user_password_change_locks`
+--
+
+DROP TABLE IF EXISTS `user_password_change_locks`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `user_password_change_locks` (
+  `user_id` int NOT NULL,
+  `last_changed_at` datetime NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`user_id`),
+  KEY `idx_last_changed_at` (`last_changed_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `user_password_change_locks`
+--
+
+LOCK TABLES `user_password_change_locks` WRITE;
+/*!40000 ALTER TABLE `user_password_change_locks` DISABLE KEYS */;
+/*!40000 ALTER TABLE `user_password_change_locks` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `user_saved_addresses`
+--
+
+DROP TABLE IF EXISTS `user_saved_addresses`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `user_saved_addresses` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `label` varchar(80) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'Saved Address',
+  `contact_name` varchar(120) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `contact_phone` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `street_address` varchar(190) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `region_name` varchar(120) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `region_code` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `province_name` varchar(120) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `province_code` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `city_name` varchar(120) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `city_code` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `barangay_name` varchar(120) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `barangay_code` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `full_address` varchar(350) COLLATE utf8mb4_general_ci NOT NULL,
+  `address_hash` char(40) COLLATE utf8mb4_general_ci NOT NULL,
+  `latitude` decimal(10,7) DEFAULT NULL,
+  `longitude` decimal(10,7) DEFAULT NULL,
+  `is_default` tinyint(1) NOT NULL DEFAULT '0',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_user_hash` (`user_id`,`address_hash`),
+  KEY `idx_user_default` (`user_id`,`is_default`),
+  KEY `idx_user_updated` (`user_id`,`updated_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=63 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `user_saved_addresses`
+--
+
+LOCK TABLES `user_saved_addresses` WRITE;
+/*!40000 ALTER TABLE `user_saved_addresses` DISABLE KEYS */;
+INSERT INTO `user_saved_addresses` VALUES (1,4,'My Address','justine santos','123','Lat 14.324788',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'Lat 14.324788, Lng 120.980608','36bf777403c9ea05c1c084dfe4392e20dc990b5b',14.3247881,120.0000000,0,'2026-03-31 11:09:06','2026-04-09 04:46:42'),(3,4,'Checkout Address','justine santos','09917471283','Lat 14.324788','CALABARZON','040000000','Cavite','042100000','City of Dasmariñas','042106000','Salawag','042106011','Lat 14.324788, Salawag, City of Dasmariñas, Cavite, CALABARZON','b8b1258784c2130bd3bb8d2bd75b74926b8c3c76',14.3247881,120.9806080,0,'2026-03-31 13:53:15','2026-09-24 15:26:11'),(4,9,'Account Address','justine santos','09917471283','taga dito lang sa tabi tabi boss.',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'taga dito lang sa tabi tabi boss.','c5f7342cefda0863edadc6ef0f3722932b392e9f',NULL,NULL,1,'2026-03-31 14:38:03','2026-03-31 14:38:03'),(7,31,'Account Address','justine santos','09917471283','asdasd',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'asdasd','85136c79cbf9fe36bb9d05d0639c70c265c18d37',NULL,NULL,1,'2026-04-11 01:58:53','2026-04-11 01:58:53'),(8,36,'Account Address','justine hero','09917478967','asd',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'asd, Pacheco, Magallanes, Cavite, CALABARZON','9a3c82b9e2122cf38d270dfa8d4c1bde70cce61f',NULL,NULL,1,'2026-08-04 14:00:30','2026-08-04 14:00:30'),(9,36,'Checkout Address','justine hero','09917478967','El Salvador Street','CALABARZON','040000000','Cavite','042100000','City of Dasmariñas','042106000','Salawag','042106011','El Salvador Street, Salawag, City of Dasmariñas 4114, Cavite, CALABARZON','79b9e0bb150b85b4339c6efd20df137f8a32bec1',14.3247624,120.9806080,0,'2026-08-04 14:22:54','2026-09-16 08:03:41'),(10,1,'Checkout Address','Justine PayMongo Test','09123456789','Sample Street',NULL,NULL,'Cavite',NULL,'Dasmariñas',NULL,NULL,NULL,'Sample Street, Dasmariñas, Cavite','764ba7c6ec7e50603983e6bdc579f13066eca6ee',NULL,120.9367000,0,'2026-08-04 14:24:48','2026-09-16 08:03:41'),(12,36,'Checkout Address','justine hero','09917478967','Hanoi Street','CALABARZON','040000000','Cavite','042100000','City of Dasmariñas','042106000','Salawag','042106011','Hanoi Street, Salawag, City of Dasmariñas 4114, Cavite, CALABARZON','2d7df95395f0c87b608e97c9e05af3f17cc78eeb',14.3246530,120.9806080,0,'2026-08-04 14:26:15','2026-09-16 08:03:41'),(26,18,'Checkout Address','justine santos','09917471283','Japan Street, San Marino City, Salawag, Dasmariñas, Cavite, Calabarzon, 4114, Philippines',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'El Salvador Street, Salawag, City of Dasmariñas 4114, Cavite, CALABARZON','79b9e0bb150b85b4339c6efd20df137f8a32bec1',14.3246530,120.9806080,0,'2026-08-13 03:56:11','2026-09-16 08:03:41'),(27,18,'Saved Address','justine santos','09917471283','El Salvador Street',NULL,NULL,NULL,NULL,'San Marino City, Salawag, Dasmariñas, Cavite, Calabarzon, 4114, Philippines',NULL,NULL,NULL,'El Salvador Street, San Marino City, Salawag, Dasmariñas, Cavite, Calabarzon, 4114, Philippines','77a8a2db53313b7f8e5ef135bad5afe30bf1fe4b',14.3243622,120.9806080,0,'2026-08-13 03:56:11','2026-09-16 08:03:41'),(28,37,'Saved Address','em jay','09670485087','Don Placido Campos Avenue',NULL,NULL,NULL,NULL,'San Jose, San Jose-Sabang, Dasmariñas, Cavite, Calabarzon, 4114, Philippines',NULL,NULL,NULL,'Don Placido Campos Avenue, San Jose, San Jose-Sabang, Dasmariñas, Cavite, Calabarzon, 4114, Philippines','eec6f2cafd971150a03d40e6ee21ad1987adaaa8',14.3425502,120.0000000,0,'2026-08-10 09:03:35','2026-08-10 09:10:40'),(31,18,'Saved Address','justine santos','09917471283','Japan Street',NULL,NULL,NULL,NULL,'San Marino City, Salawag, Dasmariñas, Cavite, Calabarzon, 4114, Philippines',NULL,NULL,NULL,'Japan Street, San Marino City, Salawag, Dasmariñas, Cavite, Calabarzon, 4114, Philippines','1f37f6a72a54058f99d08703e5488bba8902d3ec',14.3273052,120.9806080,0,'2026-08-13 03:56:16','2026-09-16 08:03:41'),(32,38,'Saved Address','JM Bacamante','09055657350','Dasmaville',NULL,NULL,NULL,NULL,'Zone 1, Poblacion, Dasmariñas, Cavite, Calabarzon, 4114, Philippines',NULL,NULL,NULL,'Dasmaville, Zone 1, Poblacion, Dasmariñas, Cavite, Calabarzon, 4114, Philippines','fdc10697f2c2e22569029ffc5078b516e92deb2c',14.3312521,120.0000000,0,'2026-08-12 06:25:00','2026-08-12 06:25:22'),(35,18,'Checkout Address','justine santos','09917471283','El Salvador Street',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'El Salvador Street, Dasmariñas 4114','8190cc485487287b4941bbcb1d756f061b711a1e',14.3249670,120.9806080,1,'2026-08-25 16:25:26','2026-09-16 13:47:14'),(37,38,'Saved Address','JM Bacamante','09055657350','Guijo Drive',NULL,NULL,NULL,NULL,'Vista Bonita, San Jose, San Jose-Sabang, Dasmariñas, Cavite, Calabarzon, 4114, Philippines',NULL,NULL,NULL,'Guijo Drive, Vista Bonita, San Jose, San Jose-Sabang, Dasmariñas, Cavite, Calabarzon, 4114, Philippines','ba4c1bddd8b050aeb660d5ce2932f422e70b2a1a',14.3331753,120.0000000,0,'2026-08-12 06:25:22','2026-08-12 06:25:48'),(38,38,'Saved Location','JM Bacamante','09055657350','Pinned Location',NULL,NULL,NULL,NULL,'Cavite',NULL,NULL,NULL,'Pinned Location, Cavite','359bc54ba4f072537a212fa6953c69b2664d3e2a',NULL,NULL,0,'2026-08-12 06:25:48','2026-08-12 07:07:13'),(39,38,'Saved Address','JM Bacamante','09055657350','Medina Street',NULL,NULL,NULL,NULL,'Dasmaville, Zone 1, Poblacion, Dasmariñas, Cavite, Calabarzon, 4114, Philippines',NULL,NULL,NULL,'Medina Street, Dasmaville, Zone 1, Poblacion, Dasmariñas, Cavite, Calabarzon, 4114, Philippines','01d6a80d87f355678015683387592b0b3f2ba41e',14.3295475,120.0000000,0,'2026-08-12 07:07:13','2026-08-12 07:08:54'),(40,38,'Saved Location','JM Bacamante','09055657350','23/69, Sodium Street, Goldenville 1, Sabang, San Jose-Sabang, Dasmariñas, Cavite, Calabarzon, 4114, Philippines',NULL,NULL,NULL,NULL,'Cavite',NULL,NULL,NULL,'23/69, Sodium Street, Goldenville 1, Sabang, San Jose-Sabang, Dasmariñas, Cavite, Calabarzon, 4114, Philippines, Cavite','e6ad722ffa6881f474bad1918e062ecdad2d9951',NULL,NULL,0,'2026-08-12 07:08:54','2026-08-12 07:09:53'),(41,38,'Saved Location','JM Bacamante','09055657350','Cavite–Laguna Expressway, Malagasang II-C, Imus, Cavite, Calabarzon, 4103, Philippines',NULL,NULL,NULL,NULL,'Cavite',NULL,NULL,NULL,'Cavite–Laguna Expressway, Malagasang II-C, Imus, Cavite, Calabarzon, 4103, Philippines, Cavite','11475b02ae7369614636627627d869aa8f0c16e9',NULL,NULL,0,'2026-08-12 07:09:53','2026-09-01 04:09:35'),(42,1,'Saved Location','Admin User','09171234567','NCST Campus Road, Zone 4, Poblacion',NULL,NULL,NULL,NULL,'Dasmariñas',NULL,NULL,NULL,'NCST Campus Road, Zone 4, Poblacion, Dasmariñas, Cavite, Calabarzon, 4114, Philippines','9dccfe2a12762e3d26a4db90aec2d2a0cf3037d3',14.3294000,120.0000000,0,'2026-08-15 15:05:37','2026-08-15 15:05:51'),(43,1,'Updated Location','Admin User','09171234567','Don Placido Campos Avenue, Unit 4B',NULL,NULL,NULL,NULL,'Dasmariñas',NULL,NULL,NULL,'Don Placido Campos Avenue, Unit 4B, San Jose, Dasmariñas, Cavite, Calabarzon, 4114, Philippines','4bb740e71bc37f5998c278a87cee08b7',14.3312000,120.9410000,1,'2026-08-15 15:05:51','2026-08-15 15:14:46'),(44,37,'Checkout Address','em jay','09670485087','Pinned Location',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'Pinned Location, Cavite','359bc54ba4f072537a212fa6953c69b2664d3e2a',0.0000000,NULL,0,'2026-08-15 15:10:41','2026-08-17 13:24:12'),(45,37,'Saved Location','em jay','09670485087','B23, Gold Avenue, Goldenville 1, Sabang, San Jose-Sabang, Dasmariñas, Cavite, Calabarzon, 4114, Philippines',NULL,NULL,NULL,NULL,'Cavite',NULL,NULL,NULL,'B23, Gold Avenue, Goldenville 1, Sabang, San Jose-Sabang, Dasmariñas, Cavite, Calabarzon, 4114, Philippines, Cavite','f2aa34797fa043c920d717807dd3e1668faefc4e',NULL,NULL,0,'2026-08-15 15:16:59','2026-08-17 13:45:38'),(48,37,'Saved Location','em jay','09670485087','Kiko Rosa, San Francisco, General Trias, Cavite, Calabarzon, 4107, Philippines',NULL,NULL,NULL,NULL,'Cavite',NULL,NULL,NULL,'Kiko Rosa, San Francisco, General Trias, Cavite, Calabarzon, 4107, Philippines, Cavite','be3520d9f265cb20357b0834155a6da594c17df6',NULL,NULL,1,'2026-08-17 13:45:38','2026-08-17 13:45:38'),(49,38,'Saved Location','JM Bacamante','09055657350','Aguinaldo Highway',NULL,NULL,NULL,NULL,'Cavite',NULL,NULL,NULL,'Aguinaldo Highway, Cavite','2358fd876a29186d9219a777ea8960fbb9f311ce',NULL,NULL,1,'2026-09-01 04:09:35','2026-09-01 04:09:35'),(50,8,'Checkout Address','Local Two','09123456789','El Salvador Street',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'asd','f10e2821bbbea527ea02200352313bc059445190',14.3243622,120.9772764,0,'2026-09-24 09:51:24','2026-09-24 09:52:20'),(51,8,'Saved Location','Local Two','09123456789','El Salvador Street',NULL,NULL,NULL,NULL,'Dasmariñas 4114',NULL,NULL,NULL,'El Salvador Street, Dasmariñas 4114','8190cc485487287b4941bbcb1d756f061b711a1e',14.3243622,120.9772764,1,'2026-09-24 09:52:04','2026-09-24 09:52:15'),(57,4,'Checkout Address','justine santos','09917471283','El Salvador Street','CALABARZON','040000000','Cavite','042100000','City of Dasmariñas','042106000',NULL,NULL,'El Salvador Street, Dasmariñas 4114','8190cc485487287b4941bbcb1d756f061b711a1e',14.3243622,120.9772764,1,'2026-09-24 15:26:11','2026-09-24 16:50:00'),(59,4,'Checkout Address','justine santos','09917471283','El Salvador Street','CALABARZON','040000000','Cavite','042100000','City of Dasmariñas','042106000','Salawag','042106011','El Salvador Street, Salawag, City of Dasmariñas 324788, Cavite, CALABARZON','13f44a09927f3b4bf71fce90d769a423efebf97d',14.3243719,120.9772825,0,'2026-09-24 15:26:55','2026-09-24 15:26:55');
+/*!40000 ALTER TABLE `user_saved_addresses` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `user_valid_id_documents`
+--
+
+DROP TABLE IF EXISTS `user_valid_id_documents`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `user_valid_id_documents` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `document_type` varchar(50) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'valid_id',
+  `file_name` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `file_path` varchar(500) COLLATE utf8mb4_general_ci NOT NULL,
+  `uploaded_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_valid_id_documents_user` (`user_id`),
+  CONSTRAINT `fk_user_valid_id_documents_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `user_valid_id_documents`
+--
+
+LOCK TABLES `user_valid_id_documents` WRITE;
+/*!40000 ALTER TABLE `user_valid_id_documents` DISABLE KEYS */;
+INSERT INTO `user_valid_id_documents` VALUES (1,36,'Driver\'s License - Front','36_valid_id_front_1785851989_5578_captured_id_front.jpg','uploads/user_valid_ids/36_valid_id_front_1785851989_5578_captured_id_front.jpg','2026-08-04 13:59:49'),(2,36,'Driver\'s License - Back','36_valid_id_back_1785851989_7263_captured_id_back.jpg','uploads/user_valid_ids/36_valid_id_back_1785851989_7263_captured_id_back.jpg','2026-08-04 13:59:49'),(3,37,'Philippine Passport - Front','37_valid_id_front_1785902333_4512_code1.png','uploads/user_valid_ids/37_valid_id_front_1785902333_4512_code1.png','2026-08-05 03:58:53'),(4,37,'Philippine Passport - Back','37_valid_id_back_1785902333_4469_code2.png','uploads/user_valid_ids/37_valid_id_back_1785902333_4469_code2.png','2026-08-05 03:58:53');
+/*!40000 ALTER TABLE `user_valid_id_documents` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `users`
+--
+
+DROP TABLE IF EXISTS `users`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `users` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `email` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `password` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `full_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `phone` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `address` text COLLATE utf8mb4_general_ci,
+  `profile_image` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `business_logo` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `user_type` enum('customer','admin','employee') COLLATE utf8mb4_general_ci DEFAULT 'customer',
+  `role_id` int DEFAULT NULL,
+  `account_type` enum('individual','organization') COLLATE utf8mb4_general_ci DEFAULT 'individual',
+  `business_name` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `business_type` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `business_registration` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `website` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `tax_id` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT '1',
+  `account_control_status` enum('active','restricted','suspended','banned') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'active',
+  `access_restriction_notes` text COLLATE utf8mb4_general_ci,
+  `access_restricted_at` datetime DEFAULT NULL,
+  `access_restricted_by` int DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `last_login` timestamp NULL DEFAULT NULL,
+  `reset_token` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `reset_expires` timestamp NULL DEFAULT NULL,
+  `oauth_provider` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `oauth_provider_id` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `remember_token` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `remember_expires` timestamp NULL DEFAULT NULL,
+  `email_verified_at` datetime DEFAULT NULL,
+  `email_verification_token` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `email_verification_expires` datetime DEFAULT NULL,
+  `email_verification_sent_at` datetime DEFAULT NULL,
+  `email_otp_code` varchar(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `middle_name` varchar(80) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `birth_date` date DEFAULT NULL,
+  `gender` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `nickname` varchar(80) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_users_email_verification_token` (`email_verification_token`)
+) ENGINE=InnoDB AUTO_INCREMENT=48 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `users`
+--
+
+LOCK TABLES `users` WRITE;
+/*!40000 ALTER TABLE `users` DISABLE KEYS */;
+INSERT INTO `users` VALUES (1,'admin@lechondelights.com','$2y$10$WCiiltqfQtinI7spkDE7de8vQYaa7U7EKbcE0V6Y39A4rRWrO4nUm','Justine Test','09123456789','Sample Street, Dasmariñas, Cavite',NULL,NULL,'admin',1,'individual',NULL,NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-01-15 09:12:13','2026-08-04 14:27:55','2026-04-09 04:53:22',NULL,NULL,NULL,NULL,NULL,NULL,NULL,'af135fd2b58eef2d06e05ebbc4de60ae6df0de889dea98457354818e8dc460e3','2026-08-04 22:08:50','2026-08-04 21:53:50','297183',NULL,NULL,NULL,NULL),(4,'justineher0@gmail.com','$2y$10$zdQWlPmslxrOa4Oy0GbkEeagVh3m7W53Pf/zIwaaYesQmERIMMTZ.','justine santos','09917471283','El Salvador Street, Dasmariñas 4114',NULL,NULL,'customer',NULL,'individual',NULL,NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-01-15 15:04:39','2026-09-24 16:50:00','2026-09-24 15:25:21','7cea51dbf69d218be9861b918dd0ced91caca7cd3d3fc6bddced3263840852f5','2026-08-04 12:35:41',NULL,NULL,NULL,NULL,NULL,'a19e5814096557aa463d4bdeb953afcc421e92a03cb12833aadc0e2ada3398db','2026-04-12 21:43:34','2026-04-11 21:43:34',NULL,NULL,NULL,NULL,NULL),(5,'justinehero1@gmail.com','$2y$10$Ej0nCgQ6sIT.WBySDE/1Ru23SstzBpQt..joZqScEA5EBLe79QANu','justine santos','09917471283','adsasd',NULL,NULL,'customer',NULL,'individual','','','','','',1,'active',NULL,NULL,NULL,'2026-01-15 16:20:24','2026-03-31 14:15:34','2026-01-15 17:06:37',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(6,'adminaccount@gmail.com','$2y$10$4LM1uYCQIt.u3gcHEYMJm.JIdjQZuZC4m./IQFWJIfdiP9M2go8Ce','Local Admin','09123456789','asdasdasdasd',NULL,NULL,'admin',1,'individual','','','','','',1,'active',NULL,NULL,NULL,'2026-01-18 10:43:09','2026-03-31 14:15:34','2026-02-24 17:19:53',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(8,'useraccount2@gmail.com','$2y$10$DaONyE3FoK7fKNne1Quoz.zqZJX68Si922qJaVutD3815xx9Esj/a','Local Two','09123456789','asd',NULL,NULL,'customer',NULL,'individual','','','','','',1,'active',NULL,NULL,NULL,'2026-01-20 13:58:50','2026-09-24 15:03:14','2026-09-24 15:03:14',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(9,'asd@gmail.com','$2y$10$HL2Zoo/7J0UZWp2Bh9/SWuXO5QYl0ucVB/agpZhzIZQHaBFTP8I/C','justine santos','09917471283','taga dito lang sa tabi tabi boss., Salawag, City of Dasmariñas, Cavite, CALABARZON',NULL,NULL,'admin',1,'individual','','','','','',1,'active',NULL,NULL,NULL,'2026-01-22 07:13:26','2026-08-04 12:35:44','2026-04-11 02:50:15','13ea31e87d7213c7d80cedf6f44e8240604299b87ac8d608416cd624cc97c621','2026-08-04 12:45:44',NULL,NULL,NULL,NULL,NULL,'2b609a3f23a54ec68f8500fbd750c4a538178c9b4a7cc3a4a44369f5e6986ee4','2026-04-12 21:52:28','2026-04-11 21:52:28',NULL,NULL,NULL,NULL,NULL),(10,'useraccount@gmail.com','$2y$10$Nsk86hdAkSrQXfXtm8RCXOr6iBI7FF/tJ47hv0LHTNhalj9IOq6M6','Local Account','09123456789','asd asd dds d',NULL,NULL,'admin',2,'organization','Lydias','sole_proprietorship','','','',1,'active',NULL,NULL,NULL,'2026-01-26 07:03:50','2026-03-31 14:15:34','2026-02-01 13:53:00',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(11,'localone@gmail.com','$2y$10$EE3zCP4CdI0HZvl9Ybn7se3h1IcNAWQZJWt8pxIqZatEWPoDgtQTO','Local One','09123456789','asdasd asdasd asd',NULL,NULL,'admin',2,'organization','Linda','sole_proprietorship','','','',1,'active',NULL,NULL,NULL,'2026-01-27 11:58:16','2026-03-31 14:15:34','2026-01-27 12:01:08',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(12,'employee@gmail.colm','$2y$10$o1uI.jrka8lxqpFQlnhoxuoc08Q1Np9Quzt9iGtRAGCBUghG7xjJ.','justine santos','09917471283','Employee',NULL,NULL,'employee',NULL,'individual','','','','','',1,'active',NULL,NULL,NULL,'2026-02-03 12:40:58','2026-03-31 14:15:34','2026-02-09 17:39:35',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(13,'maria.ops@example.com','*C350442FAD512B4A9ED73554F66FF544DE4E9A88','Maria Operations','09123456789',NULL,NULL,NULL,'employee',4,'individual',NULL,NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-02-06 10:20:22','2026-03-31 14:15:34',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(14,'employee@gmail.com','$2y$10$ky9FXDLutX8OafM8ZMn9oeyfXGe6UeN73vhxdsSF0uLpW76FC2tsi','justine santos','09917471283',NULL,NULL,NULL,'employee',3,'individual',NULL,NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-02-06 10:26:32','2026-03-31 14:15:34','2026-03-13 05:42:16',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(15,'asdasd@gmail.com','$2y$10$0oy/teO9TRkBGGOEd9VFg.SfIz1pK8uyeBdh8DyZyqMIzqtuBzIf2','asd asd','123123123',NULL,NULL,NULL,'employee',1,'individual',NULL,NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-02-09 16:12:00','2026-03-31 14:15:34','2026-02-17 11:46:56',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(17,'asdasdasd@gmail.com','$2y$10$.SeVmrdX2fCfoShpR8ozkut.ZBK14RnYq1bmVJNtgpsFXkRCwdkS2','asdsad asdasd','09926421200','blk 14 lot 3 brunei st.',NULL,NULL,'customer',NULL,'individual','','','','','',1,'active',NULL,NULL,NULL,'2026-02-09 17:31:58','2026-03-31 14:15:34','2026-02-16 14:54:31',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(18,'justinehero03@gmail.com','$2y$10$LRbSCErJvcH7BgRywcWoveL2LuPCY8Zp/XBQOkdGURKTUNAjxXZ9K','justine santos','09917471283','El Salvador Street, Dasmariñas 4114',NULL,NULL,'employee',7,'individual',NULL,NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-02-10 14:11:30','2026-09-24 15:28:10','2026-09-24 15:28:10','eb77016a107e651115a31801ff07d46c446ba39cdf660aa285e26932ef01d86e','2026-08-25 16:30:27',NULL,NULL,'b0aaf847fb4a324f99580d6cc64a2edd7aaeac3fe50f1cb63f15e9e00079672e','2026-10-24 08:54:31','2026-04-11 21:53:38',NULL,NULL,'2026-04-11 21:52:40',NULL,NULL,NULL,NULL,NULL),(19,'bob.johnson@company.com','$2y$10$atzlra3F9X8roH49EEj21ePgcwt6oJPPrrCTN22/XJWSmZcPeZqiS','Bob Johnson',NULL,NULL,NULL,NULL,'employee',8,'individual',NULL,NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-02-10 14:39:27','2026-03-31 14:15:34',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(26,'localemployee@gmail.com','$2y$10$otTN7BnYbMJNwK39dVE5TO9rQg.0DVqkzlbCN3lj.BEZrPf4gyaZO','Local Employee','09987654321',NULL,NULL,NULL,'employee',4,'individual',NULL,NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-02-12 06:51:46','2026-03-31 14:15:34','2026-02-16 14:46:48',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(27,'localemployee2@gmail.com','$2y$10$73NhEHRCKR09j9JVho6CEeWNHEHzL1Qb0wJh9mzFQkoRyatlQqvvi','Local Two Employee','09912345678',NULL,NULL,NULL,'employee',4,'individual',NULL,NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-02-12 07:13:42','2026-03-31 14:15:34','2026-02-16 14:47:01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(28,'asd123@gmail.com','$2y$10$yQf3AyUFcEa9UtuP2RNtV.StibrHKi9XlAIO.Jpt7ws2tvjXluTmS','asd asd','09917471283','asdasdasd',NULL,NULL,'customer',NULL,'individual','','','','','',1,'active',NULL,NULL,NULL,'2026-02-17 10:21:19','2026-03-31 14:15:34','2026-03-31 08:43:18',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(29,'asd123123@gmail.com','$2y$10$eutPLU8V279GZ4s6e2p5IuusqMWzFCQV8bH2.aw9Vonu3BeisxAQ2','justine budoy','09917471283',NULL,NULL,NULL,'employee',7,'individual',NULL,NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-03-17 05:43:54','2026-03-31 14:15:34','2026-03-31 08:43:29',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(30,'asdasd123123@gmail.com','$2y$10$TUqhvtJNOGloIuc0ebi5XeK5K4i8iuEvPMR7t9zTB5LUBIof/EFGa','justine asdasd','09917471283',NULL,NULL,NULL,'employee',7,'individual',NULL,NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-03-17 13:49:25','2026-03-31 14:15:34','2026-03-27 07:29:25',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(31,'justinehero033@gmail.com','$2y$10$7JBps8TCdyHW4GzAJReQWOG6BJhMQlQLzWVv0D1aBVS4o.qLRGQlK','justine santos','09917471283','asdasd',NULL,NULL,'admin',2,'organization','justine business','partnership','','','',1,'active',NULL,NULL,NULL,'2026-03-23 18:06:44','2026-08-06 14:34:06','2026-08-06 14:34:06',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(32,'asdasd222@gmail.com','$2y$10$fSox0EyEH8VPpDzJYbo0NeJPqwtJtY9vu2uWO4uDuOiscOSbL4UuO','Justine asd asd','09917471281','blk 14 lot 3 brunei st., Salawag, City of Dasmariñas, Cavite, CALABARZON',NULL,NULL,'customer',NULL,'individual','','',NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-03-25 17:29:42','2026-03-31 14:15:34',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(33,'joshuasantosivan14@gmail.com','$2y$10$xkAa6BsBoRv2OzgFvwoJ2OB8UfCst6l/BDCG8sgr0nHVbkDN3iqi2','Joshua Santos','+63 9937626925',NULL,NULL,NULL,'employee',11,'individual',NULL,NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-03-31 08:41:38','2026-03-31 14:15:34','2026-03-31 09:07:07',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(34,'josh@gmail.com','$2y$10$thyKVelhcJEnZQ/07tafiukkMXQqMZauvJ.LzJJP1I8e9aIjGFPfW','joshua santos','09171234567',NULL,NULL,NULL,'employee',11,'individual',NULL,NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-03-31 09:08:38','2026-03-31 14:15:34','2026-03-31 09:08:50',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(35,'jannasantos@gmail.com','$2y$10$bh8sD33kXbE3JOUvbX1npuQ51YtqUh1wudy6OUNtrekeJNmsJYT6C','Janna Santos','09917471286','san marino city, blk 14 lot 3, Salawag, City of Dasmariñas, Cavite, CALABARZON',NULL,NULL,'admin',2,'organization','Janna Restaurant','partnership','123',NULL,'123',1,'active',NULL,NULL,NULL,'2026-03-31 09:27:33','2026-04-10 08:51:40','2026-04-10 08:51:40',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(36,'santos.justinehero1@ncst.edu.ph','$2y$10$F57YG4yGKWoZfColZZufxOYtUwRSEkWeXawX1axvHJJjExf9uTnXO','justine hero','09917478967','El Salvador Street, Salawag, City of Dasmariñas 4114, Cavite, CALABARZON',NULL,NULL,'customer',NULL,'individual','','restaurant',NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-08-04 13:59:49','2026-08-04 14:31:29','2026-08-04 14:18:49',NULL,NULL,NULL,NULL,NULL,NULL,'2026-08-04 22:00:01',NULL,NULL,'2026-08-04 21:59:49',NULL,'','2005-06-10','',''),(37,'justinesantos03123@gmail.com','$2y$10$R.PxbZnCmRnIrJT7.lSXCuRSeYWZiWxTzcmVNF1eWUhn4RbfBLSQ6','justine santos','09917474567','asd asd 123 asd, Anuling Lejos II, Mendez, Cavite, CALABARZON',NULL,NULL,'customer',NULL,'individual','','restaurant',NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-08-05 03:58:53','2026-08-05 03:58:53',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'a0dde4169b8234b845b5412dd29c8fdb8f361b072181d23b1fbfa450166df8f4','2026-08-05 12:13:53','2026-08-05 11:58:53','288515','','2009-10-09','',''),(38,'jm@gmail.com','$2y$10$5tQcmAIETz4PiJYchJPIzOXuzRvAgB8fAATaTTaU/OykY4vEsgaga','JM Bacamante','09055657350','Blk 42 lot 32 50st metrogate, Salawag, City of Dasmariñas, Cavite (Partnership Scope), CALABARZON',NULL,NULL,'admin',2,'organization','jm lechon','partnership',NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-08-05 03:02:24','2026-09-02 05:32:26','2026-09-02 05:32:26',NULL,NULL,NULL,NULL,'457b397458bf9e28c875c19535744a044b3cfd6cfd26eb6ae6c7efac1f350e51','2026-09-19 06:02:32','2026-08-24 23:11:34',NULL,NULL,'2026-08-05 11:02:24',NULL,'','2026-08-15','male',''),(39,'testcustomer@demo.com','$2y$10$hVxbKnj4mwNOJ.P/o6IcGuUWN3/UKfH5nvugqTYBl2uL85Y8vLHUS','Test Customer',NULL,NULL,NULL,NULL,'customer',NULL,'individual',NULL,NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-08-20 06:03:11','2026-08-27 02:57:21',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(40,'jonard@demo.com','\\/Ah2TDhV.u0gKfKrBhaeuAo7IeAFkjYFrUwGtGb4K','Jonard',NULL,NULL,NULL,NULL,'customer',NULL,'individual',NULL,NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-08-20 06:03:56','2026-08-20 06:05:38',NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-08-20 14:05:38',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(41,'customer.jm@gmail.com','$2y$10$hVxbKnj4mwNOJ.P/o6IcGuUWN3/UKfH5nvugqTYBl2uL85Y8vLHUS','JM Bacamante','09171234567','Blk 42 lot 32 50st metrogate, San Agustin, Magallanes, Cavite, CALABARZON',NULL,NULL,'customer',NULL,'individual',NULL,NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-08-24 15:12:21','2026-08-27 02:57:21','2026-08-24 15:13:10',NULL,NULL,NULL,NULL,NULL,NULL,'2026-08-24 23:12:21',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(42,'dasma@lechondelights.com','$2y$10$TP9uPrAvLe3Dh.ow3qcY8.EXsPS3WjxZU6mr1u7Ar7s3BH1wRvBtS','Dasmariñas Branch Manager','0917-123-4567','Emilio Aguinaldo Highway, Zone IV, Dasmariñas, Cavite',NULL,NULL,'admin',2,'individual','Dasmariñas Central Branch',NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-08-27 02:58:27','2026-09-24 09:57:26','2026-09-24 09:57:26',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(43,'bacoor@lechondelights.com','$2y$10$TP9uPrAvLe3Dh.ow3qcY8.EXsPS3WjxZU6mr1u7Ar7s3BH1wRvBtS','Bacoor Branch Manager','0917-234-5678','Tirona Highway, Habay I, Bacoor, Cavite',NULL,NULL,'admin',2,'individual','Bacoor Express Branch',NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-08-27 02:58:27','2026-08-27 02:58:27',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(44,'imus@lechondelights.com','$2y$10$TP9uPrAvLe3Dh.ow3qcY8.EXsPS3WjxZU6mr1u7Ar7s3BH1wRvBtS','Imus Branch Manager','0917-345-6789','Nueno Avenue, Poblacion, Imus, Cavite',NULL,NULL,'admin',2,'individual','Imus Heritage Branch',NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-08-27 02:58:27','2026-08-27 02:58:27',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(45,'tagaytay@lechondelights.com','$2y$10$TP9uPrAvLe3Dh.ow3qcY8.EXsPS3WjxZU6mr1u7Ar7s3BH1wRvBtS','Tagaytay Branch Manager','0917-456-7890','Tagaytay-Nasugbu Highway, Maharlika West, Tagaytay, Cavite',NULL,NULL,'admin',2,'individual','Tagaytay Ridge Branch',NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-08-27 02:58:27','2026-08-27 02:58:27',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(46,'admin@lechonsystem.com','$2y$10$rCC5J4ngKcQ0omLPCVyXru8ZKlG1doW5CE/.xV2v.RrtJybVgI5Cm','System Administrator','09123456788','Cavite Office',NULL,NULL,'admin',NULL,'organization',NULL,NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-09-02 05:20:06','2026-09-02 05:20:06',NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-09-02 13:20:06',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(47,'customer@lechonsystem.com','$2y$10$yK5deREmKoRJMcTtlQP0nu3taZoSHnblJRANe8Y/56Kt/u9l21axa','Juan Dela Cruz','09123456789','Sampaloc 1, Dasmariñas, Cavite',NULL,NULL,'customer',NULL,'individual',NULL,NULL,NULL,NULL,NULL,1,'active',NULL,NULL,NULL,'2026-09-02 05:20:22','2026-09-02 05:48:52','2026-09-02 05:48:52',NULL,NULL,NULL,NULL,NULL,NULL,'2026-09-02 13:20:22',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
+/*!40000 ALTER TABLE `users` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Dumping routines for database 'lechon_db'
+--
+
+--
+-- Final view structure for view `delivery_ratings`
+--
+
+/*!50001 DROP VIEW IF EXISTS `delivery_ratings`*/;
+/*!50001 SET @saved_cs_client          = @@character_set_client */;
+/*!50001 SET @saved_cs_results         = @@character_set_results */;
+/*!50001 SET @saved_col_connection     = @@collation_connection */;
+/*!50001 SET character_set_client      = utf8mb4 */;
+/*!50001 SET character_set_results     = utf8mb4 */;
+/*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
+/*!50001 CREATE ALGORITHM=UNDEFINED */
+/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
+/*!50001 VIEW `delivery_ratings` AS select `delivery_reviews`.`id` AS `id`,`delivery_reviews`.`order_id` AS `order_id`,`delivery_reviews`.`user_id` AS `user_id`,`delivery_reviews`.`rating` AS `rating`,`delivery_reviews`.`comment` AS `comment`,`delivery_reviews`.`created_at` AS `created_at` from `delivery_reviews` */;
+/*!50001 SET character_set_client      = @saved_cs_client */;
+/*!50001 SET character_set_results     = @saved_cs_results */;
+/*!50001 SET collation_connection      = @saved_col_connection */;
+
+--
+-- Final view structure for view `job_openings`
+--
+
+/*!50001 DROP VIEW IF EXISTS `job_openings`*/;
+/*!50001 SET @saved_cs_client          = @@character_set_client */;
+/*!50001 SET @saved_cs_results         = @@character_set_results */;
+/*!50001 SET @saved_col_connection     = @@collation_connection */;
+/*!50001 SET character_set_client      = utf8mb4 */;
+/*!50001 SET character_set_results     = utf8mb4 */;
+/*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
+/*!50001 CREATE ALGORITHM=UNDEFINED */
+/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
+/*!50001 VIEW `job_openings` AS select `job_positions`.`id` AS `id`,`job_positions`.`position_title` AS `position_title`,`job_positions`.`position_title` AS `job_title`,`job_positions`.`department_id` AS `department_id`,`job_positions`.`description` AS `description`,`job_positions`.`requirements` AS `requirements`,`job_positions`.`salary_range_min` AS `salary_range_min`,`job_positions`.`salary_range_max` AS `salary_range_max`,`job_positions`.`employment_type` AS `employment_type`,`job_positions`.`status` AS `status`,`job_positions`.`posted_date` AS `posted_date`,`job_positions`.`closing_date` AS `closing_date`,`job_positions`.`created_by` AS `created_by`,`job_positions`.`created_at` AS `created_at`,`job_positions`.`updated_at` AS `updated_at` from `job_positions` */;
+/*!50001 SET character_set_client      = @saved_cs_client */;
+/*!50001 SET character_set_results     = @saved_cs_results */;
+/*!50001 SET collation_connection      = @saved_col_connection */;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2026-09-25  0:56:16

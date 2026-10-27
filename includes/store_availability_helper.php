@@ -121,6 +121,53 @@ function sahEnsureStoreLocationAvailabilitySchema($conn): void
     if (!sahIndexExists($conn, 'store_locations', 'idx_store_email')) {
         mysqli_query($conn, "ALTER TABLE store_locations ADD INDEX idx_store_email (email)");
     }
+
+    // Auto-heal any corrupted mojibake store branch names and cities in database
+    static $mojibake_repaired = false;
+    if (!$mojibake_repaired) {
+        $mojibake_repaired = true;
+        @mysqli_query($conn, "UPDATE store_locations SET store_name = 'Dasmariñas Branch' WHERE store_id = 1 AND (store_name LIKE 'Dasmari%as%' OR store_name LIKE '%├%' OR store_name LIKE '%Ã%')");
+        @mysqli_query($conn, "UPDATE store_locations SET city = 'Dasmariñas' WHERE (city LIKE 'Dasmari%as%' OR city LIKE '%Dasmari%') AND city <> 'Dasmariñas'");
+        @mysqli_query($conn, "UPDATE store_locations SET address = REPLACE(REPLACE(REPLACE(REPLACE(address, '├░', 'ñ'), '├▒', 'ñ'), 'Ã±', 'ñ'), 'Γö£ΓûÆ', 'ñ') WHERE address LIKE '%├%' OR address LIKE '%Ã%'");
+        @mysqli_query($conn, "UPDATE users SET full_name = 'Dasmariñas Branch Manager' WHERE email = 'dasma@lechondelights.com' AND full_name <> 'Dasmariñas Branch Manager'");
+        @mysqli_query($conn, "UPDATE users SET business_name = 'Dasmariñas Central Branch' WHERE email = 'dasma@lechondelights.com' AND business_name <> 'Dasmariñas Central Branch'");
+        @mysqli_query($conn, "UPDATE users SET address = REPLACE(REPLACE(REPLACE(REPLACE(address, '├░', 'ñ'), '├▒', 'ñ'), 'Ã±', 'ñ'), 'Γö£ΓûÆ', 'ñ') WHERE address LIKE '%├%' OR address LIKE '%Ã%'");
+    }
+
+    sahEnsureCaviteBranchesSeed($conn);
+}
+
+function sahEnsureCaviteBranchesSeed($conn): void
+{
+    if (!($conn instanceof mysqli)) {
+        return;
+    }
+    
+    static $seeded = false;
+    if ($seeded) {
+        return;
+    }
+    $seeded = true;
+
+    $chk = mysqli_query($conn, "SELECT COUNT(*) AS total FROM store_locations WHERE province = 'Cavite'");
+    $total = 0;
+    if ($chk && ($row = mysqli_fetch_assoc($chk))) {
+        $total = (int)$row['total'];
+        mysqli_free_result($chk);
+    }
+
+    if ($total < 6) {
+        $seed_file = __DIR__ . '/../database/schema_updates/cavite_sample_stores_seed.sql';
+        if (file_exists($seed_file)) {
+            $sql = file_get_contents($seed_file);
+            mysqli_multi_query($conn, $sql);
+            while (mysqli_more_results($conn) && mysqli_next_result($conn)) {
+                if ($extra = mysqli_store_result($conn)) {
+                    mysqli_free_result($extra);
+                }
+            }
+        }
+    }
 }
 
 function sahNormalizeOperatingDays($days): string
@@ -412,12 +459,67 @@ function sahUpsertPartnerStoreLocation($conn, array $app_data): array
     mysqli_stmt_close($find_stmt);
     $existing_id = (int)($existing['store_id'] ?? 0);
 
+    $latitude = null;
+    $longitude = null;
+    if (isset($app_data['latitude']) && is_numeric($app_data['latitude'])) {
+        $latitude = (float)$app_data['latitude'];
+    } elseif (isset($app_data['location_latitude']) && is_numeric($app_data['location_latitude'])) {
+        $latitude = (float)$app_data['location_latitude'];
+    }
+
+    if (isset($app_data['longitude']) && is_numeric($app_data['longitude'])) {
+        $longitude = (float)$app_data['longitude'];
+    } elseif (isset($app_data['location_longitude']) && is_numeric($app_data['location_longitude'])) {
+        $longitude = (float)$app_data['location_longitude'];
+    }
+
+    if ($latitude === null || $longitude === null || $latitude == 0 || $longitude == 0) {
+        $city_text = strtolower(trim(($app_data['city_name'] ?? '') . ' ' . ($app_data['business_address'] ?? '')));
+        $cavite_city_coords = [
+            'dasma' => [14.3294, 120.9367],
+            'bacoor' => [14.4445, 120.9439],
+            'imus' => [14.4296, 120.9367],
+            'tagaytay' => [14.1153, 120.9621],
+            'trias' => [14.2818, 120.8800],
+            'silang' => [14.2307, 120.9749],
+            'trece' => [14.2820, 120.8670],
+            'kawit' => [14.4450, 120.9020],
+            'rosario' => [14.4167, 120.8500],
+            'tanza' => [14.3940, 120.8540],
+            'naic' => [14.3167, 120.7667],
+            'carmona' => [14.3167, 121.0500],
+            'alfonso' => [14.1333, 120.8500],
+            'amadeo' => [14.1667, 120.9167],
+            'general mariano alvarez' => [14.3000, 121.0000],
+            'gma' => [14.3000, 121.0000],
+            'indang' => [14.1950, 120.8767],
+            'magallanes' => [14.1833, 120.7500],
+            'maragondon' => [14.2667, 120.7333],
+            'mendez' => [14.1333, 120.9000],
+            'noveleta' => [14.4283, 120.8800],
+            'ternate' => [14.2867, 120.7167],
+            'bailen' => [14.1833, 120.8000],
+        ];
+        foreach ($cavite_city_coords as $k => $c) {
+            if (strpos($city_text, $k) !== false) {
+                $latitude = $c[0];
+                $longitude = $c[1];
+                break;
+            }
+        }
+        if ($latitude === null || $longitude === null) {
+            $latitude = 14.3294;
+            $longitude = 120.9367;
+        }
+    }
+
     if ($existing_id > 0) {
         $update_stmt = mysqli_prepare(
             $conn,
             "UPDATE store_locations
              SET owner_user_id = ?, store_name = ?, address = ?, city = ?, province = ?, phone = ?, email = ?,
                  opening_hours = ?, opening_time = ?, closing_time = ?, operating_days = ?, availability_mode = ?,
+                 latitude = COALESCE(?, latitude), longitude = COALESCE(?, longitude),
                  is_active = 1
              WHERE store_id = ?"
         );
@@ -426,7 +528,7 @@ function sahUpsertPartnerStoreLocation($conn, array $app_data): array
         }
         mysqli_stmt_bind_param(
             $update_stmt,
-            "isssssssssssi",
+            "isssssssssssddi",
             $owner_user_id,
             $store_name,
             $address,
@@ -439,6 +541,8 @@ function sahUpsertPartnerStoreLocation($conn, array $app_data): array
             $closing_time,
             $operating_days,
             $availability_mode,
+            $latitude,
+            $longitude,
             $existing_id
         );
         if (!mysqli_stmt_execute($update_stmt)) {
@@ -453,15 +557,15 @@ function sahUpsertPartnerStoreLocation($conn, array $app_data): array
     $insert_stmt = mysqli_prepare(
         $conn,
         "INSERT INTO store_locations
-            (owner_user_id, store_name, address, city, province, phone, email, opening_hours, opening_time, closing_time, operating_days, availability_mode, manual_status, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)"
+            (owner_user_id, store_name, address, city, province, phone, email, opening_hours, opening_time, closing_time, operating_days, availability_mode, manual_status, latitude, longitude, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)"
     );
     if (!$insert_stmt) {
         throw new RuntimeException('Unable to prepare store insert query.');
     }
     mysqli_stmt_bind_param(
         $insert_stmt,
-        "issssssssssss",
+        "issssssssssssdd",
         $owner_user_id,
         $store_name,
         $address,
@@ -474,7 +578,9 @@ function sahUpsertPartnerStoreLocation($conn, array $app_data): array
         $closing_time,
         $operating_days,
         $availability_mode,
-        $manual_status
+        $manual_status,
+        $latitude,
+        $longitude
     );
     if (!mysqli_stmt_execute($insert_stmt)) {
         $message = trim((string)mysqli_stmt_error($insert_stmt));

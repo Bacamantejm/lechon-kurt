@@ -186,7 +186,7 @@ if ($has_roles) {
         "SELECT id, name
          FROM roles
          WHERE is_active = 1
-         ORDER BY level DESC, name ASC"
+         ORDER BY name ASC"
     );
 }
 
@@ -264,7 +264,7 @@ saRenderModuleHeader('Notification Center', 'Notification Center', $admin_info);
                     data-sa-confirm-title="Send Notification?"
                     data-sa-confirm-text="This will deliver the notification to selected recipients based on the chosen scope."
                     data-sa-confirm-confirm-text="Yes, Send"
-                    data-sa-confirm-confirm-color="#9f1239">
+                    data-sa-confirm-confirm-color="#b3261e">
                 <i class="fas fa-paper-plane"></i> Send Notification
             </button>
         </form>
@@ -304,15 +304,285 @@ saRenderModuleHeader('Notification Center', 'Notification Center', $admin_info);
     </div>
 </div>
 
+<?php
+if (!function_exists('saNotificationTypeIcon')) {
+    function saNotificationTypeIcon($type) {
+        $type = strtolower(trim((string)$type));
+        if (strpos($type, 'deliver') !== false) return 'fa-check-circle';
+        if (strpos($type, 'paid') !== false || strpos($type, 'payment') !== false) return 'fa-receipt';
+        if (strpos($type, 'rider') !== false) return 'fa-motorcycle';
+        if (strpos($type, 'franchise') !== false || strpos($type, 'store') !== false) return 'fa-store';
+        if (strpos($type, 'user') !== false || strpos($type, 'account') !== false) return 'fa-user';
+        if (strpos($type, 'alert') !== false || strpos($type, 'warn') !== false) return 'fa-exclamation-circle';
+        return 'fa-bell';
+    }
+}
+?>
+<style>
+.notif-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+}
+@media (min-width: 1400px) {
+    .notif-cards-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+@media (min-width: 1800px) {
+    .notif-cards-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+.notif-card {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.15s ease;
+    position: relative;
+}
+.notif-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px -4px rgba(16, 24, 40, 0.08);
+    border-color: #d0d5dd;
+}
+body.dark-mode .notif-card {
+    background: #181d26 !important;
+    border-color: #27303f !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+body.dark-mode .notif-card:hover {
+    border-color: #3b4758 !important;
+    box-shadow: 0 10px 22px -4px rgba(0, 0, 0, 0.4);
+}
+.notif-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.notif-card-header-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+.notif-type-badge {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: capitalize;
+    color: #175cd3;
+    background: #eff8ff;
+    border: 1px solid #b2ddff;
+    padding: 2px 7px;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+body.dark-mode .notif-type-badge {
+    background: #172554;
+    color: #93c5fd;
+    border-color: #1e40af;
+}
+.notif-timestamp {
+    font-size: 11.5px;
+    color: #667085;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+body.dark-mode .notif-timestamp {
+    color: #94a3b8;
+}
+.notif-card-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.notif-icon-wrap {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    color: #b3261e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+}
+.notif-card.is-unread .notif-icon-wrap {
+    background: #fff8eb;
+    border-color: #fedf89;
+    color: #b54708;
+}
+body.dark-mode .notif-icon-wrap {
+    background: #1f2937;
+    border-color: #374151;
+    color: #f87171;
+}
+body.dark-mode .notif-card.is-unread .notif-icon-wrap {
+    background: #3b2a12;
+    border-color: #78350f;
+    color: #fbbf24;
+}
+.notif-text-wrap {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.notif-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #101828;
+    margin: 0 0 4px 0;
+    line-height: 1.35;
+    word-break: break-word;
+}
+body.dark-mode .notif-title {
+    color: #f8fafc;
+}
+.notif-message {
+    font-size: 12.5px;
+    color: #475467;
+    line-height: 1.45;
+    margin: 0;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+body.dark-mode .notif-message {
+    color: #94a3b8;
+}
+.notif-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #eaecf0;
+    font-size: 12px;
+}
+body.dark-mode .notif-card-footer {
+    border-top-color: #27303f;
+}
+.notif-recipient-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #475467;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+body.dark-mode .notif-recipient-info {
+    color: #94a3b8;
+}
+.notif-recipient-info i {
+    color: #667085;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+.notif-recipient-name {
+    font-weight: 600;
+    color: #101828;
+}
+body.dark-mode .notif-recipient-name {
+    color: #f8fafc;
+}
+.notif-recipient-email {
+    font-size: 11.5px;
+    color: #667085;
+}
+body.dark-mode .notif-recipient-email {
+    color: #94a3b8;
+}
+.notif-btn-status {
+    padding: 4px 10px;
+    font-size: 11.5px;
+    font-weight: 600;
+    border-radius: 6px;
+    border: 1px solid #eaecf0;
+    background: #ffffff;
+    color: #344054;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+.notif-btn-status:hover {
+    border-color: #d0d5dd;
+    background: #f8f9fa;
+}
+.notif-btn-status.btn-mark-read {
+    color: #027a48;
+    background: #ecfdf3;
+    border-color: #abefc6;
+}
+.notif-btn-status.btn-mark-read:hover {
+    background: #d1fadf;
+    border-color: #6ce9a6;
+}
+body.dark-mode .notif-btn-status {
+    background: #181d26;
+    border-color: #374151;
+    color: #e2e8f0;
+}
+body.dark-mode .notif-btn-status.btn-mark-read {
+    background: #064e3b;
+    border-color: #059669;
+    color: #6ee7b7;
+}
+.notif-cards-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 44px 20px;
+    background: #ffffff;
+    border: 1px dashed #d0d5dd;
+    border-radius: 12px;
+    color: #667085;
+}
+body.dark-mode .notif-cards-empty {
+    background: #181d26;
+    border-color: #374151;
+    color: #94a3b8;
+}
+</style>
+
 <div class="module-section">
     <div class="module-section-header">
         <div>
             <h3>Notification History</h3>
             <p class="module-subtext">Audit all outgoing notifications and update read status when needed.</p>
         </div>
+        <div class="d-flex align-items-center gap-2">
+            <div class="view-mode-toggle" role="group" aria-label="View toggle">
+                <button type="button" class="view-mode-btn active" id="saNotifsViewCards" onclick="switchNotifsView('cards')" title="Card Grid View">
+                    <i class="fas fa-th-large"></i>
+                </button>
+                <button type="button" class="view-mode-btn" id="saNotifsViewTable" onclick="switchNotifsView('table')" title="Table Spreadsheet View">
+                    <i class="fas fa-list"></i>
+                </button>
+            </div>
+        </div>
     </div>
 
-    <form method="GET" class="module-form-grid" style="margin-bottom: 12px;">
+    <form method="GET" class="module-form-grid" style="margin-bottom: 16px;">
         <input type="text" name="search" class="form-control" placeholder="Search title, message, recipient..." value="<?php echo htmlspecialchars($search); ?>">
         <input type="text" name="type" class="form-control" placeholder="Type (or all)" value="<?php echo htmlspecialchars($type_filter); ?>">
         <select name="read_status" class="form-select">
@@ -326,7 +596,75 @@ saRenderModuleHeader('Notification Center', 'Notification Center', $admin_info);
     <?php if (!$has_notifications): ?>
         <div class="note-box">`notifications` table is unavailable.</div>
     <?php else: ?>
-        <div class="table-wrap">
+        <!-- Card Grid View (Compact & Clean) -->
+        <div class="notif-cards-grid" id="saNotifsCardsGrid">
+            <?php if (empty($notifications)): ?>
+                <div class="notif-cards-empty">
+                    <i class="fas fa-bell-slash fa-2x mb-2 text-muted"></i>
+                    <p class="mb-0">No notifications found for current filters.</p>
+                </div>
+            <?php else: ?>
+                <?php foreach ($notifications as $notification): ?>
+                    <?php
+                        $is_read = (int)($notification['is_read'] ?? 0) === 1;
+                        $notif_id = (int)$notification['id'];
+                        $notif_type = (string)($notification['type'] ?? 'system_alert');
+                        $notif_title = (string)($notification['title'] ?? 'Notice');
+                        $notif_message = (string)($notification['message'] ?? '');
+                        $created_at_fmt = saFormatDateTime($notification['created_at'] ?? null, 'M d, Y • h:i A');
+                        $recipient_name = (string)($notification['recipient_name'] ?? ('User #' . (int)$notification['user_id']));
+                        $recipient_email = (string)($notification['recipient_email'] ?? '');
+                        $icon_class = saNotificationTypeIcon($notif_type);
+                    ?>
+                    <div class="notif-card <?php echo $is_read ? 'is-read' : 'is-unread'; ?>">
+                        <div class="notif-card-header">
+                            <div class="notif-card-header-left">
+                                <span class="notif-type-badge"><?php echo htmlspecialchars(str_replace('_', ' ', $notif_type)); ?></span>
+                                <span class="status-chip <?php echo $is_read ? 'chip-success' : 'chip-warning'; ?>">
+                                    <?php echo $is_read ? 'Read' : 'Unread'; ?>
+                                </span>
+                            </div>
+                            <span class="notif-timestamp">
+                                <i class="far fa-clock"></i> <?php echo htmlspecialchars($created_at_fmt); ?>
+                            </span>
+                        </div>
+
+                        <div class="notif-card-body">
+                            <div class="notif-icon-wrap">
+                                <i class="fas <?php echo $icon_class; ?>"></i>
+                            </div>
+                            <div class="notif-text-wrap">
+                                <h4 class="notif-title"><?php echo htmlspecialchars($notif_title); ?></h4>
+                                <p class="notif-message"><?php echo htmlspecialchars($notif_message); ?></p>
+                            </div>
+                        </div>
+
+                        <div class="notif-card-footer">
+                            <div class="notif-recipient-info" title="<?php echo htmlspecialchars($recipient_name . ($recipient_email !== '' ? ' (' . $recipient_email . ')' : '')); ?>">
+                                <i class="fas fa-user-circle"></i>
+                                <span class="notif-recipient-name"><?php echo htmlspecialchars($recipient_name); ?></span>
+                                <?php if ($recipient_email !== ''): ?>
+                                    <span class="notif-recipient-email">&bull; <?php echo htmlspecialchars($recipient_email); ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <form method="POST" style="margin: 0;">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                                <input type="hidden" name="action" value="mark_notification_status">
+                                <input type="hidden" name="notification_id" value="<?php echo $notif_id; ?>">
+                                <input type="hidden" name="mark_read" value="<?php echo $is_read ? 0 : 1; ?>">
+                                <button type="submit" class="notif-btn-status <?php echo $is_read ? 'btn-mark-unread' : 'btn-mark-read'; ?>" title="<?php echo $is_read ? 'Mark as unread' : 'Mark as read'; ?>">
+                                    <i class="fas <?php echo $is_read ? 'fa-envelope' : 'fa-check'; ?>"></i>
+                                    <span><?php echo $is_read ? 'Mark Unread' : 'Mark Read'; ?></span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+
+        <!-- Table Spreadsheet View (Alternate) -->
+        <div class="table-wrap d-none" id="saNotifsTableView">
             <table class="module-table">
                 <thead>
                     <tr>
@@ -382,4 +720,30 @@ saRenderModuleHeader('Notification Center', 'Notification Center', $admin_info);
     <?php endif; ?>
 </div>
 <?php
-saRenderModuleFooter();
+$extra_scripts = <<<'HTML'
+<script>
+    function switchNotifsView(mode) {
+        if (mode === 'table') {
+            $('#saNotifsCardsGrid').addClass('d-none');
+            $('#saNotifsTableView').removeClass('d-none');
+            $('#saNotifsViewCards').removeClass('active');
+            $('#saNotifsViewTable').addClass('active');
+            try { localStorage.setItem('sa_notifs_view_mode', 'table'); } catch(e){}
+        } else {
+            $('#saNotifsCardsGrid').removeClass('d-none');
+            $('#saNotifsTableView').addClass('d-none');
+            $('#saNotifsViewCards').addClass('active');
+            $('#saNotifsViewTable').removeClass('active');
+            try { localStorage.setItem('sa_notifs_view_mode', 'cards'); } catch(e){}
+        }
+    }
+
+    $(function() {
+        var saved = 'cards';
+        try { saved = localStorage.getItem('sa_notifs_view_mode') || 'cards'; } catch(e){}
+        switchNotifsView(saved);
+    });
+</script>
+HTML;
+
+saRenderModuleFooter($extra_scripts);

@@ -530,6 +530,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_preorder'])) {
         justify-content: center;
     }
 }
+
+/* ==========================================================================
+   PREORDER DETAILS DARK THEME ENGINE
+   ========================================================================== */
+body.dark-mode .orders-section {
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .order-card {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25) !important;
+}
+
+body.dark-mode .order-header {
+    background-color: #1e293b !important;
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .order-info h3,
+body.dark-mode .section-title,
+body.dark-mode .detail-item strong,
+body.dark-mode .item-name {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .order-date,
+body.dark-mode .detail-item span,
+body.dark-mode .item-meta,
+body.dark-mode .timeline-step .time {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .order-details {
+    border-color: #334155 !important;
+}
+
+body.dark-mode .detail-box,
+body.dark-mode .order-item {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
 </style>
 
 <script>

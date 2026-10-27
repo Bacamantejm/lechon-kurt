@@ -267,10 +267,19 @@ function hasPermission($conn, $user_id, $permission_name) {
         return $has_permission_cache[$cache_key];
     }
     
-    // Super admin always has all permissions.
+    // Super admin and business owner always have all permissions.
     $user_role = getUserRole($conn, $user_id);
-    if ($user_role && $user_role['name'] === 'super_admin') {
+    if ($user_role && in_array($user_role['name'], ['super_admin', 'business_owner'], true)) {
         return $has_permission_cache[$cache_key] = true;
+    }
+    if (isset($_SESSION['role_name']) && in_array($_SESSION['role_name'], ['super_admin', 'business_owner'], true)) {
+        return $has_permission_cache[$cache_key] = true;
+    }
+    if (function_exists('getFranchiseSellerScopeOwnerId')) {
+        $scoped_owner = (int)(getFranchiseSellerScopeOwnerId($conn, $user_id) ?? 0);
+        if ($scoped_owner > 0 && $scoped_owner === $user_id) {
+            return $has_permission_cache[$cache_key] = true;
+        }
     }
 
     $permissions = getUserPermissions($conn, $user_id);
@@ -304,10 +313,19 @@ function hasModuleAccess($conn, $user_id, $module_name) {
         return $module_access_cache[$cache_key];
     }
     
-    // Super admin always has access.
+    // Super admin and business owner always have access.
     $user_role = getUserRole($conn, $user_id);
-    if ($user_role && $user_role['name'] === 'super_admin') {
+    if ($user_role && in_array($user_role['name'], ['super_admin', 'business_owner'], true)) {
         return $module_access_cache[$cache_key] = true;
+    }
+    if (isset($_SESSION['role_name']) && in_array($_SESSION['role_name'], ['super_admin', 'business_owner'], true)) {
+        return $module_access_cache[$cache_key] = true;
+    }
+    if (function_exists('getFranchiseSellerScopeOwnerId')) {
+        $scoped_owner = (int)(getFranchiseSellerScopeOwnerId($conn, $user_id) ?? 0);
+        if ($scoped_owner > 0 && $scoped_owner === $user_id) {
+            return $module_access_cache[$cache_key] = true;
+        }
     }
 
     $permissions = getUserPermissions($conn, $user_id);
@@ -419,7 +437,7 @@ function getAllRoles($conn, $active_only = true) {
     if ($active_only) {
         $query .= " WHERE is_active = 1";
     }
-    $query .= " ORDER BY level DESC";
+    $query .= " ORDER BY name ASC";
     
     $result = mysqli_query($conn, $query);
     if (!$result) {
@@ -654,6 +672,20 @@ function resolveBackofficeDashboardRoute($conn = null, $user_id = 0) {
 }
 
 function getUserDashboardRoute($conn, $user_id, $user_type = '') {
+    $user_id = (int)$user_id;
+
+    // Check if user is a registered delivery rider
+    if ($conn && $user_id > 0) {
+        require_once __DIR__ . '/rider_helper.php';
+        if (function_exists('isDeliveryDriverUser') && isDeliveryDriverUser($conn, $user_id)) {
+            return 'rider/index.php';
+        }
+        $r_chk = mysqli_query($conn, "SELECT id FROM riders WHERE user_id = $user_id AND verification_status = 'verified' LIMIT 1");
+        if ($r_chk && mysqli_num_rows($r_chk) > 0) {
+            return 'rider/index.php';
+        }
+    }
+
     if (hasBackofficeAccess($conn, $user_id)) {
         return resolveBackofficeDashboardRoute($conn, $user_id);
     }

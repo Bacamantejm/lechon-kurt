@@ -3,7 +3,48 @@ session_start();
 $current_page = 'menu';
 $page_title = "Menu & Order | Lechon Delights";
 
-$requested_seller_id = isset($_GET['seller_id']) ? (int)$_GET['seller_id'] : 0;
+require_once 'includes/config.php';
+require_once __DIR__ . '/includes/rider_helper.php';
+if (!empty($_SESSION['user_id']) && isDeliveryDriverUser($conn, (int)$_SESSION['user_id'])) {
+    header("Location: rider/index.php");
+    exit();
+}
+
+$scoped_partner_seller_id = 0;
+if (!empty($_SESSION['user_id']) && isset($conn) && $conn) {
+    $logged_user_id = (int)$_SESSION['user_id'];
+    $is_super_admin = (strtolower(trim((string)($_SESSION['role_name'] ?? ''))) === 'super_admin' || strtolower(trim((string)($_SESSION['user_type'] ?? ''))) === 'super_admin');
+    if (!$is_super_admin) {
+        $check_scope_stmt = mysqli_prepare($conn, "SELECT u.id FROM users u WHERE u.id = ? AND (u.account_type = 'organization' OR EXISTS (SELECT 1 FROM franchise_applications fa WHERE fa.user_id = u.id AND fa.status = 'approved')) LIMIT 1");
+        if ($check_scope_stmt) {
+            mysqli_stmt_bind_param($check_scope_stmt, "i", $logged_user_id);
+            mysqli_stmt_execute($check_scope_stmt);
+            $check_scope_res = mysqli_stmt_get_result($check_scope_stmt);
+            if ($check_scope_row = mysqli_fetch_assoc($check_scope_res)) {
+                $scoped_partner_seller_id = (int)$check_scope_row['id'];
+            }
+            mysqli_stmt_close($check_scope_stmt);
+        }
+        if ($scoped_partner_seller_id <= 0) {
+            $staff_scope_stmt = mysqli_prepare($conn, "SELECT pmu.partner_user_id FROM partner_managed_users pmu WHERE pmu.managed_user_id = ? LIMIT 1");
+            if ($staff_scope_stmt) {
+                mysqli_stmt_bind_param($staff_scope_stmt, "i", $logged_user_id);
+                mysqli_stmt_execute($staff_scope_stmt);
+                $staff_scope_res = mysqli_stmt_get_result($staff_scope_stmt);
+                if ($staff_scope_row = mysqli_fetch_assoc($staff_scope_res)) {
+                    $scoped_partner_seller_id = (int)$staff_scope_row['partner_user_id'];
+                }
+                mysqli_stmt_close($staff_scope_stmt);
+            }
+        }
+    }
+}
+
+if ($scoped_partner_seller_id > 0) {
+    $requested_seller_id = $scoped_partner_seller_id;
+} else {
+    $requested_seller_id = isset($_GET['seller_id']) ? (int)$_GET['seller_id'] : 0;
+}
 $requested_branch_id = isset($_GET['branch_id']) ? (int)$_GET['branch_id'] : 0;
 if ($requested_seller_id > 0) {
     $_SESSION['storefront_seller_id'] = $requested_seller_id;
@@ -25,10 +66,10 @@ if (!isset($_SESSION['cart'])) {
 
 // Initialize delivery options
 if (!isset($_SESSION['delivery_option'])) {
-    $_SESSION['delivery_option'] = 'pickup'; // Default to pickup
+    $_SESSION['delivery_option'] = 'delivery'; // Default to delivery
 }
 if (!isset($_SESSION['delivery_location'])) {
-    $_SESSION['delivery_location'] = 'metro_manila'; // Default to Metro Manila
+    $_SESSION['delivery_location'] = 'cavite'; // Default to Cavite
 }
 
 // Delivery fee quotes are now calculated dynamically from the nearest store and the customer's pinned location.
@@ -157,21 +198,22 @@ if (isset($_SESSION['user_id'])) {
 
 // Store locations for pickup (database-driven, with static fallback)
 $store_locations = [];
+$store_scope_filter = ($scoped_partner_seller_id > 0) ? " AND owner_user_id = " . (int)$scoped_partner_seller_id : "";
 $store_query = "SELECT store_id, owner_user_id, store_name, address, city, province, phone, opening_hours, latitude, longitude
                 FROM store_locations
-                WHERE is_active = 1
+                WHERE is_active = 1 {$store_scope_filter}
                 ORDER BY store_name";
 $store_result = mysqli_query($conn, $store_query);
 
 if ($store_result && mysqli_num_rows($store_result) > 0) {
     while ($store = mysqli_fetch_assoc($store_result)) {
-        $street_address = trim((string)($store['address'] ?? ''));
-        $city_name = trim((string)($store['city'] ?? ''));
-        $province_name = trim((string)($store['province'] ?? ''));
+        $street_address = fixMojibakeText(trim((string)($store['address'] ?? '')));
+        $city_name = fixMojibakeText(trim((string)($store['city'] ?? '')));
+        $province_name = fixMojibakeText(trim((string)($store['province'] ?? '')));
         $store_locations[] = [
             'id' => (int)$store['store_id'],
             'owner_user_id' => (int)($store['owner_user_id'] ?? 0),
-            'name' => (string)$store['store_name'],
+            'name' => fixMojibakeText((string)$store['store_name']),
             'street_address' => $street_address,
             'address' => menuAddressLabel($street_address, '', $city_name, $province_name),
             'city' => $city_name,
@@ -189,64 +231,132 @@ if (empty($store_locations)) {
         [
             'id' => 1,
             'owner_user_id' => 0,
-            'name' => 'Main Branch - Makati',
-            'street_address' => '123 Ayala Avenue',
-            'address' => '123 Ayala Avenue, Makati City, Metro Manila',
-            'city' => 'Makati',
-            'province' => 'Metro Manila',
-            'phone' => '(02) 1234-5678',
+            'name' => 'Dasmariñas Branch',
+            'street_address' => 'Governor Drive, Sampaloc 1',
+            'address' => 'Governor Drive, Sampaloc 1, Dasmariñas, Cavite',
+            'city' => 'Dasmariñas',
+            'province' => 'Cavite',
+            'phone' => '(046) 416-1234',
             'hours' => '8:00 AM - 10:00 PM',
-            'latitude' => 14.554729,
-            'longitude' => 121.024445
+            'latitude' => 14.32940000,
+            'longitude' => 120.93670000
         ],
         [
             'id' => 2,
             'owner_user_id' => 0,
-            'name' => 'Quezon City Branch',
-            'street_address' => '456 Tomas Morato Avenue',
-            'address' => '456 Tomas Morato Avenue, Quezon City, Metro Manila',
-            'city' => 'Quezon City',
-            'province' => 'Metro Manila',
-            'phone' => '(02) 8765-4321',
+            'name' => 'Imus Branch',
+            'street_address' => 'Nueno Avenue, Poblacion',
+            'address' => 'Nueno Avenue, Poblacion, Imus, Cavite',
+            'city' => 'Imus',
+            'province' => 'Cavite',
+            'phone' => '(046) 471-5678',
             'hours' => '8:00 AM - 10:00 PM',
-            'latitude' => 14.632916,
-            'longitude' => 121.033203
+            'latitude' => 14.42970000,
+            'longitude' => 120.93670000
         ],
         [
             'id' => 3,
             'owner_user_id' => 0,
-            'name' => 'Alabang Branch',
-            'street_address' => '789 Commerce Avenue',
-            'address' => '789 Commerce Avenue, Muntinlupa, Metro Manila',
-            'city' => 'Muntinlupa',
-            'province' => 'Metro Manila',
-            'phone' => '(02) 3456-7890',
+            'name' => 'General Trias Branch',
+            'street_address' => 'Arnaldo Highway, San Francisco',
+            'address' => 'Arnaldo Highway, San Francisco, General Trias, Cavite',
+            'city' => 'General Trias',
+            'province' => 'Cavite',
+            'phone' => '(046) 509-9012',
             'hours' => '8:00 AM - 10:00 PM',
-            'latitude' => 14.425533,
-            'longitude' => 121.039489
+            'latitude' => 14.38690000,
+            'longitude' => 120.88090000
         ],
         [
             'id' => 4,
             'owner_user_id' => 0,
-            'name' => 'Antipolo Branch',
-            'street_address' => '101 Sumulong Highway',
-            'address' => '101 Sumulong Highway, Antipolo, Rizal',
-            'city' => 'Antipolo',
-            'province' => 'Rizal',
-            'phone' => '(02) 9876-5432',
-            'hours' => '8:00 AM - 9:00 PM',
-            'latitude' => 14.589768,
-            'longitude' => 121.173599
+            'name' => 'Bacoor Branch',
+            'street_address' => 'Aguinaldo Highway, Talaba',
+            'address' => 'Aguinaldo Highway, Talaba, Bacoor, Cavite',
+            'city' => 'Bacoor',
+            'province' => 'Cavite',
+            'phone' => '(046) 417-3456',
+            'hours' => '8:00 AM - 10:00 PM',
+            'latitude' => 14.46040000,
+            'longitude' => 120.96340000
+        ],
+        [
+            'id' => 5,
+            'owner_user_id' => 0,
+            'name' => 'Tagaytay Branch',
+            'street_address' => 'Emilio Aguinaldo Hwy, Silang Junction South',
+            'address' => 'Emilio Aguinaldo Hwy, Silang Junction South, Tagaytay, Cavite',
+            'city' => 'Tagaytay',
+            'province' => 'Cavite',
+            'phone' => '(046) 483-7890',
+            'hours' => '8:00 AM - 10:00 PM',
+            'latitude' => 14.11530000,
+            'longitude' => 120.96210000
         ]
     ];
 }
 
+function menuGetStoreImage($store_id, $store_name, $custom_image = '') {
+    $custom = trim((string)$custom_image);
+    if ($custom !== '' && $custom !== 'default.jpg') {
+        if (str_starts_with($custom, 'http') || str_starts_with($custom, 'images/') || str_starts_with($custom, 'uploads/')) {
+            return $custom;
+        }
+        if (file_exists('uploads/business_logos/' . $custom)) {
+            return 'uploads/business_logos/' . $custom;
+        }
+        if (file_exists('images/' . $custom)) {
+            return 'images/' . $custom;
+        }
+    }
+    
+    $image_map = [
+        1 => 'images/store-bg.jpg',
+        2 => 'images/panda_preorder_lechon.jpg',
+        3 => 'images/about-us-bg.jpg',
+        4 => 'images/hero-bg.jpg',
+        5 => 'images/panda_fresh_lechon.jpg',
+        6 => 'images/store-bg.jpg',
+        7 => 'images/panda_preorder_lechon.jpg',
+    ];
+    if (isset($image_map[$store_id])) {
+        return $image_map[$store_id];
+    }
+    
+    $name_lower = strtolower((string)$store_name);
+    if (str_contains($name_lower, 'lydia')) return 'images/panda_fresh_lechon.jpg';
+    if (str_contains($name_lower, 'linda')) return 'images/about-us-bg.jpg';
+    if (str_contains($name_lower, 'tagaytay')) return 'images/hero-bg.jpg';
+    if (str_contains($name_lower, 'bacoor')) return 'images/panda_preorder_lechon.jpg';
+    if (str_contains($name_lower, 'imus')) return 'images/about-us-bg.jpg';
+    return 'images/store-bg.jpg';
+}
+
+$official_owner_ids = [0, 1, 42, 43, 44, 45];
+$selected_pickup_branch = null;
 $default_pickup_location = (int)($_SESSION['pickup_location'] ?? ($store_locations[0]['id'] ?? 1));
 if ($requested_branch_id > 0) {
     foreach ($store_locations as $branch_option) {
         if ((int)$branch_option['id'] === $requested_branch_id) {
             $default_pickup_location = $requested_branch_id;
             $_SESSION['pickup_location'] = $requested_branch_id;
+            $selected_pickup_branch = $branch_option;
+            break;
+        }
+    }
+}
+if (!$selected_pickup_branch && $requested_seller_id > 0) {
+    foreach ($store_locations as $branch_option) {
+        if ((int)($branch_option['owner_user_id'] ?? 0) === $requested_seller_id) {
+            $selected_pickup_branch = $branch_option;
+            break;
+        }
+    }
+}
+if (!$selected_pickup_branch) {
+    foreach ($store_locations as $branch_option) {
+        if ((int)($branch_option['id'] ?? 0) === (int)$default_pickup_location) {
+            $selected_pickup_branch = $branch_option;
             break;
         }
     }
@@ -259,6 +369,70 @@ if ($requested_seller_id > 0) {
         }
     }
 }
+
+// Build unified list of all business shops for the store directory & quick switcher
+$all_menu_shops = [];
+
+// 1. Physical branches
+foreach ($store_locations as $loc) {
+    $b_id = (int)$loc['id'];
+    $b_owner = (int)($loc['owner_user_id'] ?? 1);
+    $is_partner = ($b_owner > 0 && !in_array($b_owner, $official_owner_ids, true));
+    $all_menu_shops[] = [
+        'id' => $b_id,
+        'seller_id' => $b_owner,
+        'branch_id' => $b_id,
+        'name' => (string)$loc['name'],
+        'address' => (string)($loc['address'] ?? ''),
+        'city' => (string)($loc['city'] ?? 'Cavite'),
+        'category' => $is_partner ? 'partner' : 'branch',
+        'type_label' => $is_partner ? 'Partner Store' : 'Official Branch',
+        'image' => menuGetStoreImage($b_id, (string)$loc['name']),
+        'link' => $is_partner ? ('menu.php?seller_id=' . $b_owner) : ('menu.php?branch_id=' . $b_id),
+        'is_active_selection' => ($is_partner ? ($requested_seller_id > 0 && $requested_seller_id === $b_owner) : ($requested_branch_id > 0 && $requested_branch_id === $b_id && $requested_seller_id <= 0))
+    ];
+}
+
+// 2. Partner organization sellers
+$partner_sql = "SELECT u.id AS seller_id, u.full_name, u.business_name, u.business_type, u.business_logo, u.profile_image, u.address, u.phone,
+                       sl.store_id, sl.city, sl.province
+                FROM users u
+                LEFT JOIN store_locations sl ON sl.owner_user_id = u.id AND sl.is_active = 1
+                WHERE (u.account_type = 'organization' OR u.user_type = 'seller' OR EXISTS (SELECT 1 FROM franchise_applications fa WHERE fa.user_id = u.id AND fa.status = 'approved')) AND u.is_active = 1";
+$partner_res = mysqli_query($conn, $partner_sql);
+if ($partner_res) {
+    while ($p_row = mysqli_fetch_assoc($partner_res)) {
+        $sid = (int)$p_row['seller_id'];
+        $already_in = false;
+        foreach ($all_menu_shops as $st) {
+            if ((int)($st['seller_id'] ?? 0) === $sid) {
+                $already_in = true;
+                break;
+            }
+        }
+        if (!$already_in) {
+            $name = trim((string)$p_row['business_name']) ?: (trim((string)$p_row['full_name']) . ' Store');
+            $city = !empty($p_row['city']) ? $p_row['city'] : 'Cavite';
+            $p_img = !empty($p_row['business_logo']) ? $p_row['business_logo'] : (!empty($p_row['profile_image']) ? $p_row['profile_image'] : '');
+            $all_menu_shops[] = [
+                'id' => 9000 + $sid,
+                'seller_id' => $sid,
+                'branch_id' => !empty($p_row['store_id']) ? (int)$p_row['store_id'] : 0,
+                'name' => $name,
+                'address' => $p_row['address'] ?: ($city . ', Cavite'),
+                'city' => $city,
+                'category' => 'partner',
+                'type_label' => 'Partner Store',
+                'image' => menuGetStoreImage(9000 + $sid, $name, $p_img),
+                'link' => 'menu.php?seller_id=' . $sid,
+                'is_active_selection' => ($requested_seller_id > 0 && $requested_seller_id === $sid)
+            ];
+        }
+    }
+    mysqli_free_result($partner_res);
+}
+
+$has_selected_store = ($requested_seller_id > 0 || $requested_branch_id > 0);
 
 // Compute total sold per product for best/top-seller filtering
 $total_sold_map = [];
@@ -288,6 +462,13 @@ $query = "SELECT p.*, COALESCE(i.current_stock, p.stock) as stock,
           WHERE p.is_archived = 0 AND p.is_active = 1";
 if ($requested_seller_id > 0) {
     $query .= " AND p.seller_id = " . (int)$requested_seller_id;
+} elseif ($requested_branch_id > 0) {
+    $branch_owner = $selected_pickup_branch ? (int)($selected_pickup_branch['owner_user_id'] ?? 0) : 0;
+    if ($branch_owner > 0 && !in_array($branch_owner, [0, 1, 42, 43, 44, 45], true)) {
+        $query .= " AND p.seller_id = " . (int)$branch_owner;
+    } else {
+        $query .= " AND (p.seller_id = 1 OR p.seller_id IS NULL" . ($branch_owner > 0 ? " OR p.seller_id = " . (int)$branch_owner : "") . ")";
+    }
 }
 $query .= " ORDER BY p.category, p.name";
 $result = mysqli_query($conn, $query);
@@ -379,14 +560,6 @@ $_SESSION['product_details'] = $product_details;
 $_SESSION['delivery_fees'] = $delivery_fees;
 $_SESSION['store_locations'] = $store_locations;
 
-$selected_pickup_branch = null;
-foreach ($store_locations as $branch_option) {
-    if ((int)($branch_option['id'] ?? 0) === (int)$default_pickup_location) {
-        $selected_pickup_branch = $branch_option;
-        break;
-    }
-}
-
 $breadcrumb_location = 'Marketplace';
 $storefront_breadcrumb_address = '';
 if ($requested_seller_id > 0) {
@@ -462,8 +635,19 @@ if ($storefront_breadcrumb_address !== '') {
     $breadcrumb_location = $storefront_breadcrumb_address;
 }
 
-$store_display_name = $storefront_name !== '' ? $storefront_name : 'Lechon Delights';
-$store_display_subtitle = $storefront_subtitle;
+if ($requested_seller_id > 0) {
+    $store_display_name = $storefront_name !== '' ? $storefront_name : 'Partner Store';
+    $store_display_type_label = 'Partner Store';
+    $store_display_subtitle = $storefront_subtitle;
+} elseif ($requested_branch_id > 0 && $selected_pickup_branch) {
+    $store_display_name = $selected_pickup_branch['name'];
+    $store_display_type_label = 'Official Pickup Branch';
+    $store_display_subtitle = 'Order directly from ' . $selected_pickup_branch['name'] . ' and browse available products.';
+} else {
+    $store_display_name = 'All Business Shops';
+    $store_display_type_label = 'Marketplace Directory';
+    $store_display_subtitle = 'Browse products across all verified partner shops and official branches, or select a specific shop below.';
+}
 
 $category_keys = array_values(array_filter(array_keys($menu_categories), static function ($category) {
     return trim((string)$category) !== '';
@@ -528,7 +712,7 @@ if (is_array($store_initials_parts)) {
 }
 if ($store_initials === '') $store_initials = 'LD';
 
-$mobile_quick_order_bottom = (isset($_SESSION['user_id']) && !empty($_SESSION['user_id']) && isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'customer') ? '86px' : '14px';
+$mobile_quick_order_bottom = '98px';
 
 $store_recent_reviews = [];
 $product_ids_for_reviews = array_values(array_map('intval', array_keys($product_details)));
@@ -599,8 +783,295 @@ if (!empty($product_ids_for_reviews)) {
     }
 }
 
-mysqli_close($conn);
-?><!-- Product Preview Modal -->
+// Record claimed voucher from URL if passed
+if (!empty($_GET['voucher'])) {
+    $claimed_v_code = strtoupper(trim((string)$_GET['voucher']));
+    if ($claimed_v_code !== '') {
+        $_SESSION['pending_welcome_voucher'] = $claimed_v_code;
+    }
+}
+
+// Fetch active store-specific deals/vouchers for this shop
+$store_deals = [];
+$lookup_seller_id = (int)($requested_seller_id ?: ($store_owner_id ?? 0));
+if ($lookup_seller_id <= 0) {
+    if (!empty($selected_pickup_branch['owner_user_id']) && (int)$selected_pickup_branch['owner_user_id'] > 0) {
+        $lookup_seller_id = (int)$selected_pickup_branch['owner_user_id'];
+    } elseif (!empty($_SESSION['storefront_seller_id']) && (int)$_SESSION['storefront_seller_id'] > 0) {
+        $lookup_seller_id = (int)$_SESSION['storefront_seller_id'];
+    } else {
+        $lookup_seller_id = 1;
+    }
+}
+
+if ($lookup_seller_id > 0 && isset($conn) && $conn instanceof mysqli) {
+    require_once __DIR__ . '/includes/partner_voucher_helper.php';
+    pvEnsureVoucherSchema($conn);
+    $vd_stmt = mysqli_prepare($conn, "
+        SELECT id, seller_id, code, name, description, discount_type, discount_value, min_order_amount, max_discount_amount 
+        FROM partner_vouchers 
+        WHERE (seller_id = ? OR seller_id = 0) AND is_active = 1 
+          AND (start_at IS NULL OR start_at <= NOW()) 
+          AND (end_at IS NULL OR end_at >= NOW()) 
+        ORDER BY (seller_id = ?) DESC, id DESC 
+        LIMIT 6
+    ");
+    if ($vd_stmt) {
+        mysqli_stmt_bind_param($vd_stmt, "ii", $lookup_seller_id, $lookup_seller_id);
+        mysqli_stmt_execute($vd_stmt);
+        $vd_res = mysqli_stmt_get_result($vd_stmt);
+        if ($vd_res) {
+            while ($vd_row = mysqli_fetch_assoc($vd_res)) {
+                $store_deals[] = $vd_row;
+            }
+            mysqli_free_result($vd_res);
+        }
+        mysqli_stmt_close($vd_stmt);
+    }
+}
+?>
+<style>
+/* Global Smooth Motion & Fluid Glass Architecture */
+html {
+    scroll-behavior: smooth !important;
+}
+body {
+    -webkit-overflow-scrolling: touch !important;
+}
+
+/* Immediate Navigation & Tab Styles */
+.panda-cat-tab {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    padding: 10px 0 !important;
+    color: #64748b !important;
+    font-size: 0.92rem !important;
+    font-weight: 600 !important;
+    text-decoration: none !important;
+    border-bottom: 3px solid transparent !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+}
+.panda-cat-tab:hover {
+    color: #171922 !important;
+    text-decoration: none !important;
+}
+.panda-cat-tab.active {
+    color: #171922 !important;
+    font-weight: 800 !important;
+    border-bottom-color: #171922 !important;
+    text-decoration: none !important;
+}
+.panda-cat-count {
+    font-size: 0.84rem !important;
+    color: #64748b !important;
+    font-weight: 500 !important;
+}
+.panda-cat-tab.active .panda-cat-count {
+    color: #171922 !important;
+    font-weight: 700 !important;
+}
+
+/* Store Breadcrumb & Metadata Links */
+.store-breadcrumb a {
+    color: #64748b !important;
+    text-decoration: none !important;
+    font-size: 0.84rem !important;
+}
+.store-breadcrumb a:hover {
+    color: #b3261e !important;
+}
+.storefront-meta-row-secondary a {
+    color: #475467 !important;
+    text-decoration: none !important;
+}
+.storefront-meta-row-secondary a:hover {
+    color: #171922 !important;
+}
+
+/* Smooth Image Display & Zero-Jump Sizing */
+.store-logo-tile {
+    width: 100px !important;
+    height: 100px !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+    flex-shrink: 0 !important;
+    background: #e2e8f0 !important;
+}
+.store-logo-tile img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+    transition: transform 0.25s ease !important;
+}
+.item-image {
+    position: relative !important;
+    height: 140px !important;
+    overflow: hidden !important;
+    background: #f8fafc !important;
+    border-radius: 16px 16px 0 0 !important;
+}
+.item-image img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+    transition: transform 0.25s ease !important;
+}
+.menu-item:hover .item-image img {
+    transform: scale(1.03) !important;
+}
+
+/* Dark Mode Theme Engine for Menu & Quick Order */
+body.dark-mode .panda-cat-tab {
+    color: #94a3b8 !important;
+    text-decoration: none !important;
+}
+body.dark-mode .panda-cat-tab:hover {
+    color: #ffffff !important;
+    text-decoration: none !important;
+}
+body.dark-mode .panda-cat-tab.active {
+    color: #ef4444 !important;
+    border-bottom-color: #ef4444 !important;
+    text-decoration: none !important;
+}
+body.dark-mode .panda-cat-count {
+    color: #64748b !important;
+}
+body.dark-mode .panda-cat-tab.active .panda-cat-count {
+    color: #ef4444 !important;
+}
+body.dark-mode .store-breadcrumb a {
+    color: #94a3b8 !important;
+}
+body.dark-mode .store-breadcrumb a:hover {
+    color: #ffffff !important;
+}
+body.dark-mode .storefront-meta-row-secondary a {
+    color: #cbd5e1 !important;
+}
+body.dark-mode .storefront-meta-row-secondary a:hover {
+    color: #ffffff !important;
+}
+body.dark-mode .quick-order-panel {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+body.dark-mode .quick-order-tabs {
+    background: #0f172a !important;
+    border: 1px solid #334155 !important;
+}
+body.dark-mode .quick-order-tab {
+    color: #94a3b8 !important;
+}
+body.dark-mode .quick-order-tab.active {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
+}
+body.dark-mode .quick-order-hero {
+    background: #111827 !important;
+    border: 1px solid #334155 !important;
+}
+body.dark-mode .quick-order-hero h3 {
+    color: #f8fafc !important;
+}
+body.dark-mode .quick-order-hero p {
+    color: #94a3b8 !important;
+}
+body.dark-mode .quick-order-summary {
+    color: #f8fafc !important;
+}
+body.dark-mode .quick-order-meta {
+    color: #94a3b8 !important;
+}
+body.dark-mode .quick-order-items-empty {
+    color: #94a3b8 !important;
+}
+body.dark-mode .quick-order-item {
+    border-bottom-color: #334155 !important;
+}
+body.dark-mode .quick-order-item-title {
+    color: #f8fafc !important;
+}
+body.dark-mode .quick-order-item-price {
+    color: #ef4444 !important;
+}
+body.dark-mode .summary-row {
+    color: #f8fafc !important;
+}
+body.dark-mode .summary-row strong,
+body.dark-mode #quickOrderTotal {
+    color: #f8fafc !important;
+}
+body.dark-mode .quick-order-link {
+    color: #f8fafc !important;
+}
+body.dark-mode .quick-order-checkout:disabled {
+    background: #334155 !important;
+    color: #64748b !important;
+}
+body.dark-mode .quick-order-checkout:not(:disabled) {
+    background: #b3261e !important;
+    color: #ffffff !important;
+}
+
+/* Business Shop Showcase Directory Cards */
+.menu-shop-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
+}
+.menu-shop-card:hover {
+    transform: translateY(-3px) !important;
+    border-color: #b3261e !important;
+    box-shadow: 0 10px 24px rgba(16, 24, 40, 0.08) !important;
+}
+.menu-shop-card:hover img {
+    transform: scale(1.04) !important;
+}
+.storefront-change-shop-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 5px 12px !important;
+    background: #fff1f0 !important;
+    border: 1px solid #fee4e2 !important;
+    border-radius: 999px !important;
+    color: #b3261e !important;
+    font-weight: 700 !important;
+    font-size: 0.8rem !important;
+    text-decoration: none !important;
+    transition: all 0.15s ease !important;
+}
+.storefront-change-shop-btn:hover {
+    background: #b3261e !important;
+    color: #ffffff !important;
+    border-color: #b3261e !important;
+    text-decoration: none !important;
+}
+body.dark-mode .menu-shop-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+body.dark-mode .menu-shop-card:hover {
+    border-color: #ef4444 !important;
+}
+body.dark-mode .storefront-change-shop-btn {
+    background: #334155 !important;
+    border-color: #475467 !important;
+    color: #ef4444 !important;
+}
+body.dark-mode .storefront-change-shop-btn:hover {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+}
+</style>
+
+<!-- Product Preview Modal -->
 <div class="product-preview-modal" id="productPreviewModal" style="display:none;">
     <div class="preview-modal-content">
         <button class="preview-close" id="previewClose">&times;</button>
@@ -650,10 +1121,14 @@ mysqli_close($conn);
                     </div>
                 </div>
                 
-                <button class="btn-primary add-to-cart-confirm" id="addToCartConfirm">
-                    <i class="fas fa-cart-plus"></i> Add to Cart
-                </button>
-            </div>
+                </div>
+        </div>
+        
+        <!-- Fixed Preview Modal Action Footer (Add to Cart only) -->
+        <div class="preview-actions-wrap">
+            <button class="btn-primary add-to-cart-confirm" id="addToCartConfirm">
+                <i class="fas fa-cart-plus"></i> Add to Cart
+            </button>
         </div>
     </div>
     <div class="preview-overlay" id="previewOverlay"></div>
@@ -766,21 +1241,109 @@ mysqli_close($conn);
     <div class="preview-overlay" id="storefrontReviewsOverlay"></div>
 </div>
 
-<section class="storefront-header">
+<?php
+$store_banner_image = 'images/store-bg.jpg';
+if (is_file(__DIR__ . '/images/hero-bg.jpg')) {
+    $store_banner_image = 'images/hero-bg.jpg';
+}
+?>
+
+<!-- Foodpanda Mobile Hero Header (Mobile Viewport Only) -->
+<div class="fp-mobile-hero-header">
+    <div class="fp-hero-banner">
+        <img src="<?php echo htmlspecialchars($store_banner_image); ?>" alt="<?php echo htmlspecialchars($store_display_name); ?>" class="fp-hero-img">
+        <div class="fp-hero-overlay"></div>
+        
+        <!-- Floating Navigation Over Banner (Back on Left, Actions on Right) -->
+        <div class="fp-hero-floating-nav">
+            <a href="<?php echo $has_selected_store ? 'menu.php' : 'index.php'; ?>" class="fp-floating-round-btn" aria-label="Go Back">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            <div class="fp-hero-actions-group">
+                <button type="button" class="fp-floating-round-btn js-open-store-reviews" aria-label="Store Information">
+                    <i class="fas fa-circle-info"></i>
+                </button>
+                <button type="button" class="fp-floating-round-btn js-fav-store-btn" id="fpStoreFavBtn" aria-label="Favorite Store">
+                    <i class="far fa-heart"></i>
+                </button>
+                <button type="button" class="fp-floating-round-btn js-share-store-btn" id="fpStoreShareBtn" aria-label="Share Store">
+                    <i class="fas fa-arrow-up-from-bracket"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Overlapping Center Store Badge -->
+        <div class="fp-hero-badge-wrap">
+            <div class="fp-hero-badge">
+                <?php if ($store_logo_image !== ''): ?>
+                    <img src="<?php echo htmlspecialchars($store_logo_image); ?>" alt="<?php echo htmlspecialchars($store_display_name); ?>">
+                <?php else: ?>
+                    <span><?php echo htmlspecialchars($store_initials !== '' ? $store_initials : 'LD'); ?></span>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <!-- Store Info Card -->
+    <div class="fp-store-info-card">
+        <h1 class="fp-store-title"><?php echo htmlspecialchars($store_display_name); ?></h1>
+        
+        <div class="fp-rating-row">
+            <span class="fp-rating-badge"><i class="fas fa-star"></i> <?php echo number_format($store_rating_value > 0 ? $store_rating_value : 4.9, 1); ?></span>
+            <span class="fp-rating-count">(<?php echo max(50, $store_review_total > 0 ? $store_review_total : 120); ?>+ ratings)</span>
+            <span class="fp-dot">•</span>
+            <a href="javascript:void(0);" class="fp-see-reviews-btn js-open-store-reviews">See reviews</a>
+        </div>
+
+        <!-- Fulfillment Mode Switcher -->
+        <?php $active_fulfillment_mode = strtolower($_SESSION['delivery_option'] ?? 'delivery'); ?>
+        <div class="fp-fulfillment-row">
+            <div class="fp-fulfillment-toggle">
+                <button type="button" class="fp-toggle-pill <?php echo ($active_fulfillment_mode === 'delivery') ? 'active' : ''; ?>" data-mode="delivery">
+                    <i class="fas fa-motorcycle"></i> Delivery
+                </button>
+                <button type="button" class="fp-toggle-pill <?php echo ($active_fulfillment_mode === 'pickup') ? 'active' : ''; ?>" data-mode="pickup">
+                    <i class="fas fa-bag-shopping"></i> Pick-up
+                </button>
+            </div>
+        </div>
+
+        <!-- Delivery ETA & Pricing Card -->
+        <div class="fp-delivery-meta-card">
+            <div class="fp-del-main">
+                <span class="fp-del-time"><i class="fas fa-clock"></i> <strong>Delivery 20–35 min</strong></span>
+                <a href="javascript:void(0);" class="fp-del-change" onclick="document.querySelector('.market-location-btn')?.click() || alert('Update delivery location');">Change</a>
+            </div>
+            <div class="fp-del-sub">
+                ₱49.00 delivery or ₱34.30 with Saver • Min. order ₱149.00
+            </div>
+        </div>
+
+
+    </div>
+</div>
+
+<section class="storefront-header desktop-storefront-header">
     <div class="container">
         <nav class="store-breadcrumb" aria-label="Breadcrumb">
-            <a href="locations.php"><?php echo htmlspecialchars($breadcrumb_location); ?></a>
-            <span class="breadcrumb-sep">&rsaquo;</span>
-            <a href="index.php#marketplaceStores">Store list</a>
-            <span class="breadcrumb-sep">&rsaquo;</span>
-            <span class="is-current"><?php echo htmlspecialchars($store_display_name); ?></span>
+            <?php if ($has_selected_store): ?>
+                <a href="menu.php" style="color: #b3261e; font-weight: 700;"><i class="fas fa-arrow-left"></i> All Business Shops</a>
+                <span class="breadcrumb-sep">&rsaquo;</span>
+                <span class="is-current"><?php echo htmlspecialchars($store_display_name); ?></span>
+            <?php else: ?>
+                <a href="locations.php"><?php echo htmlspecialchars($breadcrumb_location); ?></a>
+                <span class="breadcrumb-sep">&rsaquo;</span>
+                <span class="is-current">All Business Shops</span>
+            <?php endif; ?>
         </nav>
         <div class="storefront-overview">
             <div class="store-logo-tile">
                 <?php if ($store_logo_image !== ''): ?>
-                    <img src="<?php echo htmlspecialchars($store_logo_image); ?>" alt="<?php echo htmlspecialchars($store_display_name); ?>" loading="lazy" onerror="this.style.display='none';">
+                    <img src="<?php echo htmlspecialchars($store_logo_image); ?>" alt="<?php echo htmlspecialchars($store_display_name); ?>" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <span class="store-logo-initials" style="display:none;"><?php echo htmlspecialchars($store_initials); ?></span>
+                <?php else: ?>
+                    <span class="store-logo-initials"><?php echo htmlspecialchars($store_initials); ?></span>
                 <?php endif; ?>
-                <span class="store-logo-initials"><?php echo htmlspecialchars($store_initials); ?></span>
             </div>
             <div class="storefront-copy">
                 <p class="storefront-categories"><?php echo htmlspecialchars($store_category_line); ?></p>
@@ -789,12 +1352,17 @@ mysqli_close($conn);
                 <div class="storefront-meta-row">
                     <span><i class="fas fa-motorcycle"></i> Delivery and pickup available</span>
                     <span><i class="fas fa-receipt"></i> <?php echo htmlspecialchars($store_price_label); ?></span>
-                    <span><i class="fas fa-utensils"></i> <?php echo number_format($store_item_count); ?> items</span>
+                    <span><i class="fas fa-utensils"></i> <?php echo $has_selected_store ? (number_format($store_item_count) . ' items') : (count($all_menu_shops) . ' shops available'); ?></span>
                 </div>
                 <div class="storefront-meta-row storefront-meta-row-secondary">
-                    <a href="javascript:void(0);" id="openStorefrontReviewsBtn"><i class="fas fa-star" style="color:#f59e0b;"></i> <?php echo htmlspecialchars($store_rating_label); ?> <span style="text-decoration:underline; font-weight:700; margin-left:4px;">See reviews</span></a>
-                    <a href="#menu"><i class="far fa-comment-dots"></i> See menu</a>
-                    <a href="locations.php"><i class="fas fa-circle-info"></i> More info</a>
+                    <?php if ($has_selected_store): ?>
+                        <a href="javascript:void(0);" id="openStorefrontReviewsBtn"><i class="fas fa-star" style="color:#f59e0b;"></i> <?php echo htmlspecialchars($store_rating_label); ?> <span style="text-decoration:underline; font-weight:700; margin-left:4px;">See reviews</span></a>
+                        <a href="menu.php" class="storefront-change-shop-btn"><i class="fas fa-arrows-rotate"></i> Change Shop</a>
+                        <a href="locations.php"><i class="fas fa-circle-info"></i> More info</a>
+                    <?php else: ?>
+                        <a href="#shopsDirectory"><i class="fas fa-store"></i> Choose a Shop Below</a>
+                        <a href="locations.php"><i class="fas fa-location-dot"></i> View Branch Map</a>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -804,113 +1372,227 @@ mysqli_close($conn);
 <!-- Menu Section -->
 <section class="menu-section" id="menu">
     <div class="container">
-        <!-- Foodpanda Unified Sticky Category Navigation Bar -->
-        <div class="panda-menu-sticky-bar" id="pandaMenuStickyBar">
-            <div class="panda-menu-bar-inner">
-                <!-- Search in Menu Input -->
-                <div class="panda-menu-search-box">
-                    <i class="fas fa-magnifying-glass"></i>
-                    <input type="search" id="menuSearchInput" placeholder="Search in menu" autocomplete="off">
-                </div>
+        <?php if (!$has_selected_store): ?>
+            <!-- All Business Shops Directory Showcase Grid -->
+            <div class="menu-shops-showcase-section" id="shopsDirectory" style="margin-bottom: 40px;">
+                <div style="background: #ffffff; border: 1px solid #eaecf0; border-radius: 20px; padding: 32px 24px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+                    <div style="text-align: center; max-width: 680px; margin: 0 auto 28px;">
+                        <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 800; color: #b3261e; background: #fff1f0; border: 1px solid #fee4e2; padding: 4px 12px; border-radius: 999px; margin-bottom: 10px;">
+                            <i class="fas fa-store"></i> Verified Marketplace Partners & Branches
+                        </span>
+                        <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.75rem; font-weight: 800; color: #101828; margin: 0 0 8px; letter-spacing: -0.02em;">
+                            Choose a Business Shop to Order
+                        </h2>
+                        <p style="font-size: 0.92rem; color: #475467; margin: 0; line-height: 1.5;">
+                            Select an official pickup branch or partner restaurant below to view their exclusive dishes, real-time inventory, and store deals.
+                        </p>
+                    </div>
 
-                <!-- Left Scroll Arrow -->
-                <button type="button" class="panda-cat-arrow arrow-left" id="pandaCatScrollLeft" aria-label="Scroll categories left">
-                    <i class="fas fa-chevron-left"></i>
-                </button>
-
-                <!-- Category Tabs Strip -->
-                <div class="panda-cat-strip-wrap" id="pandaCatStripWrap">
-                    <div class="panda-cat-strip" id="pandaCatStrip">
-                        <?php $cat_index = 0; foreach ($menu_categories as $category => $items): ?>
-                            <?php
-                            $cat_slug = strtolower(str_replace(' ', '-', $category));
-                            $cat_count = count($items);
-                            $is_active_cat = ($cat_index === 0);
-                            ?>
-                            <a href="#<?php echo htmlspecialchars($cat_slug); ?>" class="panda-cat-tab<?php echo $is_active_cat ? ' active' : ''; ?>" data-category="<?php echo htmlspecialchars($cat_slug); ?>">
-                                <?php echo htmlspecialchars($category); ?> <span class="panda-cat-count">(<?php echo $cat_count; ?>)</span>
+                    <div class="menu-shops-directory-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
+                        <?php foreach ($all_menu_shops as $shop): ?>
+                            <a href="<?php echo htmlspecialchars($shop['link']); ?>" class="menu-shop-card" style="background: #ffffff; border: 1.5px solid #eaecf0; border-radius: 16px; overflow: hidden; text-decoration: none; display: flex; flex-direction: column; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+                                <div style="height: 160px; overflow: hidden; position: relative; background: #f8f9fa;">
+                                    <img src="<?php echo htmlspecialchars($shop['image']); ?>" alt="<?php echo htmlspecialchars($shop['name']); ?>" style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.25s ease;" onerror="this.src='images/store-bg.jpg'">
+                                    <span style="position: absolute; top: 12px; left: 12px; font-size: 0.72rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; background: rgba(16, 24, 40, 0.82); color: #ffffff; backdrop-filter: blur(4px);">
+                                        <i class="<?php echo $shop['category'] === 'branch' ? 'fas fa-location-dot' : 'fas fa-shop'; ?>" style="margin-right: 3px;"></i> <?php echo htmlspecialchars($shop['type_label']); ?>
+                                    </span>
+                                </div>
+                                <div style="padding: 18px; display: flex; flex-direction: column; flex: 1;">
+                                    <div style="font-size: 0.78rem; color: #b3261e; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 5px;">
+                                        <i class="fas fa-map-pin"></i> <?php echo htmlspecialchars($shop['city']); ?>
+                                    </div>
+                                    <h3 style="margin: 0 0 6px; font-family: 'Outfit', sans-serif; font-size: 1.15rem; font-weight: 800; color: #101828;">
+                                        <?php echo htmlspecialchars($shop['name']); ?>
+                                    </h3>
+                                    <p style="margin: 0 0 16px; font-size: 0.82rem; color: #667085; line-height: 1.4; flex: 1;">
+                                        <?php echo htmlspecialchars($shop['address']); ?>
+                                    </p>
+                                    <div style="border-top: 1px solid #f2f4f7; padding-top: 14px; display: flex; align-items: center; justify-content: space-between;">
+                                        <span style="font-size: 0.84rem; font-weight: 700; color: #b3261e; display: inline-flex; align-items: center; gap: 6px;">
+                                            <i class="fas fa-utensils"></i> Browse Food Menu
+                                        </span>
+                                        <span style="width: 32px; height: 32px; border-radius: 50%; background: #fff1f0; color: #b3261e; display: flex; align-items: center; justify-content: center; font-size: 0.85rem;">
+                                            <i class="fas fa-arrow-right"></i>
+                                        </span>
+                                    </div>
+                                </div>
                             </a>
-                        <?php $cat_index++; endforeach; ?>
+                        <?php endforeach; ?>
                     </div>
                 </div>
+            </div>
+        <?php else: ?>
+            <!-- Specific Shop Food Menu & Ordering Section -->
+            <?php if (!empty($store_deals)): ?>
+                <div class="store-deals-strip" style="background: #ffffff; border: 1px solid #eaecf0; border-radius: 16px; padding: 18px 20px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 34px; height: 34px; border-radius: 10px; background: #fff1f0; color: #b3261e; display: flex; align-items: center; justify-content: center; font-size: 0.95rem;">
+                                <i class="fas fa-tags"></i>
+                            </div>
+                            <div>
+                                <h3 style="margin: 0; font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 800; color: #101828;">Store Exclusive Deals</h3>
+                                <p style="margin: 0; font-size: 0.78rem; color: #667085;">Special discounts available only when ordering from <?php echo htmlspecialchars($store_display_name); ?>.</p>
+                            </div>
+                        </div>
+                        <span style="font-size: 0.76rem; font-weight: 700; color: #027a48; background: #ecfdf3; border: 1px solid #abefc6; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px;">
+                            <i class="fas fa-circle-check"></i> <?php echo count($store_deals); ?> Store Offer<?php echo count($store_deals) > 1 ? 's' : ''; ?> Available
+                        </span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px;">
+                        <?php foreach ($store_deals as $deal): ?>
+                            <?php
+                                $is_pct = strtolower((string)$deal['discount_type']) === 'percent';
+                                $val_text = $is_pct ? (rtrim(rtrim(number_format((float)$deal['discount_value'], 2), '0'), '.') . '% OFF') : ('₱' . number_format((float)$deal['discount_value'], 0) . ' OFF');
+                                $min_order = (float)$deal['min_order_amount'];
+                                $min_text = $min_order > 0 ? ('Min. spend ₱' . number_format($min_order, 0)) : 'No min. spend';
+                                $deal_code = htmlspecialchars((string)$deal['code']);
+                            ?>
+                            <div style="background: #f8f9fa; border: 1px dashed #d0d5dd; border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                                <div>
+                                    <div style="font-weight: 800; color: #b3261e; font-size: 1.05rem;"><?php echo $val_text; ?></div>
+                                    <div style="font-size: 0.78rem; color: #344054; font-weight: 700; margin-top: 1px;"><?php echo htmlspecialchars((string)$deal['name']); ?></div>
+                                    <div style="font-size: 0.72rem; color: #667085;"><?php echo $min_text; ?></div>
+                                </div>
+                                <button type="button" onclick="claimStoreVoucher('<?php echo $deal_code; ?>', this)" style="background: #ffffff; border: 1px solid #d0d5dd; color: #344054; font-size: 0.76rem; font-weight: 700; padding: 7px 12px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; transition: all 0.15s ease;">
+                                    <i class="fas fa-copy"></i> <?php echo $deal_code; ?>
+                                </button>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
 
-                <!-- Right Scroll Arrow -->
-                <button type="button" class="panda-cat-arrow arrow-right" id="pandaCatScrollRight" aria-label="Scroll categories right">
-                    <i class="fas fa-chevron-right"></i>
-                </button>
-                
-                <!-- Filter Dropdown -->
-                <div class="panda-menu-filter-select-wrap">
-                    <select id="menuSortFilter" class="panda-menu-filter-select">
-                        <option value="default" selected>Default Sort</option>
-                        <option value="lowest_price">Lowest Price</option>
-                        <option value="highest_price">Highest Price</option>
-                        <option value="best_top_seller">Best / Top Seller</option>
-                    </select>
+            <!-- Foodpanda Unified Sticky Category Navigation Bar -->
+            <div class="panda-menu-sticky-bar" id="pandaMenuStickyBar">
+                <!-- Mobile Fixed Top Bar (Revealed when scrolled, back + enlarged search + more) -->
+                <div class="fp-mobile-top-bar" id="fpMobileTopBar">
+                    <a href="<?php echo $has_selected_store ? 'menu.php' : 'index.php'; ?>" class="fp-bar-round-btn fp-bar-back" aria-label="Back">
+                        <i class="fas fa-arrow-left"></i>
+                    </a>
+                    
+                    <div class="fp-bar-search-box">
+                        <i class="fas fa-magnifying-glass"></i>
+                        <input type="search" id="menuSearchInput" placeholder="Search <?php echo htmlspecialchars($store_display_name); ?>..." autocomplete="off">
+                    </div>
+
+                    <button type="button" class="fp-bar-round-btn fp-bar-more js-open-store-reviews" aria-label="More Options">
+                        <i class="fas fa-ellipsis"></i>
+                    </button>
+                </div>
+
+                <div class="panda-menu-bar-inner">
+                    <!-- Desktop Search in Menu Input -->
+                    <div class="panda-menu-search-box fp-desktop-search">
+                        <i class="fas fa-magnifying-glass"></i>
+                        <input type="search" id="menuSearchInputDesktop" placeholder="Search in this store's menu" autocomplete="off">
+                    </div>
+
+                    <!-- Left Scroll Arrow -->
+                    <button type="button" class="panda-cat-arrow arrow-left" id="pandaCatScrollLeft" aria-label="Scroll categories left">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+
+                    <!-- Category Tabs Strip -->
+                    <div class="panda-cat-strip-wrap" id="pandaCatStripWrap">
+                        <div class="panda-cat-strip" id="pandaCatStrip">
+                            <?php $cat_index = 0; foreach ($menu_categories as $category => $items): ?>
+                                <?php
+                                $cat_slug = strtolower(str_replace(' ', '-', $category));
+                                $cat_count = count($items);
+                                $is_active_cat = ($cat_index === 0);
+                                ?>
+                                <a href="#<?php echo htmlspecialchars($cat_slug); ?>" class="panda-cat-tab<?php echo $is_active_cat ? ' active' : ''; ?>" data-category="<?php echo htmlspecialchars($cat_slug); ?>">
+                                    <?php echo htmlspecialchars($category); ?> <span class="panda-cat-count">(<?php echo $cat_count; ?>)</span>
+                                </a>
+                            <?php $cat_index++; endforeach; ?>
+                        </div>
+                    </div>
+
+                    <!-- Right Scroll Arrow -->
+                    <button type="button" class="panda-cat-arrow arrow-right" id="pandaCatScrollRight" aria-label="Scroll categories right">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                    
+                    <!-- Filter Dropdown -->
+                    <div class="panda-menu-filter-select-wrap">
+                        <select id="menuSortFilter" class="panda-menu-filter-select">
+                            <option value="default" selected>Default Sort</option>
+                            <option value="lowest_price">Lowest Price</option>
+                            <option value="highest_price">Highest Price</option>
+                            <option value="best_top_seller">Best / Top Seller</option>
+                        </select>
+                    </div>
                 </div>
             </div>
-        </div>
-        <p id="menuSearchResultInfo" class="menu-search-result-info" style="display:none;"></p>
+            <p id="menuSearchResultInfo" class="menu-search-result-info" style="display:none;"></p>
 
-        <div class="menu-layout">
-            <div class="menu-main-column">
+            <div class="menu-layout">
+                <div class="menu-main-column">
 
-        <?php if (empty($menu_categories)): ?>
-        <div class="menu-filter-bar" style="margin-top:16px;">
-            <label>Storefront update:</label>
-            <span style="color:#6b7280;font-weight:600;">This store has no active posted products yet.</span>
-            <a href="index.php#marketplaceStores" class="btn-primary" style="margin-left:auto;">Back to Stores</a>
-        </div>
-        <?php endif; ?>
+            <?php if (empty($menu_categories)): ?>
+            <div class="menu-filter-bar" style="margin-top:16px; background:#ffffff; border:1px dashed #d0d5dd; border-radius:14px; padding:32px 20px; text-align:center;">
+                <i class="fas fa-utensils" style="font-size:2.2rem; color:#98a2b3; margin-bottom:12px; display:block;"></i>
+                <h3 style="font-family:'Outfit',sans-serif; font-size:1.15rem; font-weight:800; color:#101828; margin:0 0 6px;">No Menu Items Currently Posted</h3>
+                <p style="color:#667085; font-size:0.88rem; margin:0 0 16px;">This store currently has no active products posted in the menu catalog.</p>
+                <a href="menu.php" class="btn-primary" style="display:inline-flex; align-items:center; gap:6px; padding:10px 20px; border-radius:10px; text-decoration:none;"><i class="fas fa-store"></i> Browse Other Shops</a>
+            </div>
+            <?php endif; ?>
 
-        <!-- Menu Items by Category -->
-        <?php foreach ($menu_categories as $category => $items): ?>
-        <div class="menu-category" id="<?php echo strtolower(str_replace(' ', '-', $category)); ?>">
-            <h2 class="category-title"><?php echo $category; ?></h2>
-            <div class="menu-items-grid">
-                <?php foreach ($items as $item): ?>
-                <?php
-                    $item_search_tokens = [
-                        (string)($item['name'] ?? ''),
-                        (string)($item['category'] ?? ''),
-                        (string)strip_tags((string)($item['description'] ?? '')),
-                        (string)($item['store_name'] ?? ''),
-                        implode(' ', array_filter(array_map('strval', (array)($item['sizes'] ?? [])))),
-                        implode(' ', array_filter(array_map('strval', (array)($item['addons'] ?? [])))),
-                        implode(' ', array_filter(array_map('strval', (array)($item['weights'] ?? [])))),
-                        implode(' ', array_filter(array_map('strval', (array)($item['good_for'] ?? []))))
-                    ];
-                    $item_search_text = strtolower(trim(preg_replace('/\s+/', ' ', implode(' ', array_filter($item_search_tokens)))));
-                    $is_product_favorite = !empty($favorite_product_ids[(int)$item['id']]);
-                ?>
-                 <div class="menu-item <?php if ($item['stock'] <= 0) echo 'item-unavailable'; ?>"
-                     data-product-id="<?php echo $item['id']; ?>"
-                     data-min-price="<?php echo htmlspecialchars((string)min($item['size_prices'])); ?>"
-                     data-search="<?php echo htmlspecialchars($item_search_text); ?>"
-                     data-total-sold="<?php echo (int)$item['total_sold']; ?>">
-<?php
-    $imagePath = $item['image'] ?? '';
-    $placeholderText = urlencode($item['name']);
-    if (empty($imagePath)) {
-        $imageSrc = 'https://via.placeholder.com/400x300?text=' . $placeholderText;
-    } elseif (stripos($imagePath, 'http://') === 0 || stripos($imagePath, 'https://') === 0) {
-        $imageSrc = $imagePath;
-    } elseif (strpos($imagePath, '/') === false) {
-        $imageSrc = 'images/menu/' . $imagePath;
-    } else {
-        $imageSrc = $imagePath;
-    }
-?>
-                    <?php if ($item['stock'] <= 0): ?>
-                        <div class="item-sold-out-overlay">
-                            <span>Sold Out</span>
+            <!-- Menu Items by Category -->
+            <?php foreach ($menu_categories as $category => $items): ?>
+            <div class="menu-category" id="<?php echo strtolower(str_replace(' ', '-', $category)); ?>">
+                <h2 class="category-title"><?php echo $category; ?></h2>
+                <div class="menu-items-grid">
+                    <?php foreach ($items as $item): ?>
+                    <?php
+                        $item_search_tokens = [
+                            (string)($item['name'] ?? ''),
+                            (string)($item['category'] ?? ''),
+                            (string)strip_tags((string)($item['description'] ?? '')),
+                            (string)($item['store_name'] ?? ''),
+                            implode(' ', array_filter(array_map('strval', (array)($item['sizes'] ?? [])))),
+                            implode(' ', array_filter(array_map('strval', (array)($item['addons'] ?? [])))),
+                            implode(' ', array_filter(array_map('strval', (array)($item['weights'] ?? [])))),
+                            implode(' ', array_filter(array_map('strval', (array)($item['good_for'] ?? []))))
+                        ];
+                        $item_search_text = strtolower(trim(preg_replace('/\s+/', ' ', implode(' ', array_filter($item_search_tokens)))));
+                        $is_product_favorite = !empty($favorite_product_ids[(int)$item['id']]);
+                    ?>
+                     <div class="menu-item <?php if ($item['stock'] <= 0) echo 'item-unavailable'; ?>"
+                         data-product-id="<?php echo $item['id']; ?>"
+                         data-min-price="<?php echo htmlspecialchars((string)min($item['size_prices'])); ?>"
+                         data-search="<?php echo htmlspecialchars($item_search_text); ?>"
+                         data-total-sold="<?php echo (int)$item['total_sold']; ?>">
+    <?php
+        $imagePath = $item['image'] ?? '';
+        $placeholderText = urlencode($item['name']);
+        if (empty($imagePath)) {
+            $imageSrc = 'https://via.placeholder.com/400x300?text=' . $placeholderText;
+        } elseif (stripos($imagePath, 'http://') === 0 || stripos($imagePath, 'https://') === 0) {
+            $imageSrc = $imagePath;
+        } elseif (strpos($imagePath, '/') === false) {
+            $imageSrc = 'images/menu/' . $imagePath;
+        } else {
+            $imageSrc = $imagePath;
+        }
+    ?>
+                        <?php if ($item['stock'] <= 0): ?>
+                            <div class="item-sold-out-overlay">
+                                <span>Sold Out</span>
+                            </div>
+                        <?php endif; ?>
+                        
+                        <!-- Card Image -->
+                        <div class="item-image">
+                            <img src="<?php echo htmlspecialchars($imageSrc); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>" 
+                                 onerror="this.src='https://via.placeholder.com/400x300?text=<?php echo $placeholderText; ?>'">
+                            <?php if (($item['total_sold'] ?? 0) > 0): ?>
+                            <span class="top-seller-badge"><i class="fas fa-fire"></i> Top Seller</span>
+                            <?php endif; ?>
                         </div>
-                    <?php endif; ?>
-                    
-                    <!-- Top Image Banner -->
-                    <div class="item-image">
-                        <img src="<?php echo htmlspecialchars($imageSrc); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>" 
-                             onerror="this.src='https://via.placeholder.com/400x300?text=<?php echo $placeholderText; ?>'">
+
+                        <!-- Card Favorite Heart Button (Positioned at top right of card, away from product image) -->
                         <button
                             type="button"
                             class="product-favorite-btn<?php echo $is_product_favorite ? ' is-active' : ''; ?>"
@@ -922,124 +1604,153 @@ mysqli_close($conn);
                             title="<?php echo $is_product_favorite ? 'Remove from favorites' : 'Save to favorites'; ?>">
                             <i class="<?php echo $is_product_favorite ? 'fas' : 'far'; ?> fa-heart"></i>
                         </button>
-                        <?php if (($item['total_sold'] ?? 0) > 0): ?>
-                        <span class="top-seller-badge"><i class="fas fa-fire"></i> Top Seller</span>
-                        <?php endif; ?>
-                    </div>
-                    
-                    <!-- Card Body Content -->
-                    <div class="item-content">
-                        <h3><?php echo htmlspecialchars($item['name']); ?></h3>
                         
-                        <div class="item-rating">
-                            <?php
-                            $rating = floatval($item['avg_rating']);
-                            $review_count = intval($item['review_count']);
-                            for ($i = 1; $i <= 5; $i++) {
-                                if ($i <= $rating) {
-                                    echo '<i class="fas fa-star"></i>';
-                                } elseif ($i - 0.5 <= $rating) {
-                                    echo '<i class="fas fa-star-half-alt"></i>';
-                                } else {
-                                    echo '<i class="far fa-star"></i>';
-                                }
-                            }
+                        <!-- Card Body Content -->
+                        <div class="item-content">
+                            <?php 
+                            $is_whole_roast = stripos($item['name'], 'whole') !== false || stripos($item['category'], 'whole') !== false || stripos($item['name'], 'lechon baka') !== false;
+                            if ($is_whole_roast): 
                             ?>
-                            <span class="review-count">(<?php echo $review_count; ?>)</span>
-                        </div>
-                        
-                        <p class="item-description"><?php echo htmlspecialchars($item['description']); ?></p>
-                        
-                        <!-- Bottom Action Bar: Price Pill + (+) Plus Button -->
-                        <div class="item-card-bottom">
-                            <div class="panda-price-pill">
-                                PHP <?php echo number_format(min($item['size_prices']), 2); ?>
+                                <div style="margin-bottom: 6px;">
+                                    <span style="display:inline-flex; align-items:center; gap:4px; font-size:0.7rem; font-weight:800; color:#b54708; background:#fffaeb; border:1px solid #fedf89; padding:2px 8px; border-radius:6px;">
+                                        <i class="fas fa-clock"></i> 4–6 hrs Roasting • Advance Order
+                                    </span>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <h3 class="item-title"><?php echo htmlspecialchars($item['name']); ?></h3>
+                            
+                            <div class="item-rating">
+                                <?php
+                                $rating = floatval($item['avg_rating']);
+                                $review_count = intval($item['review_count']);
+                                for ($i = 1; $i <= 5; $i++) {
+                                    if ($i <= $rating) {
+                                        echo '<i class="fas fa-star"></i>';
+                                    } elseif ($i - 0.5 <= $rating) {
+                                        echo '<i class="fas fa-star-half-alt"></i>';
+                                    } else {
+                                        echo '<i class="far fa-star"></i>';
+                                    }
+                                }
+                                ?>
+                                <span class="review-count">(<?php echo $review_count; ?>)</span>
                             </div>
                             
-                            <button type="button" class="panda-quick-add-btn view-details-btn add-to-cart"
-                                    data-id="<?php echo $item['id']; ?>"
-                                    data-product-id="<?php echo $item['product_id']; ?>"
-                                    data-name="<?php echo htmlspecialchars($item['name']); ?>"
-                                    data-description="<?php echo htmlspecialchars($item['description']); ?>"
-                                    data-image="<?php echo htmlspecialchars($imageSrc); ?>"
-                                    data-sizes='<?php echo json_encode($item['sizes']); ?>'
-                                    data-weights='<?php echo json_encode($item['weights']); ?>'
-                                    data-good-for='<?php echo json_encode($item['good_for']); ?>'
-                                    data-size-prices='<?php echo json_encode($item['size_prices']); ?>'
-                                    data-addons='<?php echo json_encode($item['addons']); ?>'
-                                    data-avg-rating='<?php echo $item['avg_rating']; ?>'
-                                    data-stock="<?php echo $item['stock']; ?>"
-                                    <?php if ($item['stock'] <= 0) echo 'disabled'; ?>
-                                    title="View details / Add to cart">
-                                <i class="fas fa-<?php echo ($item['stock'] <= 0) ? 'ban' : 'plus'; ?>"></i>
-                            </button>
+                            <p class="item-description"><?php echo htmlspecialchars($item['description']); ?></p>
+                            
+                            <!-- Stock & Inventory Status Indicator -->
+                            <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                                <?php if ((int)$item['stock'] > 0): ?>
+                                    <span style="font-size: 0.72rem; font-weight: 700; color: #027a48; background: #ecfdf3; border: 1px solid #abefc6; padding: 2px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+                                        <i class="fas fa-boxes-stacked"></i> <?php echo (int)$item['stock']; ?> Available in Stock
+                                    </span>
+                                <?php else: ?>
+                                    <span style="font-size: 0.72rem; font-weight: 700; color: #b3261e; background: #fff1f0; border: 1px solid #fee4e2; padding: 2px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+                                        <i class="fas fa-ban"></i> Currently Sold Out
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+
+                            <!-- Bottom Action Bar: Price Pill + (+) Plus Button -->
+                            <div class="item-card-bottom">
+                                <div class="panda-price-pill">
+                                    PHP <?php echo number_format(min($item['size_prices']), 2); ?>
+                                </div>
+                                
+                                <button type="button" class="panda-quick-add-btn view-details-btn add-to-cart"
+                                        data-id="<?php echo $item['id']; ?>"
+                                        data-product-id="<?php echo $item['product_id']; ?>"
+                                        data-name="<?php echo htmlspecialchars($item['name']); ?>"
+                                        data-description="<?php echo htmlspecialchars($item['description']); ?>"
+                                        data-image="<?php echo htmlspecialchars($imageSrc); ?>"
+                                        data-sizes='<?php echo json_encode($item['sizes']); ?>'
+                                        data-weights='<?php echo json_encode($item['weights']); ?>'
+                                        data-good-for='<?php echo json_encode($item['good_for']); ?>'
+                                        data-size-prices='<?php echo json_encode($item['size_prices']); ?>'
+                                        data-addons='<?php echo json_encode($item['addons']); ?>'
+                                        data-avg-rating='<?php echo $item['avg_rating']; ?>'
+                                        data-stock="<?php echo $item['stock']; ?>"
+                                        <?php if ($item['stock'] <= 0) echo 'disabled'; ?>
+                                        title="View details / Add to cart">
+                                    <i class="fas fa-<?php echo ($item['stock'] <= 0) ? 'ban' : 'plus'; ?>"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
+                    <?php endforeach; ?>
                 </div>
-                <?php endforeach; ?>
             </div>
-        </div>
-        <?php endforeach; ?>
+            <?php endforeach; ?>
 
-            </div>
-
-            <aside class="menu-side-column">
-                <div class="menu-side-stack">
-                    <section class="quick-order-panel" id="quickOrderPanel">
-                        <div class="quick-order-tabs" role="tablist" aria-label="Order option">
-                            <button type="button"
-                                    class="quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'delivery' ? ' active' : ''; ?>"
-                                    data-delivery-option="delivery"
-                                    onclick="switchDeliveryOptionTab('delivery')">
-                                Delivery
-                            </button>
-                            <button type="button"
-                                    class="quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'pickup' ? ' active' : ''; ?>"
-                                    data-delivery-option="pickup"
-                                    onclick="switchDeliveryOptionTab('pickup')">
-                                Pick-up
-                            </button>
-                        </div>
-
-                        <div class="quick-order-hero">
-                            <div class="quick-order-hero-icon">
-                                <i class="fas fa-bag-shopping"></i>
-                            </div>
-                            <h3>Free delivery on your first order</h3>
-                            <p id="quickOrderHint">Add items to unlock free delivery</p>
-                        </div>
-
-                        <div class="quick-order-summary">
-                            <p class="quick-order-meta" id="quickOrderMeta">Pick-up selected</p>
-                            <div class="quick-order-items" id="quickOrderItems" aria-live="polite">
-                                <p class="quick-order-items-empty">No items in cart yet.</p>
-                            </div>
-                            <div class="summary-row">
-                                <span>Total <small>(incl. fees and tax)</small></span>
-                                <strong id="quickOrderTotal">&#8369;0.00</strong>
-                            </div>
-                            <button type="button" class="quick-order-link" id="quickSeeSummaryBtn">See summary</button>
-                        </div>
-
-                        <button type="button" class="quick-order-checkout" id="quickCheckoutBtn" disabled>
-                            Review payment and address
-                        </button>
-                    </section>
                 </div>
-            </aside>
-        </div>
+
+                <aside class="menu-side-column">
+                    <div class="menu-side-stack">
+                        <section class="quick-order-panel" id="quickOrderPanel">
+                            <div class="quick-order-tabs" role="tablist" aria-label="Order option">
+                                <button type="button"
+                                        class="quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'delivery' ? ' active' : ''; ?>"
+                                        data-delivery-option="delivery"
+                                        onclick="switchDeliveryOptionTab('delivery')">
+                                    Delivery
+                                </button>
+                                <button type="button"
+                                        class="quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'pickup' ? ' active' : ''; ?>"
+                                        data-delivery-option="pickup"
+                                        onclick="switchDeliveryOptionTab('pickup')">
+                                    Pick-up
+                                </button>
+                            </div>
+
+                            <div class="quick-order-hero">
+                                <div class="quick-order-hero-icon">
+                                    <i class="fas fa-bag-shopping"></i>
+                                </div>
+                                <h3>Free delivery on your first order</h3>
+                                <p id="quickOrderHint">Add items to unlock free delivery</p>
+                            </div>
+
+                            <div class="quick-order-summary">
+                                <p class="quick-order-meta" id="quickOrderMeta">Pick-up selected</p>
+                                <div class="quick-order-items" id="quickOrderItems" aria-live="polite">
+                                    <p class="quick-order-items-empty">No items in cart yet.</p>
+                                </div>
+                                <div class="summary-row">
+                                    <span>Total <small>(incl. fees and tax)</small></span>
+                                    <strong id="quickOrderTotal">&#8369;0.00</strong>
+                                </div>
+                                <button type="button" class="quick-order-link" id="quickSeeSummaryBtn">See summary</button>
+                            </div>
+
+                            <button type="button" class="quick-order-checkout" id="quickCheckoutBtn" disabled>
+                                Review payment and address
+                            </button>
+                        </section>
+                    </div>
+                </aside>
+            </div>
+        <?php endif; ?>
     </div>
 </section>
 
 <!-- Cart Sidebar -->
 <div class="cart-overlay" id="cartOverlay"></div>
 <div class="cart-sidebar" id="cartSidebar">
-    <div class="cart-header">
-        <h3><i class="fas fa-shopping-cart"></i> Your Cart</h3>
-        <button class="cart-close" id="cartClose">&times;</button>
+    <div class="cart-header" style="display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid #efddcd; background: #ffffff;">
+        <button class="cart-close" id="cartClose" style="background: none; border: none; font-size: 1.6rem; color: #171922; cursor: pointer; padding: 0; display: inline-flex; align-items: center; justify-content: center; margin: 0; line-height: 1;">&times;</button>
+        <div style="text-align: center; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; margin-right: 24px;">
+            <span style="font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 1.15rem; color: #171922; line-height: 1.2;">Basket</span>
+            <small style="font-size: 0.72rem; color: #667085; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-top: 2px;"><i class="far fa-clock"></i> Delivery time: 30-40 min</small>
+        </div>
     </div>
     
-    <div class="cart-body" id="cartBody">
+    <div class="cart-body" id="cartBody" style="padding: 24px; overflow-y: auto; flex: 1;">
+        <!-- Store Name Header in Drawer -->
+        <div class="cart-store-header" style="margin-bottom: 20px; text-align: left;">
+            <h4 style="font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 1.25rem; color: #171922; margin: 0;"><?php echo htmlspecialchars($store_display_name); ?></h4>
+        </div>
+
         <div class="cart-empty" id="cartEmpty">
             <i class="fas fa-shopping-cart"></i>
             <p>Your cart is empty</p>
@@ -1051,53 +1762,43 @@ mysqli_close($conn);
         </div>
     </div>
     
-    <div class="cart-footer" id="cartFooter" style="display: none;">
-        <div class="cart-summary">
-            <div class="summary-row">
-                <span>Subtotal:</span>
-                <span id="cartSubtotal">PHP 0.00</span>
+    <div class="cart-footer" id="cartFooter" style="display: none; padding: 24px; border-top: 1px solid #efddcd; background: #ffffff; margin-top: auto;">
+        <div class="cart-summary" style="margin-bottom: 20px;">
+            <div class="summary-row" style="display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 0.95rem; color: #667085; font-weight: 600;">
+                <span>Subtotal</span>
+                <span id="cartSubtotal" style="color: #171922; font-weight: 700;">PHP 0.00</span>
             </div>
-            <div class="summary-row total">
-                <span>Total:</span>
+            <div style="font-size: 0.82rem; color: #7b6d64; text-align: left; line-height: 1.4; margin-bottom: 16px;">
+                Delivery Fee will be shown after you review order
+            </div>
+            <div class="summary-row total" style="display: flex; justify-content: space-between; border-top: 1px solid #efddcd; padding-top: 16px; font-size: 1.15rem; font-weight: 800; color: #171922;">
+                <span style="font-family: 'Outfit', sans-serif;">Total</span>
                 <span id="cartTotal">PHP 0.00</span>
             </div>
         </div>
         
-        <div class="cart-actions">
-            <button class="btn-secondary" id="clearCart">Clear Cart</button>
-            <button class="btn-primary" id="checkoutBtn" <?php echo empty($_SESSION['cart']) ? 'disabled' : ''; ?>>
-                Proceed to Checkout
+        <div class="cart-actions" style="display: flex; flex-direction: column; gap: 8px;">
+            <button class="btn-primary" id="checkoutBtn" <?php echo empty($_SESSION['cart']) ? 'disabled' : ''; ?> style="width: 100% !important; background: #b3261e !important; color: #fff !important; border: none !important; border-radius: 8px !important; padding: 14px !important; font-weight: 700 !important; font-size: 1rem !important; cursor: pointer !important; text-align: center !important;">
+                Review Order
             </button>
+            <button class="btn-secondary" id="clearCart" style="background: none; border: none; color: #7b6d64; font-size: 0.85rem; font-weight: 600; cursor: pointer; text-decoration: underline; padding: 8px 0; margin: 0 auto; display: block;">Clear Cart</button>
         </div>
     </div>
 </div>
 
-<!-- Mobile Compact Order Bar -->
-<div class="mobile-quick-order" id="mobileQuickOrder" aria-label="Quick order controls">
+<!-- Mobile Compact Order Bar (Screen 6 Reference: Clean glassmorphic capsule, only shown when items exist) -->
+<?php
+$initial_cart_items_count = (isset($_SESSION['cart']) && is_array($_SESSION['cart'])) ? count($_SESSION['cart']) : 0;
+$initial_cart_has_items = $initial_cart_items_count > 0;
+?>
+<div class="mobile-quick-order<?php echo $initial_cart_has_items ? ' has-items' : ''; ?>" id="mobileQuickOrder" aria-label="Quick order controls">
     <div class="mobile-quick-order-inner">
-        <div class="mobile-quick-order-top">
-            <div class="mobile-quick-order-tabs" role="tablist" aria-label="Mobile order option">
-                <button type="button"
-                        class="mobile-quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'delivery' ? ' active' : ''; ?>"
-                        data-delivery-option="delivery"
-                        onclick="switchDeliveryOptionTab('delivery')">
-                    Delivery
-                </button>
-                <button type="button"
-                        class="mobile-quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'pickup' ? ' active' : ''; ?>"
-                        data-delivery-option="pickup"
-                        onclick="switchDeliveryOptionTab('pickup')">
-                    Pick-up
-                </button>
-            </div>
-            <button type="button" class="mobile-quick-order-link" id="mobileSeeSummaryBtn">Summary</button>
-        </div>
         <div class="mobile-quick-order-bottom">
             <div class="mobile-quick-order-meta-wrap">
-                <p class="mobile-quick-order-meta" id="mobileQuickOrderMeta">Pick-up selected</p>
+                <p class="mobile-quick-order-meta" id="mobileQuickOrderMeta"><?php echo $initial_cart_has_items ? ($initial_cart_items_count . ' item' . ($initial_cart_items_count > 1 ? 's' : '') . ' • ' . (($_SESSION['delivery_option'] ?? 'pickup') === 'delivery' ? 'Delivery' : 'Pick-up')) : 'Pick-up selected'; ?></p>
                 <strong class="mobile-quick-order-total" id="mobileQuickOrderTotal">&#8369;0.00</strong>
             </div>
-            <button type="button" class="mobile-quick-order-checkout" id="mobileQuickCheckoutBtn" disabled>Checkout</button>
+            <button type="button" class="mobile-quick-order-checkout" id="mobileQuickCheckoutBtn" <?php echo $initial_cart_has_items ? '' : 'disabled'; ?>>Checkout &rarr;</button>
         </div>
     </div>
 </div>
@@ -1106,6 +1807,53 @@ mysqli_close($conn);
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
+function claimStoreVoucher(code, btn) {
+    if (!code) return;
+    const textToCopy = String(code).trim();
+    try {
+        sessionStorage.setItem('pending_welcome_voucher', textToCopy);
+    } catch(e) {}
+
+    // Send to backend so PHP session records it immediately
+    fetch('apply_voucher.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ action: 'claim', code: textToCopy })
+    }).catch(() => {});
+
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(textToCopy).catch(() => {});
+    }
+
+    if (btn) {
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> Applied!';
+        btn.style.background = '#ecfdf3';
+        btn.style.color = '#027a48';
+        btn.style.borderColor = '#abefc6';
+        setTimeout(() => {
+            btn.innerHTML = originalHtml;
+            btn.style.background = '#ffffff';
+            btn.style.color = '#344054';
+            btn.style.borderColor = '#d0d5dd';
+        }, 2500);
+    }
+
+    if (typeof Swal !== 'undefined') {
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3000,
+            timerProgressBar: true
+        });
+        Toast.fire({
+            icon: 'success',
+            title: 'Store Voucher ' + textToCopy + ' activated! It will apply to this shop at checkout.'
+        });
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Product Preview Modal
     const productPreviewModal = document.getElementById('productPreviewModal');
@@ -1150,6 +1898,98 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Foodpanda Mobile Header Docking & Scroll Watcher
+    const pandaMenuStickyBar = document.getElementById('pandaMenuStickyBar');
+    const fpHeroHeader = document.querySelector('.fp-mobile-hero-header');
+    
+    if (pandaMenuStickyBar && fpHeroHeader) {
+        let isTicking = false;
+        function updateFpStickyState() {
+            const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+            const threshold = fpHeroHeader.offsetHeight - 50;
+            if (scrollY > threshold) {
+                pandaMenuStickyBar.classList.add('is-docked');
+            } else {
+                pandaMenuStickyBar.classList.remove('is-docked');
+            }
+            isTicking = false;
+        }
+
+        window.addEventListener('scroll', function() {
+            if (!isTicking) {
+                window.requestAnimationFrame(updateFpStickyState);
+                isTicking = true;
+            }
+        }, { passive: true });
+        updateFpStickyState();
+    }
+
+    // Sync Desktop and Mobile Search Inputs
+    const menuSearchInputDesktop = document.getElementById('menuSearchInputDesktop');
+    if (menuSearchInput && menuSearchInputDesktop) {
+        menuSearchInputDesktop.addEventListener('input', function() {
+            menuSearchInput.value = this.value;
+            menuSearchQuery = normalizeMenuSearch(this.value);
+            applyMenuFilter(menuSortFilter ? menuSortFilter.value : 'default');
+        });
+        menuSearchInput.addEventListener('input', function() {
+            menuSearchInputDesktop.value = this.value;
+        });
+    }
+
+    // Foodpanda Header Controls (Reviews, Share, Favorite, Fulfillment pills)
+    document.querySelectorAll('.js-open-store-reviews').forEach(function(btn) {
+        btn.addEventListener('click', openStorefrontReviews);
+    });
+
+    document.querySelectorAll('.js-share-store-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const storeName = (document.querySelector('.fp-store-title') || document.querySelector('h1'))?.textContent.trim() || 'Store';
+            const shareData = {
+                title: storeName + ' on Lechon Delights',
+                text: 'Order delicious food from ' + storeName + '!',
+                url: window.location.href
+            };
+            if (navigator.share) {
+                navigator.share(shareData).catch(function() {});
+            } else if (navigator.clipboard) {
+                navigator.clipboard.writeText(window.location.href).then(function() {
+                    alert('Store menu link copied to clipboard!');
+                });
+            }
+        });
+    });
+
+    document.querySelectorAll('.js-fav-store-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const icon = this.querySelector('i');
+            if (icon) {
+                if (icon.classList.contains('far')) {
+                    icon.classList.remove('far');
+                    icon.classList.add('fas');
+                    icon.style.color = '#ef4444';
+                } else {
+                    icon.classList.remove('fas');
+                    icon.classList.add('far');
+                    icon.style.color = '';
+                }
+            }
+        });
+    });
+
+    document.querySelectorAll('.fp-toggle-pill').forEach(function(pill) {
+        pill.addEventListener('click', function() {
+            const mode = this.getAttribute('data-mode') || 'delivery';
+            document.querySelectorAll('.fp-toggle-pill').forEach(function(p) { p.classList.remove('active'); });
+            this.classList.add('active');
+            if (typeof setDeliveryOption === 'function') {
+                setDeliveryOption(mode);
+            }
+        });
+    });
+
     // Category Tabs Active Line Transfer & Scroll Spy
     const pandaCatTabs = Array.from(document.querySelectorAll('.panda-cat-tab'));
     const menuCategorySections = Array.from(document.querySelectorAll('.menu-category'));
@@ -1180,7 +2020,8 @@ document.addEventListener('DOMContentLoaded', function() {
             setPandaCatTabActive(this);
 
             if (targetSection) {
-                const headerOffset = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--site-header-offset')) || 92) + 75;
+                const isMobile = window.innerWidth <= 768;
+                const headerOffset = isMobile ? 100 : ((parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--site-header-offset')) || 92) + 75);
                 const elementPosition = targetSection.getBoundingClientRect().top + window.pageYOffset;
                 const offsetPosition = elementPosition - headerOffset;
 
@@ -1195,7 +2036,8 @@ document.addEventListener('DOMContentLoaded', function() {
     window.addEventListener('scroll', function() {
         if (menuCategorySections.length === 0) return;
         
-        const headerOffset = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--site-header-offset')) || 92) + 110;
+        const isMobile = window.innerWidth <= 768;
+        const headerOffset = isMobile ? 110 : ((parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--site-header-offset')) || 92) + 110);
         const scrollPosition = window.pageYOffset + headerOffset;
 
         let currentCategorySection = null;
@@ -1268,10 +2110,8 @@ document.addEventListener('DOMContentLoaded', function() {
             document.documentElement.style.setProperty('--menu-category-nav-height', `${navHeight}px`);
         }
         const rootStyles = getComputedStyle(document.documentElement);
-        const navGap = parseFloat(rootStyles.getPropertyValue('--menu-category-nav-gap')) || 14;
-        const headerOffset = parseFloat(rootStyles.getPropertyValue('--site-header-offset')) || 92;
-        const stickyNavTop = headerOffset + 10;
-        const resolvedTop = stickyNavTop + navHeight + navGap;
+        const headerOffset = parseFloat(rootStyles.getPropertyValue('--site-header-offset')) || 72;
+        const resolvedTop = headerOffset + navHeight + 14;
         document.documentElement.style.setProperty('--menu-side-stack-top', `${resolvedTop}px`);
     }
 
@@ -1422,6 +2262,14 @@ document.addEventListener('DOMContentLoaded', function() {
         if (mobileQuickCheckoutBtn) {
             mobileQuickCheckoutBtn.disabled = itemCount <= 0;
         }
+        const mobileQuickOrderEl = document.getElementById('mobileQuickOrder');
+        if (mobileQuickOrderEl) {
+            if (itemCount > 0 && finalTotal > 0) {
+                mobileQuickOrderEl.classList.add('has-items');
+            } else {
+                mobileQuickOrderEl.classList.remove('has-items');
+            }
+        }
 
         setQuickOrderTabsActive(deliveryOption);
     }
@@ -1429,6 +2277,11 @@ document.addEventListener('DOMContentLoaded', function() {
     async function setDeliveryOption(option) {
         const normalizedOption = option === 'delivery' ? 'delivery' : 'pickup';
         setQuickOrderTabsActive(normalizedOption);
+
+        // Also synchronize Foodpanda pills
+        document.querySelectorAll('.fp-toggle-pill').forEach(function(p) {
+            p.classList.toggle('active', (p.getAttribute('data-mode') || '').toLowerCase() === normalizedOption);
+        });
 
         const payload = new URLSearchParams({ delivery_option: normalizedOption });
         if (normalizedOption === 'pickup') {
@@ -1458,15 +2311,16 @@ document.addEventListener('DOMContentLoaded', function() {
     async function handleCheckoutStart() {
         if (window.cartData && Number(window.cartData.cart_count || 0) > 0) {
             const activeDeliveryOption =
-                document.querySelector('.quick-order-tab.active')?.dataset.deliveryOption
+                document.querySelector('.fp-toggle-pill.active')?.dataset.mode
+                || document.querySelector('.quick-order-tab.active')?.dataset.deliveryOption
                 || document.querySelector('.mobile-quick-order-tab.active')?.dataset.deliveryOption
-                || (window.cartData?.delivery_option || 'pickup');
+                || (window.cartData?.delivery_option || 'delivery');
             try {
                 await setDeliveryOption(activeDeliveryOption);
             } catch (error) {
                 console.error('Unable to sync delivery option before checkout:', error);
             }
-            window.location.href = 'checkout.php';
+            window.location.href = 'checkout.php?mode=' + encodeURIComponent(activeDeliveryOption);
             return;
         }
 
@@ -1867,11 +2721,20 @@ document.addEventListener('click', function(e) {
         } else {
             document.getElementById('previewAddonsSection').style.display = 'none';
         }
-              // Set initial price
+        // Set initial price
         updateOrderSummary();
+
+
         
+        if (addToCartConfirm) {
+            addToCartConfirm.disabled = (parseInt(product.stock) <= 0);
+            addToCartConfirm.innerHTML = (parseInt(product.stock) <= 0) ? '<i class="fas fa-ban"></i> Currently Sold Out' : '<i class="fas fa-cart-plus"></i> Add to Cart';
+            addToCartConfirm.style.display = 'flex';
+        }
+
         // Show modal
         if (productPreviewModal) {
+            document.body.classList.add('product-preview-open');
             productPreviewModal.style.display = 'block';
             setTimeout(() => {
                 productPreviewModal.classList.add('active');
@@ -1938,6 +2801,7 @@ document.addEventListener('click', function(e) {
     // Close preview modal
     function closeProductPreview() {
         if (!productPreviewModal) return;
+        document.body.classList.remove('product-preview-open');
         productPreviewModal.classList.remove('active');
         setTimeout(() => {
             productPreviewModal.style.display = 'none';
@@ -1966,7 +2830,7 @@ document.addEventListener('click', function(e) {
 
             try {
                 const formData = new FormData();
-                formData.append('product_id', currentProduct.id);
+                formData.append('product_id', currentProduct.id || currentProduct.product_id || 0);
                 formData.append('quantity', quantity);
                 formData.append('size', size);
                 formData.append('price', price);
@@ -1983,7 +2847,9 @@ document.addEventListener('click', function(e) {
                     closeProductPreview();
                     updateCartSidebar();
 
-                    if (typeof Swal !== 'undefined') {
+                    if (window.showPopupAlert) {
+                        window.showPopupAlert(data.message || 'Item successfully added to your cart.', 'success', 2500);
+                    } else if (typeof Swal !== 'undefined') {
                         Swal.fire({
                             icon: 'success',
                             title: 'Added to Cart!',
@@ -1995,26 +2861,122 @@ document.addEventListener('click', function(e) {
                         });
                     }
                 } else {
-                    if (data.code === 'MIXED_TENANT_ADD_BLOCKED' || data.code === 'MIXED_TENANT_CART_EXISTING') {
-                        if (typeof Swal !== 'undefined') {
+                    if (data.code === 'MIXED_TENANT_ADD_BLOCKED') {
+                        if (window.showConfirmDialog) {
+                            window.showConfirmDialog({
+                                title: 'Switch Store Order?',
+                                text: data.message || 'Your cart has items from another store. Clear cart and start an order from this shop?',
+                                icon: 'warning',
+                                confirmText: 'Yes, Clear & Add Item',
+                                confirmColor: '#b3261e',
+                                cancelText: 'Keep Existing Cart'
+                            }).then(async (confirmed) => {
+                                if (confirmed) {
+                                    formData.append('clear_and_add', '1');
+                                    try {
+                                        const retryRes = await fetch('add_to_cart.php', {
+                                            method: 'POST',
+                                            body: formData
+                                        });
+                                        const retryData = await retryRes.json();
+                                        if (retryData.success) {
+                                            closeProductPreview();
+                                            updateCartSidebar();
+                                            if (window.showPopupAlert) {
+                                                window.showPopupAlert('Cart was cleared and your new item was added.', 'success', 2500);
+                                            }
+                                        } else {
+                                            if (window.showPopupAlert) {
+                                                window.showPopupAlert(retryData.message || 'Failed to add item.', 'error');
+                                            }
+                                        }
+                                    } catch (e) {
+                                        console.error(e);
+                                    }
+                                }
+                            });
+                        } else if (typeof Swal !== 'undefined') {
                             Swal.fire({
                                 icon: 'warning',
-                                title: 'Different Store Item',
+                                title: 'Switch Store Order?',
+                                text: data.message || 'Your cart has items from another store. Clear cart and start an order from this shop?',
+                                showCancelButton: true,
+                                confirmButtonColor: '#b3261e',
+                                cancelButtonColor: '#6c757d',
+                                confirmButtonText: '<i class="fas fa-rotate"></i> Yes, Clear &amp; Add Item',
+                                cancelButtonText: 'Keep Existing Cart'
+                            }).then(async (result) => {
+                                if (result.isConfirmed) {
+                                    formData.append('clear_and_add', '1');
+                                    try {
+                                        const retryRes = await fetch('add_to_cart.php', {
+                                            method: 'POST',
+                                            body: formData
+                                        });
+                                        const retryData = await retryRes.json();
+                                        if (retryData.success) {
+                                            closeProductPreview();
+                                            updateCartSidebar();
+                                            if (window.showPopupAlert) {
+                                                window.showPopupAlert('Cart was cleared and your new item was added.', 'success', 2500);
+                                            }
+                                        } else {
+                                            if (window.showPopupAlert) {
+                                                window.showPopupAlert(retryData.message || 'Failed to add item.', 'error');
+                                            }
+                                        }
+                                    } catch (e) {
+                                        console.error(e);
+                                    }
+                                }
+                            });
+                        } else {
+                            if (confirm(data.message + "\n\nClick OK to clear cart and add this item.")) {
+                                formData.append('clear_and_add', '1');
+                                fetch('add_to_cart.php', { method: 'POST', body: formData })
+                                    .then(r => r.json())
+                                    .then(rd => { if (rd.success) { location.reload(); } });
+                            }
+                        }
+                    } else if (data.code === 'MIXED_TENANT_CART_EXISTING') {
+                        if (window.showConfirmDialog) {
+                            window.showConfirmDialog({
+                                title: 'Cart Contains Multiple Stores',
+                                text: data.message,
+                                icon: 'warning',
+                                confirmText: 'Go to Cart',
+                                confirmColor: '#b3261e',
+                                cancelText: 'Close'
+                            }).then((confirmed) => {
+                                if (confirmed) {
+                                    openCartSidebar();
+                                }
+                            });
+                        } else if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Cart Contains Multiple Stores',
                                 text: data.message,
                                 showCancelButton: true,
                                 confirmButtonColor: '#b3261e',
                                 confirmButtonText: 'Go to Cart',
-                                cancelButtonText: 'Keep Current Cart'
+                                cancelButtonText: 'Close'
                             }).then((result) => {
                                 if (result.isConfirmed) {
                                     openCartSidebar();
                                 }
                             });
                         } else {
-                            alert(data.message);
+                            if (window.showPopupAlert) {
+                                window.showPopupAlert(data.message, 'warning');
+                            } else {
+                                alert(data.message);
+                            }
                         }
                     } else {
-                        if (typeof Swal !== 'undefined') {
+                        if (window.showPopupAlert) {
+                            window.showPopupAlert(data.message || 'Failed to add item to cart.', 'error');
+                        } else if (typeof Swal !== 'undefined') {
                             Swal.fire({
                                 icon: 'error',
                                 title: 'Cannot Add Item',
@@ -2028,7 +2990,9 @@ document.addEventListener('click', function(e) {
                 }
             } catch (err) {
                 console.error('Add to cart error:', err);
-                if (typeof Swal !== 'undefined') {
+                if (window.showPopupAlert) {
+                    window.showPopupAlert('An error occurred while adding the item to cart. Please try again.', 'error');
+                } else if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'error',
                         title: 'Error',
@@ -2179,25 +3143,24 @@ document.addEventListener('click', function(e) {
                     const cartImageSrc = resolveCartItemImageSource(item);
                     const cartImageFallback = resolveCartItemImageFallback(item);
                     cartItem.innerHTML = `
-                        <div class="cart-item-image">
+                        <div class="cart-item-quantity" style="display: flex; align-items: center; gap: 8px; margin-right: 12px;">
+                            <button class="qty-decrease" data-index="${index}" style="border: 1px solid #efddcd; background: #fff; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #667085; font-weight: bold; cursor: pointer; font-size: 0.85rem; padding: 0;">-</button>
+                            <span style="font-weight: 700; font-size: 0.95rem; color: #171922; min-width: 14px; text-align: center;">${item.quantity}</span>
+                            <button class="qty-increase" data-index="${index}" style="border: 1px solid #efddcd; background: #fff; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #667085; font-weight: bold; cursor: pointer; font-size: 0.85rem; padding: 0;">+</button>
+                        </div>
+                        <div class="cart-item-image" style="width: 48px; height: 48px; border-radius: 6px; overflow: hidden; flex-shrink: 0; margin-right: 12px; background-color: #f5f5f5;">
                             <img src="${escapeHtml(cartImageSrc)}" alt="${escapeHtml(item.name || 'Lechon item')}" 
-                                 onerror="this.onerror=null;this.src='${escapeHtml(cartImageFallback)}'">
+                                 onerror="this.onerror=null;this.src='${escapeHtml(cartImageFallback)}'" style="width: 100%; height: 100%; object-fit: cover;">
                         </div>
-                        <div class="cart-item-details">
-                            <div class="cart-item-name">${item.name}</div>
-                            ${item.size !== 'Regular' ? `<div class="cart-item-size">Size: ${item.size}</div>` : ''}
-                            <div class="cart-item-price">${formatCurrency(parseFloat(item.price))}</div>
+                        <div class="cart-item-details" style="flex: 1; text-align: left; padding: 0;">
+                            <div class="cart-item-name" style="font-weight: 700; color: #171922; font-size: 0.92rem; margin-bottom: 2px;">${item.name}</div>
+                            ${item.size !== 'Regular' ? `<div class="cart-item-size" style="font-size: 0.78rem; color: #667085; margin: 0;">Size: ${item.size}</div>` : ''}
                             ${item.addons && item.addons.length > 0 ? 
-                                `<div class="cart-item-addons">Add-ons: ${item.addons.join(', ')}</div>` : ''}
-                            <div class="cart-item-quantity">
-                                <button class="qty-decrease" data-index="${index}">-</button>
-                                <span>${item.quantity}</span>
-                                <button class="qty-increase" data-index="${index}">+</button>
-                            </div>
+                                `<div class="cart-item-addons" style="font-size: 0.78rem; color: #667085; margin: 0;">Add-ons: ${item.addons.join(', ')}</div>` : ''}
                         </div>
-                        <div class="cart-item-actions">
-                            <div class="cart-item-total">${formatCurrency(item.price * item.quantity)}</div>
-                            <button class="cart-item-remove" data-index="${index}">
+                        <div class="cart-item-price-col" style="text-align: right; margin-left: 12px; font-weight: 700; color: #171922; font-size: 0.92rem; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end;">
+                            <div>${formatCurrency(parseFloat(item.price) * item.quantity)}</div>
+                            <button class="cart-item-remove" data-index="${index}" style="background: none; border: none; color: #7b6d64; cursor: pointer; font-size: 0.8rem; display: block; margin-top: 4px; padding: 0;" title="Remove item">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -2264,16 +3227,19 @@ document.addEventListener('click', function(e) {
                 if (data.success) {
                     updateCartSidebar();
                     
-                    // Show notification
-                    Swal.fire({
-                        icon: 'success',
-                        title: action === 'remove' ? 'Removed!' : 'Updated!',
-                        text: action === 'remove' ? 'Item removed from cart' : 'Cart updated',
-                        toast: true,
-                        position: 'top-end',
-                        showConfirmButton: false,
-                        timer: 1500
-                    });
+                    if (window.showPopupAlert) {
+                        window.showPopupAlert(action === 'remove' ? 'Item removed from cart' : 'Cart updated', 'success', 1500);
+                    } else if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: action === 'remove' ? 'Removed!' : 'Updated!',
+                            text: action === 'remove' ? 'Item removed from cart' : 'Cart updated',
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: 1500
+                        });
+                    }
                 }
             } catch (error) {
                 console.error('Error:', error);
@@ -2282,18 +3248,10 @@ document.addEventListener('click', function(e) {
     });
     
     // Clear cart
-    document.getElementById('clearCart').addEventListener('click', async function() {
-        Swal.fire({
-            title: 'Clear Cart?',
-            text: 'Are you sure you want to clear your entire cart?',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#b3261e',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Yes, clear cart',
-            cancelButtonText: 'Cancel'
-        }).then(async (result) => {
-            if (result.isConfirmed) {
+    const clearCartBtn = document.getElementById('clearCart');
+    if (clearCartBtn) {
+        clearCartBtn.addEventListener('click', async function() {
+            const handleClear = async () => {
                 try {
                     const response = await fetch('update_cart.php', {
                         method: 'POST',
@@ -2310,130 +3268,84 @@ document.addEventListener('click', function(e) {
                     if (data.success) {
                         updateCartSidebar();
                         
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Cart Cleared!',
-                            text: 'Your cart has been cleared.',
-                            toast: true,
-                            position: 'top-end',
-                            showConfirmButton: false,
-                            timer: 1500
-                        });
+                        if (window.showPopupAlert) {
+                            window.showPopupAlert('Your cart has been cleared.', 'success', 1500);
+                        } else if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Cart Cleared!',
+                                text: 'Your cart has been cleared.',
+                                toast: true,
+                                position: 'top-end',
+                                showConfirmButton: false,
+                                timer: 1500
+                            });
+                        }
                     }
                 } catch (error) {
                     console.error('Error:', error);
                 }
-            }
-        });
-    });
-    
-    // Close modals with Escape key
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            // closeProductPreview(); // This is handled by its own function now
-            closeCartSidebar();
-        }
-    });
-    
-    
-    // Cart item quantity controls
-    document.addEventListener('click', async function(e) {
-        if (e.target.closest('.qty-decrease') || e.target.closest('.qty-increase') || e.target.closest('.cart-item-remove')) {
-            const button = e.target.closest('.qty-decrease, .qty-increase, .cart-item-remove');
-            const index = button.getAttribute('data-index');
-            const action = button.classList.contains('qty-decrease') ? 'decrease' : 
-                          button.classList.contains('qty-increase') ? 'increase' : 'remove';
-            
-            try {
-                const response = await fetch('update_cart.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: new URLSearchParams({
-                        'index': index,
-                        'action': action
-                    })
+            };
+
+            if (window.showConfirmDialog) {
+                window.showConfirmDialog({
+                    title: 'Clear Cart?',
+                    text: 'Are you sure you want to clear your entire cart?',
+                    icon: 'warning',
+                    confirmText: 'Yes, clear cart',
+                    confirmColor: '#b3261e',
+                    cancelText: 'Cancel'
+                }).then((confirmed) => {
+                    if (confirmed) handleClear();
                 });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    updateCartSidebar();
-                    
-                    // Show notification
-                    Swal.fire({
-                        icon: 'success',
-                        title: action === 'remove' ? 'Removed!' : 'Updated!',
-                        text: action === 'remove' ? 'Item removed from cart' : 'Cart updated',
-                        toast: true,
-                        position: 'top-end',
-                        showConfirmButton: false,
-                        timer: 1500
-                    });
-                }
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        }
-    });
-    
-    // Clear cart
-    document.getElementById('clearCart').addEventListener('click', async function() {
-        Swal.fire({
-            title: 'Clear Cart?',
-            text: 'Are you sure you want to clear your entire cart?',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#b3261e',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Yes, clear cart',
-            cancelButtonText: 'Cancel'
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                try {
-                    const response = await fetch('update_cart.php', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
-                        body: new URLSearchParams({
-                            'action': 'clear'
-                        })
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        updateCartSidebar();
-                        
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Cart Cleared!',
-                            text: 'Your cart has been cleared.',
-                            toast: true,
-                            position: 'top-end',
-                            showConfirmButton: false,
-                            timer: 1500
-                        });
-                    }
-                } catch (error) {
-                    console.error('Error:', error);
+            } else if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Clear Cart?',
+                    text: 'Are you sure you want to clear your entire cart?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#b3261e',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Yes, clear cart',
+                    cancelButtonText: 'Cancel'
+                }).then((result) => {
+                    if (result.isConfirmed) handleClear();
+                });
+            } else {
+                if (confirm('Are you sure you want to clear your entire cart?')) {
+                    handleClear();
                 }
             }
         });
-    });
+    }
     
     // Close modals with Escape key
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
-            // closeProductPreview(); // This is handled by its own function now
             closeCartSidebar();
         }
+    });
+    
+    // Intercept all header cart buttons to open sidebar modal instead of redirecting to cart.php
+    document.querySelectorAll('.cart-btn, #cartToggle').forEach(btn => {
+        btn.removeAttribute('onclick');
+        btn.setAttribute('data-no-redirect', '1');
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openCartSidebar();
+        });
     });
     
     // Initialize cart sidebar
     updateCartSidebar();
+
+    // Auto open cart modal if redirected with open_cart=1 parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('open_cart') === '1') {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setTimeout(openCartSidebar, 150);
+    }
 });
 </script>
 
@@ -2487,49 +3399,51 @@ document.addEventListener('click', function(e) {
     --shadow-hover: 0 20px 40px rgba(0,0,0,0.12);
     --menu-category-nav-height: 68px;
     --menu-category-nav-gap: 14px;
-    --menu-side-stack-top: calc(var(--site-header-offset, 92px) + 10px + var(--menu-category-nav-height, 68px) + var(--menu-category-nav-gap, 14px));
+    --menu-side-stack-top: calc(var(--site-header-offset, 72px) + var(--menu-category-nav-height, 58px) + 14px);
 }
 
 .page-header {
-    background: linear-gradient(135deg, rgba(0,0,0,0.85), rgba(0,0,0,0.7)), url('images/menu-bg.jpg');
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-    color: white;
+    background: #ffffff;
+    border-bottom: 1px solid #eaecf0;
+    color: #101828;
     text-align: center;
-    padding: 160px 20px 100px;
-    position: relative;
-    margin-bottom: -50px; /* Overlap effect */
-    z-index: 1;
+    padding: 36px 20px 28px;
+    position: static;
+    margin-bottom: 0;
 }
 
 .page-header h1 {
-    font-size: 3.5rem;
+    font-family: 'Outfit', sans-serif;
+    font-size: 2.2rem;
     font-weight: 800;
-    margin-bottom: 15px;
-    color: white;
-    text-shadow: 0 2px 10px rgba(0,0,0,0.3);
-    letter-spacing: -1px;
+    margin-bottom: 6px;
+    color: #101828;
+    text-shadow: none;
+    letter-spacing: -0.02em;
 }
 
 .page-header p {
-    font-size: 1.2rem;
-    opacity: 0.9;
+    font-size: 0.95rem;
+    color: #475467;
     max-width: 600px;
     margin: 0 auto;
-    font-weight: 300;
+    font-weight: 400;
+    opacity: 1;
 }
 
 /* Foodpanda Unified Sticky Category Navigation Bar */
 .panda-menu-sticky-bar {
     position: sticky !important;
-    top: var(--site-header-offset, 64px) !important;
-    z-index: 80 !important;
+    top: var(--site-header-offset, 72px) !important;
+    z-index: 1100 !important;
     background: #ffffff !important;
-    border-bottom: 1px solid #e2e8f0 !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04) !important;
-    margin: 0 -22px 30px -22px !important;
-    padding: 10px 22px !important;
+    border: 1px solid #eaecf0 !important;
+    border-radius: 16px !important;
+    box-shadow: 0 4px 16px rgba(16, 24, 40, 0.05) !important;
+    margin: 0 0 24px 0 !important;
+    padding: 10px 16px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
 }
 
 .panda-menu-bar-inner {
@@ -2596,8 +3510,11 @@ document.addEventListener('click', function(e) {
 .panda-cat-strip-wrap {
     flex: 1 !important;
     overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-x pan-y !important;
     scroll-behavior: smooth !important;
     scrollbar-width: none !important;
+    scroll-snap-type: x proximity !important;
 }
 
 .panda-cat-strip-wrap::-webkit-scrollbar {
@@ -2623,6 +3540,9 @@ document.addEventListener('click', function(e) {
     border-bottom: 3px solid transparent !important;
     transition: all 0.2s ease !important;
     cursor: pointer !important;
+    flex-shrink: 0 !important;
+    scroll-snap-align: center !important;
+    touch-action: pan-x pan-y !important;
 }
 
 .panda-cat-tab:hover {
@@ -4069,6 +4989,37 @@ document.addEventListener('click', function(e) {
         grid-template-columns: 1fr;
     }
 
+    .menu-shops-directory-grid {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x pan-y !important;
+        scroll-snap-type: x mandatory !important;
+        scroll-behavior: smooth !important;
+        gap: 14px !important;
+        padding: 4px 4px 16px 4px !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .menu-shops-directory-grid::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .menu-shops-directory-grid .menu-shop-card {
+        flex: 0 0 clamp(220px, 72vw, 270px) !important;
+        width: clamp(220px, 72vw, 270px) !important;
+        min-width: clamp(220px, 72vw, 270px) !important;
+        max-width: clamp(220px, 72vw, 270px) !important;
+        scroll-snap-align: start !important;
+        box-sizing: border-box !important;
+    }
+
     .menu-filter-bar {
         flex-direction: column;
         align-items: stretch;
@@ -4172,23 +5123,23 @@ body {
 
 .page-header {
     margin-bottom: 0;
-    padding: 132px 20px 88px;
-    background:
-        linear-gradient(128deg, rgba(17, 11, 8, 0.86), rgba(45, 22, 14, 0.72)),
-        url('images/faq-bg.jpg') center/cover no-repeat;
+    padding: 36px 20px 28px;
+    background: #ffffff;
+    border-bottom: 1px solid #eaecf0;
 }
 
 .page-header h1 {
-    letter-spacing: -0.03em;
+    letter-spacing: -0.02em;
+    color: #101828;
 }
 
 .page-header p {
-    color: #f7e6d7;
+    color: #475467;
 }
 
 .menu-section {
-    background: linear-gradient(180deg, #fffaf3 0%, #fff 100%);
-    padding-top: 45px;
+    background: #f8f9fa;
+    padding-top: 32px;
 }
 
 .category-nav {
@@ -4602,6 +5553,8 @@ body {
     opacity: 0;
     box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
     transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
 }
 
 .product-preview-modal.active .preview-modal-content {
@@ -4621,7 +5574,7 @@ body {
     font-size: 1.3rem;
     color: #171922;
     cursor: pointer;
-    z-index: 10;
+    z-index: 30;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -4637,15 +5590,135 @@ body {
 
 .preview-body {
     display: flex;
-    max-height: 88vh;
-    overflow: hidden;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
 }
 
+.preview-actions-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 28px;
+    border-top: 1px solid #eaecf0;
+    background: #ffffff;
+    flex-shrink: 0;
+    z-index: 20;
+}
+
+.preview-actions-wrap .add-to-cart-confirm {
+    min-width: 200px;
+    height: 48px;
+    padding: 0 24px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    border-radius: 12px;
+    background: #b3261e;
+    color: #ffffff;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.2);
+    transition: all 0.2s ease;
+}
+
+.preview-actions-wrap .add-to-cart-confirm:hover {
+    background: #981b15;
+    box-shadow: 0 6px 16px rgba(179, 38, 30, 0.3);
+}
+
+.preview-actions-wrap .add-to-cart-confirm:disabled {
+    background: #94a3b8 !important;
+    cursor: not-allowed !important;
+    box-shadow: none !important;
+    opacity: 0.7 !important;
+}
+
+
+
 @media (max-width: 768px) {
-    .preview-body {
-        flex-direction: column;
-        overflow-y: auto;
+    .preview-modal-content {
+        width: min(440px, 94vw) !important;
+        max-width: 440px !important;
+        height: auto !important;
+        max-height: 88vh !important;
+        max-height: 88dvh !important;
+        border-radius: 20px !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        margin: 0 !important;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25) !important;
     }
+    .product-preview-modal.active .preview-modal-content {
+        transform: translate(-50%, -50%) scale(1) !important;
+        opacity: 1 !important;
+    }
+    .preview-body {
+        display: flex !important;
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        flex-direction: column !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding-bottom: 8px !important;
+    }
+    .preview-image {
+        min-width: 0 !important;
+        width: 100% !important;
+        height: 160px !important;
+        min-height: 160px !important;
+        max-height: 160px !important;
+        flex: 0 0 160px !important;
+    }
+    .preview-details {
+        padding: 14px 16px !important;
+        flex: none !important;
+        overflow: visible !important;
+    }
+    .preview-details h3 {
+        font-size: 1.25rem !important;
+    }
+    .preview-actions-wrap {
+        position: relative !important;
+        flex: 0 0 auto !important;
+        width: 100% !important;
+        background: #ffffff !important;
+        border-top: 1px solid #eaecf0 !important;
+        padding: 12px 16px 16px !important;
+        margin: 0 !important;
+        z-index: 20 !important;
+        box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.08) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    .preview-actions-wrap .add-to-cart-confirm {
+        width: 100% !important;
+        min-height: 48px !important;
+        height: 48px !important;
+        font-size: 1rem !important;
+        font-weight: 800 !important;
+        border-radius: 12px !important;
+        background: #b3261e !important;
+        color: #ffffff !important;
+        border: none !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        box-shadow: 0 4px 14px rgba(179, 38, 30, 0.25) !important;
+        cursor: pointer !important;
+    }
+
 }
 
 .preview-image {
@@ -4729,31 +5802,46 @@ body {
 
 .product-favorite-btn {
     position: absolute;
-    top: 14px;
-    right: 14px;
-    width: 38px;
-    height: 38px;
+    top: 10px;
+    right: 10px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.88);
-    background: rgba(255, 255, 255, 0.92);
-    color: #7b6f68;
+    border: 1px solid #eaecf0;
+    background: #ffffff;
+    color: #98a2b3;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    z-index: 3;
-    transition: var(--transition);
+    z-index: 5;
+    box-shadow: 0 1px 4px rgba(16, 24, 40, 0.08);
+    transition: all 0.2s ease;
 }
 
 .product-favorite-btn:hover {
-    color: var(--primary-color);
-    transform: translateY(-1px);
+    color: #b3261e;
+    background: #fff1f0;
+    border-color: #fee4e2;
+    transform: scale(1.08);
 }
 
 .product-favorite-btn.is-active {
-    color: var(--primary-color);
-    background: #fff1ea;
-    border-color: #f0c3ab;
+    color: #b3261e;
+    background: #fff1f0;
+    border-color: #fecdca;
+}
+
+body.dark-mode .product-favorite-btn {
+    background: #334155;
+    border-color: #475467;
+    color: #cbd5e1;
+}
+
+body.dark-mode .product-favorite-btn.is-active {
+    color: #ef4444;
+    background: #451a1a;
+    border-color: #7f1d1d;
 }
 
 .store-logo-initials {
@@ -4823,9 +5911,15 @@ body {
 
 .menu-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-columns: minmax(0, 1fr) 340px;
     gap: 24px;
-    align-items: start;
+}
+
+@media (max-width: 1200px) {
+    .menu-layout {
+        grid-template-columns: minmax(0, 1fr) 300px;
+        gap: 16px;
+    }
 }
 
 .menu-main-column {
@@ -4834,14 +5928,16 @@ body {
 
 .menu-side-column {
     min-width: 0;
+    height: 100%;
 }
 
 .menu-side-stack {
-    position: sticky;
-    top: var(--menu-side-stack-top, calc(var(--site-header-offset, 92px) + 10px + var(--menu-category-nav-height, 68px) + var(--menu-category-nav-gap, 14px)));
+    position: sticky !important;
+    top: var(--menu-side-stack-top, calc(var(--site-header-offset, 72px) + 76px)) !important;
     display: flex;
     flex-direction: column;
     gap: 16px;
+    z-index: 100 !important;
 }
 
 .quick-order-panel,
@@ -4849,7 +5945,7 @@ body {
     background: #fff;
     border: 1px solid var(--menu-border);
     border-radius: 16px;
-    box-shadow: 0 14px 28px rgba(74, 32, 20, 0.12);
+    box-shadow: 0 10px 24px rgba(16, 24, 40, 0.06);
 }
 
 .quick-order-panel {
@@ -4876,7 +5972,8 @@ body {
     color: #6d5143;
     font-weight: 700;
     border-radius: 10px;
-    padding: 11px 8px;
+    padding: 10px 8px;
+    font-size: 0.92rem;
     cursor: pointer !important;
     transition: var(--transition-fast);
     position: relative !important;
@@ -4887,40 +5984,43 @@ body {
 .quick-order-tab.active {
     background: #fff;
     color: var(--menu-red);
-    box-shadow: 0 6px 12px rgba(74, 32, 20, 0.08);
+    box-shadow: 0 4px 10px rgba(74, 32, 20, 0.08);
 }
 
 .quick-order-hero {
-    min-height: 235px;
-    display: grid;
-    place-items: center;
+    min-height: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     text-align: center;
-    padding: 16px 6px 12px;
+    padding: 14px 8px 10px;
 }
 
 .quick-order-hero-icon {
-    width: 66px;
-    height: 66px;
-    border-radius: 18px;
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     color: #f39b35;
     background: linear-gradient(135deg, #fff4e1, #ffe2bf);
     box-shadow: inset 0 0 0 1px #f4d2a8;
-    font-size: 1.75rem;
+    font-size: 1.35rem;
 }
 
 .quick-order-hero h3 {
-    margin: 12px 0 4px;
+    margin: 8px 0 2px;
     color: #2c2521;
-    font-size: 1.7rem;
-    line-height: 1.15;
+    font-size: 1.25rem;
+    font-weight: 800;
+    line-height: 1.2;
 }
 
 .quick-order-hero p {
     margin: 0;
     color: #7d6b62;
+    font-size: 0.85rem;
     font-weight: 600;
 }
 
@@ -5315,8 +6415,12 @@ body {
         grid-template-columns: minmax(0, 1fr);
     }
 
-    .menu-side-stack {
-        position: static;
+    .menu-side-column {
+        display: none !important;
+    }
+
+    .mobile-quick-order {
+        display: block !important;
     }
 
     .store-review-list {
@@ -5335,11 +6439,11 @@ body {
         left: 10px;
         right: 10px;
         bottom: calc(<?php echo $mobile_quick_order_bottom; ?> + env(safe-area-inset-bottom, 0px));
-        z-index: 1004;
+        z-index: 1260;
     }
 
     .menu-section {
-        padding-bottom: 210px;
+        padding-bottom: 240px !important;
     }
 
     .cart-toggle-btn {
@@ -5387,6 +6491,2027 @@ body {
         gap: 10px 12px;
     }
 }
+
+/* GrabFood Style Storefront Header and Menu Items Overrides */
+.storefront-header {
+    background-color: #fff9f2 !important;
+    border-bottom: 1px solid #efddcd !important;
+    padding: 32px 0 !important;
+    text-align: left !important;
+}
+.store-breadcrumb {
+    margin-bottom: 16px !important;
+    font-size: 0.85rem !important;
+    color: #667085 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+.store-breadcrumb a {
+    color: #667085 !important;
+    text-decoration: none !important;
+    font-weight: 500 !important;
+}
+.store-breadcrumb a:hover {
+    color: #b3261e !important;
+}
+.store-breadcrumb .breadcrumb-sep {
+    color: #667085 !important;
+    font-size: 0.85rem !important;
+}
+.storefront-overview {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 20px !important;
+    align-items: center !important;
+}
+.store-logo-tile {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 110px !important;
+    height: 110px !important;
+    min-width: 110px !important;
+    min-height: 110px !important;
+    border-radius: 18px !important;
+    background: #ffffff !important;
+    border: 1px solid #eaecf0 !important;
+    box-shadow: 0 4px 16px rgba(16, 24, 40, 0.08) !important;
+    overflow: hidden !important;
+    flex-shrink: 0 !important;
+    position: relative !important;
+}
+.store-logo-tile img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+}
+.store-logo-initials {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: linear-gradient(135deg, #b3261e 0%, #981b15 100%) !important;
+    color: #ffffff !important;
+    font-family: 'Outfit', sans-serif !important;
+    font-size: 2.2rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.5px !important;
+}
+.storefront-copy {
+    padding: 0 !important;
+    flex: 1 !important;
+    min-width: 0 !important;
+}
+.storefront-copy h1 {
+    font-family: 'Outfit', sans-serif !important;
+    font-weight: 800 !important;
+    font-size: 2.2rem !important;
+    color: #171922 !important;
+    margin: 0 0 6px 0 !important;
+    letter-spacing: -0.5px !important;
+}
+.storefront-categories {
+    color: #667085 !important;
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+    text-transform: capitalize !important;
+    margin: 0 0 6px 0 !important;
+}
+.storefront-subtitle {
+    color: #7b6d64 !important;
+    font-size: 0.92rem !important;
+    margin: 0 0 12px 0 !important;
+    max-width: 600px !important;
+}
+.storefront-meta-row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 16px !important;
+    color: #667085 !important;
+    font-size: 0.85rem !important;
+    margin: 8px 0 0 0 !important;
+}
+.storefront-meta-row span, .storefront-meta-row a {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    color: #667085 !important;
+    text-decoration: none !important;
+    font-weight: 500 !important;
+}
+.storefront-meta-row a:hover {
+    color: #b3261e !important;
+}
+.storefront-meta-row i, .storefront-meta-row-secondary i {
+    color: #ef6b2e !important;
+}
+.menu-items-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 20px !important;
+}
+.menu-item {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    background: #ffffff !important;
+    border: 1px solid #efddcd !important;
+    border-radius: 12px !important;
+    padding: 16px !important;
+    transition: all 0.2s ease !important;
+    position: relative !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+}
+.menu-item:hover {
+    border-color: #ef6b2e !important;
+    background: #fffdfb !important;
+}
+.menu-item .item-image {
+    width: 110px !important;
+    height: 110px !important;
+    flex-shrink: 0 !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+    margin-right: 16px !important;
+    position: relative !important;
+    order: -1 !important;
+}
+.menu-item .item-image img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+}
+.menu-item .item-content {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 0 !important;
+    text-align: left !important;
+}
+.menu-item .item-content h3 {
+    font-family: 'Outfit', sans-serif !important;
+    font-weight: 800 !important;
+    font-size: 1.1rem !important;
+    color: #171922 !important;
+    margin: 0 0 6px 0 !important;
+}
+.menu-item .item-description {
+    font-size: 0.85rem !important;
+    color: #667085 !important;
+    line-height: 1.4 !important;
+    margin: 0 0 10px 0 !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+.menu-item .item-card-bottom {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    margin-top: auto !important;
+    width: 100% !important;
+}
+.menu-item .panda-price-pill {
+    font-weight: 800 !important;
+    color: #b3261e !important;
+    font-size: 1.05rem !important;
+    background: none !important;
+    padding: 0 !important;
+    border: none !important;
+}
+.menu-item .panda-quick-add-btn {
+    border-radius: 8px !important;
+    background: #b3261e !important;
+    color: #fff !important;
+    border: none !important;
+    padding: 8px 12px !important;
+    font-size: 0.85rem !important;
+}
+.menu-item .panda-quick-add-btn:hover {
+    background: #ef6b2e !important;
+}
+@media (max-width: 768px) {
+    .menu-section {
+        padding-bottom: 200px !important;
+    }
+    .menu-items-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+    .menu-item {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        padding: 10px 12px !important;
+        gap: 12px !important;
+        border-radius: 16px !important;
+        background: #ffffff !important;
+        border: 1px solid #eaecf0 !important;
+    }
+    .menu-item .item-image {
+        width: 88px !important;
+        height: 88px !important;
+        flex: 0 0 88px !important;
+        border-radius: 12px !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+    }
+    .menu-item .item-content {
+        padding: 0 !important;
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+    }
+    .menu-item .item-title {
+        font-size: 0.94rem !important;
+        line-height: 1.25 !important;
+        margin: 0 0 3px 0 !important;
+        padding-right: 36px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    .menu-item .item-description {
+        display: -webkit-box !important;
+        -webkit-line-clamp: 2 !important;
+        -webkit-box-orient: vertical !important;
+        overflow: hidden !important;
+        font-size: 0.76rem !important;
+        margin-bottom: 6px !important;
+        line-height: 1.35 !important;
+        color: #667085 !important;
+    }
+    .menu-item .item-card-bottom {
+        margin-top: 4px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+    }
+    .menu-item .panda-price-pill {
+        font-size: 0.88rem !important;
+        font-weight: 800 !important;
+        padding: 3px 8px !important;
+    }
+    .menu-item .panda-quick-add-btn {
+        width: 32px !important;
+        height: 32px !important;
+        padding: 0 !important;
+        font-size: 0.82rem !important;
+        border-radius: 8px !important;
+    }
+    .storefront-copy h1 {
+        font-size: 1.5rem !important;
+    }
+}
+@media (max-width: 480px) {
+    .menu-shops-directory-grid {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x !important;
+        scroll-snap-type: x mandatory !important;
+        gap: 14px !important;
+        padding: 4px 2px 14px 2px !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        cursor: grab;
+        user-select: none;
+    }
+    .menu-shops-directory-grid::-webkit-scrollbar {
+        display: none !important;
+    }
+    .menu-shops-directory-grid:active,
+    .menu-shops-directory-grid.is-dragging {
+        cursor: grabbing !important;
+    }
+    .menu-shops-directory-grid .menu-shop-card {
+        flex: 0 0 240px !important;
+        width: 240px !important;
+        min-width: 240px !important;
+        max-width: 240px !important;
+        scroll-snap-align: start !important;
+        user-select: none;
+    }
+}
+
+.cart-item {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0 !important;
+    padding: 16px 0 !important;
+    border-bottom: 1px solid #efddcd !important;
+}
+.cart-overlay {
+    background-color: rgba(0, 0, 0, 0.04) !important;
+}
+.cart-sidebar {
+    border-left: 1px solid #efddcd !important;
+    box-shadow: -8px 0 32px rgba(42, 33, 29, 0.08) !important;
+}
+#floatingCartBtn {
+    display: none !important;
+}
+.swal2-container {
+    z-index: 99999 !important;
+}
+.menu-section {
+    overflow: visible !important;
+}
+.panda-menu-sticky-bar {
+    position: sticky !important;
+    top: var(--site-header-offset, 72px) !important;
+    z-index: 999 !important;
+}
+@media (min-width: 993px) {
+    #backToTopBtn {
+        z-index: 1050 !important;
+    }
+}
+
+/* ==========================================================================
+   STOREFRONT MENU PAGE DARK MODE THEME ENGINE
+   ========================================================================== */
+body.dark-mode,
+html.dark-mode,
+body.dark-mode .storefront-header,
+body.dark-mode .menu-section,
+body.dark-mode .menu-container {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-breadcrumb a,
+body.dark-mode .store-breadcrumb span {
+    color: #94a3b8 !important;
+}
+body.dark-mode .store-breadcrumb .is-current {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .storefront-copy h1 {
+    color: #f8fafc !important;
+}
+body.dark-mode .storefront-categories {
+    color: #cbd5e1 !important;
+}
+body.dark-mode .storefront-subtitle {
+    color: #94a3b8 !important;
+}
+body.dark-mode .storefront-meta-row span,
+body.dark-mode .storefront-meta-row a {
+    color: #cbd5e1 !important;
+}
+body.dark-mode .storefront-meta-row a:hover {
+    color: #ffffff !important;
+}
+
+/* Store Deals Box */
+body.dark-mode .store-deals-strip {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+body.dark-mode .store-deals-strip h3 {
+    color: #f8fafc !important;
+}
+body.dark-mode .store-deals-strip p {
+    color: #94a3b8 !important;
+}
+body.dark-mode .store-deals-strip [style*="background: #f8f9fa"],
+body.dark-mode .store-deals-strip [style*="background:#f8f9fa"] {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+body.dark-mode .store-deals-strip [style*="color: #344054"],
+body.dark-mode .store-deals-strip [style*="color:#344054"] {
+    color: #f8fafc !important;
+}
+body.dark-mode .store-deals-strip button {
+    background: #1e293b !important;
+    border-color: #475569 !important;
+    color: #f8fafc !important;
+}
+
+/* Foodpanda Sticky Category Nav Bar */
+body.dark-mode .panda-menu-sticky-bar {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+}
+body.dark-mode .panda-menu-search-box {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+body.dark-mode .panda-menu-search-box input {
+    color: #f8fafc !important;
+}
+body.dark-mode .panda-cat-arrow {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+body.dark-mode .panda-cat-arrow:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+body.dark-mode .panda-cat-tab {
+    color: #94a3b8 !important;
+}
+body.dark-mode .panda-cat-tab:hover {
+    color: #ffffff !important;
+}
+body.dark-mode .panda-cat-tab.active {
+    color: #ef4444 !important;
+    border-bottom-color: #ef4444 !important;
+}
+body.dark-mode .panda-cat-count {
+    color: #64748b !important;
+}
+body.dark-mode .panda-cat-tab.active .panda-cat-count {
+    color: #ef4444 !important;
+}
+body.dark-mode .panda-menu-filter-select {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+/* Menu Category Titles & Product Cards */
+body.dark-mode .category-title {
+    color: #f8fafc !important;
+}
+body.dark-mode .menu-item {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+body.dark-mode .menu-item:hover {
+    border-color: #b3261e !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4) !important;
+}
+body.dark-mode .menu-item h3,
+body.dark-mode .menu-item-title {
+    color: #f8fafc !important;
+}
+body.dark-mode .menu-item p,
+body.dark-mode .menu-item-desc {
+    color: #94a3b8 !important;
+}
+body.dark-mode .menu-item-price {
+    color: #ef4444 !important;
+}
+
+/* Empty State / Storefront Update Card */
+body.dark-mode [style*="Storefront update"],
+body.dark-mode div[style*="Storefront update"] {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+body.dark-mode .empty-menu-container,
+body.dark-mode .empty-cart-message {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+/* ==========================================================================
+   RIGHT CART SIDEBAR IN DARK MODE
+   ========================================================================== */
+body.dark-mode .cart-sidebar,
+body.dark-mode .panda-cart-sidebar,
+body.dark-mode .cart-container {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: -4px 0 25px rgba(0, 0, 0, 0.5) !important;
+}
+
+body.dark-mode .cart-header {
+    background: #1e293b !important;
+    border-bottom: 1px solid #334155 !important;
+}
+
+body.dark-mode .cart-close {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .cart-close:hover {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .cart-header span {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-header small {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-body {
+    background: #1e293b !important;
+}
+
+body.dark-mode .cart-store-header h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-empty {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-empty i {
+    color: #64748b !important;
+}
+
+body.dark-mode .cart-empty p {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .cart-item {
+    background: #111827 !important;
+    border: 1px solid #334155 !important;
+    border-radius: 10px !important;
+    padding: 10px !important;
+    margin-bottom: 10px !important;
+}
+
+body.dark-mode .cart-item-quantity button,
+body.dark-mode .qty-decrease,
+body.dark-mode .qty-increase {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .cart-item-quantity button:hover,
+body.dark-mode .qty-decrease:hover,
+body.dark-mode .qty-increase:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .cart-item-quantity span {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-item-image {
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .cart-item-name {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-item-size,
+body.dark-mode .cart-item-addons {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-item-price-col,
+body.dark-mode .cart-item-price-col div {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-item-remove {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .cart-item-remove:hover {
+    color: #f87171 !important;
+}
+
+body.dark-mode .cart-footer {
+    background: #1e293b !important;
+    border-top: 1px solid #334155 !important;
+}
+
+body.dark-mode .summary-row span,
+body.dark-mode .cart-summary .summary-row span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode #cartSubtotal {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-row.total,
+body.dark-mode .cart-summary .summary-row.total {
+    border-top: 1px solid #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode #cartTotal {
+    color: #ef4444 !important;
+}
+
+body.dark-mode #clearCart {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode #clearCart:hover {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .delivery-pickup-toggle,
+body.dark-mode .order-type-switch {
+    background: #0f172a !important;
+    border: 1px solid #334155 !important;
+}
+body.dark-mode .toggle-btn,
+body.dark-mode .order-type-btn {
+    color: #94a3b8 !important;
+}
+body.dark-mode .toggle-btn.active,
+body.dark-mode .order-type-btn.active {
+    background: #1e293b !important;
+    color: #ef4444 !important;
+    border: 1px solid #334155 !important;
+}
+body.dark-mode .cart-item-row {
+    border-color: #334155 !important;
+}
+body.dark-mode .cart-summary-line {
+    border-color: #334155 !important;
+}
+
+/* ==========================================================================
+   PRODUCT PREVIEW & REVIEWS MODAL DARK MODE ENGINE
+   ========================================================================== */
+body.dark-mode .product-preview-modal .preview-modal-content,
+body.dark-mode .preview-modal-content {
+    background-color: #1e293b !important;
+    border: 1px solid #334155 !important;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .preview-body {
+    background-color: #1e293b !important;
+}
+
+body.dark-mode .preview-image {
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .preview-close {
+    background-color: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .preview-close:hover {
+    background-color: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .preview-details {
+    background-color: #1e293b !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .preview-details h3,
+body.dark-mode #previewProductName {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .preview-description,
+body.dark-mode #previewDescription {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .preview-price-section {
+    background-color: #111827 !important;
+    border: 1px solid #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .preview-price-section h4 {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .preview-price-section .price-amount,
+body.dark-mode #previewPrice {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .size-selection label,
+body.dark-mode .addons-selection label,
+body.dark-mode .quantity-selection label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .size-preview-btn {
+    background-color: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .size-preview-btn:hover {
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .size-preview-btn.active {
+    background-color: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 14px rgba(179, 38, 30, 0.4) !important;
+}
+
+body.dark-mode .size-preview-btn .size-info {
+    color: #cbd5e1 !important;
+    opacity: 0.9 !important;
+}
+
+body.dark-mode .addon-checkbox {
+    background-color: #111827 !important;
+    border: 1px solid #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .addon-checkbox:hover {
+    background-color: #1e293b !important;
+    border-color: #475569 !important;
+}
+
+body.dark-mode .addon-checkbox span {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .quantity-control {
+    border-color: #334155 !important;
+    background-color: #111827 !important;
+}
+
+body.dark-mode .quantity-control button,
+body.dark-mode .qty-minus,
+body.dark-mode .qty-plus {
+    background-color: #1e293b !important;
+    color: #f8fafc !important;
+    border: 1px solid #334155 !important;
+}
+
+body.dark-mode .quantity-control button:hover,
+body.dark-mode .qty-minus:hover,
+body.dark-mode .qty-plus:hover {
+    background-color: #334155 !important;
+}
+
+body.dark-mode .quantity-control input,
+body.dark-mode .qty-input {
+    background-color: #111827 !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .order-summary,
+body.dark-mode #previewOrderSummary {
+    background-color: #111827 !important;
+    border: 1px solid #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .order-summary h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-details p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .summary-details p span {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-details .summary-total {
+    border-top-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-details .summary-total span,
+body.dark-mode #summaryTotal {
+    color: #ef4444 !important;
+}
+
+/* Reviews Modal Dark Mode */
+body.dark-mode #storefrontReviewsModal .preview-modal-content {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode #storefrontReviewsModal h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #storefrontReviewsModal [style*="background:#fff9f2"],
+body.dark-mode #storefrontReviewsModal [style*="background: #fff9f2"] {
+    background-color: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode #storefrontReviewsModal [style*="color:#171922"] {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-review-item {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-review-filter-btn {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .store-review-filter-btn.active {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+/* Hidden on desktop */
+.fp-mobile-hero-header,
+.fp-mobile-top-bar {
+    display: none !important;
+}
+
+/* ==========================================================================
+   FOODPANDA MOBILE STOREFRONT HERO & DOCKED EXPANDING HEADER ENGINE
+   ========================================================================== */
+@media (max-width: 768px) {
+    /* Hide desktop storefront header and standard site navbar on menu page */
+    .desktop-storefront-header,
+    .storefront-header,
+    .site-header {
+        display: none !important;
+    }
+
+    body {
+        background-color: #f8f9fa !important;
+        padding-top: 0 !important;
+    }
+
+    .main-content,
+    .site-main {
+        padding-top: 0 !important;
+    }
+
+    .menu-section {
+        padding-top: 0 !important;
+    }
+
+    .menu-section > .container {
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+    }
+
+    /* 1. Hero Banner Cover */
+    .fp-mobile-hero-header {
+        display: block !important;
+        background: #ffffff;
+        position: relative;
+    }
+
+    .fp-hero-banner {
+        position: relative;
+        width: 100%;
+        height: 185px;
+        background: #111827;
+        overflow: visible;
+    }
+
+    .fp-hero-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .fp-hero-overlay {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.35) 100%);
+        pointer-events: none;
+    }
+
+    /* Floating Round Action Buttons on Banner */
+    .fp-hero-floating-nav {
+        position: absolute;
+        top: 14px;
+        left: 14px;
+        right: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        z-index: 10;
+        pointer-events: auto;
+    }
+
+    .fp-floating-round-btn {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: none;
+        color: #171922;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+        font-size: 0.95rem;
+        cursor: pointer;
+        text-decoration: none;
+        transition: transform 0.15s ease, background 0.15s ease;
+    }
+
+    .fp-floating-round-btn:active {
+        transform: scale(0.92);
+        background: #f1f3f5;
+    }
+
+    .fp-hero-actions-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* Overlapping Logo Badge */
+    .fp-hero-badge-wrap {
+        position: absolute;
+        bottom: -24px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 12;
+    }
+
+    .fp-hero-badge {
+        width: 62px;
+        height: 62px;
+        border-radius: 16px;
+        background: #ffffff;
+        border: 3px solid #ffffff;
+        box-shadow: 0 6px 18px rgba(16, 24, 40, 0.14);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+
+    .fp-hero-badge img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .fp-hero-badge span {
+        font-family: 'Outfit', sans-serif;
+        font-weight: 800;
+        font-size: 1.35rem;
+        color: #b3261e;
+    }
+
+    /* 2. Store Info Card */
+    .fp-store-info-card {
+        padding: 34px 16px 16px;
+        text-align: center;
+        background: #ffffff;
+        border-bottom: 1px solid #eaecf0;
+    }
+
+    .fp-store-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: #101828;
+        margin: 0 0 6px;
+        line-height: 1.25;
+        letter-spacing: -0.02em;
+    }
+
+    .fp-rating-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 0.82rem;
+        margin-bottom: 14px;
+    }
+
+    .fp-rating-badge {
+        font-weight: 800;
+        color: #101828;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+    }
+
+    .fp-rating-badge i {
+        color: #f59e0b;
+        font-size: 0.85rem;
+    }
+
+    .fp-rating-count {
+        color: #64748b;
+        font-weight: 500;
+    }
+
+    .fp-dot {
+        color: #d0d5dd;
+    }
+
+    .fp-see-reviews-btn {
+        color: #101828;
+        font-weight: 700;
+        text-decoration: underline;
+        cursor: pointer;
+    }
+
+    /* Fulfillment Toggle & Group Order */
+    .fp-fulfillment-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .fp-fulfillment-toggle {
+        display: inline-flex;
+        background: #f1f3f5;
+        padding: 3px;
+        border-radius: 999px;
+        gap: 2px;
+    }
+
+    .fp-toggle-pill {
+        border: none;
+        background: transparent;
+        padding: 7px 14px;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #475467;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        transition: all 0.2s ease;
+    }
+
+    .fp-toggle-pill.active {
+        background: #101828;
+        color: #ffffff;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    }
+
+    .fp-discount-badge {
+        font-size: 0.68rem;
+        font-weight: 800;
+        color: #b3261e;
+        background: #fff1f0;
+        padding: 1px 6px;
+        border-radius: 999px;
+        margin-left: 2px;
+    }
+
+    .fp-group-order-btn {
+        border: none;
+        background: transparent;
+        color: #101828;
+        font-size: 0.84rem;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        cursor: pointer;
+        padding: 6px 8px;
+    }
+
+    /* Delivery ETA Card */
+    .fp-delivery-meta-card {
+        background: #ffffff;
+        border: 1px solid #eaecf0;
+        border-radius: 12px;
+        padding: 12px 14px;
+        text-align: left;
+        margin-bottom: 10px;
+        box-shadow: 0 1px 3px rgba(16, 24, 40, 0.03);
+    }
+
+    .fp-del-main {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 4px;
+        font-size: 0.88rem;
+    }
+
+    .fp-del-time {
+        color: #101828;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .fp-del-change {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #101828;
+        text-decoration: underline;
+        cursor: pointer;
+    }
+
+    .fp-del-sub {
+        font-size: 0.76rem;
+        color: #64748b;
+    }
+
+    /* Promo Highlight Card */
+    .fp-promo-highlight {
+        background: #fdf4ff;
+        border: 1px solid #f5d0fe;
+        border-radius: 12px;
+        padding: 10px 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        text-align: left;
+    }
+
+    .fp-promo-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: #fae8ff;
+        color: #9333ea;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.88rem;
+        flex-shrink: 0;
+    }
+
+    .fp-promo-copy {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.3;
+    }
+
+    .fp-promo-copy strong {
+        font-size: 0.82rem;
+        color: #581c87;
+    }
+
+    .fp-promo-copy span {
+        font-size: 0.72rem;
+        color: #7e22ce;
+    }
+
+    /* 3. Sticky Navigation Bar & Expanding Search */
+    .panda-menu-sticky-bar {
+        position: sticky !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        z-index: 1050 !important;
+        background: #ffffff !important;
+        border-left: none !important;
+        border-right: none !important;
+        border-top: none !important;
+        border-bottom: 1px solid #eaecf0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        transition: box-shadow 0.25s ease !important;
+    }
+
+    .panda-menu-sticky-bar.is-docked {
+        box-shadow: 0 4px 18px rgba(16, 24, 40, 0.08) !important;
+    }
+
+    /* Mobile Sticky Top Row (Search + Buttons) */
+    .fp-mobile-top-bar {
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+        padding: 8px 12px 6px !important;
+        background: #ffffff !important;
+    }
+
+    .fp-bar-round-btn {
+        width: 38px !important;
+        height: 38px !important;
+        min-width: 38px !important;
+        border-radius: 50% !important;
+        background: #ffffff !important;
+        border: 1px solid #eaecf0 !important;
+        color: #171922 !important;
+        display: none !important; /* Hidden initially, shown when docked */
+        align-items: center !important;
+        justify-content: center !important;
+        box-shadow: 0 2px 6px rgba(16, 24, 40, 0.05) !important;
+        font-size: 0.92rem !important;
+        cursor: pointer !important;
+        text-decoration: none !important;
+        flex-shrink: 0 !important;
+        transition: all 0.2s ease !important;
+    }
+
+    .panda-menu-sticky-bar.is-docked .fp-bar-round-btn {
+        display: inline-flex !important;
+    }
+
+    .fp-bar-search-box {
+        flex: 1 1 auto !important;
+        height: 42px !important;
+        border-radius: 999px !important;
+        background: #f1f3f5 !important;
+        border: 1px solid transparent !important;
+        padding: 0 16px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+        transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+
+    .fp-bar-search-box:focus-within {
+        background: #ffffff !important;
+        border-color: #b3261e !important;
+        box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.12) !important;
+    }
+
+    .fp-bar-search-box i {
+        color: #64748b !important;
+        font-size: 0.9rem !important;
+    }
+
+    .fp-bar-search-box input {
+        border: none !important;
+        background: transparent !important;
+        width: 100% !important;
+        outline: none !important;
+        font-size: 0.88rem !important;
+        font-weight: 600 !important;
+        color: #101828 !important;
+        padding: 0 !important;
+    }
+
+    .fp-bar-search-box input::placeholder {
+        color: #64748b !important;
+        font-weight: 500 !important;
+    }
+
+    /* Category Tabs Strip */
+    .panda-menu-bar-inner {
+        padding: 0 !important;
+        display: flex !important;
+        border-top: 1px solid #f2f4f7 !important;
+        background: #ffffff !important;
+    }
+
+    .panda-menu-search-box.fp-desktop-search,
+    .panda-cat-arrow,
+    .panda-menu-filter-select-wrap {
+        display: none !important;
+    }
+
+    .panda-cat-strip-wrap {
+        width: 100% !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        scrollbar-width: none !important;
+        padding: 0 10px !important;
+    }
+
+    .panda-cat-strip-wrap::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .panda-cat-strip {
+        display: flex !important;
+        gap: 8px !important;
+        padding: 0 !important;
+        white-space: nowrap !important;
+    }
+
+    .panda-cat-tab {
+        padding: 10px 14px !important;
+        font-size: 0.95rem !important;
+        font-weight: 600 !important;
+        color: #64748b !important;
+        border-bottom: 2.5px solid transparent !important;
+        text-decoration: none !important;
+        transition: all 0.15s ease !important;
+    }
+
+    .panda-cat-tab.active {
+        color: #101828 !important;
+        font-weight: 800 !important;
+        border-bottom-color: #101828 !important;
+    }
+
+    .panda-cat-tab .panda-cat-count {
+        display: none !important; /* Cleaner look to lessen text like Foodpanda */
+    }
+    .menu-shops-showcase-section {
+        margin-bottom: 20px !important;
+    }
+    .menu-shops-showcase-section > div {
+        padding: 16px 14px !important;
+        border-radius: 16px !important;
+    }
+    .menu-shops-showcase-section h2 {
+        font-size: 1.25rem !important;
+    }
+    .menu-shops-directory-grid {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x pan-y !important;
+        scroll-snap-type: x mandatory !important;
+        scroll-behavior: smooth !important;
+        gap: 14px !important;
+        padding: 4px 4px 14px 4px !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        user-select: none;
+    }
+    .menu-shops-directory-grid::-webkit-scrollbar {
+        display: none !important;
+    }
+    .menu-shops-directory-grid .menu-shop-card {
+        flex: 0 0 clamp(225px, 70vw, 265px) !important;
+        width: clamp(225px, 70vw, 265px) !important;
+        min-width: clamp(225px, 70vw, 265px) !important;
+        max-width: clamp(225px, 70vw, 265px) !important;
+        scroll-snap-align: start !important;
+        scroll-snap-stop: normal !important;
+        touch-action: pan-x pan-y !important;
+    }
+    
+    /* Sleek Floating Quick Order Bar */
+    .mobile-quick-order {
+        display: none !important;
+    }
+    .mobile-quick-order.has-items {
+        display: block !important;
+        position: fixed !important;
+        left: 14px !important;
+        right: 14px !important;
+        bottom: calc(98px + env(safe-area-inset-bottom, 0px)) !important;
+        z-index: 1260 !important;
+    }
+    .mobile-quick-order-inner {
+        background: rgba(255, 255, 255, 0.94) !important;
+        backdrop-filter: blur(18px) !important;
+        -webkit-backdrop-filter: blur(18px) !important;
+        border: 1px solid rgba(234, 236, 240, 0.85) !important;
+        border-radius: 999px !important;
+        box-shadow: 0 10px 32px rgba(16, 24, 40, 0.15) !important;
+        padding: 6px 10px 6px 18px !important;
+    }
+    .mobile-quick-order-top {
+        display: none !important;
+    }
+    .mobile-quick-order-bottom {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 12px !important;
+    }
+    .mobile-quick-order-meta {
+        font-size: 0.70rem !important;
+        color: #64748b !important;
+        font-weight: 600 !important;
+        margin: 0 !important;
+    }
+    .mobile-quick-order-total {
+        font-size: 1.05rem !important;
+        font-weight: 800 !important;
+        color: #101828 !important;
+        line-height: 1.1 !important;
+    }
+    .mobile-quick-order-checkout {
+        background: #b3261e !important;
+        color: #ffffff !important;
+        font-weight: 800 !important;
+        font-size: 0.84rem !important;
+        padding: 10px 20px !important;
+        border-radius: 999px !important;
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(179, 38, 30, 0.25) !important;
+        cursor: pointer !important;
+    }
+    /* 4. Foodpanda 2-Column Product Grid */
+    .menu-items-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 12px !important;
+        margin-top: 10px !important;
+    }
+
+    .menu-item {
+        background: #ffffff !important;
+        border: 1px solid #eaecf0 !important;
+        border-radius: 16px !important;
+        padding: 8px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        position: relative !important;
+        box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04) !important;
+        transition: transform 0.15s ease !important;
+    }
+
+    .menu-item .item-image {
+        width: 100% !important;
+        height: 125px !important;
+        min-height: 125px !important;
+        border-radius: 12px !important;
+        position: relative !important;
+        overflow: hidden !important;
+        background: #f8fafc !important;
+    }
+
+    .menu-item .item-image img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+    }
+
+    .menu-item .panda-quick-add-btn {
+        position: absolute !important;
+        bottom: 6px !important;
+        right: 6px !important;
+        width: 32px !important;
+        height: 32px !important;
+        border-radius: 50% !important;
+        background: #ffffff !important;
+        color: #101828 !important;
+        border: 1px solid #eaecf0 !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 0.85rem !important;
+        z-index: 4 !important;
+        cursor: pointer !important;
+        transition: transform 0.15s ease !important;
+    }
+
+    .menu-item .panda-quick-add-btn:active {
+        transform: scale(0.9) !important;
+    }
+
+    .menu-item .product-favorite-btn {
+        top: 6px !important;
+        right: 6px !important;
+        width: 28px !important;
+        height: 28px !important;
+        font-size: 0.75rem !important;
+        z-index: 5 !important;
+        background: rgba(255, 255, 255, 0.88) !important;
+        backdrop-filter: blur(4px) !important;
+        border-radius: 50% !important;
+    }
+
+    .menu-item .item-content {
+        padding: 4px 2px 2px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 !important;
+    }
+
+    .menu-item .item-title {
+        font-size: 0.88rem !important;
+        font-weight: 700 !important;
+        color: #101828 !important;
+        line-height: 1.25 !important;
+        margin: 6px 0 2px !important;
+        display: -webkit-box !important;
+        -webkit-line-clamp: 2 !important;
+        -webkit-box-orient: vertical !important;
+        overflow: hidden !important;
+        padding-right: 0 !important;
+    }
+
+    /* Lessen text: hide heavy description & stock text in card (kept in modal) */
+    .menu-item .item-description,
+    .menu-item .item-rating,
+    .menu-item .item-content > div:not(.item-card-bottom):not(.item-title) {
+        display: none !important;
+    }
+
+    .menu-item .item-card-bottom {
+        display: flex !important;
+        align-items: baseline !important;
+        justify-content: space-between !important;
+        margin-top: auto !important;
+        padding-top: 4px !important;
+        border: none !important;
+    }
+
+    .menu-item .panda-price-pill {
+        font-size: 0.92rem !important;
+        font-weight: 800 !important;
+        color: #101828 !important;
+        background: transparent !important;
+        padding: 0 !important;
+        border: none !important;
+    }
+
+    /* Category Header Clean & Compact */
+    .menu-category-header {
+        margin-top: 24px !important;
+        margin-bottom: 8px !important;
+    }
+
+    .menu-category-header h2 {
+        font-size: 1.25rem !important;
+        font-weight: 800 !important;
+        color: #101828 !important;
+        margin: 0 !important;
+    }
+
+    .menu-category-header p {
+        font-size: 0.80rem !important;
+        color: #64748b !important;
+        margin: 2px 0 0 !important;
+    }
+    
+    
+    /* Product Preview Modal Mobile Fit (Ensures Add to Cart button is fixed and never scrollable) */
+    .preview-modal-content {
+        width: min(440px, 94vw) !important;
+        max-width: 440px !important;
+        height: auto !important;
+        max-height: 88vh !important;
+        max-height: 88dvh !important;
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        border-radius: 20px !important;
+        overflow: hidden !important;
+        margin: 0 !important;
+    }
+    .preview-image {
+        height: 160px !important;
+        min-height: 160px !important;
+        max-height: 160px !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        flex: 0 0 160px !important;
+    }
+    .preview-image img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+    }
+    .preview-body {
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding-bottom: 8px !important;
+    }
+    .preview-details {
+        padding: 14px 16px !important;
+        flex: none !important;
+        overflow: visible !important;
+        display: block !important;
+    }
+    .order-summary {
+        padding: 12px 14px !important;
+        margin-bottom: 12px !important;
+        border-radius: 12px !important;
+    }
+    .order-summary h4 {
+        font-size: 0.95rem !important;
+        margin-bottom: 8px !important;
+    }
+    .summary-details p {
+        margin-bottom: 4px !important;
+        font-size: 0.82rem !important;
+    }
+    .preview-actions-wrap {
+        position: relative !important;
+        flex: 0 0 auto !important;
+        width: 100% !important;
+        background: #ffffff !important;
+        border-top: 1px solid #eaecf0 !important;
+        padding: 12px 16px 16px !important;
+        margin: 0 !important;
+        z-index: 20 !important;
+        box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.08) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    .preview-actions-wrap .add-to-cart-confirm,
+    .add-to-cart-confirm {
+        min-height: 48px !important;
+        height: 48px !important;
+        width: 100% !important;
+        font-size: 1rem !important;
+        font-weight: 800 !important;
+        border-radius: 12px !important;
+        background: #b3261e !important;
+        color: #ffffff !important;
+        border: none !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        box-shadow: 0 4px 14px rgba(179, 38, 30, 0.25) !important;
+        cursor: pointer !important;
+    }
+
+
+    body.dark-mode .preview-actions-wrap {
+        background: #1e293b !important;
+        border-top-color: #334155 !important;
+    }
+
+    /* Suppress mobile bottom nav and quick order pill when preview modal is active */
+    body.product-preview-open .mobile-bottom-nav,
+    body.product-preview-open .mobile-quick-order {
+        display: none !important;
+    }
+
+    /* Floating action button clutter suppression on mobile menu page */
+    .floating-order-btn,
+    #floatingOrderBtn {
+        display: none !important;
+    }
+    .floating-chat-btn,
+    #floatingChatBtn {
+        display: none !important;
+    }
+}
+
+
+/* Foodpanda Mobile Dark Mode Engine */
+body.dark-mode .fp-mobile-hero-header,
+body.dark-mode .fp-store-info-card,
+body.dark-mode .fp-hero-badge,
+body.dark-mode .panda-menu-sticky-bar,
+body.dark-mode .fp-mobile-top-bar,
+body.dark-mode .panda-menu-bar-inner {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .fp-store-title,
+body.dark-mode .fp-rating-badge,
+body.dark-mode .fp-del-time,
+body.dark-mode .fp-bar-search-box input,
+body.dark-mode .menu-category-header h2,
+body.dark-mode .menu-item .item-title,
+body.dark-mode .menu-item .panda-price-pill {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .fp-floating-round-btn,
+body.dark-mode .fp-bar-round-btn,
+body.dark-mode .menu-item .panda-quick-add-btn {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .fp-bar-search-box {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .fp-delivery-meta-card {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .fp-promo-highlight {
+    background: rgba(147, 51, 234, 0.12) !important;
+    border-color: rgba(147, 51, 234, 0.3) !important;
+}
+
+body.dark-mode .fp-promo-copy strong {
+    color: #d8b4fe !important;
+}
+
+body.dark-mode .fp-promo-copy span {
+    color: #c084fc !important;
+}
+
+body.dark-mode .panda-cat-tab.active {
+    color: #ef4444 !important;
+    border-bottom-color: #ef4444 !important;
+}
+
+body.dark-mode .menu-item {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .fp-toggle-pill {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .fp-toggle-pill.active {
+    background: #0f172a !important;
+    color: #ffffff !important;
+}
+
+
+/* ==========================================================================
+   GLASSMORPHISM & FLUID MOTION DESIGN SYSTEM ENGINE
+   ========================================================================== */
+
+/* Glassmorphic Search Bars (Desktop & Mobile) */
+.fp-bar-search-box,
+.panda-menu-search-box,
+.menu-search-field {
+    background: rgba(255, 255, 255, 0.75) !important;
+    backdrop-filter: blur(14px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.85) !important;
+    box-shadow: 0 4px 16px rgba(16, 24, 40, 0.05), inset 0 1px 2px rgba(255, 255, 255, 0.75) !important;
+    border-radius: 999px !important;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.fp-bar-search-box:focus-within,
+.panda-menu-search-box:focus-within,
+.menu-search-field:focus-within {
+    background: rgba(255, 255, 255, 0.94) !important;
+    border-color: rgba(179, 38, 30, 0.45) !important;
+    box-shadow: 0 6px 22px rgba(179, 38, 30, 0.12), inset 0 1px 2px rgba(255, 255, 255, 0.9) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Glassmorphic Circular Action Buttons */
+.fp-floating-round-btn,
+.fp-bar-round-btn,
+.preview-close {
+    background: rgba(255, 255, 255, 0.80) !important;
+    backdrop-filter: blur(14px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.9) !important;
+    box-shadow: 0 4px 16px rgba(16, 24, 40, 0.12), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.fp-floating-round-btn:hover,
+.fp-bar-round-btn:hover,
+.preview-close:hover {
+    background: rgba(255, 255, 255, 0.96) !important;
+    transform: translateY(-2px) scale(1.05) !important;
+    box-shadow: 0 8px 22px rgba(16, 24, 40, 0.16) !important;
+}
+
+.fp-floating-round-btn:active,
+.fp-bar-round-btn:active,
+.preview-close:active {
+    transform: scale(0.92) !important;
+}
+
+/* Quick Add (+) Button Glassmorphism & Spring Motion */
+.panda-quick-add-btn {
+    background: rgba(255, 255, 255, 0.88) !important;
+    backdrop-filter: blur(12px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.95) !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
+    transition: transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.panda-quick-add-btn:hover {
+    background: #b3261e !important;
+    color: #ffffff !important;
+    transform: scale(1.1) !important;
+    box-shadow: 0 6px 18px rgba(179, 38, 30, 0.35) !important;
+}
+
+.panda-quick-add-btn:active {
+    transform: scale(0.86) rotate(90deg) !important;
+}
+
+/* Product Card Favorite Heart Button */
+.product-favorite-btn {
+    background: rgba(255, 255, 255, 0.82) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.85) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, color 0.2s ease !important;
+}
+
+.product-favorite-btn:hover {
+    transform: scale(1.12) !important;
+    background: #ffffff !important;
+}
+
+.product-favorite-btn:active {
+    transform: scale(0.85) !important;
+}
+
+/* Glassmorphism Primary CTA Buttons */
+.add-to-cart-confirm,
+.btn-primary {
+    background: rgba(179, 38, 30, 0.95) !important;
+    backdrop-filter: blur(14px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    box-shadow: 0 6px 20px rgba(179, 38, 30, 0.28), inset 0 1px 1px rgba(255, 255, 255, 0.4) !important;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, background 0.2s ease !important;
+}
+
+.add-to-cart-confirm:hover,
+.btn-primary:hover {
+    background: rgba(152, 27, 21, 0.98) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 10px 26px rgba(179, 38, 30, 0.38) !important;
+}
+
+.add-to-cart-confirm:active,
+.btn-primary:active {
+    transform: scale(0.97) !important;
+}
+
+/* Glassmorphism Sticky Bar & Category Navigation */
+.panda-menu-sticky-bar {
+    background: rgba(255, 255, 255, 0.84) !important;
+    backdrop-filter: blur(20px) saturate(190%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(190%) !important;
+    border-bottom: 1px solid rgba(234, 236, 240, 0.75) !important;
+    box-shadow: 0 4px 20px rgba(16, 24, 40, 0.04) !important;
+    transition: box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1), background 0.3s ease, border-color 0.3s ease !important;
+}
+
+.panda-menu-sticky-bar.is-docked {
+    background: rgba(255, 255, 255, 0.92) !important;
+    box-shadow: 0 8px 30px rgba(16, 24, 40, 0.10) !important;
+}
+
+/* Smooth Category Tab Slide & Underline Motion */
+.panda-cat-tab {
+    position: relative !important;
+    border-bottom: none !important;
+    transition: color 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s ease !important;
+}
+
+.panda-cat-tab::after {
+    content: '' !important;
+    position: absolute !important;
+    left: 12px !important;
+    right: 12px !important;
+    bottom: 0 !important;
+    height: 3px !important;
+    border-radius: 999px !important;
+    background: #101828 !important;
+    transform: scaleX(0) !important;
+    transform-origin: center !important;
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease !important;
+}
+
+.panda-cat-tab.active::after {
+    transform: scaleX(1) !important;
+}
+
+.panda-cat-tab:active {
+    transform: scale(0.94) !important;
+}
+
+.panda-cat-strip-wrap {
+    scroll-behavior: smooth !important;
+    -webkit-overflow-scrolling: touch !important;
+}
+
+/* Glassmorphism Product Cards */
+.menu-item {
+    background: rgba(255, 255, 255, 0.84) !important;
+    backdrop-filter: blur(12px) saturate(170%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(170%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.75) !important;
+    box-shadow: 0 4px 16px rgba(16, 24, 40, 0.04), inset 0 1px 1px rgba(255, 255, 255, 0.85) !important;
+    transition: transform 0.26s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.26s ease !important;
+}
+
+.menu-item:hover {
+    transform: translateY(-3px) !important;
+    box-shadow: 0 10px 28px rgba(16, 24, 40, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
+}
+
+.menu-item:active {
+    transform: scale(0.98) !important;
+}
+
+/* Glassmorphism Input & Controls */
+.quantity-control,
+.qty-minus,
+.qty-plus {
+    background: rgba(248, 250, 252, 0.85) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(226, 232, 240, 0.85) !important;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.qty-minus:active,
+.qty-plus:active {
+    transform: scale(0.9) !important;
+}
+
+.size-preview-btn {
+    background: rgba(255, 255, 255, 0.78) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border: 1.5px solid rgba(226, 232, 240, 0.9) !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.size-preview-btn.active {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+    transform: scale(1.02) !important;
+}
+
+.preview-actions-wrap {
+    background: rgba(255, 255, 255, 0.88) !important;
+    backdrop-filter: blur(18px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(180%) !important;
+    border-top: 1px solid rgba(234, 236, 240, 0.75) !important;
+}
+
+/* Dark Mode Glassmorphism Overrides */
+body.dark-mode .panda-menu-sticky-bar {
+    background: rgba(30, 41, 59, 0.82) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    border-bottom-color: rgba(51, 65, 85, 0.7) !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.dark-mode .fp-bar-search-box,
+body.dark-mode .panda-menu-search-box,
+body.dark-mode .menu-search-field {
+    background: rgba(15, 23, 42, 0.78) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
+}
+
+body.dark-mode .fp-floating-round-btn,
+body.dark-mode .fp-bar-round-btn,
+body.dark-mode .menu-item .panda-quick-add-btn,
+body.dark-mode .preview-close {
+    background: rgba(15, 23, 42, 0.82) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.38) !important;
+}
+
+body.dark-mode .menu-item {
+    background: rgba(30, 41, 59, 0.75) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
+}
+
+body.dark-mode .panda-cat-tab::after {
+    background: #ef4444 !important;
+}
+
+body.dark-mode .preview-actions-wrap {
+    background: rgba(30, 41, 59, 0.88) !important;
+    backdrop-filter: blur(18px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(180%) !important;
+    border-top-color: rgba(51, 65, 85, 0.8) !important;
+}
+
 </style>
 
 <?php include 'includes/footer.php'; ?>

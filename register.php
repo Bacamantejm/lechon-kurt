@@ -15,16 +15,8 @@ if (isset($_SESSION['user_id'])) {
 $error = '';
 $success = '';
 $form_data = [];
-$requested_account_type = strtolower(trim((string)($_GET['account_type'] ?? '')));
-$partner_signup_flag = strtolower(trim((string)($_GET['partner_signup'] ?? '')));
-$is_partner_signup = (
-    $requested_account_type === 'organization' ||
-    in_array($partner_signup_flag, ['1', 'true', 'yes'], true)
-);
-
-if ($is_partner_signup) {
-    $form_data['account_type'] = 'organization';
-}
+$is_partner_signup = false;
+$form_data['account_type'] = 'individual';
 
 if (empty($_SESSION['registration_csrf_token'])) {
     $_SESSION['registration_csrf_token'] = bin2hex(random_bytes(32));
@@ -120,7 +112,7 @@ if (!function_exists('ensureRegistrationValidIdSchema')) {
         $table_sql = "CREATE TABLE IF NOT EXISTS `user_valid_id_documents` (
             `id` int(11) NOT NULL AUTO_INCREMENT,
             `user_id` int(11) NOT NULL,
-            `document_type` varchar(50) NOT NULL DEFAULT 'valid_id',
+            `document_type` varchar(100) NOT NULL DEFAULT 'valid_id',
             `file_name` varchar(255) NOT NULL,
             `file_path` varchar(500) NOT NULL,
             `uploaded_at` timestamp NOT NULL DEFAULT current_timestamp(),
@@ -137,7 +129,7 @@ if (!function_exists('ensureRegistrationValidIdSchema')) {
         $required_columns = [
             'id' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `id` INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY FIRST",
             'user_id' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `user_id` INT(11) NOT NULL AFTER `id`",
-            'document_type' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `document_type` VARCHAR(50) NOT NULL DEFAULT 'valid_id' AFTER `user_id`",
+            'document_type' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `document_type` VARCHAR(100) NOT NULL DEFAULT 'valid_id' AFTER `user_id`",
             'file_name' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `file_name` VARCHAR(255) NOT NULL AFTER `document_type`",
             'file_path' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `file_path` VARCHAR(500) NOT NULL AFTER `file_name`",
             'uploaded_at' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `uploaded_at` TIMESTAMP NOT NULL DEFAULT current_timestamp() AFTER `file_path`",
@@ -159,6 +151,24 @@ if (!function_exists('ensureRegistrationValidIdSchema')) {
 if (!function_exists('validateRegistrationValidIdUpload')) {
     function validateRegistrationValidIdUpload($file)
     {
+        if (is_array($file) && !empty($file['is_temp_cached']) && !empty($file['tmp_name'])) {
+            $abs_path = (string)$file['tmp_name'];
+            if (!file_exists($abs_path) || filesize($abs_path) <= 0) {
+                return ['valid' => false, 'message' => 'Cached valid ID file was invalid or expired. Please upload again.'];
+            }
+            if (filesize($abs_path) > 10 * 1024 * 1024) {
+                return ['valid' => false, 'message' => 'Uploaded ID file is too large (maximum 10MB).'];
+            }
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $mime_type = finfo_file($finfo, $abs_path);
+            finfo_close($finfo);
+            $allowed_types = ['image/jpeg', 'image/png', 'image/webp'];
+            if (!in_array($mime_type, $allowed_types, true)) {
+                return ['valid' => false, 'message' => 'Please upload a clear JPG, PNG, or WEBP valid ID image.'];
+            }
+            return ['valid' => true, 'mime_type' => $mime_type];
+        }
+
         if (!isset($file) || !is_array($file) || !isset($file['error']) || (int)$file['error'] === UPLOAD_ERR_NO_FILE) {
             return ['valid' => false, 'message' => 'Please upload a valid ID image.'];
         }
@@ -177,12 +187,12 @@ if (!function_exists('validateRegistrationValidIdUpload')) {
         }
 
         $allowed_types = ['image/jpeg', 'image/png', 'image/webp'];
-        $validation = validateFileUpload($file, $allowed_types, 5 * 1024 * 1024);
+        $validation = validateFileUpload($file, $allowed_types, 10 * 1024 * 1024);
         if (empty($validation['valid'])) {
             $errors = $validation['errors'] ?? [];
             $friendly_message = !empty($errors)
                 ? (string)$errors[0]
-                : 'Please upload a clear JPG, PNG, or WEBP valid ID image up to 5MB.';
+                : 'Please upload a clear JPG, PNG, or WEBP valid ID image up to 10MB.';
             return ['valid' => false, 'message' => $friendly_message];
         }
 
@@ -244,8 +254,14 @@ if (!function_exists('saveRegistrationValidIdDocument')) {
         $target_path = $upload_dir . $unique_name;
         $relative_path = 'uploads/user_valid_ids/' . $unique_name;
 
-        if (!move_uploaded_file((string)$uploaded_file['tmp_name'], $target_path)) {
-            return ['success' => false, 'message' => 'Unable to save the uploaded valid ID. Please try again.'];
+        if (!empty($uploaded_file['is_temp_cached']) && !empty($uploaded_file['tmp_name'])) {
+            if (!copy((string)$uploaded_file['tmp_name'], $target_path)) {
+                return ['success' => false, 'message' => 'Unable to save the cached valid ID. Please try again.'];
+            }
+        } else {
+            if (!move_uploaded_file((string)$uploaded_file['tmp_name'], $target_path)) {
+                return ['success' => false, 'message' => 'Unable to save the uploaded valid ID. Please try again.'];
+            }
         }
 
         $id_label_map = [
@@ -260,9 +276,12 @@ if (!function_exists('saveRegistrationValidIdDocument')) {
             'national_id' => 'Philippine National ID (PhilSys)',
             'tin' => 'TIN ID',
             'pag_ibig' => 'Pag-IBIG ID',
-            'philhealth' => 'PhilHealth ID'
+            'pagibig' => 'Pag-IBIG ID',
+            'philhealth' => 'PhilHealth ID',
+            'senior_citizen' => 'Senior Citizen ID',
+            'ofw' => 'OFW ID'
         ];
-        $document_type_label = ($id_label_map[$valid_id_type] ?? 'Government ID') . ' - ' . $side;
+        $document_type_label = substr(($id_label_map[$valid_id_type] ?? 'Government ID') . ' - ' . $side, 0, 100);
 
         $insert_sql = "INSERT INTO user_valid_id_documents (user_id, document_type, file_name, file_path) VALUES (?, ?, ?, ?)";
         $stmt = mysqli_prepare($conn, $insert_sql);
@@ -316,47 +335,117 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $first_name = preg_replace('/\s+/', ' ', trim($_POST['first_name'] ?? ''));
     $last_name = preg_replace('/\s+/', ' ', trim($_POST['last_name'] ?? ''));
     $middle_name = preg_replace('/\s+/', ' ', trim($_POST['middle_name'] ?? ''));
+    $suffix = preg_replace('/\s+/', ' ', trim($_POST['suffix'] ?? ''));
     $nickname = preg_replace('/\s+/', ' ', trim($_POST['nickname'] ?? ''));
-    $birth_date = trim($_POST['birth_date'] ?? '');
+    $birth_date = trim($_POST['birth_date'] ?? $_POST['dob'] ?? '');
     $gender = strtolower(trim($_POST['gender'] ?? ''));
     $email = strtolower(trim($_POST['email'] ?? ''));
     $phone = trim($_POST['phone'] ?? '');
     $password = $_POST['password'] ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
-    $accept_terms = isset($_POST['accept_terms']);
+    $accept_terms = !empty($_POST['accept_terms']) 
+        || !empty($_POST['terms']) 
+        || (isset($_POST['accept_terms']) && $_POST['accept_terms'] !== '' && $_POST['accept_terms'] !== '0')
+        || (isset($_POST['terms']) && $_POST['terms'] !== '' && $_POST['terms'] !== '0');
     $valid_id_type = trim($_POST['valid_id_type'] ?? '');
-    $valid_id_front = $_FILES['valid_id_front'] ?? null;
-    $valid_id_back = $_FILES['valid_id_back'] ?? null;
+    
+    // Setup temporary storage directory for pending ID uploads
+    $temp_id_dir = __DIR__ . '/uploads/temp_valid_ids/';
+    if (!is_dir($temp_id_dir)) {
+        @mkdir($temp_id_dir, 0755, true);
+    }
+
+    // Front ID: If newly uploaded, validate and cache in temp directory and session
+    if (isset($_FILES['valid_id_front']) && is_array($_FILES['valid_id_front']) && (int)($_FILES['valid_id_front']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+        $front_val = validateRegistrationValidIdUpload($_FILES['valid_id_front']);
+        if (!empty($front_val['valid'])) {
+            $ext = ($front_val['mime_type'] === 'image/png') ? 'png' : (($front_val['mime_type'] === 'image/webp') ? 'webp' : 'jpg');
+            $temp_filename = 'temp_front_' . bin2hex(random_bytes(16)) . '.' . $ext;
+            $temp_target = $temp_id_dir . $temp_filename;
+            if (move_uploaded_file($_FILES['valid_id_front']['tmp_name'], $temp_target)) {
+                if (!empty($_SESSION['temp_valid_id_front']['file_path'])) {
+                    @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path']);
+                }
+                $_SESSION['temp_valid_id_front'] = [
+                    'file_path' => 'uploads/temp_valid_ids/' . $temp_filename,
+                    'name' => $_FILES['valid_id_front']['name'] ?? 'valid_id_front.jpg',
+                    'mime_type' => $front_val['mime_type'],
+                    'uploaded_at' => time()
+                ];
+            }
+        }
+    }
+
+    // Back ID: If newly uploaded, validate and cache in temp directory and session
+    if (isset($_FILES['valid_id_back']) && is_array($_FILES['valid_id_back']) && (int)($_FILES['valid_id_back']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+        $back_val = validateRegistrationValidIdUpload($_FILES['valid_id_back']);
+        if (!empty($back_val['valid'])) {
+            $ext = ($back_val['mime_type'] === 'image/png') ? 'png' : (($back_val['mime_type'] === 'image/webp') ? 'webp' : 'jpg');
+            $temp_filename = 'temp_back_' . bin2hex(random_bytes(16)) . '.' . $ext;
+            $temp_target = $temp_id_dir . $temp_filename;
+            if (move_uploaded_file($_FILES['valid_id_back']['tmp_name'], $temp_target)) {
+                if (!empty($_SESSION['temp_valid_id_back']['file_path'])) {
+                    @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path']);
+                }
+                $_SESSION['temp_valid_id_back'] = [
+                    'file_path' => 'uploads/temp_valid_ids/' . $temp_filename,
+                    'name' => $_FILES['valid_id_back']['name'] ?? 'valid_id_back.jpg',
+                    'mime_type' => $back_val['mime_type'],
+                    'uploaded_at' => time()
+                ];
+            }
+        }
+    }
+
+    // Resolve Front ID reference (newly uploaded or session cached)
+    if (!empty($_SESSION['temp_valid_id_front']['file_path']) && file_exists(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path'])) {
+        $valid_id_front = [
+            'is_temp_cached' => true,
+            'tmp_name' => __DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path'],
+            'file_path' => $_SESSION['temp_valid_id_front']['file_path'],
+            'name' => $_SESSION['temp_valid_id_front']['name'],
+            'error' => UPLOAD_ERR_OK,
+            'size' => filesize(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path']),
+            'type' => $_SESSION['temp_valid_id_front']['mime_type']
+        ];
+    } elseif (isset($_FILES['valid_id_front']) && is_array($_FILES['valid_id_front']) && (int)($_FILES['valid_id_front']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+        $valid_id_front = $_FILES['valid_id_front'];
+    } else {
+        $valid_id_front = null;
+    }
+
+    // Resolve Back ID reference (newly uploaded or session cached)
+    if (!empty($_SESSION['temp_valid_id_back']['file_path']) && file_exists(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path'])) {
+        $valid_id_back = [
+            'is_temp_cached' => true,
+            'tmp_name' => __DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path'],
+            'file_path' => $_SESSION['temp_valid_id_back']['file_path'],
+            'name' => $_SESSION['temp_valid_id_back']['name'],
+            'error' => UPLOAD_ERR_OK,
+            'size' => filesize(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path']),
+            'type' => $_SESSION['temp_valid_id_back']['mime_type']
+        ];
+    } elseif (isset($_FILES['valid_id_back']) && is_array($_FILES['valid_id_back']) && (int)($_FILES['valid_id_back']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+        $valid_id_back = $_FILES['valid_id_back'];
+    } else {
+        $valid_id_back = null;
+    }
     
     // Business partner fields
     $business_name = preg_replace('/\s+/', ' ', trim($_POST['business_name'] ?? ''));
     $business_type = 'restaurant';
     $business_registration = trim($_POST['business_registration'] ?? '');
     $website = null;
-    $tax_id = trim($_POST['tax_id'] ?? '');
+    $tax_id = trim($_POST['tax_id'] ?? $_POST['tin_number'] ?? '');
     $street_address = trim($_POST['street_address'] ?? '');
     $address = trim($_POST['address'] ?? '');
-    $psgc_region_code = trim($_POST['psgc_region_code'] ?? '');
-    $psgc_region_name = trim($_POST['psgc_region_name'] ?? '');
-    $psgc_province_code = trim($_POST['psgc_province_code'] ?? '');
-    $psgc_province_name = trim($_POST['psgc_province_name'] ?? '');
-    $psgc_city_code = trim($_POST['psgc_city_code'] ?? '');
-    $psgc_city_name = trim($_POST['psgc_city_name'] ?? '');
-    $psgc_barangay_code = trim($_POST['psgc_barangay_code'] ?? '');
-    $psgc_barangay_name = trim($_POST['psgc_barangay_name'] ?? '');
+    $latitude = trim($_POST['latitude'] ?? '');
+    $longitude = trim($_POST['longitude'] ?? '');
+    $city_name = trim($_POST['city_name'] ?? '');
+    $province_name = trim($_POST['province_name'] ?? '');
 
-    $address_parts = array_filter([
-        $street_address,
-        $psgc_barangay_name,
-        $psgc_city_name,
-        $psgc_province_name,
-        $psgc_region_name
-    ], static function ($part) {
-        return $part !== '';
-    });
-
-    if (!empty($address_parts)) {
-        $address = implode(', ', array_unique($address_parts));
+    if ($address === '' && $street_address !== '') {
+        $address = $street_address . ($city_name !== '' ? ', ' . $city_name : '') . ($province_name !== '' ? ', ' . $province_name : '');
     }
 
     // Store form data for repopulation
@@ -365,8 +454,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         'first_name' => $first_name,
         'last_name' => $last_name,
         'middle_name' => $middle_name,
+        'suffix' => $suffix,
         'nickname' => $nickname,
         'birth_date' => $birth_date,
+        'dob' => $birth_date,
         'gender' => $gender,
         'email' => $email,
         'phone' => $phone,
@@ -375,19 +466,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         'business_type' => $business_type,
         'business_registration' => $business_registration,
         'tax_id' => $tax_id,
+        'tin_number' => $tax_id,
         'street_address' => $street_address,
         'address' => $address,
-        'psgc_region_code' => $psgc_region_code,
-        'psgc_region_name' => $psgc_region_name,
-        'psgc_province_code' => $psgc_province_code,
-        'psgc_province_name' => $psgc_province_name,
-        'psgc_city_code' => $psgc_city_code,
-        'psgc_city_name' => $psgc_city_name,
-        'psgc_barangay_code' => $psgc_barangay_code,
-        'psgc_barangay_name' => $psgc_barangay_name
+        'latitude' => $latitude,
+        'longitude' => $longitude,
+        'city_name' => $city_name,
+        'province_name' => $province_name,
     ];
 
-    // Validation
+    // Validation - Fail-fast while isolating and clearing ONLY the specific invalid field
     if ($error === '') {
         $csrf_token = $_POST['csrf_token'] ?? '';
         if (empty($csrf_token) || empty($_SESSION['registration_csrf_token']) || !hash_equals($_SESSION['registration_csrf_token'], $csrf_token)) {
@@ -396,84 +484,78 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $error = 'Invalid account type selected.';
         } elseif (!$accept_terms) {
             $error = 'You must accept the Terms of Service and Privacy Policy.';
-        } elseif (empty($first_name) || empty($last_name)) {
+        } elseif (empty($first_name) && empty($last_name)) {
             $error = 'Please enter your first and last name.';
-        } elseif (!preg_match('/^[\p{L}\p{M}\'\-\s]{2,60}$/u', $first_name) || !preg_match('/^[\p{L}\p{M}\'\-\s]{2,60}$/u', $last_name)) {
-            $error = 'Please enter a valid first and last name.';
-        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $error = 'Please enter a valid email address.';
-        } elseif (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,72}$/', $password)) {
-            $error = 'Password must be 8-72 characters with uppercase, lowercase, number, and symbol.';
-        } elseif (!hash_equals($password, $confirm_password)) {
-            $error = 'Passwords do not match.';
-        } elseif (empty($phone)) {
-            $error = 'Please enter your mobile number.';
+            $form_data['first_name'] = '';
+            $form_data['last_name'] = '';
+        } elseif (empty($first_name)) {
+            $error = 'Please enter your first name.';
+            $form_data['first_name'] = '';
+        } elseif (empty($last_name)) {
+            $error = 'Please enter your last name.';
+            $form_data['last_name'] = '';
+        } elseif (!preg_match('/^[\p{L}\p{M}\'\-\s]{2,60}$/u', $first_name)) {
+            $error = 'Please enter a valid first name.';
+            $form_data['first_name'] = '';
+        } elseif (!preg_match('/^[\p{L}\p{M}\'\-\s]{2,60}$/u', $last_name)) {
+            $error = 'Please enter a valid last name.';
+            $form_data['last_name'] = '';
+        } elseif (empty($birth_date)) {
+            $error = 'Please enter your date of birth.';
+            $form_data['birth_date'] = '';
+            $form_data['dob'] = '';
+        } elseif (($dob_time = strtotime($birth_date)) === false || 
+            $dob_time > strtotime('-10 years') || 
+            $dob_time < strtotime('-100 years')
+        ) {
+            $error = 'Please enter a valid date of birth. You must be at least 10 years old to register.';
+            $form_data['birth_date'] = '';
+            $form_data['dob'] = '';
         } elseif (empty($valid_id_type)) {
             $error = 'Please select your valid ID type.';
-        } elseif (empty($valid_id_front) || !is_array($valid_id_front) || (int)($valid_id_front['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            $form_data['valid_id_type'] = '';
+        } elseif (empty($valid_id_front)) {
             $error = 'Please upload a photo of the front side of your valid ID.';
-        } elseif (empty($valid_id_back) || !is_array($valid_id_back) || (int)($valid_id_back['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        } elseif ($valid_id_type !== 'passport' && empty($valid_id_back)) {
             $error = 'Please upload a photo of the back side of your valid ID.';
+        } elseif ($account_type === 'organization' && empty($business_name)) {
+            $error = 'Please enter your restaurant name.';
+            $form_data['business_name'] = '';
+        } elseif (strlen($address) < 6) {
+            $error = 'Please enter your complete address.';
+            $form_data['address'] = '';
+            $form_data['street_address'] = '';
+            $form_data['latitude'] = '';
+            $form_data['longitude'] = '';
         } else {
             $front_validation = validateRegistrationValidIdUpload($valid_id_front);
-            $back_validation = validateRegistrationValidIdUpload($valid_id_back);
+            $back_validation = (!empty($valid_id_back)) ? validateRegistrationValidIdUpload($valid_id_back) : ['valid' => true];
             if (empty($front_validation['valid'])) {
-                $error = 'Front of ID: ' . (string)($front_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 5MB.');
+                $error = 'Front of ID: ' . (string)($front_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 10MB.');
+                if (!empty($_SESSION['temp_valid_id_front']['file_path'])) {
+                    @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path']);
+                    unset($_SESSION['temp_valid_id_front']);
+                }
             } elseif (empty($back_validation['valid'])) {
-                $error = 'Back of ID: ' . (string)($back_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 5MB.');
-            }
-        }
-
-        if ($error === '' && $account_type === 'organization' && empty($business_name)) {
-            $error = 'Please enter your restaurant name.';
-        } elseif ($error === '' && strlen($address) < 10) {
-            $error = 'Please provide a complete delivery address.';
-        } elseif (
-            $error === '' &&
-            ($psgc_region_code !== '' || $psgc_region_name !== '' || $psgc_city_code !== '' || $psgc_city_name !== '' || $psgc_barangay_code !== '' || $psgc_barangay_name !== '') &&
-            ($psgc_region_name === '' || $psgc_city_name === '' || $psgc_barangay_name === '')
-        ) {
-            $error = 'Please complete the PSGC address fields (region, city/municipality, and barangay).';
-        } elseif ($error === '' && $account_type === 'organization') {
-            $is_complete_org_psgc = (
-                $psgc_region_code !== '' && $psgc_region_name !== '' &&
-                $psgc_province_code !== '' && $psgc_province_name !== '' &&
-                $psgc_city_code !== '' && $psgc_city_name !== '' &&
-                $psgc_barangay_code !== '' && $psgc_barangay_name !== ''
-            );
-
-            if (!$is_complete_org_psgc) {
-                $error = 'Please complete your PSGC business address details for Cavite (Region IV-A CALABARZON).';
-            } elseif (
-                ($psgc_region_code !== '040000000') ||
-                (stripos($psgc_region_name, 'calabarzon') === false)
-            ) {
-                $error = 'Business partner registration is limited to CALABARZON (Region IV-A).';
-            } elseif (
-                ($psgc_province_code !== '042100000') ||
-                (stripos($psgc_province_name, 'cavite') === false)
-            ) {
-                $error = 'Business partner registration is limited to Cavite province.';
-            }
-        } elseif ($error === '') {
-            $is_ncr_region = (
-                $psgc_region_code === '130000000' ||
-                stripos($psgc_region_name, 'national capital region') !== false ||
-                preg_match('/\bncr\b/i', $psgc_region_name)
-            );
-
-            $is_complete_individual_psgc = (
-                $psgc_region_code !== '' && $psgc_region_name !== '' &&
-                $psgc_city_code !== '' && $psgc_city_name !== '' &&
-                $psgc_barangay_code !== '' && $psgc_barangay_name !== '' &&
-                ($is_ncr_region || ($psgc_province_code !== '' && $psgc_province_name !== ''))
-            );
-
-            if (!$is_complete_individual_psgc) {
-                $error = 'Please complete your PSGC home address details for Luzon.';
-            } elseif (!isLuzonRegionSelection($psgc_region_code, $psgc_region_name)) {
-                $error = 'Individual registration is limited to Luzon regions only.';
-            }
+                $error = 'Back of ID: ' . (string)($back_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 10MB.');
+                if (!empty($_SESSION['temp_valid_id_back']['file_path'])) {
+                    @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path']);
+                    unset($_SESSION['temp_valid_id_back']);
+                }
+            } elseif (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $error = 'Please enter a valid email address.';
+                    $form_data['email'] = '';
+                } elseif (empty($phone)) {
+                    $error = 'Please enter your mobile phone number.';
+                    $form_data['phone'] = '';
+                } elseif (!preg_match('/^(09|\+?639)\d{9}$/', preg_replace('/[^\d+]/', '', $phone))) {
+                    $error = 'Please enter a valid Philippine mobile number (e.g., 09123456789).';
+                    $form_data['phone'] = '';
+                } elseif (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,72}$/', $password)) {
+                    $error = 'Password must be 8-72 characters with uppercase, lowercase, number, and symbol.';
+                } elseif (!hash_equals($password, $confirm_password)) {
+                    $error = 'Passwords do not match.';
+                }
         }
     }
 
@@ -481,10 +563,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $phone_cleaned = normalizePhilippineMobile($phone);
         $business_registration = preg_replace('/[^A-Za-z0-9\- ]/', '', $business_registration);
         $tax_id = preg_replace('/[^A-Za-z0-9\- ]/', '', $tax_id);
-        $full_name = trim($first_name . ' ' . $last_name);
+        $full_name = trim($first_name . ' ' . $last_name . ($suffix !== '' ? ' ' . $suffix : ''));
         $address = preg_replace('/\s+/', ' ', $address);
         if (strlen($address) > 255) {
             $address = substr($address, 0, 255);
+        }
+
+        $clean_birth_date = null;
+        if (!empty($birth_date)) {
+            $dob_time = strtotime($birth_date);
+            if ($dob_time !== false) {
+                $clean_birth_date = date('Y-m-d', $dob_time);
+            }
         }
 
         $result = registerUser(
@@ -501,9 +591,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $website,
             $tax_id,
             $middle_name,
-            $birth_date,
+            $clean_birth_date,
             $gender,
-            $nickname
+            $nickname,
+            $suffix
         );
 
 
@@ -512,7 +603,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $created_user_id = (int)($result['user_id'] ?? 0);
             
             $saved_front = saveRegistrationValidIdDocument($conn, $created_user_id, $valid_id_front, $valid_id_type, 'Front');
-            $saved_back = saveRegistrationValidIdDocument($conn, $created_user_id, $valid_id_back, $valid_id_type, 'Back');
+            $saved_back = (!empty($valid_id_back)) ? saveRegistrationValidIdDocument($conn, $created_user_id, $valid_id_back, $valid_id_type, 'Back') : ['success' => true];
             
             if (empty($saved_front['success']) || empty($saved_back['success'])) {
                 if ($created_user_id > 0) {
@@ -524,10 +615,35 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     }
                 }
                 $error = (string)(empty($saved_front['success']) ? $saved_front['message'] : ($saved_back['message'] ?? 'Unable to save your government ID uploads. Please try again.'));
+            } else {
+                // Save verified Cavite address in user_saved_addresses table
+                require_once 'includes/checkout_address_helper.php';
+                caSaveUserSavedAddress($conn, $created_user_id, [
+                    'label' => 'Home Address',
+                    'contact_name' => $full_name,
+                    'contact_phone' => $phone_cleaned,
+                    'street_address' => $street_address ?: $address,
+                    'city_name' => $city_name ?: 'Unknown City',
+                    'province_name' => $province_name ?: 'Cavite',
+                    'full_address' => $address,
+                    'latitude' => $latitude,
+                    'longitude' => $longitude,
+                    'is_default' => 1
+                ], true);
             }
         }
 
         if (!empty($result['success']) && $error === '') {
+            // Clean up temporary valid ID uploads from disk and session
+            if (!empty($_SESSION['temp_valid_id_front']['file_path'])) {
+                @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path']);
+                unset($_SESSION['temp_valid_id_front']);
+            }
+            if (!empty($_SESSION['temp_valid_id_back']['file_path'])) {
+                @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path']);
+                unset($_SESSION['temp_valid_id_back']);
+            }
+
             $email_verification = issueUserEmailVerification(
                 $conn,
                 (int)$result['user_id'],
@@ -543,34 +659,40 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $_SESSION['registration_csrf_token'] = bin2hex(random_bytes(32));
             session_regenerate_id(true);
 
-            $verification_notice = 'Your account was created successfully. We sent a confirmation email to ' . $email . '. Please open it and click the verification button to activate your account.';
-            $verification_link = '';
+            $verification_notice = 'We sent a 6-digit verification code to ' . $email . '. Enter the code below to complete your registration.';
             if (empty($email_verification['success'])) {
-                $verification_notice = 'Your account was created successfully. We could not send the confirmation email automatically, but you can verify your address from the next screen.';
-                $verification_link = (string)($email_verification['verification_url'] ?? '');
+                $verification_notice = 'Your account was created successfully. Enter your verification details below.';
             }
 
             $_SESSION['register_success'] = true;
             $_SESSION['register_email'] = $email;
             $_SESSION['registration_verification_notice'] = $verification_notice;
-            $_SESSION['registration_verification_link'] = $verification_link;
 
-            header('Location: login.php');
+            header('Location: verify_email.php?email=' . urlencode($email));
             exit;
         }
 
         if ($error === '' && empty($result['success'])) {
             $error = $result['message'] ?? 'Unable to create your account right now.';
+            if (stripos($error, 'email') !== false) {
+                $form_data['email'] = '';
+            }
+            if (stripos($error, 'phone') !== false || stripos($error, 'mobile') !== false) {
+                $form_data['phone'] = '';
+            }
         }
     }
 
     if ($error !== '') {
-        $_SESSION['registration_security']['attempts'] = (int)($_SESSION['registration_security']['attempts'] ?? 0) + 1;
-        if ($_SESSION['registration_security']['attempts'] >= $max_attempts) {
-            $_SESSION['registration_security']['blocked_until'] = $now + $lock_seconds;
-            $_SESSION['registration_security']['attempts'] = 0;
-            $_SESSION['registration_security']['window_started_at'] = $now;
-            $error = 'Too many registration attempts. Please try again in 15 minutes.';
+        $is_system_error = !empty($result) && empty($result['success']) && (strpos($error, 'Unable to create') !== false || strpos($error, 'try again later') !== false);
+        if (!$is_system_error) {
+            $_SESSION['registration_security']['attempts'] = (int)($_SESSION['registration_security']['attempts'] ?? 0) + 1;
+            if ($_SESSION['registration_security']['attempts'] >= $max_attempts) {
+                $_SESSION['registration_security']['blocked_until'] = $now + $lock_seconds;
+                $_SESSION['registration_security']['attempts'] = 0;
+                $_SESSION['registration_security']['window_started_at'] = $now;
+                $error = 'Too many registration attempts. Please try again in 15 minutes.';
+            }
         }
     }
 }
@@ -579,30 +701,36 @@ $page_title = "Create Account | Lechon Delights";
 include 'includes/header.php';
 ?>
 
-<!-- SweetAlert2 CSS -->
-<link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <!-- Add this for better mobile input handling -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+<script src="dist/bundle.iife.js"></script>
 
 <style>
 .registration-page {
-    min-height: calc(100vh - 200px);
+    background: #ffffff !important;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 40px 20px;
-    background: linear-gradient(135deg, #fff9f2 0%, #fff 100%);
-    -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
+    align-items: stretch;
+    justify-content: stretch;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .registration-container {
-    background-color: white;
-    border-radius: 24px;
-    border: 1px solid #efddcd;
-    box-shadow: 0 20px 40px rgba(15,23,42,.06);
-    max-width: 600px;
+    max-width: 100% !important;
     width: 100%;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    background-color: white;
+    border-radius: 0 !important;
+    border: none;
+    box-shadow: none !important;
+    display: flex;
+    flex-direction: row;
+    margin: 0 !important;
     overflow: hidden;
     animation: fadeIn 0.6s ease-out;
 }
@@ -676,41 +804,33 @@ include 'includes/header.php';
 /* Progress Steps styled like modal tabs */
 .progress-steps {
     display: flex;
-    justify-content: center;
-    gap: 28px;
+    flex-direction: column;
+    align-items: center;
     background: transparent;
     padding: 24px 20px 10px;
     margin: 0;
     position: relative;
-    border-bottom: 1px solid #f1f5f9;
-}
-
-.progress-bar {
-    display: none; /* Hide old progress bar */
 }
 
 .step {
-    flex: none;
-    display: inline-flex;
+    display: none; /* Hide non-active steps to show only the active one solo */
     align-items: center;
-    padding: 0 0 10px 0;
+    padding: 0 0 5px 0;
     cursor: default;
-    border-bottom: 2px solid transparent;
-    transition: all 0.22s;
-    font-weight: 600;
-    font-size: 0.94rem;
-    color: #94a3b8;
+    border: none;
+    font-weight: 800;
+    font-size: 1.15rem;
+    color: #b3261e;
+    animation: fadeIn 0.4s ease;
 }
 
 .step.active {
-    color: #b3261e;
-    border-bottom-color: #b3261e;
-    font-weight: 700;
+    display: inline-flex;
 }
 
-.step.completed {
-    color: #475569;
-    font-weight: 600;
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .step-number {
@@ -718,8 +838,8 @@ include 'includes/header.php';
 }
 
 .step-label {
-    font-size: 0.88rem;
-    font-weight: 700;
+    font-size: 1.05rem;
+    font-weight: 800;
 }
 
 /* Form Steps */
@@ -823,46 +943,76 @@ include 'includes/header.php';
     box-shadow: 0 0 0 4px rgba(198, 40, 40, 0.1);
 }
 
-.input-with-icon {
-    position: relative;
+.input-with-icon,
+.password-input-group,
+.password-wrapper {
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
 }
 
-.input-with-icon i {
-    position: absolute;
-    left: 18px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #999;
-    font-size: 1.1rem;
-    pointer-events: none; /* Prevent icon from interfering with clicks */
+.input-with-icon > i:first-child,
+.input-with-icon > i.fas:not(.fa-eye):not(.fa-eye-slash) {
+    position: absolute !important;
+    left: 16px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    color: #94a3b8 !important;
+    font-size: 1rem !important;
+    pointer-events: none !important;
+    z-index: 2 !important;
 }
 
 .input-with-icon .form-control {
-    padding-left: 50px;
+    padding-left: 44px !important;
+    padding-right: 44px !important;
 }
 
-.password-wrapper {
-    position: relative;
+.password-input-group .form-control {
+    padding-right: 44px !important;
 }
 
-.toggle-password {
-    position: absolute;
-    right: 15px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    color: #666;
-    cursor: pointer;
-    padding: 12px; /* Larger touch target */
-    font-size: 1.1rem;
-    transition: color 0.3s;
-    z-index: 10; /* Ensure button is above other elements */
+.toggle-password,
+#toggleLoginPasswordBtn,
+#togglePassword {
+    position: absolute !important;
+    right: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    background: transparent !important;
+    border: none !important;
+    color: #94a3b8 !important;
+    cursor: pointer !important;
+    width: 34px !important;
+    height: 34px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 1rem !important;
+    z-index: 10 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    outline: none !important;
     -webkit-tap-highlight-color: transparent;
 }
 
-.toggle-password:hover {
-    color: #b3261e;
+.toggle-password i,
+#toggleLoginPasswordBtn i,
+#togglePassword i {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    transform: none !important;
+    pointer-events: none !important;
+    color: inherit !important;
+    font-size: 1rem !important;
+}
+
+.toggle-password:hover,
+#toggleLoginPasswordBtn:hover,
+#togglePassword:hover {
+    color: #b3261e !important;
 }
 
 /* Form Row */
@@ -875,38 +1025,38 @@ include 'includes/header.php';
 /* Button Styles */
 .btn-primary {
     width: 100%;
-    padding: 18px; /* Increased padding for better touch */
+    padding: 12px 20px;
     background: linear-gradient(135deg, #b3261e 0%, #8f261a 100%);
     color: white;
     border: none;
-    border-radius: 10px;
-    font-size: 1.1rem;
+    border-radius: 8px;
+    font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
     position: relative;
     overflow: hidden;
     letter-spacing: 0.5px;
-    min-height: 56px; /* Better touch target */
+    min-height: 44px;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation; /* Improve touch response */
 }
 
 .btn-primary:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 30px rgba(198, 40, 40, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.2);
 }
 
 .btn-primary:active {
-    transform: translateY(-1px);
+    transform: translateY(0);
 }
 
 .btn-primary:disabled {
-    background: #cccccc;
+    background: #cbd5e1;
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
@@ -919,8 +1069,8 @@ include 'includes/header.php';
 .btn-primary.loading::after {
     content: '';
     position: absolute;
-    width: 22px;
-    height: 22px;
+    width: 18px;
+    height: 18px;
     border: 3px solid rgba(255, 255, 255, 0.3);
     border-top-color: white;
     border-radius: 50%;
@@ -933,21 +1083,21 @@ include 'includes/header.php';
 
 .btn-secondary {
     width: 100%;
-    padding: 18px; /* Increased padding for better touch */
+    padding: 12px 20px;
     background: white;
     color: #b3261e;
     border: 2px solid #b3261e;
-    border-radius: 10px;
-    font-size: 1.1rem;
+    border-radius: 8px;
+    font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
     letter-spacing: 0.5px;
-    min-height: 56px; /* Better touch target */
+    min-height: 44px;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation; /* Improve touch response */
 }
@@ -965,9 +1115,9 @@ include 'includes/header.php';
     margin-top: 30px;
 }
 
-/* Password Strength */
+/* Password Strength & Live Requirements */
 .password-strength {
-    margin-top: 12px;
+    margin-top: 10px;
     font-size: 0.9rem;
 }
 
@@ -976,37 +1126,100 @@ include 'includes/header.php';
     align-items: center;
     gap: 10px;
     margin-top: 8px;
+    margin-bottom: 8px;
 }
 
 .strength-text {
     font-weight: 600;
-    min-width: 50px;
+    font-size: 0.82rem;
+    min-width: 48px;
+    color: #64748b;
 }
 
 .strength-bars {
     display: flex;
-    gap: 4px;
+    gap: 5px;
     flex: 1;
 }
 
 .strength-bar {
     flex: 1;
-    height: 6px;
-    background-color: #e0e0e0;
+    height: 5px;
+    background-color: #e2e8f0;
     border-radius: 3px;
-    transition: all 0.3s;
+    transition: background-color 0.25s ease;
 }
 
 .strength-bar.weak {
-    background-color: #ff5252;
+    background-color: #ef4444;
 }
 
 .strength-bar.medium {
-    background-color: #ff9800;
+    background-color: #f59e0b;
 }
 
 .strength-bar.strong {
-    background-color: #4caf50;
+    background-color: #10b981;
+}
+
+.password-requirements {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 6px 12px;
+    padding: 10px 12px;
+    background: #f8fafc;
+    border: 1px solid #eaecf0;
+    border-radius: 8px;
+    margin-top: 8px;
+}
+
+.req-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.8rem;
+    color: #64748b;
+    transition: color 0.2s ease;
+}
+
+.req-item i {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.req-item.met {
+    color: #027a48;
+    font-weight: 500;
+}
+
+.req-item.met i {
+    color: #027a48;
+}
+
+body.dark-mode .password-requirements {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .req-item {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .req-item i {
+    color: #64748b !important;
+}
+
+body.dark-mode .req-item.met {
+    color: #34d399 !important;
+}
+
+body.dark-mode .req-item.met i {
+    color: #34d399 !important;
+}
+
+body.dark-mode .strength-bar {
+    background-color: #334155;
 }
 
 /* Verification Note */
@@ -1320,516 +1533,1233 @@ include 'includes/header.php';
 /* Modern Food Registration Refresh */
 :root {
     --reg-red: #b3261e;
+    --reg-hover: #981b15;
     --reg-orange: #ef6b2e;
-    --reg-cream: #fff8ef;
-    --reg-ink: #2a211d;
-    --reg-muted: #7c6e65;
-    --reg-border: #efddcc;
+    --reg-cream: #fff9f6;
+    --reg-ink: #1e293b;
+    --reg-muted: #64748b;
+    --reg-border: #eaecf0;
 }
 
 body {
-    background:
-        radial-gradient(circle at 0% 0%, rgba(239, 107, 46, 0.12), transparent 34%),
-        radial-gradient(circle at 100% 12%, rgba(179, 38, 30, 0.1), transparent 30%),
-        var(--reg-cream);
+    background: #ffffff;
 }
 
 .registration-page {
-    background: transparent;
+    background: #ffffff !important;
 }
 
 .registration-container {
-    border: 1px solid var(--reg-border);
-    border-radius: 22px;
-    box-shadow: 0 22px 44px rgba(74, 32, 20, 0.14);
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
 }
 
 .registration-header {
-    background:
-        linear-gradient(130deg, rgba(22, 14, 10, 0.9), rgba(65, 30, 20, 0.78)),
-        url('images/about-us-bg.jpg') center/cover no-repeat;
+    background: #ffffff;
 }
 
 .registration-body {
-    background: linear-gradient(180deg, #fffaf4 0%, #fff 100%);
+    background: #ffffff;
 }
 
 .step.active .step-number {
-    background: linear-gradient(135deg, var(--reg-red), var(--reg-orange));
+    background: var(--reg-red);
 }
 
 .account-type-card,
 .form-control,
 .terms-agreement {
-    border: 1px solid #ead4c1;
-    background: #fffdfb;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
 }
 
 .account-type-card.selected {
-    border-color: #d79972;
-    background: #fff5e9;
+    border-color: var(--reg-red);
+    background: #fff8f6;
 }
 
 .account-type-card i,
 .step.active .step-label,
 .auth-link a {
-    color: #9a3322;
+    color: var(--reg-red);
 }
 
 .form-control:focus {
-    border-color: #d17148;
-    box-shadow: 0 0 0 3px rgba(239, 107, 46, 0.15);
+    border-color: var(--reg-red);
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.1);
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, var(--reg-red), var(--reg-orange));
-    box-shadow: 0 12px 28px rgba(179, 38, 30, 0.26);
+    background: var(--reg-red);
+    box-shadow: 0 4px 14px rgba(179, 38, 30, 0.2);
 }
 
 .btn-primary:hover {
-    box-shadow: 0 16px 34px rgba(179, 38, 30, 0.34);
+    background: var(--reg-hover);
+    box-shadow: 0 6px 18px rgba(179, 38, 30, 0.28);
 }
 
 .btn-secondary {
-    background: white !important;
-    color: var(--reg-red) !important;
-    border: 2px solid var(--reg-red) !important;
+    background: #ffffff !important;
+    color: #344054 !important;
+    border: 1px solid #d0d5dd !important;
 }
 
 .btn-secondary:hover {
-    background: var(--reg-red) !important;
-    color: white !important;
+    background: #fff8f6 !important;
+    color: var(--reg-red) !important;
     border-color: var(--reg-red) !important;
-    box-shadow: 0 8px 20px rgba(179, 38, 30, 0.2) !important;
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.12) !important;
     transform: translateY(-2px) !important;
 }
 
 .social-divider, .social-login-buttons {
     display: none !important;
 }
+
+/* Full-screen split layout styling with smooth sliding animation */
+.registration-page {
+    background: #ffffff !important;
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    position: relative;
+}
+
+.registration-container {
+    max-width: 100% !important;
+    width: 100%;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    background-color: white;
+    border-radius: 0 !important;
+    border: none;
+    box-shadow: none !important;
+    display: flex;
+    flex-direction: row;
+    margin: 0 !important;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Left Hero Side */
+.registration-image-side {
+    width: 50%;
+    background: linear-gradient(145deg, #fff7f2 0%, #ffede5 45%, #fedecf 100%) !important;
+    border-right: 1px solid #efddcd;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    transition: transform 0.85s cubic-bezier(0.68, -0.4, 0.265, 1.35), border 0.75s ease;
+    z-index: 2;
+    transform: translateX(0);
+}
+
+/* Right Form Side */
+.registration-form-side {
+    width: 50%;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 44px 24px 36px !important;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    overflow-y: auto !important;
+    box-sizing: border-box;
+    transition: transform 0.85s cubic-bezier(0.68, -0.4, 0.265, 1.35);
+    z-index: 1;
+    transform: translateX(0);
+}
+
+/* Desktop Sliding State (Login Mode) */
+@media (min-width: 851px) {
+    .registration-container.is-login-mode .registration-image-side {
+        transform: translateX(100%);
+        border-right: none;
+        border-left: 1px solid #efddcd;
+    }
+
+    .registration-container.is-login-mode .registration-form-side {
+        transform: translateX(-100%);
+    }
+}
+
+/* Water Waves Ambient Layer in Hero Section */
+.hero-water-waves {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 200%;
+    height: 140px;
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0.45;
+}
+
+.hero-water-wave-1 {
+    animation: waterWaveFlow1 12s linear infinite;
+}
+
+.hero-water-wave-2 {
+    animation: waterWaveFlow2 18s linear infinite reverse;
+    opacity: 0.6;
+}
+
+.hero-water-wave-3 {
+    animation: waterWaveFlow3 14s ease-in-out infinite alternate;
+    opacity: 0.35;
+}
+
+@keyframes waterWaveFlow1 {
+    0% { transform: translateX(0) translateZ(0) scaleY(1); }
+    50% { transform: translateX(-25%) translateZ(0) scaleY(1.18); }
+    100% { transform: translateX(-50%) translateZ(0) scaleY(1); }
+}
+
+@keyframes waterWaveFlow2 {
+    0% { transform: translateX(0) translateZ(0) scaleY(1.1); }
+    50% { transform: translateX(-30%) translateZ(0) scaleY(0.9); }
+    100% { transform: translateX(-50%) translateZ(0) scaleY(1.1); }
+}
+
+@keyframes waterWaveFlow3 {
+    0% { transform: translateY(0) scaleY(1); }
+    100% { transform: translateY(-14px) scaleY(1.25); }
+}
+
+/* Liquid Ripple Wave Overlay on Transition */
+.liquid-ripple-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 99;
+    overflow: hidden;
+}
+
+.liquid-ripple-surge {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(179, 38, 30, 0.22) 0%, rgba(254, 222, 207, 0.35) 45%, rgba(255, 255, 255, 0) 70%);
+    transform: scale(0);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.liquid-ripple-surge.is-animating {
+    animation: liquidSurgeWave 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes liquidSurgeWave {
+    0% {
+        transform: scale(1);
+        opacity: 0.9;
+    }
+    50% {
+        opacity: 0.55;
+    }
+    100% {
+        transform: scale(140);
+        opacity: 0;
+    }
+}
+
+/* Water Droplet Wave Border along Divider */
+.liquid-wave-seam {
+    position: absolute;
+    top: 0;
+    right: -20px;
+    width: 40px;
+    height: 100%;
+    z-index: 5;
+    pointer-events: none;
+    opacity: 0.7;
+    transition: opacity 0.4s ease;
+}
+
+.registration-container.is-login-mode .liquid-wave-seam {
+    right: auto;
+    left: -20px;
+    transform: scaleX(-1);
+}
+
+.brand-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 3.4rem;
+    font-weight: 900;
+    letter-spacing: -1.5px;
+    margin: 0;
+    color: #b3261e !important;
+    text-shadow: 0 2px 10px rgba(179, 38, 30, 0.12);
+}
+
+.brand-subtitle {
+    font-size: 1.2rem;
+    color: #564840 !important;
+    margin-top: 14px;
+    max-width: 340px;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+/* Hero Content Switcher */
+.hero-content-view {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 10;
+    transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    width: 100%;
+    max-width: 420px;
+}
+
+.hero-auth-cta {
+    margin-top: 36px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.hero-auth-cta .cta-label {
+    font-size: 0.95rem;
+    color: #564840;
+    font-weight: 600;
+}
+
+.btn-slide-auth {
+    background: #ffffff;
+    color: #b3261e;
+    border: 2px solid #b3261e;
+    border-radius: 9999px;
+    padding: 10px 30px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 14px rgba(179, 38, 30, 0.08);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    text-decoration: none;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-slide-auth:hover {
+    background: #b3261e;
+    color: #ffffff;
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 22px rgba(179, 38, 30, 0.28);
+}
+
+.btn-slide-auth:active {
+    transform: translateY(0) scale(0.98);
+}
+
+/* Water Ripple on Button Click */
+.btn-slide-auth .water-drop-ripple {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.7);
+    transform: scale(0);
+    animation: waterDropRipple 0.6s linear;
+    pointer-events: none;
+}
+
+@keyframes waterDropRipple {
+    to {
+        transform: scale(4);
+        opacity: 0;
+    }
+}
+
+.floating-pigs-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.floating-pig {
+    position: absolute;
+    font-size: 3.5rem;
+    opacity: 0.16;
+    animation: floatPig 8s ease-in-out infinite alternate;
+}
+
+.pig-1 { top: 10%; left: 15%; animation-duration: 9s; font-size: 4rem; }
+.pig-2 { top: 25%; right: 15%; animation-duration: 11s; animation-delay: 1s; font-size: 3.5rem; }
+.pig-3 { bottom: 20%; left: 20%; animation-duration: 10s; animation-delay: 2s; font-size: 4.5rem; }
+.pig-4 { bottom: 15%; right: 25%; animation-duration: 8s; animation-delay: 0.5s; font-size: 3rem; }
+.pig-5 { top: 50%; left: 40%; animation-duration: 12s; animation-delay: 1.5s; font-size: 3.8rem; }
+
+@keyframes floatPig {
+    0% {
+        transform: translateY(0) rotate(0deg) scale(1);
+    }
+    50% {
+        transform: translateY(-20px) rotate(8deg) scale(1.05);
+    }
+    100% {
+        transform: translateY(10px) rotate(-8deg) scale(0.95);
+    }
+}
+
+.mascot-img-wrap {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mascot-img-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.registration-form-side-container {
+    max-width: 440px;
+    width: 100%;
+    margin: auto 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.auth-view-wrapper {
+    transition: opacity 0.35s ease, transform 0.4s ease;
+    width: 100%;
+}
+
+@media (min-width: 851px) {
+    .mobile-only-auth-cta {
+        display: none !important;
+    }
+}
+
+@media (max-width: 850px) {
+    .registration-container {
+        flex-direction: column;
+    }
+    .registration-form-side {
+        width: 100%;
+        height: auto;
+        min-height: calc(100vh - 64px);
+        transform: none !important;
+        padding-bottom: 120px !important;
+    }
+    #loginViewWrapper {
+        padding-bottom: 30px !important;
+    }
+    .registration-image-side {
+        display: none !important;
+    }
+    /* Prevent automatic zoom-in on focus on mobile devices */
+    input, select, textarea, .form-control {
+        font-size: 16px !important;
+    }
+}
+@keyframes pigRun {
+    0% {
+        transform: translateY(0) rotate(0deg) scaleX(-1);
+    }
+    50% {
+        transform: translateY(-3px) rotate(-5deg) scaleX(-1);
+    }
+    100% {
+        transform: translateY(0) rotate(5deg) scaleX(-1);
+    }
+}
+.footer {
+    margin-top: 0 !important;
+}
+
+/* ==========================================================================
+   AUTHENTICATION (SIGN UP & SIGN IN) DARK MODE THEME
+   ========================================================================== */
+body.dark-mode,
+html.dark-mode,
+body.dark-mode .registration-page,
+html.dark-mode .registration-page {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-container {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+}
+
+/* Left Hero Branding Side */
+body.dark-mode .registration-image-side {
+    background: linear-gradient(145deg, #182234 0%, #1e293b 60%, #0f172a 100%) !important;
+    border-right: 1px solid #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-container.is-login-mode .registration-image-side {
+    border-left: 1px solid #334155 !important;
+    border-right: none !important;
+}
+
+body.dark-mode .hero-water-waves {
+    opacity: 0.12 !important;
+}
+
+body.dark-mode .liquid-wave-seam svg path {
+    fill: rgba(30, 41, 59, 0.4) !important;
+}
+
+body.dark-mode .brand-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .brand-subtitle,
+body.dark-mode .cta-label {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .btn-slide-auth {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-mode .btn-slide-auth:hover {
+    background: #334155 !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+/* Right Form Side */
+body.dark-mode .registration-form-side,
+body.dark-mode .registration-form-side-container,
+body.dark-mode .registration-body,
+body.dark-mode .registration-header {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-header h2,
+body.dark-mode .registration-header span,
+body.dark-mode .form-step h2,
+body.dark-mode .form-step h3,
+body.dark-mode .form-step h4,
+body.dark-mode .form-header h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-header p,
+body.dark-mode .form-step p,
+body.dark-mode .form-header p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .registration-intro {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-intro h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-intro p {
+    color: #cbd5e1 !important;
+}
+
+/* Progress Steps */
+body.dark-mode .progress-container {
+    background: #334155 !important;
+}
+
+body.dark-mode .step.active .step-label {
+    color: #ef4444 !important;
+}
+
+/* Form Controls & Inputs */
+body.dark-mode .form-control,
+body.dark-mode .form-select,
+body.dark-mode input[type="text"],
+body.dark-mode input[type="email"],
+body.dark-mode input[type="password"],
+body.dark-mode input[type="tel"],
+body.dark-mode input[type="date"],
+body.dark-mode select,
+body.dark-mode textarea {
+    background: #1e293b !important;
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-control:focus,
+body.dark-mode .form-select:focus,
+body.dark-mode input:focus,
+body.dark-mode select:focus {
+    background: #0b1120 !important;
+    border-color: #b3261e !important;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+    color: #ffffff !important;
+}
+
+/* Browser Autofill Dark Mode Fix */
+body.dark-mode input:-webkit-autofill,
+body.dark-mode input:-webkit-autofill:hover, 
+body.dark-mode input:-webkit-autofill:focus, 
+body.dark-mode input:-webkit-autofill:active,
+body.dark-mode textarea:-webkit-autofill,
+body.dark-mode select:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 1000px #1e293b inset !important;
+    box-shadow: 0 0 0 1000px #1e293b inset !important;
+    -webkit-text-fill-color: #f8fafc !important;
+    color: #f8fafc !important;
+    transition: background-color 5000s ease-in-out 0s !important;
+    caret-color: #f8fafc !important;
+}
+
+body.dark-mode input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px #0b1120 inset, 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+    box-shadow: 0 0 0 1000px #0b1120 inset, 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+    -webkit-text-fill-color: #ffffff !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode label,
+body.dark-mode .form-group label,
+body.dark-mode .checkbox-label {
+    color: #e2e8f0 !important;
+}
+
+body.dark-mode .password-input-group .toggle-password,
+body.dark-mode .input-with-icon button {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .password-input-group .toggle-password:hover,
+body.dark-mode .input-with-icon button:hover {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .terms-group label,
+body.dark-mode .terms-agreement {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode #termsGroup {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .terms-group a,
+body.dark-mode .terms-agreement a {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .btn-secondary {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .btn-secondary:hover {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .account-type-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .account-type-card h3,
+body.dark-mode .account-type-card p {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .account-type-card.selected {
+    background: rgba(179, 38, 30, 0.18) !important;
+    border-color: #b3261e !important;
+}
+
+/* Modals (Webcam & Verification) */
+body.dark-mode #cameraModal > div {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode #cameraModal [style*="background: #f8fafc"],
+body.dark-mode #cameraModal [style*="background:#f8fafc"] {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode #cameraModal h3 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .floating-pig {
+    opacity: 0.25 !important;
+}
+
+/* Step 3 Address & Map Dark Theme */
+body.dark-mode #step3Title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #step3Subtitle {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode label[for="homeAddressInput"] {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode #registerMapWrapper {
+    border-color: #334155 !important;
+    background: #0f172a !important;
+}
+
+body.dark-mode #useCurrentLocationBtn {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.dark-mode #caviteAreaStatusBadge {
+    background: rgba(179, 38, 30, 0.15) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    color: #f87171 !important;
+}
+
+body.dark-mode .leaflet-container {
+    background: #0f172a !important;
+}
 </style>
-
 <div class="registration-page">
-    <div class="registration-container">
-        <div class="registration-header" style="background:#fff; border-bottom:1px solid #efddcd; padding:30px 24px 20px; text-align:center;">
-            <div style="display:inline-flex; align-items:center; gap:10px; margin-bottom:12px;">
-                <div style="width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; overflow:hidden; box-shadow:0 6px 16px rgba(179,38,30,.2);">
-                    <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width:100%; height:100%; object-fit:cover;">
-                </div>
-                <span style="font-size:1.25rem; font-weight:800; color:#0f172a;">Lechon Delights</span>
+    <!-- Liquid Ripple Surge Overlay -->
+    <div class="liquid-ripple-container" id="liquidRippleContainer">
+        <div class="liquid-ripple-surge" id="liquidRippleSurge"></div>
+    </div>
+
+    <div class="registration-container" id="authSplitLayout">
+        <!-- Left Side: Branding Panel with Floating Mascot Pigs & Dynamic Auth Switcher -->
+        <div class="registration-image-side" id="authHeroPanel">
+            <!-- Animated Water Wave Layers (Bottom Ambient Liquid) -->
+            <div class="hero-water-waves">
+                <svg class="hero-water-wave-1" viewBox="0 0 1200 120" preserveAspectRatio="none" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 100%;">
+                    <path d="M0,0 C150,90 350,-40 500,60 C650,160 900,10 1200,40 L1200,120 L0,120 Z" fill="rgba(179, 38, 30, 0.08)"></path>
+                </svg>
+                <svg class="hero-water-wave-2" viewBox="0 0 1200 120" preserveAspectRatio="none" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 85%;">
+                    <path d="M0,40 C300,120 450,10 700,70 C950,130 1050,30 1200,60 L1200,120 L0,120 Z" fill="rgba(254, 222, 207, 0.45)"></path>
+                </svg>
+                <svg class="hero-water-wave-3" viewBox="0 0 1200 120" preserveAspectRatio="none" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 60%;">
+                    <path d="M0,20 C200,80 400,0 600,50 C800,100 1000,20 1200,40 L1200,120 L0,120 Z" fill="rgba(179, 38, 30, 0.05)"></path>
+                </svg>
             </div>
-            <h2 style="font-size:1.35rem; font-weight:800; color:#0f172a; margin:0 0 4px 0;">Create Account</h2>
-            <p style="font-size:0.9rem; color:#64748b; margin:0;">Join us to order Cavite's finest lechon dishes.</p>
+
+            <!-- Vertical Liquid Wave Seam Edge -->
+            <div class="liquid-wave-seam">
+                <svg viewBox="0 0 40 800" preserveAspectRatio="none" style="width: 100%; height: 100%; display: block;">
+                    <path d="M 0,0 C 25,100 -10,200 20,300 C 50,400 -5,500 25,600 C 45,700 5,750 0,800 L 0,800 Z" fill="rgba(254, 222, 207, 0.3)"></path>
+                </svg>
+            </div>
+
+            <div class="floating-pigs-container">
+                <div class="floating-pig pig-1">🐷</div>
+                <div class="floating-pig pig-2">🐷</div>
+                <div class="floating-pig pig-3">🐷</div>
+                <div class="floating-pig pig-4">🐷</div>
+                <div class="floating-pig pig-5">🐷</div>
+            </div>
+
+            <!-- Hero View for Register Mode (Default: on left side) -->
+            <div class="hero-content-view" id="heroRegisterView">
+                <h1 class="brand-title">Lechon Delights</h1>
+                <p class="brand-subtitle">Cavite's Finest Lechon at Your Doorsteps</p>
+                <div class="hero-auth-cta">
+                    <div class="cta-label">Already have an account?</div>
+                    <button type="button" class="btn-slide-auth js-trigger-slide-login" id="heroBtnToLogin">
+                        <i class="fas fa-sign-in-alt"></i> Sign in here
+                    </button>
+                </div>
+            </div>
+
+            <!-- Hero View for Login Mode (When Slid to right side) -->
+            <div class="hero-content-view" id="heroLoginView" style="display: none; opacity: 0;">
+                <h1 class="brand-title">Welcome Back!</h1>
+                <p class="brand-subtitle">Join us to order Cavite's finest lechon dishes.</p>
+                <div class="hero-auth-cta">
+                    <div class="cta-label">Don't have an account yet?</div>
+                    <button type="button" class="btn-slide-auth js-trigger-slide-register" id="heroBtnToRegister">
+                        <i class="fas fa-user-plus"></i> Create an Account
+                    </button>
+                </div>
+            </div>
         </div>
-        
-        <div class="registration-body">
 
-            <!-- Progress Steps -->
-            <div class="progress-steps">
-                <div class="progress-bar" id="progressBar"></div>
-                <div class="step active" id="step2">
-                    <div class="step-number">1</div>
-                    <div class="step-label">Personal Info</div>
-                </div>
-                <div class="step" id="step3">
-                    <div class="step-number">2</div>
-                    <div class="step-label" id="step3NavLabel">Address Info</div>
-                </div>
-                <div class="step" id="step4">
-                    <div class="step-number">3</div>
-                    <div class="step-label">Create Account</div>
-                </div>
-            </div>
-            
-            <form method="POST" action="" id="registrationForm" data-swal-validate="off" enctype="multipart/form-data" novalidate>
-                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['registration_csrf_token']); ?>">
-
-                <!-- Step 1: Account Type -->
-                <div class="form-step" id="step1Form" style="display:none;">
-                    <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">
-                        <?php echo $is_partner_signup ? 'Business Partner Sign Up' : 'Select Account Type'; ?>
-                    </h2>
-                    
-                    <div class="account-type-selection">
-                        <?php if (!$is_partner_signup): ?>
-                        <div class="account-type-card" data-type="individual">
-                            <i class="fas fa-user"></i>
-                            <h3>Individual</h3>
-                            <p>Perfect for customers who want to order lechon for themselves, their family, or a special occasion.</p>
-                        </div>
-                        <?php endif; ?>
-                        <div class="account-type-card" data-type="organization">
-                            <i class="fas fa-building"></i>
-                            <h3>Business Partner</h3>
-                            <p>Great for restaurant owners who want to register their business and serve customers across Cavite.</p>
-                        </div>
-                    </div>
-                    
-                    <input type="hidden" name="account_type" id="accountType" value="<?php echo htmlspecialchars($form_data['account_type'] ?? ($is_partner_signup ? 'organization' : 'individual')); ?>">
-                    <input type="hidden" name="psgc_region_name" id="psgcRegionName" value="<?php echo htmlspecialchars($form_data['psgc_region_name'] ?? ''); ?>">
-                    <input type="hidden" name="psgc_province_name" id="psgcProvinceName" value="<?php echo htmlspecialchars($form_data['psgc_province_name'] ?? ''); ?>">
-                    <input type="hidden" name="psgc_city_name" id="psgcCityName" value="<?php echo htmlspecialchars($form_data['psgc_city_name'] ?? ''); ?>">
-                    <input type="hidden" name="psgc_barangay_name" id="psgcBarangayName" value="<?php echo htmlspecialchars($form_data['psgc_barangay_name'] ?? ''); ?>">
-                    
-                    <div class="form-actions">
-                        <button type="button" class="btn-secondary" id="backToLoginBtn">
-                            <i class="fas fa-arrow-left"></i>
-                            Back to Login
-                        </button>
-                        <button type="button" class="btn-primary" id="nextStep1">
-                            Continue
-                            <i class="fas fa-arrow-right"></i>
-                        </button>
-                    </div>
-                </div>
+        <!-- Right Side: Forms Container Panel (Register & Login) -->
+        <div class="registration-form-side" id="authFormsPanel">
+            <div class="registration-form-side-container">
                 
-                <!-- Step 2: Personal Information -->
-                <div class="form-step active" id="step2Form">
-                    <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">Tell us about you</h2>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="firstName">First Name *</label>
-                            <input type="text" id="firstName" name="first_name" class="form-control" required 
-                                placeholder="Enter your first name"
-                                value="<?php echo htmlspecialchars($form_data['first_name'] ?? ''); ?>"
-                                autocomplete="given-name">
-                        </div>
-                        <div class="form-group">
-                            <label for="lastName">Last Name *</label>
-                            <input type="text" id="lastName" name="last_name" class="form-control" required 
-                                placeholder="Enter your last name"
-                                value="<?php echo htmlspecialchars($form_data['last_name'] ?? ''); ?>"
-                                autocomplete="family-name">
-                        </div>
+                <!-- View 1: Register Form Wizard -->
+                <div id="registerViewWrapper" class="auth-view-wrapper">
+                    <div class="registration-header" style="background:#fff; text-align:center; margin-bottom:24px; padding:0 0 10px;">
+                        <h2 style="font-size:1.8rem; font-weight:700; color:#333; margin-bottom:10px;">Create Account</h2>
+                        <p style="font-size:1rem; color:#666; margin:0;">Join us to order Cavite's finest lechon dishes.</p>
                     </div>
                     
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="middleName">Middle Name</label>
-                            <input type="text" id="middleName" name="middle_name" class="form-control"
-                                placeholder="Optional"
-                                value="<?php echo htmlspecialchars($form_data['middle_name'] ?? ''); ?>"
-                                autocomplete="additional-name">
-                        </div>
-                    </div>
+                    <div class="registration-body">
 
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="birthDate">Date of Birth</label>
-                            <input type="date" id="birthDate" name="birth_date" class="form-control"
-                                value="<?php echo htmlspecialchars($form_data['birth_date'] ?? ''); ?>">
+                        <!-- Progress Steps -->
+                        <div class="progress-steps">
+                            <div class="step active" id="step1">
+                                <div class="step-label">Personal Info (Step 1 of 4)</div>
+                            </div>
+                            <div class="step" id="step2">
+                                <div class="step-label">Verification (Step 2 of 4)</div>
+                            </div>
+                            <div class="step" id="step3">
+                                <div class="step-label" id="step3NavLabel">Address Info (Step 3 of 4)</div>
+                            </div>
+                            <div class="step" id="step4">
+                                <div class="step-label">Create Account (Step 4 of 4)</div>
+                            </div>
+                            <div class="progress-container" style="width: 100%; height: 6px; background: #efddcd; border-radius: 3px; margin-top: 15px; overflow: visible; position: relative;">
+                                <div class="progress-bar" id="progressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 25%; background: #b3261e; transition: width 0.3s ease; display: block !important; overflow: visible;">
+                                    <div class="running-pig" style="position: absolute; right: -14px; top: -20px; font-size: 22px; user-select: none; line-height: 1; animation: pigRun 0.4s infinite alternate ease-in-out;">🐖</div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="gender">Gender</label>
-                            <select id="gender" name="gender" class="form-control">
-                                <option value="" <?php echo (($form_data['gender'] ?? '') === '') ? 'selected' : ''; ?>>Prefer not to say</option>
-                                <option value="male" <?php echo (($form_data['gender'] ?? '') === 'male') ? 'selected' : ''; ?>>Male</option>
-                                <option value="female" <?php echo (($form_data['gender'] ?? '') === 'female') ? 'selected' : ''; ?>>Female</option>
-                                <option value="other" <?php echo (($form_data['gender'] ?? '') === 'other') ? 'selected' : ''; ?>>Other</option>
+                        
+                        <form method="POST" action="" id="registrationForm" data-swal-validate="off" enctype="multipart/form-data" novalidate>
+                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['registration_csrf_token']); ?>">
+
+                            <input type="hidden" name="account_type" id="accountType" value="<?php echo htmlspecialchars($form_data['account_type'] ?? 'individual'); ?>">
+                            <input type="hidden" name="psgc_region_code" id="psgcRegionCode" value="<?php echo htmlspecialchars($form_data['psgc_region_code'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_region_name" id="psgcRegionName" value="<?php echo htmlspecialchars($form_data['psgc_region_name'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_province_code" id="psgcProvinceCode" value="<?php echo htmlspecialchars($form_data['psgc_province_code'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_province_name" id="psgcProvinceName" value="<?php echo htmlspecialchars($form_data['psgc_province_name'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_city_code" id="psgcCityCode" value="<?php echo htmlspecialchars($form_data['psgc_city_code'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_city_name" id="psgcCityName" value="<?php echo htmlspecialchars($form_data['psgc_city_name'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_barangay_code" id="psgcBarangayCode" value="<?php echo htmlspecialchars($form_data['psgc_barangay_code'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_barangay_name" id="psgcBarangayName" value="<?php echo htmlspecialchars($form_data['psgc_barangay_name'] ?? ''); ?>">
+                        
+
+                    
+                    <!-- Step 1: Personal Information -->
+                    <div class="form-step active" id="step1Form">
+                        <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">Tell us about you</h2>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="firstName">First Name *</label>
+                                <input type="text" id="firstName" name="first_name" class="form-control" required 
+                                    placeholder="Enter your first name"
+                                    value="<?php echo htmlspecialchars($form_data['first_name'] ?? ''); ?>"
+                                    autocomplete="given-name">
+                            </div>
+                            <div class="form-group">
+                                <label for="lastName">Last Name *</label>
+                                <input type="text" id="lastName" name="last_name" class="form-control" required 
+                                    placeholder="Enter your last name"
+                                    value="<?php echo htmlspecialchars($form_data['last_name'] ?? ''); ?>"
+                                    autocomplete="family-name">
+                            </div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="middleName">Middle Name</label>
+                                <input type="text" id="middleName" name="middle_name" class="form-control"
+                                    placeholder="Optional"
+                                    value="<?php echo htmlspecialchars($form_data['middle_name'] ?? ''); ?>"
+                                    autocomplete="additional-name">
+                            </div>
+                            <div class="form-group">
+                                <label for="suffix">Suffix</label>
+                                <input type="text" id="suffix" name="suffix" class="form-control"
+                                    placeholder="Optional (e.g. Jr., Sr., III)"
+                                    value="<?php echo htmlspecialchars($form_data['suffix'] ?? ''); ?>"
+                                    autocomplete="honorific-suffix"
+                                    list="suffixList">
+                                <datalist id="suffixList">
+                                    <option value="Jr.">
+                                    <option value="Sr.">
+                                    <option value="II">
+                                    <option value="III">
+                                    <option value="IV">
+                                    <option value="V">
+                                </datalist>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="dob">Date of Birth *</label>
+                                <input type="date" id="dob" name="dob" class="form-control" required
+                                    min="<?php echo date('Y-m-d', strtotime('-100 years')); ?>"
+                                    max="<?php echo date('Y-m-d', strtotime('-10 years')); ?>"
+                                    value="<?php echo htmlspecialchars($form_data['dob'] ?? $form_data['birth_date'] ?? ''); ?>">
+                                <small class="text-muted" style="font-size: 0.8rem; display: block; margin-top: 4px;">Must match the date of birth on your government ID.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="gender">Gender</label>
+                                <select id="gender" name="gender" class="form-control">
+                                    <option value="" <?php echo empty($form_data['gender']) ? 'selected' : ''; ?>>Prefer not to say</option>
+                                    <option value="male" <?php echo ($form_data['gender'] ?? '') === 'male' ? 'selected' : ''; ?>>Male</option>
+                                    <option value="female" <?php echo ($form_data['gender'] ?? '') === 'female' ? 'selected' : ''; ?>>Female</option>
+                                    <option value="other" <?php echo ($form_data['gender'] ?? '') === 'other' ? 'selected' : ''; ?>>Other</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="button-group">
+                            <button type="button" class="btn btn-primary" id="nextStep1" style="width: 100%;">Continue <i class="fas fa-arrow-right ms-1"></i></button>
+                        </div>
+
+                        <div class="auth-switch-prompt mobile-only-auth-cta" style="text-align:center; margin-top:20px; font-size:0.92rem; color:#475467;">
+                            <span>Already have an account?</span>
+                            <a href="register.php?mode=login#login" class="js-trigger-slide-login" style="color:#b3261e; font-weight:700; text-decoration:none; margin-left:6px; display:inline-block;">
+                                Sign In
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 2: Verification (Upload Government ID / Business Proof) -->
+                    <div class="form-step" id="step2Form">
+                        <div class="mb-4">
+                            <h2 style="color: #333; margin-bottom: 8px; font-size: 1.5rem;" id="step2Title">Upload Valid ID</h2>
+                            <p style="color: #666; font-size: 0.95rem;" id="step2Subtitle">Please upload front and back of a valid government-issued ID for identity verification.</p>
+                        </div>
+                        
+                        <div class="form-group mb-4">
+                            <label for="validIdType" id="idTypeLabel">Select ID Type *</label>
+                            <select id="validIdType" name="valid_id_type" class="form-control" required>
+                                <option value="" disabled <?php echo empty($form_data['valid_id_type']) ? 'selected' : ''; ?>>Select a valid ID type</option>
+                                <option value="national_id" <?php echo ($form_data['valid_id_type'] ?? '') === 'national_id' ? 'selected' : ''; ?>>Philippine National ID (PhilSys)</option>
+                                <option value="drivers_license" <?php echo ($form_data['valid_id_type'] ?? '') === 'drivers_license' ? 'selected' : ''; ?>>Driver's License (LTO)</option>
+                                <option value="passport" <?php echo ($form_data['valid_id_type'] ?? '') === 'passport' ? 'selected' : ''; ?>>Philippine Passport</option>
+                                <option value="umid" <?php echo ($form_data['valid_id_type'] ?? '') === 'umid' ? 'selected' : ''; ?>>SSS UMID Card</option>
+                                <option value="sss" <?php echo ($form_data['valid_id_type'] ?? '') === 'sss' ? 'selected' : ''; ?>>Social Security System (SSS) ID</option>
+                                <option value="philhealth" <?php echo ($form_data['valid_id_type'] ?? '') === 'philhealth' ? 'selected' : ''; ?>>PhilHealth ID</option>
+                                <option value="tin" <?php echo ($form_data['valid_id_type'] ?? '') === 'tin' ? 'selected' : ''; ?>>TIN ID (BIR)</option>
+                                <option value="pagibig" <?php echo ($form_data['valid_id_type'] ?? '') === 'pagibig' ? 'selected' : ''; ?>>Pag-IBIG ID / Loyalty Card</option>
+                                <option value="postal" <?php echo ($form_data['valid_id_type'] ?? '') === 'postal' ? 'selected' : ''; ?>>Postal ID (PHLPost)</option>
+                                <option value="prc" <?php echo ($form_data['valid_id_type'] ?? '') === 'prc' ? 'selected' : ''; ?>>PRC ID (Professional Regulation Commission)</option>
+                                <option value="senior_citizen" <?php echo ($form_data['valid_id_type'] ?? '') === 'senior_citizen' ? 'selected' : ''; ?>>Senior Citizen ID (OSCA)</option>
+                                <option value="voters" <?php echo ($form_data['valid_id_type'] ?? '') === 'voters' ? 'selected' : ''; ?>>Voter's ID (COMELEC)</option>
+                                <option value="ofw" <?php echo ($form_data['valid_id_type'] ?? '') === 'ofw' ? 'selected' : ''; ?>>OFW ID (OWWA / DMW)</option>
                             </select>
                         </div>
-                    </div>
 
-                    <div class="form-group">
-                        <label for="email">Email Address *</label>
-                        <div class="input-with-icon">
-                            <i class="fas fa-envelope"></i>
-                            <input type="email" id="email" name="email" class="form-control" required 
-                                placeholder="Enter your email address"
-                                value="<?php echo htmlspecialchars($form_data['email'] ?? ''); ?>"
-                                autocomplete="email"
-                                inputmode="email">
-                        </div>
-                        <small style="display:block; margin-top:5px; color:#666; font-size:0.85rem;">
-                            We will use this email for account notifications and sign-in.
-                        </small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="phone">Mobile Number *</label>
-                        <div class="input-with-icon">
-                            <i class="fas fa-phone"></i>
-                            <input type="tel" id="phone" name="phone" class="form-control" required 
-                                placeholder="e.g., 09171234567 or +639171234567"
-                                value="<?php echo htmlspecialchars($form_data['phone'] ?? ''); ?>"
-                                autocomplete="tel"
-                                inputmode="tel">
-                        </div>
-                        <small style="display: block; margin-top: 5px; color: #666; font-size: 0.85rem;">
-                            Enter your 11-digit mobile number (starting with 09) or with country code (+63)
-                        </small>
-                    </div>
+                        <?php
+                        $has_cached_front = !empty($_SESSION['temp_valid_id_front']['file_path']) && file_exists(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path']);
+                        $cached_front_src = $has_cached_front ? htmlspecialchars($_SESSION['temp_valid_id_front']['file_path']) : '#';
 
-                    <div class="form-group" style="margin-top:20px;">
-                        <label for="validIdType">Type of Valid ID *</label>
-                        <select id="validIdType" name="valid_id_type" class="form-control" required style="margin-bottom:15px;">
-                            <option value="">Select ID Type</option>
-                            <option value="umid">Unified Multi-Purpose ID (UMID)</option>
-                            <option value="drivers_license">Driver's License</option>
-                            <option value="passport">Philippine Passport</option>
-                            <option value="sss">SSS ID</option>
-                            <option value="gsis">GSIS ID</option>
-                            <option value="prc">PRC ID</option>
-                            <option value="postal">Postal ID</option>
-                            <option value="voters">Voter's ID</option>
-                            <option value="national_id">Philippine National ID (PhilSys)</option>
-                            <option value="tin">TIN ID</option>
-                            <option value="pag_ibig">Pag-IBIG ID</option>
-                            <option value="philhealth">PhilHealth ID</option>
-                        </select>
-                    </div>
+                        $has_cached_back = !empty($_SESSION['temp_valid_id_back']['file_path']) && file_exists(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path']);
+                        $cached_back_src = $has_cached_back ? htmlspecialchars($_SESSION['temp_valid_id_back']['file_path']) : '#';
+                        ?>
+                        <input type="hidden" id="hasCachedFrontId" value="<?php echo $has_cached_front ? '1' : '0'; ?>">
+                        <input type="hidden" id="hasCachedBackId" value="<?php echo $has_cached_back ? '1' : '0'; ?>">
 
-                    <div class="form-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 20px;">
-                        <div class="form-group">
-                            <label style="display:block; margin-bottom:8px; font-weight:600; color:#333; font-size:0.9rem;">Front of ID Card *</label>
-                            <div class="id-upload-zone" id="zoneFront" style="border: 2px dashed #cbd5e1; border-radius: 12px; padding: 20px 15px; text-align: center; cursor: pointer; transition: all 0.2s ease; background: #f8fafc; position: relative;">
-                                <input type="file" id="validIdFront" name="valid_id_front" accept="image/*" style="display:none;" required>
-                                <div class="upload-zone-content" id="zoneContentFront">
-                                    <i class="fas fa-id-card" style="font-size: 2.2rem; color: #b3261e; margin-bottom: 10px; display: block;"></i>
-                                    <span style="font-size: 0.85rem; font-weight:700; color: #475569; display: block; margin-bottom: 4px;">Capture Front Side</span>
-                                    <span style="font-size: 0.72rem; color: #94a3b8; display: block;">Tap to open camera</span>
+                        <!-- ID Upload Controls Container -->
+                        <div style="display: flex; flex-direction: column; gap: 20px;">
+                            <!-- Front Side Upload -->
+                            <div class="id-card-panel" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <label style="margin: 0; font-weight: 700; color: #1e293b; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-id-card-clip" style="color: #b3261e;"></i> <span id="frontDocLabel">Front Side of Valid ID</span> *
+                                    </label>
+                                    <span class="badge" id="frontStatusBadge" style="<?php echo $has_cached_front ? 'background: #ecfdf3; color: #027a48; border: 1px solid #abefc6;' : 'background: #f1f5f9; color: #64748b;'; ?> font-size: 0.75rem; padding: 4px 8px; border-radius: 6px;">
+                                        <?php echo $has_cached_front ? '<i class="fas fa-check-circle me-1"></i> Attached &amp; Saved' : 'Pending'; ?>
+                                    </span>
                                 </div>
-                                <div class="upload-preview" id="previewFront" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 10px; background: #fff; z-index: 2; overflow: hidden; padding: 4px;">
-                                    <img src="" style="width: 100%; height: 100%; object-fit: contain;">
-                                    <button type="button" class="remove-preview" id="removeFront" style="position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,0.6); border: none; color: #fff; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 3;"><i class="fas fa-times"></i></button>
+                                <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+                                    <button type="button" class="btn trigger-camera-btn" data-target="front" style="flex: 1; height: 42px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; color: #334155; font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+                                        <i class="fas fa-camera" style="color: #b3261e;"></i> Take Photo
+                                    </button>
+                                    <button type="button" class="btn direct-upload-btn" data-target="validIdFront" style="flex: 1; height: 42px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; color: #334155; font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+                                        <i class="fas fa-cloud-arrow-up" style="color: #b3261e;"></i> Upload File
+                                    </button>
+                                </div>
+                                <input type="file" id="validIdFront" name="valid_id_front" accept="image/*" style="display: none;">
+                                <div id="previewContainerFront" style="<?php echo $has_cached_front ? 'display: block;' : 'display: none;'; ?> position: relative; border-radius: 8px; overflow: hidden; max-height: 180px; background: #000; border: 1px solid #cbd5e1;">
+                                    <img id="imagePreviewFront" src="<?php echo $cached_front_src; ?>" alt="Front Preview" style="width: 100%; height: 180px; object-fit: contain; display: block;">
+                                    <button type="button" class="remove-preview-btn" data-target="front" style="position: absolute; top: 8px; right: 8px; background: rgba(15, 23, 42, 0.75); color: #fff; border: none; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.8rem; backdrop-filter: blur(4px);"><i class="fas fa-times"></i></button>
+                                </div>
+                            </div>
+
+                            <!-- Back Side Upload -->
+                            <div class="id-card-panel" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <label style="margin: 0; font-weight: 700; color: #1e293b; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-id-card" style="color: #b3261e;"></i> <span id="backDocLabel">Back Side of Valid ID</span> *
+                                    </label>
+                                    <span class="badge" id="backStatusBadge" style="<?php echo $has_cached_back ? 'background: #ecfdf3; color: #027a48; border: 1px solid #abefc6;' : 'background: #f1f5f9; color: #64748b;'; ?> font-size: 0.75rem; padding: 4px 8px; border-radius: 6px;">
+                                        <?php echo $has_cached_back ? '<i class="fas fa-check-circle me-1"></i> Attached &amp; Saved' : 'Pending'; ?>
+                                    </span>
+                                </div>
+                                <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+                                    <button type="button" class="btn trigger-camera-btn" data-target="back" style="flex: 1; height: 42px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; color: #334155; font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+                                        <i class="fas fa-camera" style="color: #b3261e;"></i> Take Photo
+                                    </button>
+                                    <button type="button" class="btn direct-upload-btn" data-target="validIdBack" style="flex: 1; height: 42px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; color: #334155; font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+                                        <i class="fas fa-cloud-arrow-up" style="color: #b3261e;"></i> Upload File
+                                    </button>
+                                </div>
+                                <input type="file" id="validIdBack" name="valid_id_back" accept="image/*" style="display: none;">
+                                <div id="previewContainerBack" style="<?php echo $has_cached_back ? 'display: block;' : 'display: none;'; ?> position: relative; border-radius: 8px; overflow: hidden; max-height: 180px; background: #000; border: 1px solid #cbd5e1;">
+                                    <img id="imagePreviewBack" src="<?php echo $cached_back_src; ?>" alt="Back Preview" style="width: 100%; height: 180px; object-fit: contain; display: block;">
+                                    <button type="button" class="remove-preview-btn" data-target="back" style="position: absolute; top: 8px; right: 8px; background: rgba(15, 23, 42, 0.75); color: #fff; border: none; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.8rem; backdrop-filter: blur(4px);"><i class="fas fa-times"></i></button>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="form-group">
-                            <label style="display:block; margin-bottom:8px; font-weight:600; color:#333; font-size:0.9rem;">Back of ID Card *</label>
-                            <div class="id-upload-zone" id="zoneBack" style="border: 2px dashed #cbd5e1; border-radius: 12px; padding: 20px 15px; text-align: center; cursor: pointer; transition: all 0.2s ease; background: #f8fafc; position: relative;">
-                                <input type="file" id="validIdBack" name="valid_id_back" accept="image/*" style="display:none;" required>
-                                <div class="upload-zone-content" id="zoneContentBack">
-                                    <i class="fas fa-id-card-clip" style="font-size: 2.2rem; color: #b3261e; margin-bottom: 10px; display: block;"></i>
-                                    <span style="font-size: 0.85rem; font-weight:700; color: #475569; display: block; margin-bottom: 4px;">Capture Back Side</span>
-                                    <span style="font-size: 0.72rem; color: #94a3b8; display: block;">Tap to open camera</span>
-                                </div>
-                                <div class="upload-preview" id="previewBack" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 10px; background: #fff; z-index: 2; overflow: hidden; padding: 4px;">
-                                    <img src="" style="width: 100%; height: 100%; object-fit: contain;">
-                                    <button type="button" class="remove-preview" id="removeBack" style="position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,0.6); border: none; color: #fff; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 3;"><i class="fas fa-times"></i></button>
-                                </div>
+                        <!-- Organization Additional Fields -->
+                        <div id="organizationFields" style="display: none; margin-top: 20px;">
+                            <div class="form-group mb-4">
+                                <label for="businessName">Business / Company Name *</label>
+                                <input type="text" id="businessName" name="business_name" class="form-control" 
+                                    placeholder="Enter registered business name"
+                                    value="<?php echo htmlspecialchars($form_data['business_name'] ?? ''); ?>">
                             </div>
-                        </div>
-                    </div>
-
-
-                    
-                    <div class="form-actions">
-                        <button type="button" class="btn-secondary" id="prevStep2">
-                            <i class="fas fa-arrow-left"></i>
-                            Back
-                        </button>
-                        <button type="button" class="btn-primary" id="nextStep2">
-                            Continue
-                            <i class="fas fa-arrow-right"></i>
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Step 3: Address + Business Partner Information -->
-                <div class="form-step" id="step3Form">
-                    <h2 id="step3Title" style="color: #333; margin-bottom: 10px; font-size: 1.5rem;">Add your delivery details</h2>
-                    <p id="step3Subtitle" style="margin: 0 0 18px; color: #666; font-size: 0.92rem;">
-                        Provide your address so we can help you get your orders delivered smoothly.
-                    </p>
-                    
-                        <div id="organizationFields">
-                            <div class="form-group">
-                            <label for="businessName">Restaurant Name *</label>
-                            <input type="text" id="businessName" name="business_name" class="form-control" 
-                                placeholder="Enter your restaurant name"
-                                value="<?php echo htmlspecialchars($form_data['business_name'] ?? ''); ?>">
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="businessType">Business Type</label>
+                            <div class="form-group mb-4">
+                                <label for="businessType">Business Type *</label>
                                 <select id="businessType" name="business_type" class="form-control">
-                                    <option value="restaurant" selected>Restaurant</option>
+                                    <option value="" disabled <?php echo empty($form_data['business_type']) ? 'selected' : ''; ?>>Select business structure</option>
+                                    <option value="sole_proprietorship" <?php echo ($form_data['business_type'] ?? '') === 'sole_proprietorship' ? 'selected' : ''; ?>>Sole Proprietorship</option>
+                                    <option value="partnership" <?php echo ($form_data['business_type'] ?? '') === 'partnership' ? 'selected' : ''; ?>>Partnership</option>
+                                    <option value="corporation" <?php echo ($form_data['business_type'] ?? '') === 'corporation' ? 'selected' : ''; ?>>Corporation</option>
+                                    <option value="cooperative" <?php echo ($form_data['business_type'] ?? '') === 'cooperative' ? 'selected' : ''; ?>>Cooperative</option>
                                 </select>
                             </div>
-                            <div class="form-group">
-                                <label for="businessRegistration">Business Registration Number</label>
-                                <input type="text" id="businessRegistration" name="business_registration" class="form-control" 
-                                    placeholder="Enter registration number"
-                                    value="<?php echo htmlspecialchars($form_data['business_registration'] ?? ''); ?>">
+                            <div class="form-group mb-4">
+                                <label for="tinNumber">Tax Identification Number (TIN)</label>
+                                <input type="text" id="tinNumber" name="tin_number" class="form-control" 
+                                    placeholder="000-000-000-000"
+                                    value="<?php echo htmlspecialchars($form_data['tin_number'] ?? ''); ?>">
                             </div>
                         </div>
                         
-                        <div class="form-group">
-                            <label for="taxId">Tax ID Number</label>
-                            <input type="text" id="taxId" name="tax_id" class="form-control" 
-                                placeholder="Enter TIN"
-                                value="<?php echo htmlspecialchars($form_data['tax_id'] ?? ''); ?>">
+                        <div class="button-group" style="margin-top: 25px;">
+                            <button type="button" class="btn btn-secondary" id="prevStep2"><i class="fas fa-arrow-left me-1"></i> Back</button>
+                            <button type="button" class="btn btn-primary" id="nextStep2">Continue <i class="fas fa-arrow-right ms-1"></i></button>
                         </div>
                     </div>
                     
-                    <div class="form-group">
-                        <label for="psgcRegion" id="addressSectionLabel">Home Address (PSGC) *</label>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="psgcRegion" id="regionLabel">Region (Luzon only) *</label>
-                                <select id="psgcRegion" name="psgc_region_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_region_code'] ?? ''); ?>">
-                                    <option value="">Select region</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="psgcProvince" id="provinceLabel">Province (Required except NCR) *</label>
-                                <select id="psgcProvince" name="psgc_province_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_province_code'] ?? ''); ?>">
-                                    <option value="">Select province</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="psgcCity">City / Municipality *</label>
-                                <select id="psgcCity" name="psgc_city_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_city_code'] ?? ''); ?>">
-                                    <option value="">Select city or municipality</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="psgcBarangay">Barangay *</label>
-                                <select id="psgcBarangay" name="psgc_barangay_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_barangay_code'] ?? ''); ?>">
-                                    <option value="">Select barangay</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="streetAddress" id="streetAddressLabel">House No. / Street / Landmark *</label>
-                            <input type="text" id="streetAddress" name="street_address" class="form-control"
-                                placeholder="e.g., Blk 5 Lot 2, Brgy. San Agustin"
-                                value="<?php echo htmlspecialchars($form_data['street_address'] ?? ''); ?>"
-                                maxlength="120"
-                                required>
-                        </div>
-                        <small id="psgcAddressHelp" style="display:block; margin-top:4px; color:#666; font-size:0.84rem;">
-                            Individual registration is limited to Luzon regions.
-                        </small>
-                    </div>
+                    <!-- Step 3: Address Information (With Leaflet Interactive Map) -->
+                    <div class="form-step" id="step3Form">
+                        <h2 style="color: #333; margin-bottom: 8px; font-size: 1.5rem;" id="step3Title">Enter Home Address</h2>
+                        <p style="color: #666; font-size: 0.95rem; margin-bottom: 20px;" id="step3Subtitle">Enter your home address or pin your location on the map.</p>
 
-                    <div class="form-group">
-                        <label for="address" id="completeAddressLabel">Complete Home Address *</label>
-                        <textarea id="address" name="address" class="form-control" rows="3"
-                                placeholder="Your complete home address will appear here after selecting PSGC fields"
-                                readonly required><?php echo htmlspecialchars($form_data['address'] ?? ''); ?></textarea>
-                    </div>
-                    
-                    <div class="form-actions">
-                        <button type="button" class="btn-secondary" id="prevStep3">
-                            <i class="fas fa-arrow-left"></i>
-                            Back
-                        </button>
-                        <button type="button" class="btn-primary" id="nextStep3">
-                            Continue
-                            <i class="fas fa-arrow-right"></i>
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Step 4: Create Account -->
-                <div class="form-step" id="step4Form">
-                    <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">Secure your account</h2>
-                    
-                    <div class="form-group">
-                        <label for="password">Password *</label>
-                        <div class="password-wrapper input-with-icon">
-                            <i class="fas fa-lock"></i>
-                            <input type="password" id="password" name="password" class="form-control" required 
-                                placeholder="Create a strong password"
-                                autocomplete="new-password"
-                                minlength="8"
-                                maxlength="72"
-                                pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,72}"
-                                title="Use at least 8 characters with uppercase, lowercase, number, and symbol.">
-                            <button type="button" class="toggle-password" aria-label="Toggle password visibility">
-                                <i class="fas fa-eye"></i>
+                        <!-- Single Home Address Input -->
+                        <div class="form-group mb-3">
+                            <label for="homeAddressInput" style="font-weight: 700; color: #1e293b;">Home Address *</label>
+                            <div style="position: relative;">
+                                <input type="text" id="homeAddressInput" class="form-control" required
+                                    placeholder="House/Unit No., Street, Barangay, City/Municipality, Province"
+                                    value="<?php echo htmlspecialchars($form_data['address'] ?? ''); ?>"
+                                    autocomplete="street-address"
+                                    style="padding-right: 40px;">
+                                <i class="fas fa-location-dot" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #b3261e; font-size: 1.1rem; pointer-events: none;"></i>
+                            </div>
+                            <small class="text-muted" style="display: block; margin-top: 5px; font-size: 0.82rem;">
+                                Type your home address or click/drag the pin on the map.
+                            </small>
+                        </div>
+
+                        <!-- Hidden Address Payload Fields for Backend Submission -->
+                        <input type="hidden" id="regAddress" name="address" value="<?php echo htmlspecialchars($form_data['address'] ?? ''); ?>">
+                        <input type="hidden" id="regStreetAddress" name="street_address" value="<?php echo htmlspecialchars($form_data['street_address'] ?? ''); ?>">
+                        <input type="hidden" id="regLatitude" name="latitude" value="<?php echo htmlspecialchars($form_data['latitude'] ?? ''); ?>">
+                        <input type="hidden" id="regLongitude" name="longitude" value="<?php echo htmlspecialchars($form_data['longitude'] ?? ''); ?>">
+                        <input type="hidden" id="regCityName" name="city_name" value="<?php echo htmlspecialchars($form_data['city_name'] ?? ''); ?>">
+                        <input type="hidden" id="regProvinceName" name="province_name" value="<?php echo htmlspecialchars($form_data['province_name'] ?? ''); ?>">
+
+                        <!-- Address Location Status Indicator Card -->
+                        <div id="caviteAreaStatusBadge" style="margin-bottom: 15px; padding: 12px 14px; border-radius: 10px; font-size: 0.88rem; display: flex; align-items: center; gap: 10px; background: #fff8f6; border: 1px solid #ffdcd6; color: #8c201a; transition: all 0.3s ease;">
+                            <i class="fas fa-map-pin" id="caviteStatusIcon" style="font-size: 1.1rem;"></i>
+                            <span id="caviteStatusText">Please search your address or pin your location on the map.</span>
+                        </div>
+
+                        <!-- Leaflet Interactive Cavite Map -->
+                        <div style="position: relative; margin-bottom: 20px;">
+                            <div id="registerMapWrapper" style="width: 100%; height: 260px; border-radius: 12px; border: 1px solid #cbd5e1; overflow: hidden; background: #f1f5f9;">
+                                <div id="registerMap" style="width: 100%; height: 100%;"></div>
+                            </div>
+                            <button type="button" id="useCurrentLocationBtn" style="position: absolute; bottom: 12px; right: 12px; z-index: 500; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 12px; font-size: 0.8rem; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,0.12); cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                                <i class="fas fa-crosshairs" style="color: #b3261e;"></i> Locate Me
                             </button>
                         </div>
-                        <div class="password-strength">
-                            <div class="strength-indicator">
-                                <span class="strength-text" id="strengthText">Weak</span>
-                                <div class="strength-bars">
-                                    <div class="strength-bar" id="strengthBar1"></div>
-                                    <div class="strength-bar" id="strengthBar2"></div>
-                                    <div class="strength-bar" id="strengthBar3"></div>
-                                    <div class="strength-bar" id="strengthBar4"></div>
+                        
+                        <div class="button-group">
+                            <button type="button" class="btn btn-secondary" id="prevStep3"><i class="fas fa-arrow-left me-1"></i> Back</button>
+                            <button type="button" class="btn btn-primary" id="nextStep3">Continue <i class="fas fa-arrow-right ms-1"></i></button>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 4: Create Account (Email, Phone, Password) -->
+                    <div class="form-step" id="step4Form">
+                        <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">Account Security</h2>
+                        
+                        <div class="form-group mb-4">
+                            <label for="email">Email Address *</label>
+                            <input type="email" id="email" name="email" class="form-control" required 
+                                placeholder="name@example.com"
+                                value="<?php echo htmlspecialchars($form_data['email'] ?? ''); ?>"
+                                autocomplete="email">
+                        </div>
+                        
+                        <div class="form-group mb-4">
+                            <label for="phone">Mobile Phone Number *</label>
+                            <input type="tel" id="phone" name="phone" class="form-control" required 
+                                placeholder="09123456789"
+                                value="<?php echo htmlspecialchars($form_data['phone'] ?? ''); ?>"
+                                autocomplete="tel">
+                        </div>
+                        
+                        <div class="form-group mb-4">
+                            <label for="password">Password *</label>
+                            <div class="password-input-group">
+                                <input type="password" id="password" name="password" class="form-control" required 
+                                    placeholder="At least 8 characters"
+                                    autocomplete="new-password">
+                                <button type="button" class="toggle-password" data-target="password"><i class="fas fa-eye"></i></button>
+                            </div>
+                            <div class="password-strength" id="passwordStrength">
+                                <div class="strength-indicator">
+                                    <div class="strength-bars">
+                                        <div class="strength-bar" id="strengthBar1"></div>
+                                        <div class="strength-bar" id="strengthBar2"></div>
+                                        <div class="strength-bar" id="strengthBar3"></div>
+                                        <div class="strength-bar" id="strengthBar4"></div>
+                                    </div>
+                                    <span class="strength-text" id="strengthText">Weak</span>
+                                </div>
+                                <div class="password-requirements" id="passwordRequirements">
+                                    <div class="req-item" id="reqLength"><i class="fas fa-circle-dot"></i> <span>8-16 characters</span></div>
+                                    <div class="req-item" id="reqUpper"><i class="fas fa-circle-dot"></i> <span>Uppercase letter (A-Z)</span></div>
+                                    <div class="req-item" id="reqLower"><i class="fas fa-circle-dot"></i> <span>Lowercase letter (a-z)</span></div>
+                                    <div class="req-item" id="reqNumber"><i class="fas fa-circle-dot"></i> <span>Number (0-9)</span></div>
+                                    <div class="req-item" id="reqSpecial"><i class="fas fa-circle-dot"></i> <span>Special symbol (!@#$%^&*)</span></div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="confirmPassword">Confirm Password *</label>
-                        <div class="password-wrapper input-with-icon">
-                            <i class="fas fa-lock"></i>
-                            <input type="password" id="confirmPassword" name="confirm_password" class="form-control" required 
-                                placeholder="Confirm your password"
-                                autocomplete="new-password">
-                            <button type="button" class="toggle-password" aria-label="Toggle password visibility">
-                                <i class="fas fa-eye"></i>
-                            </button>
+                        
+                        <div class="form-group mb-4">
+                            <label for="confirmPassword">Confirm Password *</label>
+                            <div class="password-input-group">
+                                <input type="password" id="confirmPassword" name="confirm_password" class="form-control" required 
+                                    placeholder="Re-enter password"
+                                    autocomplete="new-password">
+                                <button type="button" class="toggle-password" data-target="confirmPassword"><i class="fas fa-eye"></i></button>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div class="verification-note">
-                        <i class="fas fa-envelope-open-text"></i>
-                        <div>
-                            <strong>What happens next?</strong><br>
-                            After you create your account, we’ll send a confirmation email so you can verify your address and start using your account.
+
+                        <!-- Terms & Conditions Checkbox -->
+                        <div class="terms-group mb-4" id="termsGroup" style="display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; background: #f8fafc; border: 1px solid #eaecf0; border-radius: 10px; transition: all 0.2s ease;">
+                            <input type="checkbox" id="terms" name="accept_terms" value="1" required <?php echo (!empty($_POST['accept_terms']) || !empty($_POST['terms']) || !empty($accept_terms)) ? 'checked' : ''; ?> style="accent-color: #b3261e; width: 18px; height: 18px; min-width: 18px; margin-top: 2px; cursor: pointer;">
+                            <label for="terms" style="font-size: 0.9rem; color: #475467; cursor: pointer; margin: 0; line-height: 1.5; user-select: none;">
+                                I agree to the <a href="terms_of_service.php" class="terms-legal-link" target="_blank" style="color: #b3261e; font-weight: 600; text-decoration: underline;">Terms &amp; Conditions</a> and <a href="privacy_policy.php" class="terms-legal-link" target="_blank" style="color: #b3261e; font-weight: 600; text-decoration: underline;">Privacy Policy</a>.
+                            </label>
+                        </div>
+                        
+                        <div class="button-group">
+                            <button type="button" class="btn btn-secondary" id="prevStep4"><i class="fas fa-arrow-left me-1"></i> Back</button>
+                            <button type="submit" class="btn btn-primary" id="submitBtn">Create Account <i class="fas fa-check ms-1"></i></button>
                         </div>
                     </div>
 
-                    <div class="terms-agreement">
-                        <input type="checkbox" id="acceptTerms" name="accept_terms" required>
-                        <label for="acceptTerms">
-                            I agree to the <a href="terms_of_service.php" data-policy-modal="terms">Terms of Service</a> and 
-                            <a href="privacy_policy.php" data-policy-modal="privacy">Privacy Policy</a>
-                        </label>
+                    </form>
+                </div>
+                </div>
+
+                <!-- View 2: Login Form (Smooth Slide Transition) -->
+                <div id="loginViewWrapper" class="auth-view-wrapper" style="display: none; opacity: 0;">
+                    <div class="registration-header" style="background:#fff; text-align:center; margin-bottom:24px; padding:0 0 10px;">
+                        <h2 style="font-size:1.8rem; font-weight:700; color:#333; margin-bottom:10px;">Welcome Back!</h2>
+                        <p style="font-size:1rem; color:#666; margin:0;">Sign in to continue to your account.</p>
                     </div>
-                    
-                    <div class="form-actions">
-                        <button type="button" class="btn-secondary" id="prevStep4">
-                            <i class="fas fa-arrow-left"></i>
-                            Back
+
+                    <form method="POST" action="login.php" id="ajaxLoginForm" data-swal-validate="off" novalidate>
+                        <input type="hidden" name="login" value="1">
+                        <input type="hidden" name="ajax" value="true">
+
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label for="loginEmail" style="display:block; margin-bottom:8px; color:#333; font-weight:600; font-size:0.95rem;">Email Address *</label>
+                            <div class="input-with-icon" style="position: relative;">
+                                <input type="email" id="loginEmail" name="email" class="form-control" required placeholder="Enter your email address" autocomplete="email" style="padding-left: 44px;" value="<?php echo htmlspecialchars($_COOKIE['remember_email'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                <i class="fas fa-envelope" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #94a3b8;"></i>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <label for="loginPassword" style="margin:0; color:#333; font-weight:600; font-size:0.95rem;">Password *</label>
+                                <a href="reset_password_request.php" style="font-size:0.85rem; color:#b3261e; text-decoration:none; font-weight:600;">Forgot Password?</a>
+                            </div>
+                            <div class="input-with-icon">
+                                <i class="fas fa-lock input-lead-icon"></i>
+                                <input type="password" id="loginPassword" name="password" class="form-control" required placeholder="Enter your password" autocomplete="current-password">
+                                <button type="button" id="toggleLoginPasswordBtn" class="toggle-password" data-target="loginPassword" aria-label="Toggle password visibility">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:24px;">
+                            <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; color:#475467; cursor:pointer; margin:0;">
+                                <input type="checkbox" name="remember" value="1" style="accent-color:#b3261e; width:16px; height:16px;" <?php echo !empty($_COOKIE['remember_email']) ? 'checked' : ''; ?>>
+                                <span>Remember me</span>
+                            </label>
+                        </div>
+
+                        <button type="submit" id="loginSubmitBtn" class="btn btn-primary" style="width:100%; height:48px; font-size:1rem; font-weight:700; border-radius:10px; background:#b3261e; color:#fff; border:none; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; box-shadow: 0 4px 14px rgba(179, 38, 30, 0.25); transition: all 0.25s;">
+                            <span>Sign In</span> <i class="fas fa-arrow-right"></i>
                         </button>
-                        <button type="submit" class="btn-primary" id="submitRegistration">
-                            <i class="fas fa-user-plus"></i>
-                            <span>Create Account</span>
-                        </button>
+                    </form>
+
+                    <div class="auth-switch-prompt" style="text-align:center; margin-top:22px; padding:4px 0 12px; font-size:0.95rem; color:#475467;">
+                        <span>Don't have an account yet?</span>
+                        <a href="register.php" class="js-trigger-slide-register" style="color:#b3261e; font-weight:700; text-decoration:none; margin-left:6px; display:inline-block;">
+                            Sign Up
+                        </a>
                     </div>
                 </div>
-            </form>
-            
-            <!-- Social Registration Divider -->
-            <div class="social-divider">
-                <span>Or register with</span>
-            </div>
-            
-            <!-- Social Login Buttons -->
-            <div class="social-login-buttons">
-                <button type="button" class="social-btn google-btn" id="googleRegisterBtn" title="Register with Google">
-                    <i class="fab fa-google"></i>
-                    <span>Google</span>
-                </button>
-                <button type="button" class="social-btn facebook-btn" id="facebookRegisterBtn" title="Register with Facebook">
-                    <i class="fab fa-facebook-f"></i>
-                    <span>Facebook</span>
-                </button>
-                <button type="button" class="social-btn twitter-btn" id="twitterRegisterBtn" title="Register with X">
-                    <i class="fab fa-x-twitter"></i>
-                    <span>X</span>
-                </button>
-                <button type="button" class="social-btn instagram-btn" id="instagramRegisterBtn" title="Register with Instagram">
-                    <i class="fab fa-instagram"></i>
-                    <span>Instagram</span>
-                </button>
-            </div>
-            
-            <div class="auth-link">
-                Already have an account? 
-                <a href="login.php">Sign in here</a>
+
             </div>
         </div>
     </div>
@@ -1870,523 +2800,12 @@ body {
 <!-- SweetAlert2 JS -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-<script type="text/plain" data-legacy-registration-script>
-document.addEventListener('DOMContentLoaded', function() {
-    if (!window.__useLegacyRegistrationScript) {
-        return;
-    }
-
-    console.log('DOM loaded - registration form initialized');
-    
-    // Initialize SweetAlert2
-    const Toast = Swal.mixin({
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 3000,
-        timerProgressBar: true,
-        didOpen: (toast) => {
-            toast.addEventListener('mouseenter', Swal.stopTimer)
-            toast.addEventListener('mouseleave', Swal.resumeTimer)
-        }
-    });
-    
-    // Current step tracking
-    let currentStep = 1;
-    const totalSteps = 4;
-    let accountType = (document.getElementById('accountType')?.value || '').trim() || 'individual';
-    
-    // DOM Elements
-    const steps = document.querySelectorAll('.step');
-    const formSteps = document.querySelectorAll('.form-step');
-    const accountTypeCards = document.querySelectorAll('.account-type-card');
-    const accountTypeInput = document.getElementById('accountType');
-    const organizationFields = document.getElementById('organizationFields');
-    
-    // Initialize
-    updateProgressBar();
-    updateOrganizationFields();
-    
-    // Debug logging
-    console.log('Form steps found:', formSteps.length);
-    console.log('Account type cards found:', accountTypeCards.length);
-    
-    // Back to login button
-    document.getElementById('backToLoginBtn').addEventListener('click', function() {
-        window.location.href = 'login.php';
-    });
-    
-    // Account Type Selection
-    accountTypeCards.forEach(card => {
-        card.addEventListener('click', function() {
-            console.log('Account type card clicked:', this.dataset.type);
-            // Remove selected class from all cards
-            accountTypeCards.forEach(c => c.classList.remove('selected'));
-            
-            // Add selected class to clicked card
-            this.classList.add('selected');
-            
-            // Update account type
-            accountType = this.dataset.type;
-            accountTypeInput.value = accountType;
-            console.log('Account type set to:', accountType);
-            
-            // Update organization fields visibility
-            updateOrganizationFields();
-        });
-    });
-    
-    // Step Navigation - SIMPLIFIED EVENT LISTENERS
-    document.getElementById('nextStep1').addEventListener('click', function() {
-        console.log('Next Step 1 clicked');
-        goToStep(2);
-    });
-    
-    document.getElementById('nextStep2').addEventListener('click', function() {
-        console.log('Next Step 2 clicked');
-        validateStep2();
-    });
-    
-    document.getElementById('nextStep3').addEventListener('click', function() {
-        console.log('Next Step 3 clicked');
-        validateStep3();
-    });
-    
-    document.getElementById('prevStep2').addEventListener('click', function() {
-        console.log('Prev Step 2 clicked');
-        goToStep(1);
-    });
-    
-    document.getElementById('prevStep3').addEventListener('click', function() {
-        console.log('Prev Step 3 clicked');
-        goToStep(2);
-    });
-    
-    document.getElementById('prevStep4').addEventListener('click', function() {
-        console.log('Prev Step 4 clicked');
-        goToStep(3);
-    });
-    
-    // Toggle password visibility
-    document.querySelectorAll('.toggle-password').forEach(button => {
-        button.addEventListener('click', function() {
-            const input = this.closest('.password-wrapper').querySelector('input');
-            const icon = this.querySelector('i');
-            
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.className = 'fas fa-eye-slash';
-                this.setAttribute('aria-label', 'Hide password');
-            } else {
-                input.type = 'password';
-                icon.className = 'fas fa-eye';
-                this.setAttribute('aria-label', 'Show password');
-            }
-        });
-    });
-    
-    // Password strength indicator
-    const passwordInput = document.getElementById('password');
-    if (passwordInput) {
-        passwordInput.addEventListener('input', function() {
-            const password = this.value;
-            const strengthBars = [
-                document.getElementById('strengthBar1'),
-                document.getElementById('strengthBar2'),
-                document.getElementById('strengthBar3'),
-                document.getElementById('strengthBar4')
-            ];
-            const strengthText = document.getElementById('strengthText');
-            
-            let score = 0;
-            if (password.length >= 8) score++;
-            if (/[A-Z]/.test(password)) score++;
-            if (/[0-9]/.test(password)) score++;
-            if (/[^A-Za-z0-9]/.test(password)) score++;
-            
-            // Reset bars
-            strengthBars.forEach(bar => {
-                bar.className = 'strength-bar';
-            });
-            
-            // Update bars
-            for (let i = 0; i < score; i++) {
-                if (score <= 1) {
-                    strengthBars[i].classList.add('weak');
-                    strengthText.textContent = 'Weak';
-                    strengthText.style.color = '#ff5252';
-                } else if (score <= 2) {
-                    strengthBars[i].classList.add('medium');
-                    strengthText.textContent = 'Fair';
-                    strengthText.style.color = '#ff9800';
-                } else {
-                    strengthBars[i].classList.add('strong');
-                    strengthText.textContent = 'Strong';
-                    strengthText.style.color = '#4caf50';
-                }
-            }
-            
-            if (password.length === 0) {
-                strengthText.textContent = 'Weak';
-                strengthText.style.color = '#666';
-            }
-        });
-    }
-    
-    // Form submission
-    const registrationForm = document.getElementById('registrationForm');
-    if (registrationForm) {
-        registrationForm.addEventListener('submit', function(e) {
-            console.log('Form submission attempted');
-            e.preventDefault();
-            
-            // Validate step 4
-            if (!validateStep4()) {
-                return false;
-            }
-            
-            const submitBtn = document.getElementById('submitRegistration');
-            if (submitBtn) {
-                submitBtn.classList.add('loading');
-                submitBtn.disabled = true;
-                const span = submitBtn.querySelector('span');
-                if (span) {
-                    span.textContent = 'Creating account...';
-                }
-            }
-            
-            // Submit form
-            console.log('Submitting form...');
-            this.submit();
-        });
-    }
-    
-    // Functions
-    function goToStep(step) {
-        console.log('Going to step:', step, 'from current step:', currentStep);
-        
-        // Validate current step before proceeding
-        if (currentStep === 1 && !validateStep1()) {
-            console.log('Step 1 validation failed');
-            return;
-        }
-        
-        // Update current step
-        currentStep = step;
-        console.log('Current step updated to:', currentStep);
-        
-        // Update UI
-        updateSteps();
-        updateProgressBar();
-        
-        // Scroll to top of form
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        
-        // Focus on first input
-        setTimeout(() => {
-            const formStep = document.getElementById(`step${step}Form`);
-            if (formStep) {
-                const firstInput = formStep.querySelector('input:not([type="hidden"]), select, textarea');
-                if (firstInput) {
-                    firstInput.focus();
-                    console.log('Focused on:', firstInput.id);
-                }
-            }
-        }, 300);
-    }
-    
-    function updateSteps() {
-        console.log('Updating steps UI');
-        // Update step indicators
-        steps.forEach((step, index) => {
-            step.classList.remove('active', 'completed');
-            if (index + 1 === currentStep) {
-                step.classList.add('active');
-            } else if (index + 1 < currentStep) {
-                step.classList.add('completed');
-            }
-        });
-        
-        // Update form steps
-        formSteps.forEach((formStep, index) => {
-            formStep.classList.remove('active');
-            if (index + 1 === currentStep) {
-                formStep.classList.add('active');
-                console.log('Activated form step:', index + 1);
-            }
-        });
-    }
-    
-    function updateProgressBar() {
-        const progressBar = document.getElementById('progressBar');
-        const progress = ((currentStep - 1) / (totalSteps - 1)) * 100;
-        if (progressBar) {
-            progressBar.style.width = `${progress}%`;
-        }
-    }
-    
-    function updateOrganizationFields() {
-        console.log('Updating organization fields for account type:', accountType);
-        if (accountType === 'organization') {
-            organizationFields.style.display = 'block';
-            // Make business name required
-            const businessNameInput = document.getElementById('businessName');
-            if (businessNameInput) {
-                businessNameInput.required = true;
-            }
-        } else {
-            organizationFields.style.display = 'none';
-            // Make business name optional
-            const businessNameInput = document.getElementById('businessName');
-            if (businessNameInput) {
-                businessNameInput.required = false;
-            }
-        }
-    }
-    
-    // Validation functions
-    function validateStep1() {
-        console.log('Validating step 1, account type:', accountType);
-        if (!accountType) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Account Type Required',
-                text: 'Please select an account type to continue.',
-                confirmButtonColor: '#b3261e'
-            });
-            return false;
-        }
-        return true;
-    }
-    
-    function validateStep2() {
-        console.log('Validating step 2');
-        
-        const firstName = document.getElementById('firstName').value.trim();
-        const lastName = document.getElementById('lastName').value.trim();
-        const email = document.getElementById('email').value.trim();
-        const phone = document.getElementById('phone').value.trim();
-        
-        console.log('First name:', firstName);
-        console.log('Last name:', lastName);
-        console.log('Email:', email);
-        console.log('Phone:', phone);
-        
-        // Check for empty fields
-        if (!firstName || !lastName || !email || !phone) {
-            console.log('Validation failed: Empty fields');
-            Swal.fire({
-                icon: 'error',
-                title: 'Missing Information',
-                text: 'Please fill in all required fields.',
-                confirmButtonColor: '#b3261e'
-            });
-            return false;
-        }
-        
-        // Validate email
-        if (!isValidEmail(email)) {
-            console.log('Validation failed: Invalid email');
-            Swal.fire({
-                icon: 'error',
-                title: 'Invalid Email',
-                text: 'Please enter a valid email address.',
-                confirmButtonColor: '#b3261e'
-            });
-            return false;
-        }
-        
-        // Validate phone - MUCH MORE FLEXIBLE
-        if (!isValidPhone(phone)) {
-            console.log('Validation failed: Invalid phone');
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Invalid Phone Number',
-                    text: 'Please enter a valid Philippine mobile number (e.g., 09XXXXXXXXX).',
-                    confirmButtonColor: '#b3261e'
-                });
-                return false;
-            }
-        
-        console.log('Step 2 validation passed');
-        goToStep(3);
-        return true;
-    }
-    
-    function validateStep3() {
-        console.log('Validating step 3');
-        
-        if (accountType === 'organization') {
-            const businessName = document.getElementById('businessName').value.trim();
-            console.log('Business name:', businessName);
-            
-            if (!businessName) {
-                console.log('Validation failed: Business name required');
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Business Name Required',
-                    text: 'Please enter your business name.',
-                    confirmButtonColor: '#b3261e'
-                });
-                return false;
-            }
-        }
-        
-        console.log('Step 3 validation passed');
-        goToStep(4);
-        return true;
-    }
-    
-    function validateStep4() {
-        console.log('Validating step 4');
-        
-        const password = document.getElementById('password').value;
-        const confirmPassword = document.getElementById('confirmPassword').value;
-        const terms = document.getElementById('acceptTerms');
-        
-        console.log('Password length:', password.length);
-        console.log('Terms checked:', terms.checked);
-        
-        if (!password || !confirmPassword) {
-            console.log('Validation failed: Password required');
-            Swal.fire({
-                icon: 'error',
-                title: 'Password Required',
-                text: 'Please enter and confirm your password.',
-                confirmButtonColor: '#b3261e'
-            });
-            return false;
-        }
-        
-        if (password.length < 8) {
-            console.log('Validation failed: Password too short');
-            Swal.fire({
-                icon: 'error',
-                title: 'Weak Password',
-                text: 'Password must be at least 8 characters long.',
-                confirmButtonColor: '#b3261e'
-            });
-            return false;
-        }
-        
-        if (password !== confirmPassword) {
-            console.log('Validation failed: Passwords dont match');
-            Swal.fire({
-                icon: 'error',
-                title: 'Passwords Mismatch',
-                text: 'Passwords do not match. Please try again.',
-                confirmButtonColor: '#b3261e'
-            });
-            return false;
-        }
-        
-        if (!terms.checked) {
-            console.log('Validation failed: Terms not accepted');
-            Swal.fire({
-                icon: 'error',
-                title: 'Terms Required',
-                text: 'Please accept the Terms of Service and Privacy Policy.',
-                confirmButtonColor: '#b3261e'
-            });
-            return false;
-        }
-        
-        console.log('Step 4 validation passed');
-        return true;
-    }
-    
-    function isValidEmail(email) {
-        const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return re.test(email);
-    }
-    
-    function isValidPhone(phone) {
-        // Accept PH mobile formats:
-        // 09XXXXXXXXX, 9XXXXXXXXX, +639XXXXXXXXX, 639XXXXXXXXX
-        console.log('Validating phone:', phone);
-        
-        const cleaned = phone.replace(/[^\d]/g, '');
-        console.log('Cleaned phone:', cleaned);
-        
-        const valid =
-            /^09\d{9}$/.test(cleaned) ||
-            /^9\d{9}$/.test(cleaned) ||
-            /^639\d{9}$/.test(cleaned);
-
-        if (valid) {
-            console.log('Phone validation passed');
-            return true;
-        }
-        
-        console.log('Phone validation failed');
-        return false;
-    }
-    
-    // Auto-select account type card based on previous selection
-    if (accountType === 'organization') {
-        const orgCard = document.querySelector('.account-type-card[data-type="organization"]');
-        if (orgCard) {
-            orgCard.classList.add('selected');
-        }
-    }
-    
-    // Show error message if exists
-    <?php if ($error): ?>
-    Toast.fire({
-        icon: 'error',
-        title: '<?php echo addslashes($error); ?>'
-    });
-    <?php endif; ?>
-    
-    // Add Enter key support for mobile keyboards
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            if (currentStep === 1) {
-                document.getElementById('nextStep1').click();
-            } else if (currentStep === 2) {
-                document.getElementById('nextStep2').click();
-            } else if (currentStep === 3) {
-                document.getElementById('nextStep3').click();
-            } else if (currentStep === 4) {
-                document.getElementById('submitRegistration').click();
-            }
-        }
-    });
-    
-    // Test button functionality
-    console.log('All event listeners attached');
-    console.log('nextStep2 button exists:', !!document.getElementById('nextStep2'));
-    console.log('nextStep3 button exists:', !!document.getElementById('nextStep3'));
-
-    // Social Registration Handlers
-    document.getElementById('googleRegisterBtn').addEventListener('click', function(e) {
-        e.preventDefault();
-        window.location.href = 'controllers/google_auth.php?action=register';
-    });
-
-    document.getElementById('facebookRegisterBtn').addEventListener('click', function(e) {
-        e.preventDefault();
-        window.location.href = 'controllers/facebook_auth.php?action=register';
-    });
-
-    document.getElementById('twitterRegisterBtn').addEventListener('click', function(e) {
-        e.preventDefault();
-        window.location.href = 'controllers/twitter_auth.php?action=register';
-    });
-
-    document.getElementById('instagramRegisterBtn').addEventListener('click', function(e) {
-        e.preventDefault();
-        window.location.href = 'controllers/instagram_auth.php?action=register';
-    });
-});
-</script>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const Toast = Swal.mixin({
         toast: true,
         position: 'top-end',
+        backdrop: false,
         showConfirmButton: false,
         timer: 3000,
         timerProgressBar: true,
@@ -2396,54 +2815,364 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    let currentStep = 2;
+    let currentStep = 1;
     const totalSteps = 4;
     const steps = document.querySelectorAll('.step');
     const formSteps = document.querySelectorAll('.form-step');
     const accountTypeCards = document.querySelectorAll('.account-type-card');
     const accountTypeInput = document.getElementById('accountType');
-    if (accountTypeInput) {
+    let accountType = accountTypeInput && accountTypeInput.value ? accountTypeInput.value.toLowerCase() : 'individual';
+    if (accountTypeInput && !accountTypeInput.value) {
         accountTypeInput.value = 'individual';
     }
     const organizationFields = document.getElementById('organizationFields');
     const step3Title = document.getElementById('step3Title');
     const step3Subtitle = document.getElementById('step3Subtitle');
     const step3NavLabel = document.getElementById('step3NavLabel');
-    const addressSectionLabel = document.getElementById('addressSectionLabel');
-    const regionLabel = document.getElementById('regionLabel');
-    const provinceLabel = document.getElementById('provinceLabel');
-    const streetAddressLabel = document.getElementById('streetAddressLabel');
-    const completeAddressLabel = document.getElementById('completeAddressLabel');
-    let accountType = 'individual';
 
-    const regionSelect = document.getElementById('psgcRegion');
-    const provinceSelect = document.getElementById('psgcProvince');
-    const citySelect = document.getElementById('psgcCity');
-    const barangaySelect = document.getElementById('psgcBarangay');
-    const streetAddressInput = document.getElementById('streetAddress');
-    const addressPreviewInput = document.getElementById('address');
-    const psgcAddressHelp = document.getElementById('psgcAddressHelp');
-    const psgcRegionNameInput = document.getElementById('psgcRegionName');
-    const psgcProvinceNameInput = document.getElementById('psgcProvinceName');
-    const psgcCityNameInput = document.getElementById('psgcCityName');
-    const psgcBarangayNameInput = document.getElementById('psgcBarangayName');
+    let regMap = null;
+    let regMarker = null;
+    let isAddressInCavite = false;
+    let addressDebounceTimer = null;
 
-    const PSGC_API_BASE = 'https://psgc.gitlab.io/api';
-    const CALABARZON_REGION_CODE = '040000000';
-    const CAVITE_PROVINCE_CODE = '042100000';
-    const NCR_REGION_CODE = '130000000';
-    const LUZON_REGION_CODES = [
-        '010000000', // Ilocos Region
-        '020000000', // Cagayan Valley
-        '030000000', // Central Luzon
-        '040000000', // CALABARZON
-        '050000000', // Bicol Region
-        '130000000', // NCR
-        '140000000', // CAR
-        '170000000'  // MIMAROPA
+    function highlightErrorField(el) {
+        if (!el) return;
+        el.style.borderColor = '#b3261e';
+        el.style.boxShadow = '0 0 0 3px rgba(179, 38, 30, 0.15)';
+        const removeHighlight = () => {
+            el.style.borderColor = '';
+            el.style.boxShadow = '';
+            el.removeEventListener('input', removeHighlight);
+            el.removeEventListener('change', removeHighlight);
+        };
+        el.addEventListener('input', removeHighlight);
+        el.addEventListener('change', removeHighlight);
+    }
+
+    // Sliding Auth Panel Controller
+    const authSplitLayout = document.getElementById('authSplitLayout');
+    const heroRegisterView = document.getElementById('heroRegisterView');
+    const heroLoginView = document.getElementById('heroLoginView');
+    const registerViewWrapper = document.getElementById('registerViewWrapper');
+    const loginViewWrapper = document.getElementById('loginViewWrapper');
+    const liquidRippleSurge = document.getElementById('liquidRippleSurge');
+
+    function triggerLiquidSurge(originX, originY) {
+        if (!liquidRippleSurge) return;
+        liquidRippleSurge.classList.remove('is-animating');
+        
+        const x = originX !== undefined ? originX : window.innerWidth / 2;
+        const y = originY !== undefined ? originY : window.innerHeight / 2;
+        
+        liquidRippleSurge.style.left = (x - 10) + 'px';
+        liquidRippleSurge.style.top = (y - 10) + 'px';
+        
+        // Trigger reflow
+        void liquidRippleSurge.offsetWidth;
+        liquidRippleSurge.classList.add('is-animating');
+    }
+
+    function createWaterDropRipple(e, targetBtn) {
+        if (!targetBtn) return;
+        const rect = targetBtn.getBoundingClientRect();
+        const ripple = document.createElement('span');
+        ripple.className = 'water-drop-ripple';
+        const size = Math.max(rect.width, rect.height);
+        ripple.style.width = ripple.style.height = size + 'px';
+        ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+        ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+        targetBtn.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 650);
+    }
+
+    function switchAuthMode(mode, animate = true, clickEvent = null) {
+        if (animate) {
+            const clickX = clickEvent ? clickEvent.clientX : (window.innerWidth / 2);
+            const clickY = clickEvent ? clickEvent.clientY : (window.innerHeight / 2);
+            triggerLiquidSurge(clickX, clickY);
+        }
+
+        if (mode === 'login') {
+            if (authSplitLayout) authSplitLayout.classList.add('is-login-mode');
+            
+            // Fade out register views with fluid staggered delay
+            if (heroRegisterView) {
+                heroRegisterView.style.opacity = '0';
+                heroRegisterView.style.transform = 'translateY(15px) scale(0.96)';
+                setTimeout(() => {
+                    heroRegisterView.style.display = 'none';
+                    if (heroLoginView) {
+                        heroLoginView.style.display = 'flex';
+                        heroLoginView.style.transform = 'translateY(-15px) scale(0.96)';
+                        setTimeout(() => { 
+                            heroLoginView.style.opacity = '1'; 
+                            heroLoginView.style.transform = 'translateY(0) scale(1)';
+                        }, 30);
+                    }
+                }, animate ? 280 : 0);
+            }
+
+            if (registerViewWrapper) {
+                registerViewWrapper.style.opacity = '0';
+                registerViewWrapper.style.transform = 'translateX(-20px)';
+                setTimeout(() => {
+                    registerViewWrapper.style.display = 'none';
+                    if (loginViewWrapper) {
+                        loginViewWrapper.style.display = 'block';
+                        loginViewWrapper.style.transform = 'translateX(20px)';
+                        setTimeout(() => {
+                            loginViewWrapper.style.opacity = '1';
+                            loginViewWrapper.style.transform = 'translateX(0)';
+                            const loginEmailInput = document.getElementById('loginEmail');
+                            if (loginEmailInput) loginEmailInput.focus();
+                        }, 30);
+                    }
+                }, animate ? 280 : 0);
+            }
+
+            history.replaceState(null, '', '#login');
+        } else {
+            if (authSplitLayout) authSplitLayout.classList.remove('is-login-mode');
+            
+            // Fade out login views with fluid staggered delay
+            if (heroLoginView) {
+                heroLoginView.style.opacity = '0';
+                heroLoginView.style.transform = 'translateY(15px) scale(0.96)';
+                setTimeout(() => {
+                    heroLoginView.style.display = 'none';
+                    if (heroRegisterView) {
+                        heroRegisterView.style.display = 'flex';
+                        heroRegisterView.style.transform = 'translateY(-15px) scale(0.96)';
+                        setTimeout(() => { 
+                            heroRegisterView.style.opacity = '1'; 
+                            heroRegisterView.style.transform = 'translateY(0) scale(1)';
+                        }, 30);
+                    }
+                }, animate ? 280 : 0);
+            }
+
+            if (loginViewWrapper) {
+                loginViewWrapper.style.opacity = '0';
+                loginViewWrapper.style.transform = 'translateX(20px)';
+                setTimeout(() => {
+                    loginViewWrapper.style.display = 'none';
+                    if (registerViewWrapper) {
+                        registerViewWrapper.style.display = 'block';
+                        registerViewWrapper.style.transform = 'translateX(-20px)';
+                        setTimeout(() => {
+                            registerViewWrapper.style.opacity = '1';
+                            registerViewWrapper.style.transform = 'translateX(0)';
+                            if (regMap && typeof regMap.invalidateSize === 'function') {
+                                setTimeout(() => regMap.invalidateSize(), 300);
+                            }
+                        }, 30);
+                    }
+                }, animate ? 280 : 0);
+            }
+
+            history.replaceState(null, '', '#register');
+        }
+    }
+
+    // Attach click triggers to all switch buttons and links
+    document.querySelectorAll('.js-trigger-slide-login').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            createWaterDropRipple(e, this);
+            switchAuthMode('login', true, e);
+        });
+    });
+
+    document.querySelectorAll('.js-trigger-slide-register').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            createWaterDropRipple(e, this);
+            switchAuthMode('register', true, e);
+        });
+    });
+
+    // Check URL query param or hash on initial load
+    const urlParams = new URLSearchParams(window.location.search);
+    if (window.location.hash === '#login' || urlParams.get('mode') === 'login') {
+        switchAuthMode('login', false);
+    }
+
+    // Universal Password Visibility Toggle Handler
+    function handlePasswordToggle(btn, e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        let targetInput = null;
+        const targetId = btn.getAttribute('data-target');
+        if (targetId) {
+            targetInput = document.getElementById(targetId);
+        }
+        if (!targetInput) {
+            const parent = btn.closest('.password-input-group, .input-with-icon, .input-wrap, .form-group, .password-wrapper') || btn.parentElement;
+            if (parent) {
+                targetInput = parent.querySelector('input[type="password"], input[type="text"]');
+            }
+        }
+        if (!targetInput) return;
+
+        const isPassword = targetInput.type === 'password';
+        targetInput.type = isPassword ? 'text' : 'password';
+
+        const icon = btn.querySelector('i');
+        if (icon) {
+            icon.className = isPassword ? 'fas fa-eye-slash' : 'fas fa-eye';
+        }
+        btn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+    }
+
+    document.addEventListener('click', function(e) {
+        const toggleBtn = e.target.closest('.toggle-password, #toggleLoginPasswordBtn, #togglePassword');
+        if (toggleBtn) {
+            handlePasswordToggle(toggleBtn, e);
+        }
+    });
+
+    // AJAX Login Handler
+    const ajaxLoginForm = document.getElementById('ajaxLoginForm');
+    const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+    if (ajaxLoginForm) {
+        ajaxLoginForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const emailInput = document.getElementById('loginEmail');
+            const passInput = document.getElementById('loginPassword');
+
+            const emailVal = emailInput ? emailInput.value.trim() : '';
+            if (!emailVal) {
+                if (window.showPopupAlert) {
+                    showPopupAlert('Please enter your email address.', 'alert');
+                } else if (typeof Toast !== 'undefined') {
+                    Toast.fire({ icon: 'warning', title: 'Please enter your email address' });
+                }
+                if (emailInput) emailInput.focus();
+                return;
+            }
+
+            if (!isValidEmail(emailVal)) {
+                if (window.showPopupAlert) {
+                    showPopupAlert('Please enter a valid email address.', 'alert');
+                } else if (typeof Toast !== 'undefined') {
+                    Toast.fire({ icon: 'warning', title: 'Please enter a valid email address' });
+                }
+                if (emailInput) emailInput.focus();
+                return;
+            }
+
+            if (!passInput || !passInput.value) {
+                if (window.showPopupAlert) {
+                    showPopupAlert('Please enter your password.', 'alert');
+                } else if (typeof Toast !== 'undefined') {
+                    Toast.fire({ icon: 'warning', title: 'Please enter your password' });
+                }
+                if (passInput) passInput.focus();
+                return;
+            }
+
+            const origBtnHtml = loginSubmitBtn ? loginSubmitBtn.innerHTML : 'Sign In';
+            if (loginSubmitBtn) {
+                loginSubmitBtn.disabled = true;
+                loginSubmitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> <span>Signing In...</span>';
+            }
+
+            try {
+                const formData = new FormData(ajaxLoginForm);
+                formData.append('ajax', 'true');
+                formData.append('login', '1');
+
+                const response = await fetch('login.php', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    const userName = data.full_name || 'Customer';
+                    if (window.showPopupAlert) {
+                        showPopupAlert('Welcome back, ' + userName + '! Redirecting...', 'success', 3000);
+                    } else if (typeof Toast !== 'undefined') {
+                        Toast.fire({
+                            icon: 'success',
+                            title: 'Welcome back, ' + userName + '! Redirecting...'
+                        });
+                    }
+                    if (loginSubmitBtn) {
+                        loginSubmitBtn.innerHTML = '<i class="fas fa-check-circle"></i> <span>Success! Redirecting...</span>';
+                        loginSubmitBtn.style.background = '#027a48';
+                    }
+                    setTimeout(() => {
+                        window.location.href = data.redirect || 'index.php';
+                    }, 600);
+                } else {
+                    if (loginSubmitBtn) {
+                        loginSubmitBtn.disabled = false;
+                        loginSubmitBtn.innerHTML = origBtnHtml;
+                    }
+                    if (window.showPopupAlert) {
+                        showPopupAlert(data.message || 'Invalid email or password. Please try again.', 'error', 4500);
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Sign In Failed',
+                            text: data.message || 'Invalid email or password. Please try again.',
+                            confirmButtonColor: '#b3261e'
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error('AJAX Login error:', err);
+                if (loginSubmitBtn) {
+                    loginSubmitBtn.disabled = false;
+                    loginSubmitBtn.innerHTML = origBtnHtml;
+                }
+                if (window.showPopupAlert) {
+                    showPopupAlert('Unable to connect to login server. Please try again.', 'error', 4500);
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Sign In Error',
+                        text: 'Unable to connect to login server. Please try again.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                }
+            }
+        });
+    }
+
+    const homeAddressInput = document.getElementById('homeAddressInput');
+    const regAddress = document.getElementById('regAddress');
+    const regStreetAddress = document.getElementById('regStreetAddress');
+    const regLatitude = document.getElementById('regLatitude');
+    const regLongitude = document.getElementById('regLongitude');
+    const regCityName = document.getElementById('regCityName');
+    const regProvinceName = document.getElementById('regProvinceName');
+    const caviteStatusBadge = document.getElementById('caviteAreaStatusBadge');
+    const caviteStatusIcon = document.getElementById('caviteStatusIcon');
+    const caviteStatusText = document.getElementById('caviteStatusText');
+    const registerMapWrapper = document.getElementById('registerMapWrapper');
+    const useCurrentLocationBtn = document.getElementById('useCurrentLocationBtn');
+    const clearRegAddressBtn = document.getElementById('clearRegAddressBtn');
+
+    const CAVITE_BOUNDS = {
+        minLat: 14.00,
+        maxLat: 14.52,
+        minLng: 120.55,
+        maxLng: 121.12
+    };
+
+    const CAVITE_CITIES = [
+        'cavite', 'dasmariñas', 'dasmarinas', 'imus', 'bacoor', 'general trias', 'gen. trias',
+        'tagaytay', 'cavite city', 'trece martires', 'silang', 'kawit', 'tanza', 'alfonso',
+        'amadeo', 'carmona', 'gma', 'general mariano alvarez', 'indang', 'magallanes',
+        'maragondon', 'mendez', 'naic', 'noveleta', 'rosario', 'ternate', 'bailen', 'aguinaldo'
     ];
-    let psgcEnabled = true;
-    const psgcCache = new Map();
 
     function showError(title, text) {
         Swal.fire({
@@ -2454,540 +3183,289 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function isNcrSelection(regionCode, regionName) {
-        const code = String(regionCode || '').trim();
-        const name = String(regionName || '').toLowerCase();
-        return code === NCR_REGION_CODE || name.includes('national capital region') || /\bncr\b/i.test(name);
-    }
+    function checkIsLocationInCavite(lat, lng, addressString, addressObj) {
+        const latNum = parseFloat(lat);
+        const lngNum = parseFloat(lng);
 
-    function isLuzonSelection(regionCode, regionName) {
-        const code = String(regionCode || '').trim();
-        if (LUZON_REGION_CODES.includes(code)) {
+        const withinCoords = (
+            !isNaN(latNum) && !isNaN(lngNum) &&
+            latNum >= CAVITE_BOUNDS.minLat && latNum <= CAVITE_BOUNDS.maxLat &&
+            lngNum >= CAVITE_BOUNDS.minLng && lngNum <= CAVITE_BOUNDS.maxLng
+        );
+
+        const textToCheck = ((addressString || '') + ' ' + (addressObj ? JSON.stringify(addressObj) : '')).toLowerCase();
+        
+        const isExplicitOutside = (
+            textToCheck.includes('metro manila') || textToCheck.includes('ncr') ||
+            textToCheck.includes('las piñas') || textToCheck.includes('las pinas') ||
+            textToCheck.includes('parañaque') || textToCheck.includes('paranaque') ||
+            textToCheck.includes('muntinlupa') || textToCheck.includes('pasay') ||
+            textToCheck.includes('manila') || textToCheck.includes('quezon city') ||
+            textToCheck.includes('batangas') || textToCheck.includes('laguna') ||
+            textToCheck.includes('rizal') || textToCheck.includes('bulacan')
+        );
+
+        const hasCaviteName = CAVITE_CITIES.some(city => textToCheck.includes(city));
+
+        if (withinCoords && !isExplicitOutside && (hasCaviteName || !addressString)) {
             return true;
         }
-
-        const name = String(regionName || '').toLowerCase();
-        return (
-            name.includes('ilocos') ||
-            name.includes('cagayan valley') ||
-            name.includes('central luzon') ||
-            name.includes('calabarzon') ||
-            name.includes('bicol') ||
-            name.includes('national capital region') ||
-            /\bncr\b/i.test(name) ||
-            name.includes('cordillera') ||
-            name.includes('mimaropa')
-        );
+        if (hasCaviteName && !isExplicitOutside) {
+            return true;
+        }
+        return false;
     }
 
-    function normalizePlaceName(value) {
-        let text = String(value || '').toLowerCase();
+    function updateCaviteStatusUI(isValid, message) {
+        isAddressInCavite = isValid;
+        if (!caviteStatusBadge) return;
+
+        if (isValid) {
+            caviteStatusBadge.style.background = '#ecfdf3';
+            caviteStatusBadge.style.borderColor = '#abefc6';
+            caviteStatusBadge.style.color = '#027a48';
+            if (caviteStatusIcon) {
+                caviteStatusIcon.className = 'fas fa-check-circle';
+                caviteStatusIcon.style.color = '#12b76a';
+            }
+            if (caviteStatusText) {
+                caviteStatusText.textContent = message || 'Location verified.';
+            }
+            if (registerMapWrapper) {
+                registerMapWrapper.style.borderColor = '#12b76a';
+            }
+        } else {
+            caviteStatusBadge.style.background = '#fff8f6';
+            caviteStatusBadge.style.borderColor = '#ffdcd6';
+            caviteStatusBadge.style.color = '#8c201a';
+            if (caviteStatusIcon) {
+                caviteStatusIcon.className = 'fas fa-map-pin';
+                caviteStatusIcon.style.color = '#b3261e';
+            }
+            if (caviteStatusText) {
+                caviteStatusText.textContent = message || 'Please search your address or pin your location on the map.';
+            }
+            if (registerMapWrapper) {
+                registerMapWrapper.style.borderColor = '#cbd5e1';
+            }
+        }
+    }
+
+    // Check initial preloaded address from server form_data
+    const initialAddress = (homeAddressInput?.value || regAddress?.value || '').trim();
+    const initialLat = parseFloat(regLatitude?.value || '');
+    const initialLng = parseFloat(regLongitude?.value || '');
+    if (initialAddress) {
+        updateCaviteStatusUI(true, 'Verified address: ' + (regCityName?.value ? regCityName.value + (regProvinceName?.value ? ', ' + regProvinceName.value : '') : initialAddress));
+    } else {
+        updateCaviteStatusUI(false, 'Please type your address, click "Locate Me", or pin your location on the map.');
+    }
+
+    async function reverseGeocodeLocation(lat, lng) {
+        const latNum = parseFloat(lat);
+        const lngNum = parseFloat(lng);
+        if (isNaN(latNum) || isNaN(lngNum)) return;
+
+        if (regLatitude) regLatitude.value = String(latNum.toFixed(7));
+        if (regLongitude) regLongitude.value = String(lngNum.toFixed(7));
+
         try {
-            text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        } catch (error) {
-            // Keep original text when normalize is unavailable.
-        }
-        return text.replace(/[^a-z0-9]/g, '');
-    }
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latNum}&lon=${lngNum}&addressdetails=1`);
+            const data = await res.json();
+            if (data && data.display_name) {
+                const fullAddr = data.display_name;
+                
+                if (homeAddressInput) {
+                    homeAddressInput.value = fullAddr;
+                }
+                if (clearRegAddressBtn) {
+                    clearRegAddressBtn.style.display = fullAddr ? 'block' : 'none';
+                }
+                if (regAddress) regAddress.value = fullAddr;
 
-    function toNameTokens(value) {
-        let text = String(value || '').toLowerCase();
-        try {
-            text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        } catch (error) {
-            // Keep original text when normalize is unavailable.
-        }
+                const streetPart = (data.address?.road || data.address?.neighbourhood || data.address?.suburb || fullAddr.split(',')[0] || '').trim();
+                const cityPart = (data.address?.city || data.address?.town || data.address?.municipality || '').trim();
+                const provincePart = (data.address?.province || data.address?.state || data.address?.region || '').trim();
+                if (regStreetAddress) regStreetAddress.value = streetPart;
+                if (regCityName) regCityName.value = cityPart;
+                if (regProvinceName) regProvinceName.value = provincePart;
 
-        if (text.includes('metro manila')) {
-            text += ' ncr national capital region';
-        }
-        if (text.includes('national capital region') || /\bncr\b/.test(text)) {
-            text += ' metro manila ncr';
-        }
-        if (text.includes('calabarzon') || text.includes('region iv-a') || text.includes('region iva') || text.includes('region 4a')) {
-            text += ' calabarzon region iva region 4a iv-a';
-        }
-
-        text = text
-            .replace(/&/g, ' and ')
-            .replace(/[^a-z0-9]+/g, ' ')
-            .trim();
-
-        const stopWords = new Set([
-            'city',
-            'municipality',
-            'municipal',
-            'province',
-            'region',
-            'barangay',
-            'brgy',
-            'of',
-            'the',
-            'and'
-        ]);
-
-        return Array.from(new Set(text.split(/\s+/).filter(function(token) {
-            return token && !stopWords.has(token);
-        })));
-    }
-
-    function toCandidateNames() {
-        const seen = new Set();
-        const names = [];
-        const addName = function(value) {
-            const text = String(value || '').trim();
-            if (!text) return;
-            const key = normalizePlaceName(text);
-            if (!key || seen.has(key)) return;
-            seen.add(key);
-            names.push(text);
-        };
-
-        Array.prototype.slice.call(arguments).forEach(function(group) {
-            if (Array.isArray(group)) {
-                group.forEach(addName);
+                const locLabel = [cityPart, provincePart].filter(Boolean).join(', ') || fullAddr.split(',')[0] || 'Selected Location';
+                updateCaviteStatusUI(true, `Location verified: ${locLabel}`);
             } else {
-                addName(group);
+                updateCaviteStatusUI(true, `Coordinates: ${latNum.toFixed(4)}, ${lngNum.toFixed(4)}`);
             }
-        });
-        return names;
+        } catch (e) {
+            console.error('Reverse geocode error:', e);
+            updateCaviteStatusUI(true, 'Location selected on map.');
+        }
     }
 
-    function findOptionValueByName(selectElement, targetName) {
-        if (!selectElement || !targetName) return '';
-        const normalizedTarget = normalizePlaceName(targetName);
-        const targetTokens = toNameTokens(targetName);
-        if (!normalizedTarget || targetTokens.length === 0) return '';
+    async function forwardGeocodeAddress(query) {
+        const trimmed = (query || '').trim();
+        if (!trimmed) return;
 
-        let bestValue = '';
-        let bestScore = 0;
-        let bestOverlap = 0;
+        try {
+            const queryWithCountry = trimmed.toLowerCase().includes('philippines') ? trimmed : (trimmed + ', Philippines');
+            const searchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryWithCountry)}&limit=1&addressdetails=1`;
+            const res = await fetch(searchUrl);
+            const list = await res.json();
+            if (Array.isArray(list) && list.length > 0) {
+                const first = list[0];
+                const lat = parseFloat(first.lat);
+                const lng = parseFloat(first.lon);
 
-        Array.from(selectElement.options || []).forEach(function(option) {
-            if (!option || !option.value) return;
-            const normalizedOption = normalizePlaceName(option.textContent || option.label || '');
-            if (!normalizedOption) return;
+                if (regMap && regMarker) {
+                    regMap.flyTo([lat, lng], 16);
+                    regMarker.setLatLng([lat, lng]);
+                }
 
-            if (normalizedOption === normalizedTarget ||
-                normalizedOption.includes(normalizedTarget) ||
-                normalizedTarget.includes(normalizedOption)) {
-                bestValue = bestValue || option.value;
-                bestScore = 1;
-                bestOverlap = targetTokens.length;
-                return;
+                if (regLatitude) regLatitude.value = String(lat.toFixed(7));
+                if (regLongitude) regLongitude.value = String(lng.toFixed(7));
+                if (regAddress) regAddress.value = first.display_name || trimmed;
+
+                const streetPart = (first.address?.road || first.address?.neighbourhood || first.address?.suburb || first.display_name.split(',')[0] || '').trim();
+                const cityPart = (first.address?.city || first.address?.town || first.address?.municipality || '').trim();
+                const provincePart = (first.address?.province || first.address?.state || first.address?.region || '').trim();
+                if (regStreetAddress) regStreetAddress.value = streetPart;
+                if (regCityName) regCityName.value = cityPart;
+                if (regProvinceName) regProvinceName.value = provincePart;
+
+                const locLabel = [cityPart, provincePart].filter(Boolean).join(', ') || 'Selected Location';
+                updateCaviteStatusUI(true, `Location verified: ${locLabel}`);
+            } else {
+                updateCaviteStatusUI(false, 'Location not found. Please pin your location directly on the map.');
             }
+        } catch (e) {
+            console.error('Forward geocode error:', e);
+        }
+    }
 
-            const optionTokens = toNameTokens(option.textContent || option.label || '');
-            if (!optionTokens.length) return;
-            const optionTokenSet = new Set(optionTokens);
-            let overlap = 0;
-            targetTokens.forEach(function(token) {
-                if (optionTokenSet.has(token)) overlap++;
+    function initRegisterMap() {
+        const mapElem = document.getElementById('registerMap') || document.getElementById('registerMapCanvas');
+        if (!mapElem) return;
+
+        if (!window.L) {
+            setTimeout(initRegisterMap, 100);
+            return;
+        }
+
+        let initLat = parseFloat(regLatitude?.value || '') || 14.3294; // Default Dasmariñas Cavite
+        let initLng = parseFloat(regLongitude?.value || '') || 120.9367;
+
+        if (!regMap) {
+            regMap = L.map(mapElem, {
+                center: [initLat, initLng],
+                zoom: 14,
+                zoomControl: true,
+                scrollWheelZoom: true
             });
-            if (overlap <= 0) return;
 
-            const score = overlap / Math.max(targetTokens.length, optionTokens.length);
-            if (overlap > bestOverlap || (overlap === bestOverlap && score > bestScore)) {
-                bestOverlap = overlap;
-                bestScore = score;
-                bestValue = option.value;
-            }
-        });
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
+            }).addTo(regMap);
 
-        if (bestValue && (bestOverlap >= Math.max(1, targetTokens.length - 1) || bestScore >= 0.45)) {
-            return bestValue;
-        }
-        return '';
-    }
+            const customPinIcon = L.divIcon({
+                className: 'custom-map-pin',
+                html: '<div style="background:#b3261e;width:32px;height:32px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;border:2px solid #ffffff;box-shadow:0 3px 10px rgba(0,0,0,0.35);"><i class="fas fa-location-dot" style="transform:rotate(45deg);color:#ffffff;font-size:15px;"></i></div>',
+                iconSize: [32, 32],
+                iconAnchor: [16, 32],
+                popupAnchor: [0, -32]
+            });
 
-    function findOptionValueFromCandidates(selectElement, candidates) {
-        const names = toCandidateNames(candidates);
-        for (let i = 0; i < names.length; i += 1) {
-            const code = findOptionValueByName(selectElement, names[i]);
-            if (code) return code;
-        }
-        return '';
-    }
+            regMarker = L.marker([initLat, initLng], { draggable: true, icon: customPinIcon }).addTo(regMap);
 
-    function hasOptionValue(selectElement, value) {
-        const target = String(value || '').trim();
-        if (!selectElement || !target) return false;
-        return Array.from(selectElement.options || []).some(function(option) {
-            return String(option.value || '').trim() === target;
-        });
-    }
+            regMarker.on('dragend', function() {
+                const pos = regMarker.getLatLng();
+                if (regMap) regMap.panTo(pos);
+                reverseGeocodeLocation(pos.lat, pos.lng);
+            });
 
-    function applySelectCodeOrName(selectElement, code, candidateNames) {
-        const normalizedCode = String(code || '').trim();
-        if (normalizedCode && hasOptionValue(selectElement, normalizedCode)) {
-            selectElement.value = normalizedCode;
-            return normalizedCode;
-        }
-        const fallbackCode = findOptionValueFromCandidates(selectElement, candidateNames);
-        if (fallbackCode) {
-            selectElement.value = fallbackCode;
-            return fallbackCode;
-        }
-        return '';
-    }
-
-    function sortByName(items) {
-        return [].slice.call(items).sort(function(a, b) {
-            return String(a.name || '').localeCompare(String(b.name || ''));
-        });
-    }
-
-    function setSelectOptions(selectElement, items, placeholder) {
-        if (!selectElement) {
-            return;
-        }
-        selectElement.innerHTML = '';
-        const defaultOption = document.createElement('option');
-        defaultOption.value = '';
-        defaultOption.textContent = placeholder;
-        selectElement.appendChild(defaultOption);
-
-        sortByName(items).forEach(function(item) {
-            const option = document.createElement('option');
-            option.value = item.code || '';
-            option.textContent = item.name || '';
-            selectElement.appendChild(option);
-        });
-    }
-
-    function getSelectedLabel(selectElement) {
-        if (!selectElement || selectElement.selectedIndex < 0) {
-            return '';
-        }
-        const selectedOption = selectElement.options[selectElement.selectedIndex];
-        if (!selectedOption || !selectedOption.value) {
-            return '';
-        }
-        return selectedOption.textContent.trim();
-    }
-
-    function syncAddressPreview() {
-        if (!addressPreviewInput) {
-            return;
-        }
-
-        if (psgcRegionNameInput) {
-            psgcRegionNameInput.value = getSelectedLabel(regionSelect);
-        }
-        if (psgcProvinceNameInput) {
-            psgcProvinceNameInput.value = getSelectedLabel(provinceSelect);
-        }
-        if (psgcCityNameInput) {
-            psgcCityNameInput.value = getSelectedLabel(citySelect);
-        }
-        if (psgcBarangayNameInput) {
-            psgcBarangayNameInput.value = getSelectedLabel(barangaySelect);
-        }
-
-        if (!psgcEnabled) {
-            return;
-        }
-
-        const composedAddress = [
-            streetAddressInput ? streetAddressInput.value.trim() : '',
-            psgcBarangayNameInput ? psgcBarangayNameInput.value.trim() : '',
-            psgcCityNameInput ? psgcCityNameInput.value.trim() : '',
-            psgcProvinceNameInput ? psgcProvinceNameInput.value.trim() : '',
-            psgcRegionNameInput ? psgcRegionNameInput.value.trim() : ''
-        ].filter(Boolean).join(', ');
-
-        addressPreviewInput.value = composedAddress;
-    }
-
-    function setManualAddressFallback(message) {
-        psgcEnabled = false;
-        if (psgcAddressHelp) {
-            psgcAddressHelp.textContent = message;
-            psgcAddressHelp.style.color = '#b71c1c';
-        }
-
-        [regionSelect, provinceSelect, citySelect, barangaySelect].forEach(function(selectElement) {
-            if (selectElement) {
-                selectElement.required = false;
-                selectElement.disabled = true;
-            }
-        });
-
-        if (streetAddressInput) {
-            streetAddressInput.required = true;
-            streetAddressInput.disabled = true;
-            streetAddressInput.value = '';
-        }
-
-        if (addressPreviewInput) {
-            addressPreviewInput.readOnly = true;
-            addressPreviewInput.value = '';
-            addressPreviewInput.placeholder = 'PSGC location service is required. Please try again shortly.';
-        }
-    }
-
-    function resetSelect(selectElement, placeholder) {
-        if (!selectElement) {
-            return;
-        }
-        setSelectOptions(selectElement, [], placeholder);
-        selectElement.value = '';
-        selectElement.disabled = true;
-    }
-
-    async function fetchPSGC(path) {
-        const key = String(path || '');
-        if (psgcCache.has(key)) {
-            return psgcCache.get(key);
-        }
-        const response = await fetch(PSGC_API_BASE + key, {
-            method: 'GET',
-            headers: { 'Accept': 'application/json' }
-        });
-        if (!response.ok) {
-            throw new Error('PSGC API request failed');
-        }
-        const payload = await response.json();
-        psgcCache.set(key, payload);
-        return payload;
-    }
-
-    async function loadRegions() {
-        const regions = await fetchPSGC('/regions');
-        const previousValue = regionSelect ? String(regionSelect.value || '').trim() : '';
-        const previousRegionName = psgcRegionNameInput ? String(psgcRegionNameInput.value || '').trim() : '';
-
-        const allowedRegions = regions.filter(function(region) {
-            return String(region.code || '') === CALABARZON_REGION_CODE ||
-                String(region.name || '').toLowerCase().includes('calabarzon');
-        });
-
-        setSelectOptions(regionSelect, allowedRegions, allowedRegions.length ? 'Select region' : 'No allowed region');
-        regionSelect.disabled = allowedRegions.length === 0;
-
-        if (allowedRegions.some(function(region) { return String(region.code || '') === previousValue; })) {
-            regionSelect.value = previousValue;
-        } else {
-            const fallbackRegionCode = findOptionValueFromCandidates(regionSelect, previousRegionName);
-            if (fallbackRegionCode) {
-                regionSelect.value = fallbackRegionCode;
-            } else if (allowedRegions.length === 1) {
-                regionSelect.value = allowedRegions[0].code || CALABARZON_REGION_CODE;
-            }
-        }
-    }
-
-    async function loadProvinces(regionCode) {
-        if (!regionCode) {
-            resetSelect(provinceSelect, 'Select province');
-            return [];
-        }
-
-        const provinces = await fetchPSGC('/regions/' + encodeURIComponent(regionCode) + '/provinces');
-        const previousValue = provinceSelect ? String(provinceSelect.value || '').trim() : '';
-        const previousProvinceName = psgcProvinceNameInput ? String(psgcProvinceNameInput.value || '').trim() : '';
-
-        let allowedProvinces = provinces;
-        if (accountType === 'organization') {
-            allowedProvinces = provinces.filter(function(province) {
-                return String(province.code || '') === CAVITE_PROVINCE_CODE ||
-                    String(province.name || '').toLowerCase().includes('cavite');
+            regMap.on('click', function(e) {
+                const pos = e.latlng;
+                if (regMarker) regMarker.setLatLng(pos);
+                if (regMap) regMap.panTo(pos);
+                reverseGeocodeLocation(pos.lat, pos.lng);
             });
         }
 
-        setSelectOptions(provinceSelect, allowedProvinces, allowedProvinces.length ? 'Select province' : 'No allowed province');
-        provinceSelect.disabled = allowedProvinces.length === 0;
-
-        if (allowedProvinces.some(function(province) { return String(province.code || '') === previousValue; })) {
-            provinceSelect.value = previousValue;
-        } else {
-            const fallbackProvinceCode = findOptionValueFromCandidates(provinceSelect, previousProvinceName);
-            if (fallbackProvinceCode) {
-                provinceSelect.value = fallbackProvinceCode;
-            } else if (accountType === 'organization' && allowedProvinces.length === 1) {
-                provinceSelect.value = allowedProvinces[0].code || CAVITE_PROVINCE_CODE;
-            }
-        }
-        return allowedProvinces;
+        setTimeout(function() {
+            if (regMap) regMap.invalidateSize();
+        }, 100);
+        setTimeout(function() {
+            if (regMap) regMap.invalidateSize();
+        }, 300);
     }
 
-    async function loadCities(regionCode, provinceCode) {
-        if (!regionCode) {
-            resetSelect(citySelect, 'Select city or municipality');
-            return [];
-        }
+    // Input typing listener with debounce
+    if (homeAddressInput) {
+        homeAddressInput.addEventListener('input', function() {
+            const val = this.value.trim();
+            if (clearRegAddressBtn) {
+                clearRegAddressBtn.style.display = val ? 'block' : 'none';
+            }
+            if (regAddress) regAddress.value = val;
 
-        let cities = [];
-        if (provinceCode) {
-            cities = await fetchPSGC('/provinces/' + encodeURIComponent(provinceCode) + '/cities-municipalities');
-        } else {
-            cities = await fetchPSGC('/regions/' + encodeURIComponent(regionCode) + '/cities-municipalities');
-        }
+            if (addressDebounceTimer) clearTimeout(addressDebounceTimer);
+            if (val.length >= 4) {
+                addressDebounceTimer = setTimeout(function() {
+                    forwardGeocodeAddress(val);
+                }, 600);
+            }
+        });
 
-        setSelectOptions(citySelect, cities, 'Select city or municipality');
-        citySelect.disabled = cities.length === 0;
-        return cities;
+        homeAddressInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const val = this.value.trim();
+                if (val) forwardGeocodeAddress(val);
+            }
+        });
     }
 
-    async function loadBarangays(cityCode) {
-        if (!cityCode) {
-            resetSelect(barangaySelect, 'Select barangay');
-            return [];
-        }
-
-        const barangays = await fetchPSGC('/cities-municipalities/' + encodeURIComponent(cityCode) + '/barangays');
-        setSelectOptions(barangaySelect, barangays, 'Select barangay');
-        barangaySelect.disabled = barangays.length === 0;
-        return barangays;
+    if (clearRegAddressBtn && homeAddressInput) {
+        clearRegAddressBtn.addEventListener('click', function() {
+            homeAddressInput.value = '';
+            clearRegAddressBtn.style.display = 'none';
+            if (regAddress) regAddress.value = '';
+            homeAddressInput.focus();
+        });
     }
 
-    async function handleRegionChange(isRestore) {
-        const regionCode = regionSelect ? regionSelect.value : '';
-        if (!isRestore) {
-            resetSelect(provinceSelect, 'Select province');
-            resetSelect(citySelect, 'Select city or municipality');
-            resetSelect(barangaySelect, 'Select barangay');
-            if (psgcProvinceNameInput) {
-                psgcProvinceNameInput.value = '';
+    if (useCurrentLocationBtn) {
+        useCurrentLocationBtn.addEventListener('click', function() {
+            if (navigator.geolocation) {
+                useCurrentLocationBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Locating...';
+                navigator.geolocation.getCurrentPosition(
+                    function(pos) {
+                        useCurrentLocationBtn.innerHTML = '<i class="fas fa-crosshairs" style="color: #b3261e;"></i> Locate Me';
+                        const lat = pos.coords.latitude;
+                        const lng = pos.coords.longitude;
+                        if (regMap && regMarker) {
+                            regMap.flyTo([lat, lng], 16);
+                            regMarker.setLatLng([lat, lng]);
+                        }
+                        reverseGeocodeLocation(lat, lng);
+                    },
+                    function(err) {
+                        useCurrentLocationBtn.innerHTML = '<i class="fas fa-crosshairs" style="color: #b3261e;"></i> Locate Me';
+                        showError('Location Access Error', 'Unable to retrieve your current location. Please drag the pin on the map instead.');
+                    },
+                    { enableHighAccuracy: true, timeout: 8000 }
+                );
+            } else {
+                showError('Geolocation Unavailable', 'Geolocation is not supported by your browser. Please drag the pin on the map.');
             }
-            if (psgcCityNameInput) {
-                psgcCityNameInput.value = '';
-            }
-            if (psgcBarangayNameInput) {
-                psgcBarangayNameInput.value = '';
-            }
-            syncAddressPreview();
-        }
-
-        if (!regionCode) {
-            syncAddressPreview();
-            return;
-        }
-
-        const provinces = await loadProvinces(regionCode);
-        provinceSelect.required = provinces.length > 0;
-        if (provinces.length === 0) {
-            await loadCities(regionCode, '');
-        } else if (provinces.length === 1 && provinceSelect.value) {
-            await handleProvinceChange(true);
-        }
-        syncAddressPreview();
-    }
-
-    async function handleProvinceChange(isRestore) {
-        const regionCode = regionSelect ? regionSelect.value : '';
-        const provinceCode = provinceSelect ? provinceSelect.value : '';
-
-        if (!isRestore) {
-            resetSelect(citySelect, 'Select city or municipality');
-            resetSelect(barangaySelect, 'Select barangay');
-            if (psgcCityNameInput) {
-                psgcCityNameInput.value = '';
-            }
-            if (psgcBarangayNameInput) {
-                psgcBarangayNameInput.value = '';
-            }
-            syncAddressPreview();
-        }
-
-        await loadCities(regionCode, provinceCode);
-        syncAddressPreview();
-    }
-
-    async function handleCityChange(isRestore) {
-        const cityCode = citySelect ? citySelect.value : '';
-        if (!isRestore) {
-            resetSelect(barangaySelect, 'Select barangay');
-            if (psgcBarangayNameInput) {
-                psgcBarangayNameInput.value = '';
-            }
-            syncAddressPreview();
-        }
-
-        await loadBarangays(cityCode);
-        syncAddressPreview();
-    }
-
-    async function restoreAddressSelections() {
-        if (!psgcEnabled) {
-            return;
-        }
-
-        const presetRegionCode = regionSelect ? (regionSelect.getAttribute('data-selected') || '') : '';
-        const presetProvinceCode = provinceSelect ? (provinceSelect.getAttribute('data-selected') || '') : '';
-        const presetCityCode = citySelect ? (citySelect.getAttribute('data-selected') || '') : '';
-        const presetBarangayCode = barangaySelect ? (barangaySelect.getAttribute('data-selected') || '') : '';
-
-        const regionCandidates = toCandidateNames(psgcRegionNameInput ? psgcRegionNameInput.value : '');
-        const provinceCandidates = toCandidateNames(psgcProvinceNameInput ? psgcProvinceNameInput.value : '');
-        const cityCandidates = toCandidateNames(psgcCityNameInput ? psgcCityNameInput.value : '');
-        const barangayCandidates = toCandidateNames(psgcBarangayNameInput ? psgcBarangayNameInput.value : '');
-
-        const regionAppliedCode = applySelectCodeOrName(regionSelect, presetRegionCode, regionCandidates);
-        if (!regionAppliedCode) {
-            if (regionSelect && regionSelect.value) {
-                await handleRegionChange(true);
-            }
-            syncAddressPreview();
-            return;
-        }
-
-        await handleRegionChange(true);
-
-        if (provinceSelect && !provinceSelect.disabled) {
-            applySelectCodeOrName(provinceSelect, presetProvinceCode, provinceCandidates);
-            await handleProvinceChange(true);
-        } else if (provinceSelect && !provinceSelect.required) {
-            await handleProvinceChange(true);
-        }
-
-        let cityAppliedCode = '';
-        if (citySelect && !citySelect.disabled) {
-            cityAppliedCode = applySelectCodeOrName(citySelect, presetCityCode, cityCandidates);
-
-            if (!cityAppliedCode && provinceSelect && !provinceSelect.disabled) {
-                const currentProvinceCode = String(provinceSelect.value || '').trim();
-                const provinceOptions = Array.from(provinceSelect.options || []).filter(function(option) {
-                    return option && option.value;
-                });
-
-                for (let i = 0; i < provinceOptions.length; i += 1) {
-                    const option = provinceOptions[i];
-                    if (!option || !option.value || String(option.value) === currentProvinceCode) {
-                        continue;
-                    }
-                    provinceSelect.value = String(option.value);
-                    await handleProvinceChange(true);
-                    cityAppliedCode = applySelectCodeOrName(citySelect, presetCityCode, cityCandidates);
-                    if (cityAppliedCode) {
-                        break;
-                    }
-                }
-
-                if (!cityAppliedCode && currentProvinceCode && String(provinceSelect.value || '') !== currentProvinceCode) {
-                    provinceSelect.value = currentProvinceCode;
-                    await handleProvinceChange(true);
-                }
-            }
-
-            if (cityAppliedCode) {
-                await handleCityChange(true);
-            }
-        }
-
-        if (barangaySelect && !barangaySelect.disabled) {
-            applySelectCodeOrName(barangaySelect, presetBarangayCode, barangayCandidates);
-        }
-
-        syncAddressPreview();
+        });
     }
 
     function updateSteps() {
         steps.forEach(function(step, index) {
             step.classList.remove('active', 'completed');
-            if (index + 1 === currentStep) {
+            if (index === currentStep - 1) {
                 step.classList.add('active');
-            } else if (index + 1 < currentStep) {
+            } else if (index < currentStep - 1) {
                 step.classList.add('completed');
             }
         });
@@ -2995,11 +3473,16 @@ document.addEventListener('DOMContentLoaded', function() {
         formSteps.forEach(function(formStep, index) {
             formStep.classList.toggle('active', index + 1 === currentStep);
         });
+
+        if (currentStep === 3) {
+            setTimeout(initRegisterMap, 100);
+            setTimeout(initRegisterMap, 300);
+        }
     }
 
     function updateProgressBar() {
         const progressBar = document.getElementById('progressBar');
-        const progress = ((currentStep - 2) / (totalSteps - 2)) * 100;
+        const progress = ((currentStep - 1) / (totalSteps - 1)) * 100;
         if (progressBar) {
             progressBar.style.width = progress + '%';
         }
@@ -3017,35 +3500,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 businessNameInput.required = true;
             }
             if (step3Title) {
-                step3Title.textContent = 'Business Partner Information';
+                step3Title.textContent = 'Business Address';
             }
             if (step3Subtitle) {
-                step3Subtitle.textContent = 'Provide your business details and business address.';
+                step3Subtitle.textContent = 'Enter your restaurant or business location on the map.';
             }
             if (step3NavLabel) {
                 step3NavLabel.textContent = 'Partner Info';
-            }
-            if (addressSectionLabel) {
-                addressSectionLabel.textContent = 'Business Address (PSGC) *';
-            }
-            if (regionLabel) {
-                regionLabel.textContent = 'Region (CALABARZON only) *';
-            }
-            if (provinceLabel) {
-                provinceLabel.textContent = 'Province (Cavite only) *';
-            }
-            if (streetAddressLabel) {
-                streetAddressLabel.textContent = 'Business Street / Landmark *';
-            }
-            if (completeAddressLabel) {
-                completeAddressLabel.textContent = 'Complete Business Address *';
-            }
-            if (psgcAddressHelp) {
-                psgcAddressHelp.textContent = 'Business partner registration is limited to Cavite, Region IV-A (CALABARZON).';
-                psgcAddressHelp.style.color = '#666';
-            }
-            if (addressPreviewInput) {
-                addressPreviewInput.placeholder = 'Your complete business address will appear here after selecting PSGC fields';
             }
         } else {
             organizationFields.style.display = 'none';
@@ -3053,64 +3514,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 businessNameInput.required = false;
             }
             if (step3Title) {
-                step3Title.textContent = 'Individual Address Information';
+                step3Title.textContent = 'Home Address';
             }
             if (step3Subtitle) {
-                step3Subtitle.textContent = 'Provide your complete home address for deliveries.';
+                step3Subtitle.textContent = 'Enter your home address or pin your location on the map.';
             }
             if (step3NavLabel) {
                 step3NavLabel.textContent = 'Address Info';
             }
-            if (addressSectionLabel) {
-                addressSectionLabel.textContent = 'Home Address (PSGC) *';
-            }
-            if (regionLabel) {
-                regionLabel.textContent = 'Region (Luzon only) *';
-            }
-            if (provinceLabel) {
-                provinceLabel.textContent = 'Province (Required except NCR) *';
-            }
-            if (streetAddressLabel) {
-                streetAddressLabel.textContent = 'House No. / Street / Landmark *';
-            }
-            if (completeAddressLabel) {
-                completeAddressLabel.textContent = 'Complete Home Address *';
-            }
-            if (psgcAddressHelp) {
-                psgcAddressHelp.textContent = 'Individual registration is limited to Luzon regions.';
-                psgcAddressHelp.style.color = '#666';
-            }
-            if (addressPreviewInput) {
-                addressPreviewInput.placeholder = 'Your complete home address will appear here after selecting PSGC fields';
-            }
         }
-    }
-
-    async function refreshAddressScopeByAccountType() {
-        if (!psgcEnabled || !regionSelect || !provinceSelect || !citySelect || !barangaySelect) {
-            return;
-        }
-
-        const previousRegion = String(regionSelect.value || '').trim();
-        await loadRegions();
-        const currentRegion = String(regionSelect.value || '').trim();
-
-        if (currentRegion === '') {
-            resetSelect(provinceSelect, 'Select province');
-            resetSelect(citySelect, 'Select city or municipality');
-            resetSelect(barangaySelect, 'Select barangay');
-            syncAddressPreview();
-            return;
-        }
-
-        if (currentRegion !== previousRegion) {
-            resetSelect(provinceSelect, 'Select province');
-            resetSelect(citySelect, 'Select city or municipality');
-            resetSelect(barangaySelect, 'Select barangay');
-        }
-
-        await handleRegionChange(true);
-        syncAddressPreview();
     }
 
     function goToStep(step) {
@@ -3142,7 +3554,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function isValidName(name) {
-        return /^[\p{L}\p{M}'\-\s]{2,60}$/u.test(name);
+        if (!name || typeof name !== 'string') return false;
+        const trimmed = name.trim();
+        if (trimmed.length < 2 || trimmed.length > 60) return false;
+        try {
+            return /^[\p{L}\p{M}'\-\s.]{2,60}$/u.test(trimmed);
+        } catch (e) {
+            return /^[a-zA-Z\s'\-\.]{2,60}$/.test(trimmed);
+        }
     }
 
     function isStrongPassword(password) {
@@ -3150,148 +3569,346 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function validateStep1() {
-        if (!accountType || !['individual', 'organization'].includes(accountType)) {
-            showError('Account Type Required', 'Please select either Individual or Business Partner to continue.');
+        const firstNameInput = document.getElementById('firstName');
+        const lastNameInput = document.getElementById('lastName');
+        const firstName = ((firstNameInput || {}).value || '').trim();
+        const lastName = ((lastNameInput || {}).value || '').trim();
+        const dobInput = document.getElementById('dob');
+
+        if (!firstName && !lastName) {
+            showError('Missing Name', 'Please enter your First Name and Last Name.');
+            if (firstNameInput) {
+                firstNameInput.focus();
+                highlightErrorField(firstNameInput);
+            }
             return false;
         }
+
+        if (!firstName) {
+            showError('First Name Required', 'Please enter your First Name.');
+            if (firstNameInput) {
+                firstNameInput.focus();
+                highlightErrorField(firstNameInput);
+            }
+            return false;
+        }
+
+        if (!lastName) {
+            showError('Last Name Required', 'Please enter your Last Name.');
+            if (lastNameInput) {
+                lastNameInput.focus();
+                highlightErrorField(lastNameInput);
+            }
+            return false;
+        }
+
+        if (!isValidName(firstName)) {
+            showError('Invalid First Name', 'Please use valid characters (letters, spaces, dots, hyphens) for your first name.');
+            if (firstNameInput) {
+                firstNameInput.value = '';
+                firstNameInput.focus();
+                highlightErrorField(firstNameInput);
+            }
+            return false;
+        }
+
+        if (!isValidName(lastName)) {
+            showError('Invalid Last Name', 'Please use valid characters (letters, spaces, dots, hyphens) for your last name.');
+            if (lastNameInput) {
+                lastNameInput.value = '';
+                lastNameInput.focus();
+                highlightErrorField(lastNameInput);
+            }
+            return false;
+        }
+
+        if (!dobInput || !dobInput.value.trim()) {
+            showError('Date of Birth Required', 'Please enter your date of birth. This will be verified against your government ID.');
+            if (dobInput) {
+                dobInput.focus();
+                highlightErrorField(dobInput);
+            }
+            return false;
+        }
+
+        const birthDate = new Date(dobInput.value.trim());
+        const today = new Date();
+        const minAgeDate = new Date(today.getFullYear() - 10, today.getMonth(), today.getDate());
+        const maxAgeDate = new Date(today.getFullYear() - 100, today.getMonth(), today.getDate());
+
+        if (isNaN(birthDate.getTime()) || birthDate > minAgeDate || birthDate < maxAgeDate) {
+            showError('Invalid Date of Birth', 'You must be at least 10 years old to register.');
+            dobInput.value = '';
+            dobInput.focus();
+            highlightErrorField(dobInput);
+            return false;
+        }
+
         return true;
     }
 
     let idVerified = false;
 
-    function simulateIdVerification(firstName, lastName) {
+    function verifyIdWithBackend(firstName, lastName, dob) {
+        if (!firstName) firstName = (document.getElementById('firstName')?.value || '').trim();
+        if (!lastName) lastName = (document.getElementById('lastName')?.value || '').trim();
+        if (!dob) dob = (document.getElementById('dob')?.value || '').trim();
+
+        const validIdType = ((document.getElementById('validIdType') || {}).value || '').trim();
+        const frontInput = document.getElementById('validIdFront');
+        const frontFile = frontInput && frontInput.files ? frontInput.files[0] : null;
+        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+
+        const hasFrontCached = (document.getElementById('hasCachedFrontId')?.value === '1') || <?php echo $has_cached_front ? 'true' : 'false'; ?>;
+        const hasBackCached = (document.getElementById('hasCachedBackId')?.value === '1') || <?php echo $has_cached_back ? 'true' : 'false'; ?>;
+
+        if (!frontFile && !hasFrontCached) {
+            showError('ID Photo Required', 'Please upload or capture the front side of your ID.');
+            return;
+        }
+
+        const backInput = document.getElementById('validIdBack');
+        const backFile = backInput && backInput.files ? backInput.files[0] : null;
+
+        const verifyData = new FormData();
+        verifyData.append('first_name', firstName);
+        verifyData.append('last_name', lastName);
+        verifyData.append('dob', dob);
+        verifyData.append('valid_id_type', validIdType);
+        if (frontFile) {
+            verifyData.append('valid_id', frontFile);
+        } else if (hasFrontCached) {
+            verifyData.append('use_cached_front', '1');
+        }
+        if (backFile) {
+            verifyData.append('valid_id_back', backFile);
+        } else if (hasBackCached) {
+            verifyData.append('use_cached_back', '1');
+        }
+        verifyData.append('csrf_token', csrfToken);
+
+        const progressHtml = `
+            <div style="text-align: left; padding: 10px 5px 0;">
+                <div style="font-size: 0.88rem; color: #475467; margin-bottom: 12px;" id="swalScanMsg">
+                    <i class="fas fa-spinner fa-spin" style="color:#b3261e; margin-right: 6px;"></i> Scanning ID & analyzing document authenticity...
+                </div>
+                <div style="width: 100%; height: 6px; background: #eaecf0; border-radius: 4px; overflow: hidden; margin-bottom: 16px;">
+                    <div id="swalScanBar" style="width: 20%; height: 100%; background: #b3261e; transition: width 0.4s ease;"></div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.82rem; color: #667085;">
+                    <div id="chkReadable" style="display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-circle-notch fa-spin" style="color: #b3261e; width: 14px;"></i> <span>Checking photo clarity & readability</span>
+                    </div>
+                    <div id="chkType" style="display: flex; align-items: center; gap: 8px;">
+                        <i class="far fa-circle" style="color: #d0d5dd; width: 14px;"></i> <span>Verifying selected Philippine Government ID type</span>
+                    </div>
+                    <div id="chkExpiry" style="display: flex; align-items: center; gap: 8px;">
+                        <i class="far fa-circle" style="color: #d0d5dd; width: 14px;"></i> <span>Checking ID validity & expiration date</span>
+                    </div>
+                    <div id="chkName" style="display: flex; align-items: center; gap: 8px;">
+                        <i class="far fa-circle" style="color: #d0d5dd; width: 14px;"></i> <span>Matching name: <strong>${firstName} ${lastName}</strong></span>
+                    </div>
+                    <div id="chkDob" style="display: flex; align-items: center; gap: 8px;">
+                        <i class="far fa-circle" style="color: #d0d5dd; width: 14px;"></i> <span>Verifying date of birth match</span>
+                    </div>
+                </div>
+            </div>
+        `;
+
         Swal.fire({
-            title: 'Verifying Identity',
-            html: '<div style="margin-bottom:15px; font-size:0.95rem; color:#475569;" id="swalScanMsg">Initializing verification scanner...</div>' +
-                  '<div class="ocr-scan-progress" style="width:100%; height:8px; background:#e2e8f0; border-radius:4px; overflow:hidden; position:relative; margin-bottom:10px;">' +
-                  '  <div id="swalScanBar" style="position:absolute; top:0; left:0; height:100%; width:0%; background:#b3261e; transition: width 0.3s ease;"></div>' +
-                  '</div>' +
-                  '<div style="font-size:0.8rem; color:#94a3b8;"><i class="fas fa-shield-halved fa-spin"></i> Secure biometric credentials match</div>',
+            title: 'Verifying Government ID',
+            html: progressHtml,
             allowOutsideClick: false,
             allowEscapeKey: false,
             showConfirmButton: false,
-            didOpen: () => {
-                Swal.showLoading();
+            didOpen: function() {
                 const bar = document.getElementById('swalScanBar');
-                const msg = document.getElementById('swalScanMsg');
-                
-                setTimeout(() => {
-                    if (bar) bar.style.width = '35%';
-                    if (msg) msg.textContent = 'Scanning Front & Back ID documents...';
-                }, 800);
+                const chkReadable = document.getElementById('chkReadable');
+                const chkType = document.getElementById('chkType');
+                const chkExpiry = document.getElementById('chkExpiry');
+                const chkName = document.getElementById('chkName');
+                const chkDob = document.getElementById('chkDob');
 
-                setTimeout(() => {
-                    if (bar) bar.style.width = '65%';
-                    if (msg) msg.textContent = 'Extracting document credentials (OCR)...';
+                setTimeout(function() {
+                    if (bar) bar.style.width = '45%';
+                    if (chkReadable) chkReadable.innerHTML = '<i class="fas fa-check-circle" style="color: #027a48; width: 14px;"></i> <span style="color:#027a48; font-weight:600;">Photo text clear & readable</span>';
+                    if (chkType) chkType.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="color: #b3261e; width: 14px;"></i> <span>Verifying selected Philippine Government ID type</span>';
+                }, 1000);
+
+                setTimeout(function() {
+                    if (bar) bar.style.width = '70%';
+                    if (chkType) chkType.innerHTML = '<i class="fas fa-check-circle" style="color: #027a48; width: 14px;"></i> <span style="color:#027a48; font-weight:600;">Philippine Government ID Confirmed</span>';
+                    if (chkExpiry) chkExpiry.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="color: #b3261e; width: 14px;"></i> <span>Checking ID validity & expiration date</span>';
                 }, 1800);
 
-                setTimeout(() => {
-                    if (bar) bar.style.width = '88%';
-                    if (msg) msg.textContent = 'Cross-matching name: "' + firstName + ' ' + lastName + '"...';
-                }, 2800);
-
-                setTimeout(() => {
-                    if (bar) bar.style.width = '100%';
-                    if (msg) msg.textContent = 'Verification successful! Credentials match.';
-                }, 3800);
-
-                setTimeout(() => {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Identity Verified',
-                        text: 'OCR details successfully match your registration credentials.',
-                        confirmButtonColor: '#b3261e',
-                        allowOutsideClick: false,
-                        allowEscapeKey: false
-                    }).then(() => {
-                        idVerified = true;
-                        goToStep(3);
+                fetch('api/verify_government_id.php', {
+                    method: 'POST',
+                    body: verifyData
+                })
+                .then(function(response) {
+                    return response.json().then(function(data) {
+                        return { status: response.status, data: data };
                     });
-                }, 4300);
+                })
+                .then(function(resObj) {
+                    const status = resObj.status;
+                    const data = resObj.data || {};
+
+                    if (status === 200 && data.success && data.verified) {
+                        if (bar) bar.style.width = '100%';
+                        if (chkExpiry) chkExpiry.innerHTML = '<i class="fas fa-check-circle" style="color: #027a48; width: 14px;"></i> <span style="color:#027a48; font-weight:600;">ID is Valid & Unexpired</span>';
+                        if (chkName) chkName.innerHTML = '<i class="fas fa-check-circle" style="color: #027a48; width: 14px;"></i> <span style="color:#027a48; font-weight:600;">Name Matches Account</span>';
+                        if (chkDob) chkDob.innerHTML = '<i class="fas fa-check-circle" style="color: #027a48; width: 14px;"></i> <span style="color:#027a48; font-weight:600;">Date of Birth Matches</span>';
+
+                        const detectedTypeLabel = data.detected_type ? data.detected_type.replace(/_/g, ' ').toUpperCase() : 'PHILIPPINE GOVERNMENT ID';
+
+                        setTimeout(function() {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Government ID Accepted',
+                                html: `
+                                    <div style="text-align: left; font-size: 0.88rem; color: #344054; line-height: 1.6; background: #f8fafc; border: 1px solid #eaecf0; border-radius: 12px; padding: 16px; margin-top: 10px;">
+                                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                                            <i class="fas fa-check-circle" style="color:#027a48;"></i>
+                                            <span><strong>Clarity & Readability:</strong> Clear & readable photo</span>
+                                        </div>
+                                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                                            <i class="fas fa-check-circle" style="color:#027a48;"></i>
+                                            <span><strong>ID Type:</strong> ${detectedTypeLabel}</span>
+                                        </div>
+                                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                                            <i class="fas fa-check-circle" style="color:#027a48;"></i>
+                                            <span><strong>Status:</strong> Valid & Unexpired</span>
+                                        </div>
+                                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                                            <i class="fas fa-check-circle" style="color:#027a48;"></i>
+                                            <span><strong>Name Match:</strong> ${firstName} ${lastName}</span>
+                                        </div>
+                                        <div style="display:flex; align-items:center; gap:8px;">
+                                            <i class="fas fa-check-circle" style="color:#027a48;"></i>
+                                            <span><strong>Birthday Match:</strong> Verified</span>
+                                        </div>
+                                    </div>
+                                `,
+                                confirmButtonColor: '#b3261e',
+                                confirmButtonText: 'Proceed to Next Step',
+                                allowOutsideClick: false,
+                                allowEscapeKey: false
+                            }).then(function() {
+                                idVerified = true;
+                                goToStep(3);
+                            });
+                        }, 500);
+                    } else {
+                        const errorMsg = data.message || 'Verification failed. Please review the checklist below and upload a clear, valid Philippine Government ID.';
+                        const checks = data.checks || {};
+
+                        const renderCheck = (chk, defaultLabel) => {
+                            if (!chk) {
+                                return `<li><i class="fas fa-circle-question" style="color: #667085; width: 14px; margin-right: 6px;"></i> ${defaultLabel}</li>`;
+                            }
+                            if (chk.passed) {
+                                return `<li style="color: #027a48;"><i class="fas fa-check-circle" style="color: #027a48; width: 14px; margin-right: 6px;"></i> <strong>${chk.label}:</strong> Passed</li>`;
+                            }
+                            return `<li style="color: #b3261e; font-weight: 600;"><i class="fas fa-times-circle" style="color: #b3261e; width: 14px; margin-right: 6px;"></i> <strong>${chk.label}:</strong> ${chk.detail || 'Did not pass'}</li>`;
+                        };
+
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'ID Not Accepted',
+                            html: `
+                                <div style="text-align: left; font-size: 0.88rem; color: #344054; line-height: 1.5; margin-top: 8px;">
+                                    <div style="background: #fff1f0; border: 1px solid #fee4e2; border-radius: 8px; padding: 12px; color: #b3261e; margin-bottom: 12px;">
+                                        <i class="fas fa-exclamation-triangle" style="margin-right: 6px;"></i> ${errorMsg}
+                                    </div>
+                                    <div style="font-weight: 600; color: #101828; margin-bottom: 8px;">Verification Checklist:</div>
+                                    <ul style="margin: 0; padding-left: 8px; list-style: none; font-size: 0.83rem; display: flex; flex-direction: column; gap: 6px;">
+                                        ${renderCheck(checks.clear_readable, 'Clear & Readable Photo')}
+                                        ${renderCheck(checks.id_type_match, 'Selected ID Type Match')}
+                                        ${renderCheck(checks.not_expired, 'Valid & Unexpired ID')}
+                                        ${renderCheck(checks.name_match, 'Name Matches Account (' + firstName + ' ' + lastName + ')')}
+                                        ${renderCheck(checks.dob_match, 'Date of Birth Matches Account')}
+                                    </ul>
+                                </div>
+                            `,
+                            confirmButtonColor: '#b3261e',
+                            confirmButtonText: 'Review & Try Again'
+                        });
+                    }
+                })
+                .catch(function(error) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Verification Request Failed',
+                        text: error.message || 'Could not connect to ID verification server. Please try again.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                });
             }
         });
     }
 
-    // Reset ID verification flag if details change
-    document.addEventListener('DOMContentLoaded', function() {
-        ['firstName', 'lastName', 'validIdType', 'validIdFront', 'validIdBack'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.addEventListener('change', () => { idVerified = false; });
-                el.addEventListener('input', () => { idVerified = false; });
-            }
-        });
+    // Reset ID verification flag if user changes any personal detail or ID file
+    ['firstName', 'lastName', 'dob', 'validIdType', 'validIdFront', 'validIdBack'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('change', function() { idVerified = false; });
+            el.addEventListener('input', function() { idVerified = false; });
+        }
     });
 
     function validateStep2() {
-        const firstName = ((document.getElementById('firstName') || {}).value || '').trim();
-        const lastName = ((document.getElementById('lastName') || {}).value || '').trim();
-        const email = ((document.getElementById('email') || {}).value || '').trim();
-        const phone = ((document.getElementById('phone') || {}).value || '').trim();
-        const validIdType = ((document.getElementById('validIdType') || {}).value || '').trim();
+        const validIdTypeInput = document.getElementById('validIdType');
+        const validIdType = ((validIdTypeInput || {}).value || '').trim();
         const validIdFrontInput = document.getElementById('validIdFront');
         const validIdBackInput = document.getElementById('validIdBack');
         
         const validIdFrontFile = validIdFrontInput && validIdFrontInput.files ? validIdFrontInput.files[0] : null;
         const validIdBackFile = validIdBackInput && validIdBackInput.files ? validIdBackInput.files[0] : null;
 
-        if (!firstName || !lastName || !email || !phone) {
-            showError('Missing Information', 'Please fill in all required personal details.');
-            return false;
-        }
-
-        if (!isValidName(firstName) || !isValidName(lastName)) {
-            showError('Invalid Name', 'Please use letters, spaces, apostrophes, or hyphens only.');
-            return false;
-        }
-
-        if (!isValidEmail(email)) {
-            showError('Invalid Email', 'Please enter a valid email address.');
-            return false;
-        }
-
-        if (!isValidPhone(phone)) {
-            showError('Invalid Phone', 'Please enter a valid Philippine mobile number.');
-            return false;
-        }
+        const hasFrontCached = (document.getElementById('hasCachedFrontId')?.value === '1') || <?php echo $has_cached_front ? 'true' : 'false'; ?>;
+        const hasBackCached = (document.getElementById('hasCachedBackId')?.value === '1') || <?php echo $has_cached_back ? 'true' : 'false'; ?>;
 
         if (!validIdType) {
             showError('Valid ID Type Required', 'Please select what kind of ID you will upload.');
+            if (validIdTypeInput) {
+                validIdTypeInput.focus();
+                highlightErrorField(validIdTypeInput);
+            }
             return false;
         }
 
-        if (!validIdFrontFile) {
-            showError('Front ID Photo Required', 'Please upload a photo of the front side of your ID.');
+        if (!validIdFrontFile && !hasFrontCached) {
+            showError('Front ID Photo Required', 'Please upload or capture a photo of the front side of your ID.');
             return false;
         }
 
-        if (!validIdBackFile) {
-            showError('Back ID Photo Required', 'Please upload a photo of the back side of your ID.');
+        if (validIdType !== 'passport' && !validIdBackFile && !hasBackCached) {
+            showError('Back ID Photo Required', 'Please upload or capture a photo of the back side of your ID.');
             return false;
         }
 
         // Validate formats
         const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
         const validateFile = (file, label) => {
+            if (!file) return true;
             const hasType = allowedTypes.includes(file.type || '');
             const hasExt = /\.(jpg|jpeg|png|webp)$/.test(String(file.name || '').toLowerCase());
             if (!hasType && !hasExt) {
                 showError('Invalid ID Format', 'Please upload a JPG, PNG, or WEBP image for ' + label + '.');
                 return false;
             }
-            if (file.size > (5 * 1024 * 1024)) {
-                showError('File Too Large', 'Your ' + label + ' file size must be 5MB or smaller.');
+            if (file.size > (10 * 1024 * 1024)) {
+                showError('File Too Large', 'Your ' + label + ' file size must be 10MB or smaller.');
                 return false;
             }
             return true;
         };
 
-        if (!validateFile(validIdFrontFile, 'Front of ID') || !validateFile(validIdBackFile, 'Back of ID')) {
+        if (validIdFrontFile && !validateFile(validIdFrontFile, 'Front of ID')) {
             return false;
         }
-
-        if (!idVerified) {
-            simulateIdVerification(firstName, lastName);
+        if (validIdBackFile && !validateFile(validIdBackFile, 'Back of ID')) {
             return false;
         }
 
@@ -3300,90 +3917,158 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function validateStep3() {
         if (accountType === 'organization') {
-            const businessName = ((document.getElementById('businessName') || {}).value || '').trim();
+            const businessNameInput = document.getElementById('businessName');
+            const businessName = ((businessNameInput || {}).value || '').trim();
             if (!businessName) {
                 showError('Restaurant Name Required', 'Please enter your restaurant name.');
-                return false;
-            }
-        }
-
-        if (!addressPreviewInput || addressPreviewInput.value.trim().length < 10) {
-            showError('Address Required', accountType === 'organization'
-                ? 'Please provide a complete business address.'
-                : 'Please provide a complete home address.');
-            return false;
-        }
-
-        if (!psgcEnabled) {
-            showError('Address Service Unavailable', 'PSGC address lookup is currently unavailable. Please try again in a few minutes.');
-            return false;
-        }
-
-        if (psgcEnabled) {
-            const selectedRegionLabel = getSelectedLabel(regionSelect);
-            const isNcrRegion = isNcrSelection(regionSelect.value, selectedRegionLabel);
-            const hasRequiredLocationPieces =
-                !!regionSelect.value &&
-                !!citySelect.value &&
-                !!barangaySelect.value &&
-                !!streetAddressInput.value.trim() &&
-                (isNcrRegion || !!provinceSelect.value);
-
-            if (!hasRequiredLocationPieces) {
-                showError('Incomplete Address', accountType === 'organization'
-                    ? 'Please complete your business address details (region, province, city/municipality, barangay, and street).'
-                    : 'Please complete your home address details in Luzon (province may be skipped for NCR).');
-                return false;
-            }
-
-            if (accountType === 'organization') {
-                if (regionSelect.value !== CALABARZON_REGION_CODE || !String(selectedRegionLabel).toLowerCase().includes('calabarzon')) {
-                    showError('Region Restricted', 'Business partner registration is available only in Region IV-A (CALABARZON).');
-                    return false;
+                if (businessNameInput) {
+                    businessNameInput.value = '';
+                    businessNameInput.focus();
+                    highlightErrorField(businessNameInput);
                 }
-                const selectedProvinceLabel = getSelectedLabel(provinceSelect);
-                if (provinceSelect.value !== CAVITE_PROVINCE_CODE || !String(selectedProvinceLabel).toLowerCase().includes('cavite')) {
-                    showError('Province Restricted', 'Business partner registration is available only in Cavite.');
-                    return false;
-                }
-            } else if (!isLuzonSelection(regionSelect.value, selectedRegionLabel)) {
-                showError('Region Restricted', 'Individual registration is available only for Luzon regions.');
                 return false;
             }
+        }
+
+        const addressVal = (homeAddressInput ? homeAddressInput.value : (regAddress ? regAddress.value : '')).trim();
+        if (!addressVal || addressVal.length < 6) {
+            showError('Address Required', 'Please enter your home address or pin your location on the map.');
+            if (homeAddressInput) {
+                homeAddressInput.focus();
+                highlightErrorField(homeAddressInput);
+            }
+            return false;
         }
 
         return true;
     }
 
     function validateStep4() {
+        const emailInput = document.getElementById('email');
+        const phoneInput = document.getElementById('phone');
         const passwordInput = document.getElementById('password');
         const confirmPasswordInput = document.getElementById('confirmPassword');
-        const termsInput = document.getElementById('acceptTerms');
+        const termsInput = document.getElementById('terms') || document.querySelector('input[name="accept_terms"]') || document.querySelector('input[name="terms"]');
+        const termsGroup = document.getElementById('termsGroup');
+        const email = ((emailInput || {}).value || '').trim();
+        const phone = ((phoneInput || {}).value || '').trim();
         const password = passwordInput ? passwordInput.value : '';
         const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value : '';
 
-        if (!password || !confirmPassword) {
-            showError('Password Required', 'Please enter and confirm your password.');
+        if (!email) {
+            showError('Email Required', 'Please enter your email address.');
+            if (emailInput) {
+                emailInput.focus();
+                highlightErrorField(emailInput);
+            }
+            return false;
+        }
+
+        if (!isValidEmail(email)) {
+            showError('Invalid Email', 'Please enter a valid email address.');
+            if (emailInput) {
+                emailInput.value = '';
+                emailInput.focus();
+                highlightErrorField(emailInput);
+            }
+            return false;
+        }
+
+        if (!phone) {
+            showError('Phone Required', 'Please enter your mobile phone number.');
+            if (phoneInput) {
+                phoneInput.focus();
+                highlightErrorField(phoneInput);
+            }
+            return false;
+        }
+
+        if (!isValidPhone(phone)) {
+            showError('Invalid Phone', 'Please enter a valid Philippine mobile number (e.g., 09123456789).');
+            if (phoneInput) {
+                phoneInput.value = '';
+                phoneInput.focus();
+                highlightErrorField(phoneInput);
+            }
+            return false;
+        }
+
+        if (!password) {
+            showError('Password Required', 'Please enter your password.');
+            if (passwordInput) {
+                passwordInput.focus();
+                highlightErrorField(passwordInput);
+            }
+            return false;
+        }
+
+        if (!confirmPassword) {
+            showError('Confirm Password Required', 'Please confirm your password.');
+            if (confirmPasswordInput) {
+                confirmPasswordInput.focus();
+                highlightErrorField(confirmPasswordInput);
+            }
             return false;
         }
 
         if (!isStrongPassword(password)) {
             showError('Weak Password', 'Use 8+ characters with uppercase, lowercase, number, and symbol.');
+            if (passwordInput) {
+                passwordInput.value = '';
+                if (confirmPasswordInput) confirmPasswordInput.value = '';
+                passwordInput.focus();
+                highlightErrorField(passwordInput);
+            }
             return false;
         }
 
         if (password !== confirmPassword) {
-            showError('Passwords Mismatch', 'Passwords do not match. Please try again.');
+            showError('Passwords Mismatch', 'Passwords do not match. Please re-enter your password confirmation.');
+            if (confirmPasswordInput) {
+                confirmPasswordInput.value = '';
+                confirmPasswordInput.focus();
+                highlightErrorField(confirmPasswordInput);
+            }
             return false;
         }
 
-        if (!termsInput || !termsInput.checked) {
+        const isTermsChecked = Boolean(termsInput && termsInput.checked);
+        if (!isTermsChecked) {
+            if (termsGroup) {
+                termsGroup.style.borderColor = '#b3261e';
+                termsGroup.style.background = '#fff1f0';
+            }
+            if (termsInput) {
+                termsInput.focus();
+            }
             showError('Terms Required', 'Please accept the Terms of Service and Privacy Policy.');
             return false;
+        } else {
+            if (termsGroup) {
+                termsGroup.style.borderColor = '#eaecf0';
+                termsGroup.style.background = '#f8fafc';
+            }
         }
 
         return true;
     }
+
+    const termsInputEl = document.getElementById('terms');
+    const termsGroupEl = document.getElementById('termsGroup');
+    if (termsInputEl) {
+        termsInputEl.addEventListener('change', function() {
+            if (this.checked && termsGroupEl) {
+                termsGroupEl.style.borderColor = '#eaecf0';
+                termsGroupEl.style.background = '#f8fafc';
+            }
+        });
+    }
+
+    document.querySelectorAll('.terms-legal-link').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    });
 
     accountTypeCards.forEach(function(card) {
         card.addEventListener('click', function() {
@@ -3396,9 +4081,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 accountTypeInput.value = accountType;
             }
             updateOrganizationFields();
-            refreshAddressScopeByAccountType().catch(function() {
-                setManualAddressFallback('PSGC address lookup is unavailable while updating account type scope.');
-            });
         });
     });
 
@@ -3415,19 +4097,50 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    const prevStep1 = document.getElementById('prevStep1');
+    if (prevStep1) {
+        prevStep1.addEventListener('click', function() {
+            window.location.href = 'login.php';
+        });
+    }
+
     const nextStep1 = document.getElementById('nextStep1');
     if (nextStep1) {
         nextStep1.addEventListener('click', function() {
-            goToStep(2);
+            if (validateStep1()) {
+                goToStep(2);
+            }
+        });
+    }
+
+    const prevStep2 = document.getElementById('prevStep2');
+    if (prevStep2) {
+        prevStep2.addEventListener('click', function() {
+            goToStep(1);
         });
     }
 
     const nextStep2 = document.getElementById('nextStep2');
     if (nextStep2) {
         nextStep2.addEventListener('click', function() {
-            if (validateStep2()) {
-                goToStep(3);
+            if (!validateStep2()) {
+                return;
             }
+            if (idVerified) {
+                goToStep(3);
+                return;
+            }
+            const firstName = (document.getElementById('firstName')?.value || '').trim();
+            const lastName = (document.getElementById('lastName')?.value || '').trim();
+            const dob = (document.getElementById('dob')?.value || '').trim();
+            verifyIdWithBackend(firstName, lastName, dob);
+        });
+    }
+
+    const prevStep3 = document.getElementById('prevStep3');
+    if (prevStep3) {
+        prevStep3.addEventListener('click', function() {
+            goToStep(2);
         });
     }
 
@@ -3440,20 +4153,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    const prevStep2 = document.getElementById('prevStep2');
-    if (prevStep2) {
-        prevStep2.addEventListener('click', function() {
-            window.location.href = 'login.php';
-        });
-    }
-
-    const prevStep3 = document.getElementById('prevStep3');
-    if (prevStep3) {
-        prevStep3.addEventListener('click', function() {
-            goToStep(2);
-        });
-    }
-
     const prevStep4 = document.getElementById('prevStep4');
     if (prevStep4) {
         prevStep4.addEventListener('click', function() {
@@ -3461,34 +4160,47 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    document.querySelectorAll('.toggle-password').forEach(function(button) {
-        button.addEventListener('click', function() {
-            const wrapper = button.closest('.password-wrapper');
-            if (!wrapper) {
-                return;
-            }
-            const input = wrapper.querySelector('input');
-            const icon = button.querySelector('i');
-            if (!input || !icon) {
-                return;
-            }
 
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.className = 'fas fa-eye-slash';
-                button.setAttribute('aria-label', 'Hide password');
-            } else {
-                input.type = 'password';
-                icon.className = 'fas fa-eye';
-                button.setAttribute('aria-label', 'Show password');
-            }
-        });
-    });
+
+
 
     const passwordInput = document.getElementById('password');
     if (passwordInput) {
-        passwordInput.addEventListener('input', function() {
+        function updateLivePasswordFeedback() {
             const password = passwordInput.value;
+            const hasLength = password.length >= 8 && password.length <= 72;
+            const hasUpper = /[A-Z]/.test(password);
+            const hasLower = /[a-z]/.test(password);
+            const hasNumber = /\d/.test(password);
+            const hasSpecial = /[^A-Za-z\d]/.test(password);
+
+            const setReq = (id, isMet) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (isMet) {
+                    el.classList.add('met');
+                    const icon = el.querySelector('i');
+                    if (icon) icon.className = 'fas fa-circle-check';
+                } else {
+                    el.classList.remove('met');
+                    const icon = el.querySelector('i');
+                    if (icon) icon.className = 'fas fa-circle-dot';
+                }
+            };
+
+            setReq('reqLength', hasLength);
+            setReq('reqUpper', hasUpper);
+            setReq('reqLower', hasLower);
+            setReq('reqNumber', hasNumber);
+            setReq('reqSpecial', hasSpecial);
+
+            let score = 0;
+            if (password.length >= 8) score += 1;
+            if (hasUpper && hasLower) score += 1;
+            if (hasNumber) score += 1;
+            if (hasSpecial) score += 1;
+            score = Math.min(score, 4);
+
             const bars = [
                 document.getElementById('strengthBar1'),
                 document.getElementById('strengthBar2'),
@@ -3496,14 +4208,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('strengthBar4')
             ];
             const strengthText = document.getElementById('strengthText');
-            const checks = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z\d]/];
-            let score = password.length >= 8 ? 1 : 0;
-            checks.forEach(function(regex) {
-                if (regex.test(password)) {
-                    score += 1;
-                }
-            });
-            score = Math.min(score, 4);
 
             bars.forEach(function(bar) {
                 if (bar) {
@@ -3513,21 +4217,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
             let label = 'Weak';
             let cssClass = 'weak';
-            let color = '#ff5252';
+            let color = '#ef4444';
 
-            if (score >= 3) {
+            if (score === 2 || score === 3) {
                 label = 'Fair';
                 cssClass = 'medium';
-                color = '#ff9800';
-            }
-            if (score >= 4) {
+                color = '#f59e0b';
+            } else if (score >= 4 && hasLength && hasUpper && hasLower && hasNumber && hasSpecial) {
                 label = 'Strong';
                 cssClass = 'strong';
-                color = '#4caf50';
+                color = '#10b981';
             }
+
             if (!password.length) {
                 label = 'Weak';
-                color = '#666';
+                color = '#64748b';
             }
 
             for (let i = 0; i < score; i += 1) {
@@ -3539,37 +4243,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 strengthText.textContent = label;
                 strengthText.style.color = color;
             }
-        });
-    }
+        }
 
-    if (regionSelect && provinceSelect && citySelect && barangaySelect && streetAddressInput && addressPreviewInput) {
-        Promise.resolve()
-            .then(loadRegions)
-            .then(restoreAddressSelections)
-            .catch(function() {
-                setManualAddressFallback('PSGC address lookup is unavailable right now. You can enter your complete address manually.');
-            });
-
-        regionSelect.addEventListener('change', function() {
-            handleRegionChange(false).catch(function() {
-                setManualAddressFallback('PSGC address lookup failed while loading provinces/cities. Use manual address entry for now.');
-            });
-        });
-
-        provinceSelect.addEventListener('change', function() {
-            handleProvinceChange(false).catch(function() {
-                setManualAddressFallback('PSGC address lookup failed while loading cities/municipalities.');
-            });
-        });
-
-        citySelect.addEventListener('change', function() {
-            handleCityChange(false).catch(function() {
-                setManualAddressFallback('PSGC address lookup failed while loading barangays.');
-            });
-        });
-
-        barangaySelect.addEventListener('change', syncAddressPreview);
-        streetAddressInput.addEventListener('input', syncAddressPreview);
+        passwordInput.addEventListener('input', updateLivePasswordFeedback);
+        passwordInput.addEventListener('change', updateLivePasswordFeedback);
     }
 
     const registrationForm = document.getElementById('registrationForm');
@@ -3580,11 +4257,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
 
-            if (psgcEnabled) {
-                syncAddressPreview();
-            }
-
-            const submitBtn = document.getElementById('submitRegistration');
+            const submitBtn = document.getElementById('submitBtn') || document.getElementById('submitRegistration');
             if (submitBtn) {
                 submitBtn.classList.add('loading');
                 submitBtn.disabled = true;
@@ -3640,6 +4313,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function startCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            fallbackToFileUpload();
+            return;
+        }
+
         if (cameraSpinner) cameraSpinner.style.display = 'flex';
         if (cameraStream) stopCamera();
 
@@ -3652,7 +4330,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 audio: false
             };
-            cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (firstErr) {
+                console.warn('Specific video constraints failed, trying generic constraints:', firstErr);
+                cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            }
             if (webcamVideo) {
                 webcamVideo.srcObject = cameraStream;
                 webcamVideo.onloadedmetadata = function() {
@@ -3662,15 +4345,59 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (err) {
             console.error('Camera stream access failed:', err);
             if (cameraSpinner) cameraSpinner.style.display = 'none';
-            Swal.fire({
-                icon: 'error',
-                title: 'Camera Access Error',
-                text: 'Could not access your camera stream. Please allow camera permissions and try again.',
-                confirmButtonColor: '#b3261e'
-            });
             closeModal();
+            fallbackToFileUpload();
         }
     }
+
+    function fallbackToFileUpload() {
+        Swal.fire({
+            icon: 'info',
+            title: 'Camera Unreachable',
+            text: 'We could not open your camera stream. You can upload a photo of your ID from your device files instead.',
+            confirmButtonColor: '#b3261e',
+            showCancelButton: true,
+            confirmButtonText: 'Upload ID Photo',
+            cancelButtonText: 'Cancel'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                const currentInputId = activeCameraSide === 'Front' ? 'validIdFront' : 'validIdBack';
+                const fileInput = document.getElementById(currentInputId);
+                if (fileInput) {
+                    fileInput.click();
+                }
+            }
+        });
+    }
+
+    function handleFileSelection(side) {
+        const isFront = (side || '').toLowerCase() === 'front';
+        const fileInput = document.getElementById(isFront ? 'validIdFront' : 'validIdBack');
+        const previewContainer = document.getElementById(isFront ? 'previewContainerFront' : 'previewContainerBack') || document.getElementById(isFront ? 'previewFront' : 'previewBack');
+        const previewImg = document.getElementById(isFront ? 'imagePreviewFront' : 'imagePreviewBack') || (previewContainer ? previewContainer.querySelector('img') : null);
+        const statusBadge = document.getElementById(isFront ? 'frontStatusBadge' : 'backStatusBadge');
+
+        if (fileInput && fileInput.files && fileInput.files[0]) {
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                if (previewImg) previewImg.src = e.target.result;
+                if (previewContainer) previewContainer.style.display = 'block';
+                if (statusBadge) {
+                    statusBadge.textContent = 'Selected';
+                    statusBadge.style.background = '#ecfdf3';
+                    statusBadge.style.color = '#027a48';
+                }
+            };
+            reader.readAsDataURL(file);
+            idVerified = false;
+        }
+    }
+
+    const frontFileInput = document.getElementById('validIdFront');
+    const backFileInput = document.getElementById('validIdBack');
+    if (frontFileInput) frontFileInput.addEventListener('change', () => handleFileSelection('front'));
+    if (backFileInput) backFileInput.addEventListener('change', () => handleFileSelection('back'));
 
     function stopCamera() {
         if (cameraStream) {
@@ -3683,10 +4410,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function openModal(side) {
-        activeCameraSide = side;
+        activeCameraSide = (side || 'front').toLowerCase() === 'back' ? 'back' : 'front';
         const title = document.getElementById('cameraModalTitle');
-        if (title) title.textContent = 'Capture Front of ID';
-        if (side === 'Back' && title) title.textContent = 'Capture Back of ID';
+        if (title) title.textContent = activeCameraSide === 'back' ? 'Capture Back of ID' : 'Capture Front of ID';
         if (cameraModal) cameraModal.style.display = 'flex';
         startCamera();
     }
@@ -3696,29 +4422,54 @@ document.addEventListener('DOMContentLoaded', function() {
         stopCamera();
     }
 
-    if (zoneFront) zoneFront.addEventListener('click', () => openModal('Front'));
-    if (zoneBack) zoneBack.addEventListener('click', () => openModal('Back'));
+    // Trigger Camera Buttons
+    document.querySelectorAll('.trigger-camera-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const target = (this.getAttribute('data-target') || 'front').toLowerCase();
+            openModal(target);
+        });
+    });
+
     if (closeCameraBtn) closeCameraBtn.addEventListener('click', closeModal);
 
-    if (removeFront) {
-        removeFront.addEventListener('click', function(e) {
+    // Direct upload buttons — open file picker immediately
+    document.querySelectorAll('.direct-upload-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
             e.stopPropagation();
-            document.getElementById('validIdFront').value = '';
-            document.getElementById('previewFront').style.display = 'none';
-            document.getElementById('zoneContentFront').style.visibility = 'visible';
-            idVerified = false;
+            const target = this.getAttribute('data-target');
+            const inputId = target ? target : ((this.getAttribute('data-side') || '').toLowerCase() === 'back' ? 'validIdBack' : 'validIdFront');
+            const fileInput = document.getElementById(inputId);
+            if (fileInput) {
+                fileInput.value = '';
+                fileInput.click();
+            }
         });
-    }
+    });
 
-    if (removeBack) {
-        removeBack.addEventListener('click', function(e) {
+    // Remove Preview Buttons
+    document.querySelectorAll('.remove-preview-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
             e.stopPropagation();
-            document.getElementById('validIdBack').value = '';
-            document.getElementById('previewBack').style.display = 'none';
-            document.getElementById('zoneContentBack').style.visibility = 'visible';
+            const target = (this.getAttribute('data-target') || 'front').toLowerCase();
+            const isFront = target === 'front';
+            const fileInput = document.getElementById(isFront ? 'validIdFront' : 'validIdBack');
+            const previewContainer = document.getElementById(isFront ? 'previewContainerFront' : 'previewContainerBack') || document.getElementById(isFront ? 'previewFront' : 'previewBack');
+            const statusBadge = document.getElementById(isFront ? 'frontStatusBadge' : 'backStatusBadge');
+
+            if (fileInput) fileInput.value = '';
+            if (previewContainer) previewContainer.style.display = 'none';
+            if (statusBadge) {
+                statusBadge.textContent = 'Pending';
+                statusBadge.style.background = '#f1f5f9';
+                statusBadge.style.color = '#64748b';
+            }
             idVerified = false;
         });
-    }
+    });
 
     if (flipCameraBtn) {
         flipCameraBtn.addEventListener('click', function() {
@@ -3747,20 +4498,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 context.drawImage(webcamVideo, 0, 0, videoWidth, videoHeight);
                 const dataUrl = canvasHolder.toDataURL('image/jpeg', 0.95);
 
-                const previewContainer = document.getElementById(activeCameraSide === 'Front' ? 'previewFront' : 'previewBack');
-                const zoneContent = document.getElementById(activeCameraSide === 'Front' ? 'zoneContentFront' : 'zoneContentBack');
-                const inputElement = document.getElementById(activeCameraSide === 'Front' ? 'validIdFront' : 'validIdBack');
+                const isFront = activeCameraSide.toLowerCase() === 'front';
+                const previewContainer = document.getElementById(isFront ? 'previewContainerFront' : 'previewContainerBack') || document.getElementById(isFront ? 'previewFront' : 'previewBack');
+                const previewImg = document.getElementById(isFront ? 'imagePreviewFront' : 'imagePreviewBack') || (previewContainer ? previewContainer.querySelector('img') : null);
+                const statusBadge = document.getElementById(isFront ? 'frontStatusBadge' : 'backStatusBadge');
+                const inputElement = document.getElementById(isFront ? 'validIdFront' : 'validIdBack');
 
-                if (previewContainer) {
-                    const img = previewContainer.querySelector('img');
-                    if (img) img.src = dataUrl;
-                    previewContainer.style.display = 'block';
+                if (previewImg) previewImg.src = dataUrl;
+                if (previewContainer) previewContainer.style.display = 'block';
+                if (statusBadge) {
+                    statusBadge.textContent = 'Captured';
+                    statusBadge.style.background = '#ecfdf3';
+                    statusBadge.style.color = '#027a48';
                 }
-                if (zoneContent) zoneContent.style.visibility = 'hidden';
 
                 try {
                     const blob = dataURLtoBlob(dataUrl);
-                    const file = new File([blob], 'captured_id_' + activeCameraSide.toLowerCase() + '.jpg', { type: 'image/jpeg' });
+                    const file = new File([blob], 'captured_id_' + (isFront ? 'front' : 'back') + '.jpg', { type: 'image/jpeg' });
                     const dt = new DataTransfer();
                     dt.items.add(file);
                     if (inputElement) {
@@ -3771,6 +4525,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.error('File injection error:', e);
                 }
 
+                idVerified = false;
                 closeModal();
             }
         });
@@ -3779,23 +4534,59 @@ document.addEventListener('DOMContentLoaded', function() {
     updateOrganizationFields();
     updateSteps();
     updateProgressBar();
-    syncAddressPreview();
 
     const serverRegistrationError = <?php echo json_encode($error ?? ''); ?>;
-    const requestedAccountType = <?php echo json_encode($requested_account_type); ?>;
-    if (requestedAccountType && !serverRegistrationError) {
-        goToStep(2);
-    }
-    if (serverRegistrationError) {
-        const loweredError = serverRegistrationError.toLowerCase();
-        let targetStep = 2;
 
-        if (/(email|mobile|phone|name|valid id|government id)/.test(loweredError)) {
+    if (serverRegistrationError) {
+        let targetStep = 1;
+        let targetElementId = '';
+        const loweredError = serverRegistrationError.toLowerCase();
+
+        if (/(first name)/i.test(loweredError)) {
+            targetStep = 1;
+            targetElementId = 'firstName';
+        } else if (/(last name)/i.test(loweredError)) {
+            targetStep = 1;
+            targetElementId = 'lastName';
+        } else if (/(birth|dob|age)/i.test(loweredError)) {
+            targetStep = 1;
+            targetElementId = 'dob';
+        } else if (/(name)/i.test(loweredError)) {
+            targetStep = 1;
+            targetElementId = 'firstName';
+        } else if (/(valid id|government id|id type)/i.test(loweredError)) {
             targetStep = 2;
-        } else if (/(business|partner|address|psgc|delivery|restaurant)/.test(loweredError)) {
+            targetElementId = 'validIdType';
+        } else if (/(front)/i.test(loweredError)) {
+            targetStep = 2;
+            targetElementId = 'validIdFront';
+        } else if (/(back)/i.test(loweredError)) {
+            targetStep = 2;
+            targetElementId = 'validIdBack';
+        } else if (/(business|restaurant)/i.test(loweredError)) {
+            targetStep = 2;
+            targetElementId = 'businessName';
+        } else if (/(tin|tax)/i.test(loweredError)) {
+            targetStep = 2;
+            targetElementId = 'tinNumber';
+        } else if (/(address|cavite|delivery|street|location|outside)/i.test(loweredError)) {
             targetStep = 3;
-        } else if (/(password|terms|token|security)/.test(loweredError)) {
+            targetElementId = 'homeAddressInput';
+        } else if (/(email)/i.test(loweredError)) {
             targetStep = 4;
+            targetElementId = 'email';
+        } else if (/(phone|mobile)/i.test(loweredError)) {
+            targetStep = 4;
+            targetElementId = 'phone';
+        } else if (/(confirm|match)/i.test(loweredError)) {
+            targetStep = 4;
+            targetElementId = 'confirmPassword';
+        } else if (/(password)/i.test(loweredError)) {
+            targetStep = 4;
+            targetElementId = 'password';
+        } else if (/(terms)/i.test(loweredError)) {
+            targetStep = 4;
+            targetElementId = 'terms';
         }
 
         if (targetStep !== currentStep) {
@@ -3804,12 +4595,26 @@ document.addEventListener('DOMContentLoaded', function() {
             updateProgressBar();
         }
 
-        Swal.fire({
-            icon: 'error',
-            title: 'Registration failed',
-            text: serverRegistrationError,
-            confirmButtonColor: '#b3261e'
-        });
+        setTimeout(function() {
+            if (targetElementId) {
+                const targetEl = document.getElementById(targetElementId);
+                if (targetEl) {
+                    targetEl.focus();
+                    highlightErrorField(targetEl);
+                }
+            }
+        }, 200);
+
+        if (window.showPopupAlert) {
+            window.showPopupAlert(serverRegistrationError, 'error', 5000);
+        } else if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Registration Notice',
+                text: serverRegistrationError,
+                confirmButtonColor: '#b3261e'
+            });
+        }
     }
 });
 </script>

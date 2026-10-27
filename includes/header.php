@@ -2,6 +2,14 @@
 if (session_status() === PHP_SESSION_NONE) session_start();
 if (!isset($current_page)) $current_page = basename($_SERVER['PHP_SELF'], '.php');
 
+global $conn;
+if (!isset($conn) || !($conn instanceof mysqli)) {
+    $config_file = __DIR__ . '/config.php';
+    if (file_exists($config_file)) {
+        require_once $config_file;
+    }
+}
+
 $page_title = $page_title ?? 'Lechon Delights';
 $script_parent = basename(dirname($_SERVER['PHP_SELF']));
 $path_prefix = ($script_parent === 'admin') ? '../' : '';
@@ -15,13 +23,34 @@ $google_geocoding_enabled = function_exists('shouldUseGoogleGeocoding') ? should
 $normalized_user_type = strtolower(trim((string)($_SESSION['user_type'] ?? '')));
 $is_logged_in_user = !empty($_SESSION['user_id']);
 $is_customer_user = $is_logged_in_user && ($normalized_user_type === '' || $normalized_user_type === 'customer' || $normalized_user_type === 'user');
-$market_header_excluded_pages = ['reset_password'];
+$auth_pages = ['login', 'register', 'reset_password', 'reset_password_request'];
+$is_auth_page = in_array($current_page, $auth_pages, true);
+$market_header_excluded_pages = ['login', 'register', 'reset_password', 'reset_password_request'];
 $is_market_home_header = ($script_parent !== 'admin') && !in_array($current_page, $market_header_excluded_pages, true);
-$show_market_header_bottom = in_array($current_page, ['home', 'index', 'shops'], true);
+$show_market_header_bottom = in_array($current_page, ['home', 'index', 'shops', 'pickup'], true);
 $cart_count = isset($_SESSION['cart']) && is_array($_SESSION['cart']) ? count($_SESSION['cart']) : 0;
 
 $current_user_address = trim((string)($current_user_address ?? ($_SESSION['address'] ?? '')));
 $market_header_address_display = $current_user_address !== '' ? $current_user_address : 'Select your address';
+
+if (!function_exists('formatHeaderLocationText')) {
+    function formatHeaderLocationText($address, $maxLength = 38) {
+        $address = trim((string)$address);
+        if ($address === '' || $address === 'Select your address') {
+            return 'Select your address';
+        }
+        if (mb_strlen($address) > $maxLength) {
+            $cut = mb_substr($address, 0, $maxLength);
+            $lastComma = mb_strrpos($cut, ',');
+            if ($lastComma !== false && $lastComma > 18) {
+                $cut = mb_substr($cut, 0, $lastComma);
+            }
+            return rtrim($cut, ', ') . ' etc....';
+        }
+        return $address;
+    }
+}
+$market_header_address_display_short = formatHeaderLocationText($market_header_address_display);
 
 $viewer_name = trim((string)($_SESSION['full_name'] ?? ''));
 $viewer_email = trim((string)($_SESSION['email'] ?? ''));
@@ -40,13 +69,106 @@ $preorder_nav_href = $path_prefix . 'preorder.php' . ($storefront_seller_id > 0 
 $favorites_page_href = $path_prefix . 'favorites.php';
 $favorites_api_href = $path_prefix . 'api/favorites.php';
 $favorites_feature_enabled = $is_customer_user;
+
+$is_shop_owner_or_partner = false;
+if ($is_logged_in_user) {
+    $session_account_type = strtolower(trim((string)($_SESSION['account_type'] ?? '')));
+    $session_user_type = strtolower(trim((string)($_SESSION['user_type'] ?? '')));
+    $session_role_name = strtolower(trim((string)($_SESSION['role_name'] ?? '')));
+    if ($session_account_type === 'organization' || $session_user_type === 'admin' || in_array($session_role_name, ['business_owner', 'super_admin', 'store_manager', 'partner_owner'], true)) {
+        $is_shop_owner_or_partner = true;
+    } elseif (isset($conn) && $conn instanceof mysqli && !empty($_SESSION['user_id'])) {
+        $chk_fa_stmt = mysqli_prepare($conn, "SELECT 1 FROM franchise_applications WHERE user_id = ? AND status = 'approved' LIMIT 1");
+        if ($chk_fa_stmt) {
+            $current_u_id = (int)$_SESSION['user_id'];
+            mysqli_stmt_bind_param($chk_fa_stmt, "i", $current_u_id);
+            mysqli_stmt_execute($chk_fa_stmt);
+            $chk_fa_res = mysqli_stmt_get_result($chk_fa_stmt);
+            if ($chk_fa_res && mysqli_fetch_row($chk_fa_res)) {
+                $is_shop_owner_or_partner = true;
+            }
+            mysqli_stmt_close($chk_fa_stmt);
+        }
+    }
+}
+
+require_once __DIR__ . '/rider_helper.php';
+$is_driver_account = false;
+$is_rider_context = false;
+if ($is_logged_in_user) {
+    $header_db_conn = (isset($conn) && ($conn instanceof mysqli)) ? $conn : null;
+    $is_driver_account = isDeliveryDriverUser($header_db_conn, (int)$_SESSION['user_id']);
+    if ($is_driver_account) {
+        header("Location: " . $path_prefix . "rider/index.php");
+        exit();
+    }
+    $is_rider_context = isRiderSessionActive($header_db_conn);
+}
+$nav_logo_href = $is_rider_context ? ($path_prefix . 'rider/index.php') : ($path_prefix . 'index.php');
+
+$ongoing_order_id = 0;
+$ongoing_order_number = '';
+$ongoing_order_status = '';
+
+if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
+    $current_user_id = (int)$_SESSION['user_id'];
+    $ongoing_query = "SELECT o.id, o.order_number, o.status, lt.current_status as tracking_status 
+                      FROM orders o 
+                      LEFT JOIN logistics_tracking lt ON o.id = lt.order_id 
+                      WHERE o.user_id = ? 
+                        AND o.status NOT IN ('delivered', 'cancelled', 'completed', 'rejected') 
+                        AND (o.is_archived IS NULL OR o.is_archived = 0)
+                      ORDER BY o.id DESC LIMIT 1";
+    $ongoing_stmt = $conn->prepare($ongoing_query);
+    if ($ongoing_stmt) {
+        $ongoing_stmt->bind_param("i", $current_user_id);
+        $ongoing_stmt->execute();
+        $ongoing_res = $ongoing_stmt->get_result();
+        if ($ongoing_row = $ongoing_res->fetch_assoc()) {
+            $ongoing_order_id = (int)$ongoing_row['id'];
+            $ongoing_order_number = (string)$ongoing_row['order_number'];
+            $ongoing_order_status = (string)($ongoing_row['tracking_status'] ?: $ongoing_row['status']);
+        }
+        $ongoing_stmt->close();
+    }
+}
+$is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="<?php echo $is_initial_dark ? 'dark' : 'light'; ?>" class="<?php echo $is_initial_dark ? 'dark-mode' : ''; ?>">
 <head>
+    <script>
+        (function() {
+            try {
+                var cookieTheme = (document.cookie.match(/(?:^|;\s*)theme=([^;]*)/) || [])[1];
+                var savedTheme = localStorage.getItem('theme') || cookieTheme;
+                var isDark = (savedTheme === 'dark' || (!savedTheme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches));
+                if (isDark) {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                    document.documentElement.classList.add('dark-mode');
+                } else {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                    document.documentElement.classList.remove('dark-mode');
+                }
+            } catch (e) {}
+        })();
+    </script>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo htmlspecialchars($page_title . ' | Lechon Delights'); ?></title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+    <?php
+    $brand_tab_title = 'Lechon Delight';
+    $rendered_tab_title = $brand_tab_title;
+    if (!empty($page_title) && !in_array(strtolower(trim((string)$page_title)), ['home', 'index', 'marketplace home', 'lechon delight', 'lechon delights', 'lechon & meat supply shops'], true)) {
+        $rendered_tab_title = $brand_tab_title . ' — ' . trim((string)$page_title);
+    }
+    ?>
+    <title><?php echo htmlspecialchars($rendered_tab_title); ?></title>
+    <!-- Favicon & Brand Logo Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="<?php echo $path_prefix; ?>favicon-32x32.png?v=lechon2">
+    <link rel="icon" type="image/png" sizes="16x16" href="<?php echo $path_prefix; ?>favicon-16x16.png?v=lechon2">
+    <link rel="icon" type="image/x-icon" href="<?php echo $path_prefix; ?>favicon.ico?v=lechon2">
+    <link rel="shortcut icon" type="image/x-icon" href="<?php echo $path_prefix; ?>favicon.ico?v=lechon2">
+    <link rel="apple-touch-icon" sizes="180x180" href="<?php echo $path_prefix; ?>apple-touch-icon.png?v=lechon2">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -55,37 +177,628 @@ $favorites_feature_enabled = $is_customer_user;
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
-        :root { --ink:#171922; --muted:#667085; --line:#efddcd; --rose:#b3261e; --bg:#fff9f2; --card:#fff; --shadow:0 12px 30px rgba(15,23,42,.1); --primary-color:#b3261e; --primary-dark:#8f261a; --motion-ease:cubic-bezier(.22,1,.36,1); --motion-fast:.22s; --motion-base:.28s; --transition-fast:all var(--motion-fast) var(--motion-ease); --transition-fade:opacity var(--motion-fast) var(--motion-ease), visibility var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); --transition-lift:transform var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
+        /* Anti-Flash Immediate Root Styles */
+        html.dark-mode,
+        html[data-theme="dark"],
+        html.dark-mode body,
+        body.dark-mode {
+            background-color: #121824 !important;
+            color: #f8fafc !important;
+        }
+
+        :root { --ink:#171922; --muted:#667085; --line:#efddcd; --rose:#b3261e; --bg:#f8f9fa; --card:#fff; --shadow:0 12px 30px rgba(15,23,42,.1); --primary-color:#b3261e; --primary-dark:#8f261a; --motion-ease:cubic-bezier(0.16, 1, 0.3, 1); --motion-fast:0.2s; --motion-base:0.24s; --transition-fast:all var(--motion-fast) var(--motion-ease); --transition-fade:opacity var(--motion-fast) var(--motion-ease), visibility var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); --transition-lift:transform var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
+        [data-theme="dark"], body.dark-mode { --ink:#f8fafc; --muted:#94a3b8; --line:#334155; --rose:#b3261e; --bg:#121824; --card:#1e293b; --shadow:0 12px 30px rgba(0,0,0,.45); --primary-color:#b3261e; --primary-dark:#981b15; }
+        
         * { box-sizing:border-box; }
         html, body { margin:0; padding:0; overflow-x:clip !important; max-width:100vw; width:100%; font-family:"Plus Jakarta Sans","Segoe UI",sans-serif; background:var(--bg); color:var(--ink); }
+        
+        /* 0ms Delay Mobile Touch Responsiveness & Tap Optimization */
+        html, body, a, button, input, select, textarea, label, [role="button"],
+        .btn, .mob-nav-item, .rider-nav-item, .menu-item, .submenu-item,
+        .mobile-toggle, .mobile-menu-close, .sidebar-toggler, .nav-link,
+        .tab-btn, .category-chip, .user-avatar-btn, .icon-btn, .action-btn,
+        .card, .product-card, .store-card, .filter-chip, .pill-btn, .order-btn {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Instant Tactile Touch Micro-Feedback */
+        .is-touch-active,
+        .mob-nav-item.is-touch-active,
+        .rider-nav-item.is-touch-active,
+        .menu-item.is-touch-active,
+        .btn.is-touch-active,
+        .icon-btn.is-touch-active {
+            transform: scale(0.95) translateZ(0) !important;
+            transition: transform 0.05s ease-out !important;
+            opacity: 0.92;
+        }
+
+        @media (hover: none) and (pointer: coarse) {
+            a:active, button:active, [role="button"]:active,
+            .btn:active, .mob-nav-item:active, .rider-nav-item:active,
+            .menu-item:active, .icon-btn:active, .mobile-toggle:active {
+                transform: scale(0.96) translateZ(0);
+                transition: transform 0.05s ease-out !important;
+            }
+        }
+        img, video, iframe, canvas { max-width:100%; height:auto; }
+        pre, code { max-width:100%; }
         h1,h2,h3,h4,h5,h6 { font-family:"Outfit","Plus Jakarta Sans",sans-serif; }
         .site-main { min-height:calc(100vh - 260px); }
-        .site-header { position:sticky; top:0; z-index:1200; background:#ffffff; border-bottom:1px solid var(--line); box-shadow:0 6px 20px rgba(15,23,42,.04); width:100%; }
+        .site-header { position:sticky; top:0; z-index:1200; background:var(--card); border-bottom:1px solid var(--line); box-shadow:0 6px 20px rgba(15,23,42,.04); width:100%; }
+
+        /* Global Dark Mode Rules & Components */
+        html.dark-mode .site-header,
+        body.dark-mode .site-header,
+        html.dark-mode .market-header-bottom,
+        body.dark-mode .market-header-bottom {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+        }
+        body.dark-mode .logo-title { color: #f8fafc !important; }
+        body.dark-mode .logo-sub { color: #94a3b8 !important; }
+        body.dark-mode .nav-link,
+        body.dark-mode .market-home-link {
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .nav-link:hover,
+        body.dark-mode .nav-link.active,
+        body.dark-mode .market-home-link:hover,
+        body.dark-mode .market-home-link.active {
+            background: #334155 !important;
+            color: #ffffff !important;
+            border-color: #475569 !important;
+        }
+        body.dark-mode .icon-btn {
+            background: #1e293b !important;
+            color: #f8fafc !important;
+            border-color: #334155 !important;
+        }
+        body.dark-mode .icon-btn:hover {
+            background: #334155 !important;
+            color: #ffffff !important;
+            border-color: #475569 !important;
+        }
+        body.dark-mode .btn-signin {
+            background: #1e293b !important;
+            color: #f8fafc !important;
+            border-color: #334155 !important;
+        }
+        body.dark-mode .btn-signin:hover {
+            background: #334155 !important;
+            border-color: #475569 !important;
+            color: #ffffff !important;
+        }
+        body.dark-mode .user-dropdown,
+        body.dark-mode .notification-dropdown,
+        body.dark-mode .market-search-popover,
+        body.dark-mode .mobile-menu {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5) !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .user-dropdown-header,
+        body.dark-mode .notification-header,
+        body.dark-mode .user-dropdown-item.logout-btn,
+        body.dark-mode .notification-pagination {
+            border-color: #334155 !important;
+        }
+        body.dark-mode .user-name,
+        body.dark-mode .user-dropdown-item,
+        body.dark-mode .market-search-title,
+        body.dark-mode .mobile-menu a {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .user-email,
+        body.dark-mode .notification-empty,
+        body.dark-mode .notification-reason,
+        body.dark-mode .notification-business,
+        body.dark-mode .notification-time,
+        body.dark-mode .notification-page-label {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .notification-pagination { background:#111827 !important; }
+        body.dark-mode .notification-page-btn { background:#1e293b; border-color:#475569; color:#cbd5e1; }
+        body.dark-mode .user-dropdown-item:hover,
+        body.dark-mode .mobile-menu a:hover {
+            background: #334155 !important;
+        }
+        body.dark-mode .market-home-search {
+            background: #0f172a !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .market-home-search input {
+            background: transparent !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .market-search-suggestion {
+            background: #0f172a !important;
+            border-color: #334155 !important;
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .market-search-suggestion:hover {
+            background: #334155 !important;
+            color: #ffffff !important;
+        }
+        body.dark-mode,
+        html.dark-mode,
+        body.dark-mode .market-home,
+        body.dark-mode .main-content,
+        body.dark-mode .page-header,
+        body.dark-mode .site-content {
+            background-color: #0f172a !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .page-header h1,
+        body.dark-mode .page-header h2,
+        body.dark-mode .section-heading,
+        body.dark-mode h1,
+        body.dark-mode h2,
+        body.dark-mode h3,
+        body.dark-mode h4,
+        body.dark-mode h5,
+        body.dark-mode h6 {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .page-header p,
+        body.dark-mode .section-subheading {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .market-sidebar,
+        body.dark-mode .page-sidebar,
+        body.dark-mode .sticky-sidebar {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35) !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .market-sidebar-section,
+        body.dark-mode .sidebar-section {
+            border-color: #334155 !important;
+        }
+        body.dark-mode .market-sidebar h3,
+        body.dark-mode .market-sidebar h4,
+        body.dark-mode .market-filter-title {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .market-radio,
+        body.dark-mode .market-check,
+        body.dark-mode .market-radio span,
+        body.dark-mode .market-check span {
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .market-radio:hover span,
+        body.dark-mode .market-check:hover span {
+            color: #ffffff !important;
+        }
+        body.dark-mode .panda-menu-sticky-bar,
+        body.dark-mode .sticky-category-bar,
+        body.dark-mode .category-nav-bar {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+        }
+        body.dark-mode .panda-menu-search-box {
+            background: #0f172a !important;
+            border-color: #334155 !important;
+        }
+        body.dark-mode .panda-menu-search-box input {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .panda-cat-arrow {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .card,
+        body.dark-mode .product-card,
+        body.dark-mode .modal-content,
+        body.dark-mode .favorites-card,
+        body.dark-mode .order-card,
+        body.dark-mode .account-card,
+        body.dark-mode .checkout-card,
+        body.dark-mode .cart-card,
+        body.dark-mode .help-card,
+        body.dark-mode .plan-card,
+        body.dark-mode .info-card,
+        body.dark-mode .store-card,
+        body.dark-mode .hero-card,
+        body.dark-mode .sticky-ongoing-link,
+        body.dark-mode .section-card,
+        body.dark-mode .sidebar-card,
+        body.dark-mode .fav-card,
+        body.dark-mode .market-store-row,
+        body.dark-mode .swimlane-item-card,
+        body.dark-mode .menu-item-card {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
+        }
+        body.dark-mode .cart-sidebar,
+        body.dark-mode .panda-cart-sidebar,
+        body.dark-mode .cart-container {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+            box-shadow: -4px 0 25px rgba(0, 0, 0, 0.5) !important;
+        }
+        body.dark-mode .cart-header {
+            background: #1e293b !important;
+            border-bottom: 1px solid #334155 !important;
+        }
+        body.dark-mode .cart-close {
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .cart-close:hover {
+            color: #ef4444 !important;
+        }
+        body.dark-mode .cart-header span {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .cart-header small {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .cart-body {
+            background: #1e293b !important;
+        }
+        body.dark-mode .cart-store-header h4 {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .cart-empty {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .cart-empty i {
+            color: #64748b !important;
+        }
+        body.dark-mode .cart-empty p {
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .cart-item {
+            background: #111827 !important;
+            border: 1px solid #334155 !important;
+            border-radius: 10px !important;
+            padding: 10px !important;
+            margin-bottom: 10px !important;
+        }
+        body.dark-mode .cart-item-quantity button,
+        body.dark-mode .qty-decrease,
+        body.dark-mode .qty-increase {
+            background: #1e293b !important;
+            border: 1px solid #334155 !important;
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .cart-item-quantity button:hover,
+        body.dark-mode .qty-decrease:hover,
+        body.dark-mode .qty-increase:hover {
+            background: #334155 !important;
+            color: #ffffff !important;
+        }
+        body.dark-mode .cart-item-quantity span {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .cart-item-image {
+            background-color: #0f172a !important;
+        }
+        body.dark-mode .cart-item-name {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .cart-item-size,
+        body.dark-mode .cart-item-addons {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .cart-item-price-col,
+        body.dark-mode .cart-item-price-col div {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .cart-item-remove {
+            color: #ef4444 !important;
+        }
+        body.dark-mode .cart-item-remove:hover {
+            color: #f87171 !important;
+        }
+        body.dark-mode .cart-footer {
+            background: #1e293b !important;
+            border-top: 1px solid #334155 !important;
+        }
+        body.dark-mode .summary-row span,
+        body.dark-mode .cart-summary .summary-row span {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode #cartSubtotal {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .summary-row.total,
+        body.dark-mode .cart-summary .summary-row.total {
+            border-top: 1px solid #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode #cartTotal {
+            color: #ef4444 !important;
+        }
+        body.dark-mode #clearCart {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode #clearCart:hover {
+            color: #ef4444 !important;
+        }
+        body.dark-mode .form-control,
+        body.dark-mode .form-select,
+        body.dark-mode input[type="text"],
+        body.dark-mode input[type="search"],
+        body.dark-mode input[type="email"],
+        body.dark-mode input[type="password"],
+        body.dark-mode input[type="tel"],
+        body.dark-mode input[type="number"],
+        body.dark-mode select,
+        body.dark-mode textarea {
+            background-color: #0f172a !important;
+            color: #f8fafc !important;
+            border-color: #334155 !important;
+        }
+        body.dark-mode .form-control:focus,
+        body.dark-mode .form-select:focus,
+        body.dark-mode input:focus,
+        body.dark-mode select:focus,
+        body.dark-mode textarea:focus {
+            border-color: #b3261e !important;
+            box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.25) !important;
+        }
+        body.dark-mode input:-webkit-autofill,
+        body.dark-mode input:-webkit-autofill:hover, 
+        body.dark-mode input:-webkit-autofill:focus, 
+        body.dark-mode input:-webkit-autofill:active,
+        body.dark-mode textarea:-webkit-autofill,
+        body.dark-mode select:-webkit-autofill {
+            -webkit-box-shadow: 0 0 0 1000px #0f172a inset !important;
+            box-shadow: 0 0 0 1000px #0f172a inset !important;
+            -webkit-text-fill-color: #f8fafc !important;
+            color: #f8fafc !important;
+            transition: background-color 5000s ease-in-out 0s !important;
+            caret-color: #f8fafc !important;
+        }
+        body.dark-mode input:-webkit-autofill:focus {
+            -webkit-box-shadow: 0 0 0 1000px #0b1120 inset, 0 0 0 3px rgba(179, 38, 30, 0.25) !important;
+            box-shadow: 0 0 0 1000px #0b1120 inset, 0 0 0 3px rgba(179, 38, 30, 0.25) !important;
+            -webkit-text-fill-color: #ffffff !important;
+            color: #ffffff !important;
+        }
+        body.dark-mode .text-muted,
+        body.dark-mode .sub-text,
+        body.dark-mode .meta-text,
+        body.dark-mode .text-secondary {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode table,
+        body.dark-mode th,
+        body.dark-mode td {
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode th {
+            background-color: #1e293b !important;
+        }
+        body.dark-mode .footer {
+            background-color: #0f172a !important;
+            border-top: 1px solid #334155 !important;
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .footer a {
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .footer a:hover {
+            color: #ffffff !important;
+        }
+        body.dark-mode .footer-bottom {
+            border-top-color: #334155 !important;
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .mobile-bottom-nav {
+            background: #1e293b !important;
+            border-top-color: #334155 !important;
+        }
+        body.dark-mode .mob-nav-item {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .mob-nav-item.active {
+            color: #b3261e !important;
+        }
+        body.dark-mode .swal2-popup {
+            background-color: #1e293b !important;
+            color: #f8fafc !important;
+            border: 1px solid #334155 !important;
+        }
+        body.dark-mode .swal2-title {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .swal2-html-container {
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .swal2-html-container * {
+            color: inherit;
+        }
+        body.dark-mode .swal2-html-container strong,
+        body.dark-mode .swal2-html-container b {
+            color: #ffffff !important;
+        }
+        body.dark-mode .swal2-html-container [style*="color: #101828"],
+        body.dark-mode .swal2-html-container [style*="color:#101828"] {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .swal2-html-container [style*="color: #475467"],
+        body.dark-mode .swal2-html-container [style*="color:#475467"],
+        body.dark-mode .swal2-html-container [style*="color: #344054"],
+        body.dark-mode .swal2-html-container [style*="color:#344054"] {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .swal2-html-container [style*="background: #fff1f0"],
+        body.dark-mode .swal2-html-container [style*="background:#fff1f0"] {
+            background: rgba(179, 38, 30, 0.22) !important;
+            border-color: rgba(240, 68, 56, 0.35) !important;
+            color: #fca5a5 !important;
+        }
+        body.dark-mode .swal2-html-container [style*="background: #ecfdf3"],
+        body.dark-mode .swal2-html-container [style*="background:#ecfdf3"] {
+            background: rgba(2, 122, 72, 0.22) !important;
+            border-color: rgba(18, 183, 106, 0.35) !important;
+            color: #86efac !important;
+        }
+        body.dark-mode .swal2-icon.swal2-error {
+            border-color: rgba(240, 68, 56, 0.35) !important;
+            background-color: rgba(179, 38, 30, 0.22) !important;
+            color: #f87171 !important;
+        }
+        body.dark-mode .swal2-icon.swal2-error [class^=swal2-x-mark-line] {
+            background-color: #f87171 !important;
+        }
+        body.dark-mode .swal2-icon.swal2-warning {
+            border-color: rgba(247, 144, 9, 0.35) !important;
+            background-color: rgba(181, 71, 8, 0.22) !important;
+            color: #fbbf24 !important;
+        }
+        body.dark-mode .swal2-icon.swal2-warning .swal2-icon-content {
+            color: #fbbf24 !important;
+        }
+        body.dark-mode .swal2-icon.swal2-success {
+            border-color: rgba(18, 183, 106, 0.35) !important;
+            background-color: rgba(2, 122, 72, 0.22) !important;
+            color: #4ade80 !important;
+        }
+        body.dark-mode .swal2-icon.swal2-success [class^=swal2-success-line] {
+            background-color: #4ade80 !important;
+        }
+        body.dark-mode .swal2-icon.swal2-info {
+            border-color: rgba(46, 144, 250, 0.35) !important;
+            background-color: rgba(23, 92, 211, 0.22) !important;
+            color: #60a5fa !important;
+        }
+        body.dark-mode .swal2-icon.swal2-info .swal2-icon-content {
+            color: #60a5fa !important;
+        }
+        body.dark-mode .swal2-icon.swal2-question {
+            border-color: #334155 !important;
+            background-color: #0f172a !important;
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .swal2-styled.swal2-cancel {
+            background-color: #1e293b !important;
+            color: #cbd5e1 !important;
+            border-color: #334155 !important;
+        }
+        body.dark-mode .swal2-styled.swal2-cancel:hover {
+            background-color: #334155 !important;
+            color: #ffffff !important;
+        }
+
+        /* Customer Chat Dark Theme */
+        body.dark-mode .chat-container,
+        body.dark-mode .chat-sidebar,
+        body.dark-mode .chat-header,
+        body.dark-mode .chat-input-container {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .chat-messages {
+            background-color: #0f172a !important;
+        }
+        body.dark-mode .chat-bubble-agent,
+        body.dark-mode .message-agent {
+            background-color: #1e293b !important;
+            border: 1px solid #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .chat-user-item {
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .chat-user-item:hover,
+        body.dark-mode .chat-user-item.active {
+            background-color: #334155 !important;
+        }
+        body.dark-mode .chat-input-container textarea,
+        body.dark-mode .chat-input-container input {
+            background-color: #0f172a !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+
+        /* Checkout, Orders, Help Center & Modals Dark Theme */
+        body.dark-mode .order-summary-box,
+        body.dark-mode .checkout-section,
+        body.dark-mode .payment-option-card,
+        body.dark-mode .delivery-option-card,
+        body.dark-mode .address-card,
+        body.dark-mode .pricing-plan-card,
+        body.dark-mode .faq-item,
+        body.dark-mode .accordion-item,
+        body.dark-mode .accordion-button,
+        body.dark-mode .dropdown-menu,
+        body.dark-mode .offcanvas,
+        body.dark-mode .modal-header,
+        body.dark-mode .modal-body,
+        body.dark-mode .modal-footer {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .accordion-button:not(.collapsed) {
+            background-color: #273349 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .dropdown-item {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .dropdown-item:hover {
+            background-color: #334155 !important;
+            color: #ffffff !important;
+        }
+        body.dark-mode .list-group-item {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
         .header-shell { max-width:1320px; margin:0 auto; padding:0 22px; width:100%; }
         .logo-link { display:inline-flex; gap:10px; align-items:center; text-decoration:none; flex-shrink:0; }
-        .logo-icon { width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; color:#fff; background:linear-gradient(135deg,#b3261e,#ef6b2e); box-shadow:0 6px 16px rgba(179,38,30,.2); font-size:.95rem; }
+        .logo-icon { width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; background:transparent !important; box-shadow:none !important; border:none !important; font-size:.95rem; overflow:hidden; }
+        .logo-icon img { width:100%; height:100%; object-fit:contain !important; display:block; border-radius:inherit; }
         .logo-copy { display:grid; gap:1px; }
         .logo-title { font-size:1.15rem; font-weight:800; color:var(--ink); line-height:1; }
         .logo-sub { font-size:.65rem; text-transform:uppercase; letter-spacing:.12em; color:#7f879a; font-weight:700; }
         .header-actions,.auth-buttons,.main-nav,.market-home-nav { display:flex; align-items:center; gap:9px; flex-shrink:0; }
         .auth-buttons { gap:10px; display:flex !important; }
-        .btn-signin,.btn-register { min-height:38px; padding:0 14px; border-radius:999px; border:1px solid; text-decoration:none; font-weight:700; font-size:.84rem; display:inline-flex; align-items:center; justify-content:center; transition:var(--transition-fast); white-space:nowrap; }
-        .btn-signin { border-color:var(--ink); color:var(--ink); background:#fff; }
-        .btn-signin:hover { background:var(--ink); color:#fff; }
-        .btn-register { border-color:var(--ink); background:#fff; color:var(--ink); }
-        .btn-register:hover { background:var(--ink); color:#fff; border-color:var(--ink); }
+        .mobile-user-btn { display:none; }
+        .btn-signin,.btn-register { min-height:38px; padding:0 16px; border-radius:999px; border:1px solid; text-decoration:none; font-weight:700; font-size:.84rem; display:inline-flex; align-items:center; justify-content:center; transition:var(--transition-fast); white-space:nowrap; }
+        .btn-signin { border-color:#d0d5dd; color:#344054; background:#ffffff; }
+        .btn-signin:hover { background:#f8fafc; border-color:#98a2b3; color:#101828; }
+        .btn-register { border-color:#b3261e; background:#b3261e; color:#ffffff; }
+        .btn-register:hover { background:#981b15; border-color:#981b15; color:#ffffff; }
         .icon-btn { width:38px; height:38px; border-radius:10px; border:1px solid var(--line); background:#fff; color:#222a3d; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; transition:var(--transition-fast); position:relative; font-size:.9rem; }
         .icon-btn:hover { background:var(--ink); color:#fff; border-color:var(--ink); }
-        .user-avatar-btn { padding:0; overflow:hidden; }
-        .user-avatar-thumb { width:100%; height:100%; object-fit:cover; border-radius:10px; display:block; }
+        .user-avatar-btn { padding:0; overflow:hidden; border-radius:50% !important; border:2px solid #ffffff !important; box-shadow:0 2px 8px rgba(179,38,30,.2); }
+        .user-avatar-thumb { width:100%; height:100%; object-fit:cover; border-radius:50%; display:block; }
+        .user-avatar-initial { width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#b3261e,#d93829); color:#ffffff; font-weight:800; font-size:.95rem; border-radius:50%; user-select:none; }
         .badge { position:absolute; top:-5px; right:-5px; min-width:19px; height:19px; border-radius:999px; background:var(--rose); color:#fff; border:2px solid #fff; font-size:.68rem; font-weight:700; display:inline-flex; align-items:center; justify-content:center; padding:0 5px; }
         .standard-top { min-height:64px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
         .nav-link,.market-home-link { text-decoration:none; color:#56617a; font-size:.88rem; font-weight:700; min-height:38px; padding:0 12px; border-radius:999px; border:1px solid transparent; display:inline-flex; gap:6px; align-items:center; transition:var(--transition-fast); }
         .nav-link:hover,.nav-link.active,.market-home-link:hover,.market-home-link.active { background:#fff4e8; border-color:var(--line); color:var(--ink); }
         .user-menu-wrapper,.notification-wrapper { position:relative; }
-        .user-dropdown,.notification-dropdown { position:absolute; top:calc(100% + 10px); right:0; min-width:260px; background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:8px 0; opacity:0; visibility:hidden; transform:translateY(8px); transition:var(--transition-fade); z-index:1200; }
-        .notification-dropdown { min-width:310px; }
-        .user-menu-wrapper:hover .user-dropdown,.notification-wrapper:hover .notification-dropdown { opacity:1; visibility:visible; transform:translateY(0); }
+        .user-dropdown,.notification-dropdown { position:absolute; top:calc(100% + 10px); right:0; min-width:260px; background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:8px 0; opacity:0; visibility:hidden; pointer-events:none; transform:translateY(8px); transition:var(--transition-fade); z-index:1500 !important; }
+        .user-dropdown::before,.notification-dropdown::before { content:''; position:absolute; top:-14px; left:0; right:0; height:14px; background:transparent; }
+        .notification-dropdown { width:320px; min-width:320px; height:430px; max-height:calc(100vh - 90px); overflow:hidden; display:flex; flex-direction:column; }
+        .user-menu-wrapper:hover .user-dropdown,
+        .user-menu-wrapper.is-open .user-dropdown,
+        .user-menu-wrapper.active .user-dropdown,
+        .user-dropdown.is-open,
+        .user-dropdown.show,
+        .notification-wrapper:hover .notification-dropdown,
+        .notification-wrapper.is-open .notification-dropdown,
+        .notification-wrapper.active .notification-dropdown,
+        .notification-dropdown.is-open,
+        .notification-dropdown.show { opacity:1; visibility:visible; pointer-events:auto; transform:translateY(0); }
         .user-dropdown-header { padding:4px 15px 11px; border-bottom:1px solid var(--line); margin-bottom:8px; }
         .user-name { font-size:1rem; font-weight:800; }
         .user-email { font-size:.84rem; color:var(--muted); }
@@ -94,7 +807,160 @@ $favorites_feature_enabled = $is_customer_user;
         .user-dropdown-item.logout-btn { border-top:1px solid var(--line); color:#b4233c; margin-top:6px; }
         .notification-header { padding:10px 13px; border-bottom:1px solid var(--line); font-weight:800; font-size:.9rem; }
         .notification-empty { padding:18px 13px; font-size:.9rem; color:var(--muted); }
+        .notification-list { flex:1 1 auto; min-height:0; overflow-y:auto; }
+        .notification-status-item { display:block; padding:11px 13px; border-bottom:1px solid var(--line); color:inherit; text-decoration:none; }
+        .notification-status-item:hover { background:#fff8f3; }
+        .notification-status-line { display:flex; align-items:center; gap:7px; font-size:.78rem; font-weight:900; letter-spacing:.04em; }
+        .notification-status-line i { font-size:.8rem; }
+        .notification-status-line.is-approved { color:#027a48; }
+        .notification-status-line.is-rejected { color:#b42318; }
+        .notification-status-line.is-incomplete { color:#b54708; }
+        .notification-status-line.is-default { color:#475467; }
+        .notification-reason { margin-top:4px; color:#475467; font-size:.8rem; line-height:1.45; }
+        .notification-business { margin-top:5px; color:#667085; font-size:.74rem; font-weight:700; }
+        .notification-time { display:block; margin-top:6px; color:#98a2b3; font-size:.7rem; }
+        .notification-pagination { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border-top:1px solid var(--line); background:#fff8f3; }
+        .notification-page-btn { width:28px; height:28px; border:1px solid var(--line); border-radius:8px; background:#fff; color:#475467; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+        .notification-page-btn:hover:not(:disabled) { background:#b3261e; border-color:#b3261e; color:#fff; }
+        .notification-page-btn:disabled { opacity:.35; cursor:not-allowed; }
+        .notification-page-label { color:#667085; font-size:.7rem; font-weight:800; }
+        @media (max-width:480px) {
+            .notification-dropdown { width:min(320px, calc(100vw - 24px)); min-width:0; right:-48px; }
+        }
         .mobile-toggle { display:none !important; }
+
+        /* Header Active Order Pill */
+        .header-ongoing-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, #b3261e, #ef6b2e);
+            color: #ffffff !important;
+            padding: 0 14px;
+            min-height: 38px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 0.84rem;
+            text-decoration: none;
+            box-shadow: 0 4px 14px rgba(179, 38, 30, 0.25);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            white-space: nowrap;
+            position: relative;
+        }
+        .header-ongoing-pill:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(179, 38, 30, 0.35);
+        }
+        .ongoing-pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7);
+            animation: ongoingPulseDot 1.4s infinite;
+        }
+        @keyframes ongoingPulseDot {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(255, 255, 255, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+        }
+
+        /* Floating Sticky Bottom Right Ongoing Order Banner */
+        .sticky-ongoing-widget {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 1100;
+            max-width: 420px;
+            width: calc(100vw - 32px);
+            animation: stickySlideUp 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        @keyframes stickySlideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .sticky-ongoing-link {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: #ffffff;
+            border: 1px solid #efddcd;
+            border-radius: 18px;
+            padding: 14px 18px;
+            box-shadow: 0 14px 34px rgba(23, 25, 34, 0.12);
+            text-decoration: none;
+            color: #171922;
+            transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+        }
+        .sticky-ongoing-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 18px 40px rgba(179, 38, 30, 0.15);
+            border-color: #b3261e;
+        }
+        .sticky-ongoing-icon {
+            width: 46px;
+            height: 46px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #b3261e, #ef6b2e);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            position: relative;
+            flex-shrink: 0;
+            box-shadow: 0 6px 16px rgba(179, 38, 30, 0.25);
+        }
+        .sticky-pulse-ring {
+            position: absolute;
+            inset: -3px;
+            border-radius: 16px;
+            border: 2px solid #ef6b2e;
+            animation: stickyPulse 1.8s infinite;
+            pointer-events: none;
+        }
+        @keyframes stickyPulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.18); opacity: 0; }
+        }
+        .sticky-ongoing-info { flex: 1; min-width: 0; }
+        .sticky-ongoing-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 2px; }
+        .sticky-live-tag {
+            font-size: 0.68rem;
+            font-weight: 800;
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+            padding: 2px 7px;
+            border-radius: 8px;
+            letter-spacing: 0.5px;
+        }
+        .sticky-ongoing-status {
+            font-size: 0.86rem;
+            color: #667085;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .sticky-ongoing-btn {
+            background: #fff4e8;
+            color: #b3261e;
+            border: 1px solid #efddcd;
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-weight: 800;
+            font-size: 0.84rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+        .sticky-ongoing-link:hover .sticky-ongoing-btn {
+            background: #b3261e;
+            color: #ffffff;
+            border-color: #b3261e;
+        }
         .mobile-menu-overlay { position:fixed; inset:0; background:rgba(14,20,31,.48); z-index:1290; opacity:0; visibility:hidden; transition:opacity var(--motion-fast) var(--motion-ease), visibility var(--motion-fast) var(--motion-ease); }
         .mobile-menu-overlay.active { opacity:1; visibility:visible; }
         .mobile-menu { position:fixed; top:0; right:-360px; width:min(340px,92vw); height:100vh; background:#fff; border-left:1px solid var(--line); box-shadow:-14px 0 34px rgba(15,23,42,.14); z-index:1300; transition:right var(--motion-base) var(--motion-ease); display:flex; flex-direction:column; }
@@ -121,10 +987,236 @@ $favorites_feature_enabled = $is_customer_user;
         ::-webkit-scrollbar-thumb:hover {
             background: #94a3b8;
         }
-        * {
-            scrollbar-width: thin;
-            scrollbar-color: #cbd5e1 #f8fafc;
+        /* Professional SweetAlert2 Modal & Toast Design System Theme */
+        .swal2-container {
+            backdrop-filter: blur(4px) !important;
+            -webkit-backdrop-filter: blur(4px) !important;
+            background: rgba(16, 24, 40, 0.5) !important;
+            z-index: 999999 !important;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
         }
+        .swal2-popup {
+            background: #ffffff !important;
+            border-radius: 18px !important;
+            border: 1px solid #eaecf0 !important;
+            box-shadow: 0 20px 25px -5px rgba(16, 24, 40, 0.1), 0 8px 10px -6px rgba(16, 24, 40, 0.04) !important;
+            padding: 28px 24px 24px !important;
+            max-width: 440px !important;
+            width: 90vw !important;
+        }
+        .swal2-title {
+            font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif !important;
+            font-size: 1.25rem !important;
+            font-weight: 800 !important;
+            color: #101828 !important;
+            letter-spacing: -0.01em !important;
+            margin: 8px 0 0 !important;
+            padding: 0 !important;
+        }
+        .swal2-html-container {
+            font-family: 'Plus Jakarta Sans', sans-serif !important;
+            font-size: 0.92rem !important;
+            color: #475467 !important;
+            line-height: 1.55 !important;
+            margin: 8px 0 0 !important;
+            padding: 0 4px !important;
+        }
+        .swal2-icon {
+            width: 60px !important;
+            height: 60px !important;
+            min-width: 60px !important;
+            min-height: 60px !important;
+            margin: 0 auto 12px !important;
+            border-width: 2.5px !important;
+            border-style: solid !important;
+            border-radius: 50% !important;
+            box-sizing: border-box !important;
+            position: relative !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        .swal2-icon .swal2-icon-content {
+            font-size: 1.85rem !important;
+            font-weight: 800 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            line-height: 1 !important;
+            margin: 0 !important;
+        }
+        /* Error / Danger Icon */
+        .swal2-icon.swal2-error {
+            border-color: #fee4e2 !important;
+            background-color: #fff1f0 !important;
+            color: #b3261e !important;
+        }
+        .swal2-icon.swal2-error .swal2-x-mark {
+            position: relative !important;
+            width: 100% !important;
+            height: 100% !important;
+            display: block !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        .swal2-icon.swal2-error [class^=swal2-x-mark-line] {
+            position: absolute !important;
+            height: 3px !important;
+            width: 24px !important;
+            background-color: #b3261e !important;
+            border-radius: 2px !important;
+            top: calc(50% - 1.5px) !important;
+            left: calc(50% - 12px) !important;
+            right: auto !important;
+            margin: 0 !important;
+            transform-origin: center center !important;
+        }
+        .swal2-icon.swal2-error [class^=swal2-x-mark-line][class$=left] {
+            transform: rotate(45deg) !important;
+        }
+        .swal2-icon.swal2-error [class^=swal2-x-mark-line][class$=right] {
+            transform: rotate(-45deg) !important;
+        }
+        /* Warning Icon */
+        .swal2-icon.swal2-warning {
+            border-color: #fedf89 !important;
+            background-color: #fffaeb !important;
+            color: #b54708 !important;
+        }
+        .swal2-icon.swal2-warning .swal2-icon-content {
+            color: #b54708 !important;
+        }
+        /* Success Icon */
+        .swal2-icon.swal2-success {
+            border-color: #abefc6 !important;
+            background-color: #ecfdf3 !important;
+            color: #027a48 !important;
+        }
+        .swal2-icon.swal2-success [class^=swal2-success-circular-line],
+        .swal2-icon.swal2-success .swal2-success-fix,
+        .swal2-icon.swal2-success .swal2-success-ring {
+            display: none !important;
+        }
+        .swal2-icon.swal2-success [class^=swal2-success-line] {
+            background-color: #027a48 !important;
+            height: 3px !important;
+            border-radius: 2px !important;
+            position: absolute !important;
+            z-index: 2 !important;
+            display: block !important;
+        }
+        .swal2-icon.swal2-success .swal2-success-line-tip {
+            width: 14px !important;
+            top: 31px !important;
+            left: 14px !important;
+            transform: rotate(45deg) !important;
+            transform-origin: left bottom !important;
+        }
+        .swal2-icon.swal2-success .swal2-success-line-long {
+            width: 24px !important;
+            top: 26px !important;
+            left: 23px !important;
+            right: auto !important;
+            transform: rotate(-45deg) !important;
+            transform-origin: left bottom !important;
+        }
+        /* Info Icon */
+        .swal2-icon.swal2-info {
+            border-color: #b2ddff !important;
+            background-color: #eff8ff !important;
+            color: #175cd3 !important;
+        }
+        .swal2-icon.swal2-info .swal2-icon-content {
+            color: #175cd3 !important;
+        }
+        /* Question Icon */
+        .swal2-icon.swal2-question {
+            border-color: #eaecf0 !important;
+            background-color: #f8f9fa !important;
+            color: #344054 !important;
+        }
+        .swal2-icon.swal2-question .swal2-icon-content {
+            color: #344054 !important;
+        }
+        /* Modal Action Buttons */
+        .swal2-actions {
+            margin-top: 22px !important;
+            gap: 10px !important;
+            width: 100% !important;
+            justify-content: center !important;
+            padding: 0 !important;
+        }
+        .swal2-styled.swal2-confirm {
+            background-color: #b3261e !important;
+            color: #ffffff !important;
+            border: none !important;
+            border-radius: 10px !important;
+            font-family: 'Plus Jakarta Sans', sans-serif !important;
+            font-size: 0.88rem !important;
+            font-weight: 700 !important;
+            padding: 10px 24px !important;
+            min-width: 110px !important;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05) !important;
+            transition: all 0.15s ease !important;
+            cursor: pointer !important;
+        }
+        .swal2-styled.swal2-confirm:hover {
+            background-color: #981b15 !important;
+            transform: translateY(-1px) !important;
+            box-shadow: 0 4px 12px rgba(179, 38, 30, 0.2) !important;
+        }
+        .swal2-styled.swal2-cancel {
+            background-color: #ffffff !important;
+            color: #344054 !important;
+            border: 1px solid #d0d5dd !important;
+            border-radius: 10px !important;
+            font-family: 'Plus Jakarta Sans', sans-serif !important;
+            font-size: 0.88rem !important;
+            font-weight: 700 !important;
+            padding: 10px 22px !important;
+            min-width: 100px !important;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05) !important;
+            transition: all 0.15s ease !important;
+            cursor: pointer !important;
+        }
+        .swal2-styled.swal2-cancel:hover {
+            background-color: #f8f9fa !important;
+            border-color: #98a2b3 !important;
+            color: #101828 !important;
+        }
+        .swal2-styled.swal2-deny {
+            background-color: #fff1f0 !important;
+            color: #b3261e !important;
+            border: 1px solid #fee4e2 !important;
+            border-radius: 10px !important;
+            font-weight: 700 !important;
+            padding: 10px 20px !important;
+        }
+        /* Modern SweetAlert Toast Style */
+        .swal2-toast {
+            background: #ffffff !important;
+            border: 1px solid #eaecf0 !important;
+            border-radius: 14px !important;
+            box-shadow: 0 12px 30px -4px rgba(16, 24, 40, 0.14), 0 4px 6px -2px rgba(16, 24, 40, 0.05) !important;
+            padding: 12px 18px !important;
+        }
+        .swal2-toast .swal2-title {
+            font-size: 0.88rem !important;
+            font-weight: 700 !important;
+            color: #101828 !important;
+            margin: 0 !important;
+            text-align: left !important;
+        }
+        .swal2-toast .swal2-icon {
+            width: 28px !important;
+            height: 28px !important;
+            min-width: 28px !important;
+            margin: 0 10px 0 0 !important;
+        }
+        .swal2-close:focus {
+            box-shadow: none !important;
+        }
+
 
         /* Smooth Foodpanda Dark Backdrop Overlay */
         .market-search-backdrop {
@@ -151,12 +1243,20 @@ $favorites_feature_enabled = $is_customer_user;
             position: sticky;
             top: 0;
             z-index: 1200;
-            background: #ffffff !important;
+            background: #ffffff;
             backdrop-filter: none !important;
             -webkit-backdrop-filter: none !important;
             border-bottom: 1px solid var(--line);
             box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
             width: 100%;
+        }
+        body.dark-mode .site-header,
+        html.dark-mode .site-header,
+        body.dark-mode .market-header-bottom,
+        html.dark-mode .market-header-bottom {
+            background: #1e293b !important;
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
         }
 
         .market-header-top, .market-header-bottom { max-width:1280px; margin:0 auto; padding:0 24px; width:100%; box-sizing:border-box; }
@@ -384,7 +1484,8 @@ $favorites_feature_enabled = $is_customer_user;
             transform: translateY(-1px);
         }
 
-        .market-address-trigger { border:1px solid var(--line); background:#fff7ef; border-radius:999px; min-height:38px; padding:0 12px; color:#2a3042; display:inline-flex; align-items:center; gap:7px; cursor:pointer; font-size:.84rem; font-weight:600; max-width:260px; transition:var(--transition-lift); flex-shrink:0; }
+        .market-address-trigger { border:1px solid var(--line); background:#fff7ef; border-radius:999px; min-height:38px; padding:0 14px; color:#2a3042; display:inline-flex; align-items:center; gap:7px; cursor:pointer; font-size:.84rem; font-weight:600; max-width:280px; transition:var(--transition-lift); flex-shrink:0; }
+        .market-address-trigger .address-text { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:210px; display:inline-block; vertical-align:middle; text-align:left; }
         .market-partner-cta { min-height:38px; padding:0 14px; border-radius:999px; border:1px solid #f0c4a8; background:linear-gradient(135deg,#171922,#2b3144); color:#fff; text-decoration:none; font-size:.82rem; font-weight:800; display:inline-flex; align-items:center; gap:8px; transition:var(--transition-lift); white-space:nowrap; }
         .market-search-popover {
             position: absolute;
@@ -436,22 +1537,637 @@ $favorites_feature_enabled = $is_customer_user;
         .map-modal-btn.primary { background:linear-gradient(135deg,#e11d8f,#db2777); color:#fff; }
         .map-modal-btn.secondary:hover { background:#e5e7eb; }
         .map-modal-btn.primary:hover { filter:brightness(.96); transform:translateY(-1px); }
-        @media (max-width:768px){ .mobile-toggle{display:inline-flex !important;} .main-nav{display:none;} .header-shell,.market-header-top,.market-header-bottom{padding-left:14px;padding-right:14px;} .market-header-top{flex-wrap:wrap;} .market-home-search-wrap{order:3;flex-basis:100%;min-width:100%;margin-top:4px;} .btn-signin,.btn-register{padding:0 10px;font-size:.78rem;min-height:34px;} }
-        @media (max-width:480px){ .logo-title{font-size:1.02rem;} .logo-sub{font-size:.6rem;} }
-    </style>
-</head>
-<body class="<?php echo $is_market_home_header ? 'market-body' : 'site-body'; ?>">
+        /* Foodpanda Style Mobile Ready Layout */
+        @media (max-width: 768px) {
+            .site-header {
+                box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04) !important;
+                background: rgba(255, 255, 255, 0.88) !important;
+                backdrop-filter: blur(18px) !important;
+                -webkit-backdrop-filter: blur(18px) !important;
+                border-bottom: 1px solid rgba(234, 236, 240, 0.8) !important;
+                position: sticky !important;
+                top: 0 !important;
+                z-index: 1200 !important;
+            }
+            .market-header-top, .standard-top {
+                display: flex !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                gap: 8px !important;
+                min-height: 52px !important;
+                padding: 6px 12px !important;
+                flex-wrap: nowrap !important;
+            }
+            .mobile-toggle {
+                display: inline-flex !important;
+                width: 36px !important;
+                height: 36px !important;
+                border-radius: 10px !important;
+                border: 1px solid #eaecf0 !important;
+                background: #ffffff !important;
+                color: #101828 !important;
+                flex-shrink: 0 !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
+            .market-header-top.has-address-bar .logo-link {
+                display: none !important;
+            }
+            .market-header-top.no-address-bar .logo-link,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-link {
+                display: inline-flex !important;
+                align-items: center !important;
+                gap: 8px !important;
+                min-width: 0 !important;
+                flex-shrink: 1 !important;
+            }
+            .market-header-top.no-address-bar .logo-copy,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-copy {
+                display: flex !important;
+                flex-direction: column !important;
+                min-width: 0 !important;
+            }
+            .market-header-top.no-address-bar .logo-title,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-title {
+                font-size: 0.92rem !important;
+                font-weight: 800 !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                line-height: 1.2 !important;
+            }
+            .market-header-top.no-address-bar .logo-sub,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-sub {
+                display: none !important;
+            }
+            .market-header-top.no-address-bar .logo-icon,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-icon {
+                width: 32px !important;
+                height: 32px !important;
+                border-radius: 8px !important;
+                flex-shrink: 0 !important;
+            }
+            .standard-top .logo-link {
+                display: inline-flex !important;
+                gap: 8px !important;
+            }
+            .standard-top .logo-sub {
+                display: none !important;
+            }
+            .market-address-wrap {
+                order: 1 !important;
+                flex: 1 1 auto !important;
+                min-width: 0 !important;
+                margin: 0 !important;
+                display: flex !important;
+                justify-content: flex-start !important;
+            }
+            .market-address-trigger {
+                width: 100% !important;
+                max-width: 100% !important;
+                min-height: 38px !important;
+                padding: 0 12px !important;
+                background: rgba(244, 245, 247, 0.85) !important;
+                backdrop-filter: blur(12px) !important;
+                -webkit-backdrop-filter: blur(12px) !important;
+                border: 1px solid rgba(234, 236, 240, 0.85) !important;
+                border-radius: 999px !important;
+                font-size: 0.8rem !important;
+                font-weight: 700 !important;
+                display: flex !important;
+                align-items: center !important;
+                gap: 6px !important;
+                min-width: 0 !important;
+            }
+            .market-address-trigger .address-text {
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                flex: 1 1 auto !important;
+                text-align: left !important;
+                font-size: 0.8rem !important;
+                color: #1e293b !important;
+                min-width: 0 !important;
+            }
+            .market-address-popover {
+                left: 0 !important;
+                right: auto !important;
+                width: min(340px, calc(100vw - 20px)) !important;
+                max-width: calc(100vw - 20px) !important;
+                padding: 14px 12px !important;
+            }
+            .header-actions {
+                order: 2 !important;
+                display: flex !important;
+                align-items: center !important;
+                gap: 6px !important;
+                flex-shrink: 0 !important;
+            }
+            .header-actions .auth-buttons {
+                display: none !important;
+            }
+            .mobile-user-btn {
+                display: inline-flex !important;
+                width: 36px !important;
+                height: 36px !important;
+                border-radius: 10px !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
+            .header-actions #favoritesToggle,
+            .header-actions #chatBtn,
+            .header-actions .notification-wrapper {
+                display: none !important;
+            }
+            .header-actions .icon-btn {
+                width: 36px !important;
+                height: 36px !important;
+                border-radius: 10px !important;
+            }
+            .main-nav, .market-home-nav {
+                display: none !important;
+            }
+            .market-header-bottom {
+                padding: 0 12px 8px !important;
+                border-top: none !important;
+            }
+            .market-home-search-wrap {
+                width: 100% !important;
+                min-width: 100% !important;
+                margin-top: 0 !important;
+            }
+            .market-home-search {
+                min-height: 42px !important;
+                background: rgba(244, 245, 247, 0.85) !important;
+                backdrop-filter: blur(12px) !important;
+                -webkit-backdrop-filter: blur(12px) !important;
+                border: 1px solid rgba(234, 236, 240, 0.85) !important;
+                border-radius: 999px !important;
+                padding: 0 16px !important;
+            }
+            .market-home-search input {
+                font-size: 0.88rem !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .market-header-top, .standard-top {
+                padding: 6px 8px !important;
+                gap: 6px !important;
+            }
+            .header-actions {
+                gap: 4px !important;
+            }
+            .header-actions .icon-btn,
+            .mobile-user-btn,
+            .mobile-toggle {
+                width: 34px !important;
+                height: 34px !important;
+                font-size: 0.84rem !important;
+            }
+            .market-address-trigger {
+                min-height: 34px !important;
+                padding: 0 8px !important;
+                font-size: 0.76rem !important;
+            }
+            .market-address-trigger .address-text {
+                font-size: 0.76rem !important;
+            }
+        }
+
+            /* Unified Slide-in Drawer defined below */
+            .mobile-profile-card {
+                padding: 16px 14px;
+                background: #f8fafc;
+                border-bottom: 1px solid #eaecf0;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            .mobile-profile-avatar {
+                width: 44px;
+                height: 44px;
+                border-radius: 50%;
+                background: #b3261e;
+                color: #ffffff;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.1rem;
+                font-weight: 800;
+                overflow: hidden;
+                flex-shrink: 0;
+            }
+            .mobile-profile-avatar img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            .mobile-profile-info {
+                min-width: 0;
+                flex: 1;
+            }
+            .mobile-profile-name {
+                font-size: 0.94rem;
+                font-weight: 800;
+                color: #101828;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .mobile-profile-email {
+                font-size: 0.76rem;
+                color: #667085;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .mobile-nav a {
+                font-size: 0.92rem;
+                padding: 11px 14px;
+                border-radius: 10px;
+                color: #1e293b;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            .mobile-nav a i {
+                width: 20px;
+                text-align: center;
+                color: #b3261e;
+                font-size: 1rem;
+            }
+            .mobile-nav a:hover, .mobile-nav a.active {
+                background: #fff1f0;
+                color: #b3261e;
+            }
+            .mobile-auth {
+                padding: 14px;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                border-top: 1px solid #eaecf0;
+                margin-top: auto;
+            }
+        }
+        @media (max-width: 480px) {
+            .logo-title { font-size: 0.98rem; }
+            .logo-sub { font-size: 0.58rem; }
+        }
+        @media (max-width: 360px) {
+            .market-header-top {
+                padding: 8px 10px !important;
+                gap: 6px !important;
+            }
+            .header-actions {
+                gap: 4px !important;
+            }
+            .header-actions .icon-btn,
+            .header-actions .mobile-toggle {
+                width: 32px !important;
+                height: 32px !important;
+                min-width: 32px !important;
+                font-size: 0.78rem !important;
+                border-radius: 8px !important;
+            }
+            .user-avatar-btn .user-avatar-initial,
+            .user-avatar-btn .user-avatar-thumb {
+                width: 28px !important;
+                height: 28px !important;
+                font-size: 0.78rem !important;
+            }
+            .market-header-top.no-address-bar .logo-title,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-title {
+                font-size: 0.84rem !important;
+            }
+            .market-header-top.no-address-bar .logo-icon,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-icon {
+                width: 28px !important;
+                height: 28px !important;
+            }
+        }
+    
+        /* Guaranteed Mobile Drawer & Glassmorphic Overlay (Reference Screen 8) */
+        .mobile-menu-overlay {
+            position: fixed !important;
+            inset: 0 !important;
+            background: rgba(16, 24, 40, 0.5) !important;
+            backdrop-filter: blur(8px) !important;
+            -webkit-backdrop-filter: blur(8px) !important;
+            z-index: 99998 !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            transition: opacity 0.25s ease, visibility 0.25s ease !important;
+            pointer-events: none !important;
+        }
+        .mobile-menu-overlay.active {
+            opacity: 1 !important;
+            visibility: visible !important;
+            pointer-events: auto !important;
+        }
+        .mobile-menu {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            bottom: 0 !important;
+            right: auto !important;
+            width: min(320px, 86vw) !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            background: rgba(255, 255, 255, 0.98) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            border-right: 1px solid rgba(234, 236, 240, 0.85) !important;
+            border-left: none !important;
+            box-shadow: 14px 0 40px rgba(16, 24, 40, 0.18) !important;
+            z-index: 99999 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            transform: translateX(-100%) !important;
+            transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+        .mobile-menu.active {
+            transform: translateX(0) !important;
+            visibility: visible !important;
+        }
+        .mobile-menu-header {
+            padding: 18px 16px;
+            border-bottom: 1px solid rgba(234, 236, 240, 0.85);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .mobile-menu-close {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid #eaecf0;
+            background: #ffffff;
+            color: #475467;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.18s ease;
+        }
+        .mobile-menu-close:active {
+            transform: scale(0.92);
+            background: #fff1f0;
+            color: #b3261e;
+        }
+        .mobile-nav {
+            margin: 0;
+            padding: 12px;
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .mobile-nav a {
+            text-decoration: none;
+            color: #1d2939;
+            font-size: 0.92rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            transition: all 0.18s ease;
+        }
+        .mobile-nav a i:not(.chevron-icon) {
+            width: 22px;
+            text-align: center;
+            color: #b3261e;
+            font-size: 1rem;
+        }
+        .mobile-nav a .chevron-icon {
+            margin-left: auto;
+            color: #98a2b3;
+            font-size: 0.75rem;
+        }
+        .mobile-nav a:hover,
+        .mobile-nav a.active {
+            background: #fff1f0;
+            color: #b3261e;
+        }
+        body.dark-mode .mobile-menu {
+            background: rgba(30, 41, 59, 0.98) !important;
+            border-color: rgba(51, 65, 85, 0.85) !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .mobile-menu-header {
+            border-bottom-color: rgba(51, 65, 85, 0.85) !important;
+        }
+        body.dark-mode .mobile-menu-close {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .mobile-nav a {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .mobile-nav a:hover,
+        body.dark-mode .mobile-nav a.active {
+            background: #334155 !important;
+            color: #ffffff !important;
+        }
+
+        /* Mobile Header Popover Placement & Active Order Banner Fix */
+        @media (max-width: 768px) {
+            .user-dropdown {
+                position: fixed !important;
+                top: 64px !important;
+                right: 14px !important;
+                left: auto !important;
+                width: min(300px, calc(100vw - 28px)) !important;
+                max-width: calc(100vw - 28px) !important;
+                margin-left: auto !important;
+                box-shadow: 0 14px 40px rgba(16, 24, 40, 0.22) !important;
+                border-radius: 18px !important;
+                z-index: 99999 !important;
+                max-height: calc(100vh - 120px) !important;
+                max-height: calc(100dvh - 120px) !important;
+                overflow-y: auto !important;
+                -webkit-overflow-scrolling: touch !important;
+            }
+            .notification-dropdown {
+                position: fixed !important;
+                top: 64px !important;
+                right: 14px !important;
+                left: auto !important;
+                width: min(300px, calc(100vw - 28px)) !important;
+                max-width: calc(100vw - 28px) !important;
+                margin-left: auto !important;
+                box-shadow: 0 14px 40px rgba(16, 24, 40, 0.22) !important;
+                border-radius: 18px !important;
+                z-index: 99999 !important;
+            }
+            .sticky-ongoing-widget {
+                bottom: 84px !important;
+                right: 14px !important;
+                left: 14px !important;
+                width: auto !important;
+                max-width: none !important;
+                z-index: 1240 !important;
+            }
+        }
+        .sticky-ongoing-close-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #171922;
+            color: #ffffff;
+            border: 2px solid #ffffff;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+
+</style>
+    <!-- Leaflet Map CSS and JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<script>
+window.openMobileNavSidebar = function(e) {
+    if (e) {
+        if (e.cancelable && typeof e.preventDefault === 'function') e.preventDefault();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    var m = document.getElementById('mobileMenu');
+    var o = document.getElementById('mobileOverlay');
+    if (m) {
+        m.classList.add('active');
+        m.style.setProperty('display', 'flex', 'important');
+        m.style.setProperty('transform', 'translate3d(0, 0, 0)', 'important');
+        m.style.setProperty('visibility', 'visible', 'important');
+        m.style.setProperty('pointer-events', 'auto', 'important');
+        m.style.setProperty('opacity', '1', 'important');
+        m.style.setProperty('left', '0', 'important');
+        m.style.setProperty('right', 'auto', 'important');
+        m.style.setProperty('z-index', '999999', 'important');
+    }
+    if (o) {
+        o.classList.add('active');
+        o.style.setProperty('display', 'block', 'important');
+        o.style.setProperty('opacity', '1', 'important');
+        o.style.setProperty('visibility', 'visible', 'important');
+        o.style.setProperty('pointer-events', 'auto', 'important');
+        o.style.setProperty('z-index', '999998', 'important');
+    }
+    document.body.style.overflow = 'hidden';
+};
+window.closeMobileNavSidebar = function(e) {
+    if (e) {
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    var m = document.getElementById('mobileMenu');
+    var o = document.getElementById('mobileOverlay');
+    if (m) {
+        m.classList.remove('active');
+        m.style.setProperty('transform', 'translate3d(-100%, 0, 0)', 'important');
+        m.style.setProperty('pointer-events', 'none', 'important');
+    }
+    if (o) {
+        o.classList.remove('active');
+        o.style.setProperty('opacity', '0', 'important');
+        o.style.setProperty('pointer-events', 'none', 'important');
+        setTimeout(function() {
+            if (o && !o.classList.contains('active')) {
+                o.style.setProperty('display', 'none', 'important');
+            }
+        }, 220);
+    }
+    document.body.style.overflow = '';
+};
+
+// 0ms Fast Touch & Click Listeners for Drawer
+document.addEventListener('click', function(e) {
+    var toggle = e.target.closest('#mobileToggle, #mobileToggle2, .mobile-toggle');
+    if (toggle) {
+        window.openMobileNavSidebar(e);
+        return;
+    }
+    var close = e.target.closest('#mobileMenuClose, .mobile-menu-close, #mobileOverlay');
+    if (close) {
+        window.closeMobileNavSidebar(e);
+        return;
+    }
+    var navLink = e.target.closest('.mobile-nav a');
+    if (navLink) {
+        window.closeMobileNavSidebar();
+    }
+}, true);
+
+document.addEventListener('pointerdown', function(e) {
+    // Instant tactile feedback on any touchable element
+    var touchable = e.target.closest('a, button, [role="button"], .mob-nav-item, .rider-nav-item, .menu-item, .btn, .icon-btn, .tab-btn');
+    if (touchable) {
+        touchable.classList.add('is-touch-active');
+        var onRelease = function() {
+            touchable.classList.remove('is-touch-active');
+            window.removeEventListener('pointerup', onRelease);
+            window.removeEventListener('pointercancel', onRelease);
+        };
+        window.addEventListener('pointerup', onRelease, { once: true, passive: true });
+        window.addEventListener('pointercancel', onRelease, { once: true, passive: true });
+    }
+}, { passive: true });
+
+// Instant Mobile Navigation Micro-Progress Bar
+(function() {
+    var progressBar = document.createElement('div');
+    progressBar.id = 'siteNavProgressBar';
+    progressBar.style.cssText = 'position:fixed;top:0;left:0;height:2.5px;width:0%;background:#b3261e;z-index:9999999;transition:width 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;pointer-events:none;opacity:0;box-shadow:0 0 10px rgba(179,38,30,0.7);';
+    document.documentElement.appendChild(progressBar);
+
+    document.addEventListener('click', function(e) {
+        var link = e.target.closest('a[href]');
+        if (!link) return;
+        var href = link.getAttribute('href');
+        if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('tel:') || href.startsWith('mailto:') || link.target === '_blank' || e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey) {
+            return;
+        }
+        progressBar.style.opacity = '1';
+        progressBar.style.width = '78%';
+    }, { capture: true, passive: true });
+
+    window.addEventListener('pageshow', function() {
+        progressBar.style.width = '100%';
+        setTimeout(function() {
+            progressBar.style.opacity = '0';
+            setTimeout(function() { progressBar.style.width = '0%'; }, 200);
+        }, 120);
+    });
+})();
+</script>
+
+<body class="<?php echo $is_market_home_header ? 'market-body' : 'site-body'; ?><?php echo $is_initial_dark ? ' dark-mode' : ''; ?>">
+<script>(function(){if(document.documentElement.classList.contains('dark-mode')&&document.body){document.body.classList.add('dark-mode');}})();</script>
 <?php if ($is_market_home_header): ?>
 <header class="site-header market-main-header">
-    <div class="market-header-top">
-        <a href="<?php echo $path_prefix; ?>index.php" class="logo-link">
-            <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
+    <div class="market-header-top <?php echo in_array($current_page, ['index', 'home', 'pickup'], true) ? 'has-address-bar' : 'no-address-bar'; ?>">
+        <a href="<?php echo htmlspecialchars($nav_logo_href); ?>" class="logo-link">
+            <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.png?v=lechon2" alt="Lechon Delight Logo" style="width: 100%; height: 100%; object-fit: contain; display: block;"></span>
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
         </a>
 
+        <?php if (in_array($current_page, ['index', 'home', 'pickup'], true)): ?>
         <div class="market-address-wrap" id="marketAddressWrap">
-            <button type="button" class="market-address-trigger" id="marketAddressToggle">
-                <i class="fas fa-location-dot"></i><span class="address-text" id="marketAddressDisplay"><?php echo htmlspecialchars($market_header_address_display); ?></span><i class="fas fa-chevron-down"></i>
+            <button type="button" class="market-address-trigger" id="marketAddressToggle" title="<?php echo htmlspecialchars($market_header_address_display); ?>">
+                <i class="fas fa-location-dot"></i><span class="address-text" id="marketAddressDisplay" title="<?php echo htmlspecialchars($market_header_address_display); ?>"><?php echo htmlspecialchars($market_header_address_display_short); ?></span><i class="fas fa-chevron-down"></i>
             </button>
             <div class="market-address-popover" id="marketAddressPopover">
                 <div class="market-address-input-row">
@@ -476,33 +2192,50 @@ $favorites_feature_enabled = $is_customer_user;
                         <button type="button" class="market-address-pill" data-city="Tagaytay" data-street="Tagaytay, Cavite">Tagaytay</button>
                     </div>
                 </div>
+                <!-- Header Location Pinning Map -->
+                <div style="padding: 0 16px 14px 16px;">
+                    <div id="headerMap" style="height: 180px; width: 100%; border-radius: 8px; border: 1px solid #efddcd; z-index: 1;"></div>
+                    <p style="font-size: 0.72rem; color: #7b6d64; margin: 4px 0 10px 0; text-align: left; font-weight: 500;">Drag the pin or click on the map to set your location.</p>
+                    <button type="button" id="headerSaveLocationBtn" style="width: 100%; background: #b3261e; color: #fff; font-weight: 800; font-size: 14px; border: none; border-radius: 10px; padding: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 12px rgba(179,38,30,0.25);">
+                        <i class="fas fa-check-circle"></i> Save Location
+                    </button>
+                </div>
             </div>
         </div>
+        <?php endif; ?>
 
         <div class="header-actions">
             <?php if ($is_logged_in_user): ?>
+            <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
+            <div class="notification-wrapper">
+                <button class="icon-btn"><i class="fas fa-bell"></i><span class="badge" id="notificationBadge" style="display:none;">0</span></button>
+                <div class="notification-dropdown" id="notificationDropdown"><div class="notification-header"><span>Notifications</span><a href="<?php echo $path_prefix; ?>my_notifications.php">View all</a></div><div class="notification-empty">No new notifications yet.</div></div>
+            </div>
             <div class="user-menu-wrapper">
-                <button class="icon-btn user-avatar-btn" aria-label="Open user menu">
+                <button class="icon-btn user-avatar-btn" aria-label="Open user menu" title="<?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : 'Profile Settings'); ?>">
                     <?php if ($viewer_profile_image_url !== ''): ?>
                     <img src="<?php echo htmlspecialchars($viewer_profile_image_url); ?>" alt="Profile picture" class="user-avatar-thumb">
                     <?php else: ?>
-                    <i class="fas fa-user-circle"></i>
+                    <span class="user-avatar-initial"><?php echo htmlspecialchars(strtoupper(substr($viewer_name !== '' ? $viewer_name : ($viewer_first_name !== '' ? $viewer_first_name : 'U'), 0, 1))); ?></span>
                     <?php endif; ?>
                 </button>
                 <div class="user-dropdown">
-                    <div class="user-dropdown-header"><div class="user-name"><?php echo htmlspecialchars($viewer_first_name); ?></div><?php if ($viewer_email !== ''): ?><div class="user-email"><?php echo htmlspecialchars($viewer_email); ?></div><?php endif; ?></div>
-                    <a href="<?php echo $path_prefix; ?>my_account.php" class="user-dropdown-item"><i class="fas fa-user"></i> My Profile</a>
-                    <a href="<?php echo $path_prefix; ?>my_account.php#addresses" class="user-dropdown-item"><i class="fas fa-address-book"></i> Address Book</a>
-                    <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> My Orders</a>
-                    <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
-                    <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="user-dropdown-item"><i class="fas fa-layer-group"></i> Subscription Plans</a>
+                    <div class="user-dropdown-header"><div class="user-name"><?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : $viewer_first_name); ?></div><?php if ($viewer_email !== ''): ?><div class="user-email"><?php echo htmlspecialchars($viewer_email); ?></div><?php endif; ?></div>
+                    <a href="<?php echo $path_prefix; ?>my_account.php" class="user-dropdown-item"><i class="fas fa-user-gear"></i> Profile Settings</a>
+                    <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> Orders</a>
                     <?php if ($favorites_feature_enabled): ?>
-                    <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> My Favorites</a>
+                    <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> Favorites</a>
                     <?php endif; ?>
+                    <?php if (!$is_shop_owner_or_partner): ?>
                     <a href="<?php echo $path_prefix; ?>franchise_application.php" class="user-dropdown-item"><i class="fas fa-store"></i> Apply for Business</a>
+                    <?php endif; ?>
+                    <a href="javascript:void(0);" onclick="openCustomerTutorial(true)" class="user-dropdown-item"><i class="fas fa-compass"></i> Customer Guide</a>
+                    <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
                     <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
+                    <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="user-dropdown-item"><i class="fas fa-layer-group"></i> Subscription Plans</a>
                     <a href="<?php echo $path_prefix; ?>seller_products.php" class="user-dropdown-item"><i class="fas fa-box"></i> My Products</a>
                     <a href="<?php echo $path_prefix; ?>seller_vouchers.php" class="user-dropdown-item"><i class="fas fa-tags"></i> My Vouchers</a>
+                    <a href="<?php echo $path_prefix; ?>seller_advertisements.php" class="user-dropdown-item"><i class="fas fa-bullhorn"></i> My Advertisements</a>
                     <?php endif; ?>
                     <?php if ($normalized_user_type === 'admin'): ?>
                     <a href="<?php echo $path_prefix; ?>admin/index.php" class="user-dropdown-item"><i class="fas fa-gauge-high"></i> Admin Panel</a>
@@ -510,24 +2243,15 @@ $favorites_feature_enabled = $is_customer_user;
                     <a href="javascript:void(0);" onclick="confirmLogout()" class="user-dropdown-item logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
                 </div>
             </div>
-            <?php if ($favorites_feature_enabled): ?>
-            <a class="icon-btn" id="favoritesToggle" href="<?php echo $favorites_page_href; ?>" title="Favorites"><i class="far fa-heart"></i><span class="badge" id="favoritesBadge" style="display:none;">0</span></a>
-            <?php endif; ?>
-            <?php if ($is_customer_user): ?>
-            <button class="icon-btn" id="chatBtn" onclick="location.href='<?php echo $path_prefix; ?>help_center.php'" title="Help Center"><i class="fas fa-comment-dots"></i><span class="badge" id="chatBadge" style="display:none;">0</span></button>
-            <?php endif; ?>
-            <div class="notification-wrapper">
-                <button class="icon-btn"><i class="fas fa-bell"></i><span class="badge" id="notificationBadge" style="display:none;">0</span></button>
-                <div class="notification-dropdown" id="notificationDropdown"><div class="notification-header">Notifications</div><div class="notification-empty">No new notifications yet.</div></div>
-            </div>
-            <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
             <?php else: ?>
-            <div class="auth-buttons">
-                <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin">Log in</a>
-                <a href="<?php echo $path_prefix; ?>register.php" class="btn-register">Create account</a>
-            </div>
+                <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
+                <div class="auth-buttons">
+                    <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="btn-signin">Log in</a>
+                    <a href="<?php echo $path_prefix; ?>register.php?mode=register#register" class="btn-register">Create account</a>
+                </div>
+                <?php endif; ?>
             <?php endif; ?>
-            <button class="icon-btn mobile-toggle" id="mobileToggle"><i class="fas fa-bars"></i></button>
+            <button type="button" class="icon-btn mobile-toggle" id="mobileToggle" onclick="openMobileNavSidebar(event)" aria-label="Open mobile menu"><i class="fas fa-bars"></i></button>
         </div>
     </div>
     
@@ -535,7 +2259,6 @@ $favorites_feature_enabled = $is_customer_user;
     <div class="market-header-bottom">
         <nav class="market-home-nav">
             <a href="<?php echo $path_prefix; ?>index.php#marketplaceStores" class="market-home-link<?php echo ($current_page === 'home' || $current_page === 'index') ? ' active' : ''; ?>"><i class="fas fa-motorcycle"></i> Delivery</a>
-            <a href="<?php echo $path_prefix; ?>index.php?type=pickup#marketplaceStores" class="market-home-link<?php echo ($current_page === 'pickup') ? ' active' : ''; ?>"><i class="fas fa-person-walking"></i> Pick-up</a>
             <a href="<?php echo $path_prefix; ?>shops.php" class="market-home-link<?php echo ($current_page === 'shops') ? ' active' : ''; ?>"><i class="fas fa-shop"></i> Shops</a>
         </nav>
         <div class="market-home-search-wrap" id="marketHeaderSearchWrap">
@@ -544,7 +2267,6 @@ $favorites_feature_enabled = $is_customer_user;
                 <div class="market-search-tabs">
                     <button type="button" class="market-search-tab active" data-tab="all">All</button>
                     <button type="button" class="market-search-tab" data-tab="delivery">Delivery</button>
-                    <button type="button" class="market-search-tab" data-tab="pickup">Pick-up</button>
                     <button type="button" class="market-search-tab" data-tab="shops">Shops</button>
                 </div>
                 <div class="market-search-panel active" data-panel="all">
@@ -563,13 +2285,6 @@ $favorites_feature_enabled = $is_customer_user;
                         <button type="button" class="market-search-suggestion" data-term="Live menu">Live menu</button>
                     </div>
                 </div>
-                <div class="market-search-panel" data-panel="pickup">
-                    <p class="market-search-title">Pick-up searches</p>
-                    <div class="market-search-suggestions">
-                        <button type="button" class="market-search-suggestion" data-term="Pickup branch">Pickup branch</button>
-                        <button type="button" class="market-search-suggestion" data-term="Dasmarinas">Dasmarinas</button>
-                    </div>
-                </div>
                 <div class="market-search-panel" data-panel="shops">
                     <p class="market-search-title">Shops</p>
                     <div class="market-search-suggestions">
@@ -580,6 +2295,86 @@ $favorites_feature_enabled = $is_customer_user;
             </div>
         </div>
     </div>
+    <?php endif; ?>
+
+    <?php if ($ongoing_order_id > 0 && $current_page !== 'track_order'): ?>
+    <div id="stickyOngoingOrderWidget" class="sticky-ongoing-widget" style="display: none;">
+        <div style="position: relative;">
+            <a href="<?php echo $path_prefix; ?>track_order.php?order_id=<?php echo $ongoing_order_id; ?>" class="sticky-ongoing-link" onclick="handleTrackOrderClick(<?php echo (int)$ongoing_order_id; ?>)">
+                <div class="sticky-ongoing-icon">
+                    <i class="fas fa-motorcycle"></i>
+                    <span class="sticky-pulse-ring"></span>
+                </div>
+                <div class="sticky-ongoing-info">
+                    <div class="sticky-ongoing-header">
+                        <strong style="font-weight:800; font-size:0.92rem; color:#171922;">Active Delivery Order</strong>
+                        <span class="sticky-live-tag">LIVE</span>
+                    </div>
+                    <div class="sticky-ongoing-status">
+                        #<?php echo htmlspecialchars($ongoing_order_number); ?> &bull; <span style="color:#b3261e; font-weight:700;"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $ongoing_order_status))); ?></span>
+                    </div>
+                </div>
+                <div class="sticky-ongoing-btn">
+                    Track <i class="fas fa-arrow-right"></i>
+                </div>
+            </a>
+            <button type="button" class="sticky-ongoing-close-btn" onclick="dismissStickyOngoingOrder(event, <?php echo (int)$ongoing_order_id; ?>)" aria-label="Dismiss">&times;</button>
+        </div>
+    </div>
+    <script>
+    (function() {
+        var orderId = <?php echo (int)$ongoing_order_id; ?>;
+        var key = 'sticky_order_seen_' + orderId;
+        var stickyWidget = document.getElementById('stickyOngoingOrderWidget');
+        if (!stickyWidget) return;
+        
+        // Show once logic: if already seen or dismissed in this session, do NOT show again
+        if (sessionStorage.getItem(key) === '1' || sessionStorage.getItem('sticky_order_dismissed_' + orderId) === '1') {
+            stickyWidget.style.display = 'none';
+            return;
+        }
+        
+        // Mark as seen immediately so navigating away or clicking back won't show it again
+        sessionStorage.setItem(key, '1');
+        stickyWidget.style.display = 'block';
+        
+        // Auto fade out after 6 seconds
+        setTimeout(function() {
+            if (stickyWidget) {
+                stickyWidget.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+                stickyWidget.style.opacity = '0';
+                stickyWidget.style.transform = 'translateY(16px)';
+                setTimeout(function() {
+                    if (stickyWidget) stickyWidget.style.display = 'none';
+                }, 400);
+            }
+        }, 6000);
+    })();
+    
+    window.handleTrackOrderClick = function(orderId) {
+        try {
+            sessionStorage.setItem('sticky_order_seen_' + orderId, '1');
+            sessionStorage.setItem('sticky_order_dismissed_' + orderId, '1');
+        } catch(e) {}
+    };
+    
+    window.dismissStickyOngoingOrder = function(e, orderId) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        try {
+            sessionStorage.setItem('sticky_order_seen_' + orderId, '1');
+            sessionStorage.setItem('sticky_order_dismissed_' + orderId, '1');
+        } catch(e) {}
+        var stickyWidget = document.getElementById('stickyOngoingOrderWidget');
+        if (stickyWidget) {
+            stickyWidget.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+            stickyWidget.style.opacity = '0';
+            stickyWidget.style.transform = 'translateY(16px)';
+            setTimeout(function() {
+                if (stickyWidget) stickyWidget.style.display = 'none';
+            }, 300);
+        }
+    };
+    </script>
     <?php endif; ?>
     
     <div class="map-modal-overlay" id="marketMapModal" aria-hidden="true">
@@ -604,7 +2399,7 @@ $favorites_feature_enabled = $is_customer_user;
             </div>
             <div class="map-modal-foot">
                 <button type="button" class="map-modal-btn secondary" id="marketMapUseCurrent"><i class="fas fa-crosshairs"></i> Use current</button>
-                <button type="button" class="map-modal-btn primary" id="marketMapApplyBtn">Find food</button>
+                <button type="button" class="map-modal-btn primary" id="marketMapApplyBtn"><i class="fas fa-check"></i> Save Location</button>
             </div>
         </div>
     </div>
@@ -613,10 +2408,11 @@ $favorites_feature_enabled = $is_customer_user;
 <?php else: ?>
 <header class="site-header standard-header">
     <div class="header-shell standard-top">
-        <a href="<?php echo $path_prefix; ?>index.php" class="logo-link">
-            <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
-            <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
+        <a href="<?php echo htmlspecialchars($nav_logo_href); ?>" class="logo-link">
+            <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.png?v=lechon2" alt="Lechon Delight Logo" style="width: 100%; height: 100%; object-fit: contain; display: block;"></span>
+            <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub"><?php echo $is_rider_context ? 'Rider Portal' : 'Marketplace'; ?></span></span>
         </a>
+        <?php if (!$is_auth_page): ?>
         <nav class="main-nav">
             <a href="<?php echo $path_prefix; ?>index.php" class="nav-link <?php echo $current_page === 'home' ? 'active' : ''; ?>"><i class="fas fa-house"></i> Home</a>
             <a href="<?php echo $path_prefix; ?>menu.php" class="nav-link <?php echo $current_page === 'menu' ? 'active' : ''; ?>"><i class="fas fa-utensils"></i> Menu</a>
@@ -624,30 +2420,42 @@ $favorites_feature_enabled = $is_customer_user;
             <a href="<?php echo $path_prefix; ?>locations.php" class="nav-link <?php echo $current_page === 'locations' ? 'active' : ''; ?>"><i class="fas fa-location-dot"></i> Stores</a>
             <a href="<?php echo $path_prefix; ?>about.php" class="nav-link <?php echo $current_page === 'about' ? 'active' : ''; ?>"><i class="fas fa-book-open"></i> Our Story</a>
             <a href="<?php echo $path_prefix; ?>faq.php" class="nav-link <?php echo $current_page === 'faq' ? 'active' : ''; ?>"><i class="fas fa-circle-question"></i> FAQ</a>
+            <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
             <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="nav-link <?php echo $current_page === 'subscription_plans' ? 'active' : ''; ?>"><i class="fas fa-layer-group"></i> Plans</a>
+            <?php endif; ?>
         </nav>
         <div class="header-actions">
             <?php if ($is_logged_in_user): ?>
+            <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
+            <div class="notification-wrapper">
+                <button class="icon-btn"><i class="fas fa-bell"></i><span class="badge" id="notificationBadge" style="display:none;">0</span></button>
+                <div class="notification-dropdown" id="notificationDropdown"><div class="notification-header"><span>Notifications</span><a href="<?php echo $path_prefix; ?>my_notifications.php">View all</a></div><div class="notification-empty">No new notifications yet.</div></div>
+            </div>
             <div class="user-menu-wrapper">
-                <button class="icon-btn user-avatar-btn" aria-label="Open user menu">
+                <button class="icon-btn user-avatar-btn" aria-label="Open user menu" title="<?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : 'Profile Settings'); ?>">
                     <?php if ($viewer_profile_image_url !== ''): ?>
                     <img src="<?php echo htmlspecialchars($viewer_profile_image_url); ?>" alt="Profile picture" class="user-avatar-thumb">
                     <?php else: ?>
-                    <i class="fas fa-user-circle"></i>
+                    <span class="user-avatar-initial"><?php echo htmlspecialchars(strtoupper(substr($viewer_name !== '' ? $viewer_name : ($viewer_first_name !== '' ? $viewer_first_name : 'U'), 0, 1))); ?></span>
                     <?php endif; ?>
                 </button>
                 <div class="user-dropdown">
-                    <div class="user-dropdown-header"><div class="user-name"><?php echo htmlspecialchars($viewer_first_name); ?></div><?php if ($viewer_email !== ''): ?><div class="user-email"><?php echo htmlspecialchars($viewer_email); ?></div><?php endif; ?></div>
-                    <a href="<?php echo $path_prefix; ?>my_account.php" class="user-dropdown-item"><i class="fas fa-user"></i> My Profile</a>
-                    <a href="<?php echo $path_prefix; ?>my_account.php#addresses" class="user-dropdown-item"><i class="fas fa-address-book"></i> Address Book</a>
-                    <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> My Orders</a>
-                    <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
-                    <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="user-dropdown-item"><i class="fas fa-layer-group"></i> Subscription Plans</a>
-                    <?php if ($favorites_feature_enabled): ?>
-                    <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> My Favorites</a>
+                    <div class="user-dropdown-header"><div class="user-name"><?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : $viewer_first_name); ?></div><?php if ($viewer_email !== ''): ?><div class="user-email"><?php echo htmlspecialchars($viewer_email); ?></div><?php endif; ?></div>
+                    <?php if ($is_rider_context): ?>
+                    <a href="<?php echo $path_prefix; ?>admin/logistics.php" class="user-dropdown-item" style="color:#b3261e; font-weight:700;"><i class="fas fa-motorcycle"></i> Delivery Rider Dashboard</a>
                     <?php endif; ?>
+                    <a href="<?php echo $path_prefix; ?>my_account.php<?php echo $is_rider_context ? '?from=logistics' : ''; ?>" class="user-dropdown-item"><i class="fas fa-user-gear"></i> Profile Settings</a>
+                    <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> Orders</a>
+                    <?php if ($favorites_feature_enabled): ?>
+                    <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> Favorites</a>
+                    <?php endif; ?>
+                    <?php if (!$is_shop_owner_or_partner): ?>
                     <a href="<?php echo $path_prefix; ?>franchise_application.php" class="user-dropdown-item"><i class="fas fa-store"></i> Apply for Business</a>
+                    <?php endif; ?>
+                    <a href="javascript:void(0);" onclick="openCustomerTutorial(true)" class="user-dropdown-item"><i class="fas fa-compass"></i> Customer Guide</a>
+                    <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
                     <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
+                    <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="user-dropdown-item"><i class="fas fa-layer-group"></i> Subscription Plans</a>
                     <a href="<?php echo $path_prefix; ?>seller_products.php" class="user-dropdown-item"><i class="fas fa-box"></i> My Products</a>
                     <a href="<?php echo $path_prefix; ?>seller_vouchers.php" class="user-dropdown-item"><i class="fas fa-tags"></i> My Vouchers</a>
                     <?php endif; ?>
@@ -658,60 +2466,78 @@ $favorites_feature_enabled = $is_customer_user;
                 </div>
             </div>
             <?php else: ?>
-            <div class="auth-buttons">
-                <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin">Log in</a>
-                <a href="<?php echo $path_prefix; ?>login.php?tab=register" class="btn-register">Create account</a>
-            </div>
+                <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
+                <div class="auth-buttons">
+                    <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="btn-signin">Log in</a>
+                    <a href="<?php echo $path_prefix; ?>register.php?mode=register#register" class="btn-register">Create account</a>
+                </div>
+                <?php endif; ?>
             <?php endif; ?>
-            <?php if ($favorites_feature_enabled): ?>
-            <a class="icon-btn" id="favoritesToggle" href="<?php echo $favorites_page_href; ?>" title="Favorites"><i class="far fa-heart"></i><span class="badge" id="favoritesBadge" style="display:none;">0</span></a>
-            <?php endif; ?>
-            <?php if ($is_customer_user): ?>
-            <button class="icon-btn" id="chatBtn" onclick="location.href='<?php echo $path_prefix; ?>help_center.php'" title="Help Center"><i class="fas fa-comment-dots"></i><span class="badge" id="chatBadge" style="display:none;">0</span></button>
-            <?php endif; ?>
-            <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
-            <button class="icon-btn mobile-toggle" id="mobileToggle"><i class="fas fa-bars"></i></button>
+            <button type="button" class="icon-btn mobile-toggle" id="mobileToggle2" onclick="openMobileNavSidebar(event)" aria-label="Open mobile menu"><i class="fas fa-bars"></i></button>
         </div>
+        <?php endif; ?>
     </div>
 </header>
 <?php endif; ?>
 
-<div class="mobile-menu-overlay" id="mobileOverlay"></div>
+<div class="mobile-menu-overlay" id="mobileOverlay" onclick="closeMobileNavSidebar(event)"></div>
 <aside class="mobile-menu" id="mobileMenu">
     <div class="mobile-menu-header">
-        <a href="<?php echo $path_prefix; ?>index.php" class="logo-link">
-            <span class="logo-icon" style="width:38px;height:38px;font-size:.88rem;"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
-            <span class="logo-copy"><span class="logo-title" style="font-size:1.04rem;">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
+        <a href="<?php echo htmlspecialchars($nav_logo_href); ?>" class="logo-link" style="display:flex !important;">
+            <span class="logo-icon" style="width:34px;height:34px;font-size:.88rem;"><img src="<?php echo $path_prefix; ?>assets/images/logo.png?v=lechon2" alt="Lechon Delight Logo" style="width: 100%; height: 100%; object-fit: contain; display: block;"></span>
+            <span class="logo-copy"><span class="logo-title" style="font-size:0.98rem;">Lechon Delights</span><span class="logo-sub" style="font-size:0.58rem;"><?php echo $is_rider_context ? 'Rider Portal' : 'Marketplace'; ?></span></span>
         </a>
-        <button class="mobile-menu-close" id="mobileMenuClose"><i class="fas fa-times"></i></button>
+        <button type="button" class="mobile-menu-close" id="mobileMenuClose" onclick="closeMobileNavSidebar(event)" aria-label="Close menu"><i class="fas fa-times"></i></button>
     </div>
+    
+    <?php if ($is_logged_in_user): ?>
+    <div class="mobile-profile-card">
+        <div class="mobile-profile-avatar">
+            <?php if ($viewer_profile_image_url !== ''): ?>
+            <img src="<?php echo htmlspecialchars($viewer_profile_image_url); ?>" alt="Profile">
+            <?php else: ?>
+            <i class="fas fa-user"></i>
+            <?php endif; ?>
+        </div>
+        <div class="mobile-profile-info">
+            <div class="mobile-profile-name"><?php echo htmlspecialchars($viewer_first_name); ?></div>
+            <?php if ($viewer_email !== ''): ?>
+            <div class="mobile-profile-email"><?php echo htmlspecialchars($viewer_email); ?></div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <ul class="mobile-nav">
-        <li><a href="<?php echo $path_prefix; ?>index.php" class="<?php echo $current_page === 'home' ? 'active' : ''; ?>"><i class="fas fa-house"></i> Home</a></li>
+        <li><a href="<?php echo $path_prefix; ?>index.php" class="<?php echo ($current_page === 'home' || $current_page === 'index') ? 'active' : ''; ?>"><i class="fas fa-house"></i> Home</a></li>
         <li><a href="<?php echo $path_prefix; ?>menu.php" class="<?php echo $current_page === 'menu' ? 'active' : ''; ?>"><i class="fas fa-utensils"></i> Menu</a></li>
         <li><a href="<?php echo htmlspecialchars($preorder_nav_href); ?>" class="<?php echo $current_page === 'preorder' ? 'active' : ''; ?>"><i class="fas fa-calendar-check"></i> Pre-order</a></li>
         <li><a href="<?php echo $path_prefix; ?>locations.php" class="<?php echo $current_page === 'locations' ? 'active' : ''; ?>"><i class="fas fa-location-dot"></i> Stores</a></li>
         <li><a href="<?php echo $path_prefix; ?>about.php" class="<?php echo $current_page === 'about' ? 'active' : ''; ?>"><i class="fas fa-book-open"></i> Our Story</a></li>
         <li><a href="<?php echo $path_prefix; ?>faq.php" class="<?php echo $current_page === 'faq' ? 'active' : ''; ?>"><i class="fas fa-circle-question"></i> FAQ</a></li>
-        <li><a href="<?php echo $path_prefix; ?>subscription_plans.php" class="<?php echo $current_page === 'subscription_plans' ? 'active' : ''; ?>"><i class="fas fa-layer-group"></i> Subscription Plans</a></li>
         <?php if ($is_logged_in_user): ?>
-        <li><a href="<?php echo $path_prefix; ?>my_account.php"><i class="fas fa-user"></i> My Profile</a></li>
-        <li><a href="<?php echo $path_prefix; ?>my_account.php#addresses"><i class="fas fa-address-book"></i> Address Book</a></li>
-        <li><a href="<?php echo $path_prefix; ?>my_orders.php"><i class="fas fa-bag-shopping"></i> My Orders</a></li>
+        <li><a href="<?php echo $path_prefix; ?>my_account.php"><i class="fas fa-user-gear"></i> Profile Settings</a></li>
+        <li><a href="<?php echo $path_prefix; ?>my_orders.php"><i class="fas fa-bag-shopping"></i> Orders</a></li>
         <?php if ($favorites_feature_enabled): ?>
-        <li><a href="<?php echo $favorites_page_href; ?>"><i class="fas fa-heart"></i> My Favorites</a></li>
+        <li><a href="<?php echo $favorites_page_href; ?>"><i class="fas fa-heart"></i> Favorites</a></li>
         <?php endif; ?>
-        <li><a href="<?php echo $path_prefix; ?>franchise_application.php"><i class="fas fa-briefcase"></i> Business</a></li>
+        <?php if (!$is_shop_owner_or_partner): ?>
+        <li><a href="<?php echo $path_prefix; ?>franchise_application.php"><i class="fas fa-store"></i> Apply for Business</a></li>
+        <?php endif; ?>
+        <li><a href="javascript:void(0);" onclick="openCustomerTutorial(true)"><i class="fas fa-compass"></i> Customer Guide</a></li>
+        <li><a href="<?php echo $path_prefix; ?>help_center.php"><i class="fas fa-life-ring"></i> Help Center</a></li>
         <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
+        <li><a href="<?php echo $path_prefix; ?>subscription_plans.php" class="<?php echo $current_page === 'subscription_plans' ? 'active' : ''; ?>"><i class="fas fa-layer-group"></i> Subscription Plans</a></li>
         <li><a href="<?php echo $path_prefix; ?>seller_products.php"><i class="fas fa-box"></i> My Products</a></li>
         <li><a href="<?php echo $path_prefix; ?>seller_vouchers.php"><i class="fas fa-tags"></i> My Vouchers</a></li>
         <?php endif; ?>
         <li><a href="javascript:void(0);" onclick="confirmLogout()"><i class="fas fa-right-from-bracket"></i> Logout</a></li>
         <?php endif; ?>
     </ul>
-    <?php if (!$is_logged_in_user): ?>
+    <?php if (!$is_logged_in_user && $current_page !== 'register' && $current_page !== 'login'): ?>
     <div class="mobile-auth">
-        <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin" style="text-align:center;">Log in</a>
-        <a href="<?php echo $path_prefix; ?>login.php?tab=register" class="btn-register" style="text-align:center;">Create account</a>
+        <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="btn-signin" style="text-align:center;">Log in</a>
+        <a href="<?php echo $path_prefix; ?>register.php?mode=register#register" class="btn-register" style="text-align:center;">Create account</a>
     </div>
     <?php endif; ?>
 </aside>
@@ -725,8 +2551,8 @@ window.swalConfirmAction = window.swalConfirmAction || function(options) {
         icon: 'warning',
         confirmButtonText: 'Confirm',
         cancelButtonText: 'Cancel',
-        confirmButtonColor: '#171922',
-        cancelButtonColor: '#98a2b3'
+        confirmButtonColor: 'var(--danger, #ef4444)',
+        cancelButtonColor: 'var(--secondary, #64748b)'
     }, options || {});
 
     if (typeof Swal !== 'undefined') {
@@ -765,8 +2591,8 @@ window.bindSwalConfirmForms = window.bindSwalConfirmForms || function(root) {
                 icon: form.dataset.swConfirmIcon || 'warning',
                 confirmButtonText: form.dataset.swConfirmConfirmText || 'Confirm',
                 cancelButtonText: form.dataset.swConfirmCancelText || 'Cancel',
-                confirmButtonColor: form.dataset.swConfirmConfirmColor || '#171922',
-                cancelButtonColor: form.dataset.swConfirmCancelColor || '#98a2b3'
+                confirmButtonColor: form.dataset.swConfirmConfirmColor || 'var(--danger, #ef4444)',
+                cancelButtonColor: form.dataset.swConfirmCancelColor || 'var(--secondary, #64748b)'
             }).then(function(confirmed) {
                 if (confirmed) {
                     form.dataset.swConfirmed = '1';
@@ -797,9 +2623,55 @@ document.addEventListener('DOMContentLoaded', function () {
     const mobileOverlay = document.getElementById('mobileOverlay');
     const mobileMenuClose = document.getElementById('mobileMenuClose');
 
+    // Global Dark / Light Mode Theme Manager
+    window.applyMarketThemeUI = function (isDark) {
+        if (isDark) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            document.documentElement.classList.add('dark-mode');
+            if (document.body) {
+                document.body.classList.add('dark-mode');
+            }
+        } else {
+            document.documentElement.setAttribute('data-theme', 'light');
+            document.documentElement.classList.remove('dark-mode');
+            if (document.body) {
+                document.body.classList.remove('dark-mode');
+            }
+        }
+        try {
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            document.cookie = "theme=" + (isDark ? "dark" : "light") + "; path=/; max-age=31536000; SameSite=Lax";
+        } catch (e) {}
+
+        document.querySelectorAll('#marketThemeToggler, .market-theme-btn, #themeToggler, .theme-toggler').forEach(function(btn) {
+            const icon = btn.querySelector('i');
+            if (icon) {
+                icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+            }
+            btn.setAttribute('title', isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode');
+        });
+        window.dispatchEvent(new CustomEvent('themeChanged', { detail: { isDark: isDark } }));
+    };
+
+    const storedTheme = localStorage.getItem('theme') || (document.cookie.match(/(?:^|;\s*)theme=([^;]*)/) || [])[1];
+    window.applyMarketThemeUI(storedTheme === 'dark');
+
+    document.addEventListener('click', function (e) {
+        const toggler = e.target.closest('#marketThemeToggler, .market-theme-btn, #themeToggler, .theme-toggler');
+        if (!toggler) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const isCurrentlyDark = document.documentElement.classList.contains('dark-mode') || document.body.classList.contains('dark-mode');
+        window.applyMarketThemeUI(!isCurrentlyDark);
+    }, true);
+
     const showSwalError = function (message, title) {
         const alertTitle = title || 'Error';
         const alertMessage = message || 'Please check your input and try again.';
+        if (window.showToast) {
+            window.showToast((alertTitle !== 'Error' ? alertTitle + ': ' : '') + alertMessage, 'error');
+            return;
+        }
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 icon: 'error',
@@ -861,6 +2733,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (typeof form.checkValidity === 'function' && !form.checkValidity()) {
                 event.preventDefault();
                 event.stopPropagation();
+                event.stopImmediatePropagation();
                 const invalidField = form.querySelector(':invalid');
                 showFieldValidationError(invalidField);
             }
@@ -922,6 +2795,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const isLoggedInUser = <?php echo $is_logged_in_user ? 'true' : 'false'; ?>;
     const marketSearchBaseUrl = <?php echo json_encode($path_prefix . 'index.php'); ?>;
     const favoritesApiUrl = <?php echo json_encode($favorites_api_href); ?>;
+    const favoritesPageUrl = <?php echo json_encode($favorites_page_href); ?>;
     const favoritesFeatureEnabled = <?php echo $favorites_feature_enabled ? 'true' : 'false'; ?>;
     const favoritesBadge = document.getElementById('favoritesBadge');
     const googleMapsApiKey = <?php echo json_encode((string)$google_maps_api_key); ?>;
@@ -955,17 +2829,43 @@ document.addEventListener('DOMContentLoaded', function () {
         return { lat: lat, lng: lng };
     };
 
-    const buildMarketAddressPayload = function (streetAddress, city, postalCode) {
+    const getCityCoordinatesFallback = function (cityName) {
+        const norm = String(cityName || '').toLowerCase();
+        if (norm.includes('dasma') || norm.includes('salawag')) return { lat: 14.3294, lng: 120.9367 };
+        if (norm.includes('bacoor') || norm.includes('habay') || norm.includes('molino')) return { lat: 14.4445, lng: 120.9439 };
+        if (norm.includes('imus') || norm.includes('anabu') || norm.includes('poblacion')) return { lat: 14.4296, lng: 120.9367 };
+        if (norm.includes('tagaytay')) return { lat: 14.1153, lng: 120.9621 };
+        if (norm.includes('trias') || norm.includes('manggahan') || norm.includes('gentri')) return { lat: 14.2818, lng: 120.8800 };
+        if (norm.includes('silang')) return { lat: 14.2307, lng: 120.9749 };
+        if (norm.includes('trece')) return { lat: 14.2820, lng: 120.8670 };
+        if (norm.includes('kawit')) return { lat: 14.4450, lng: 120.9020 };
+        if (norm.includes('rosario')) return { lat: 14.4167, lng: 120.8500 };
+        if (norm.includes('tanza')) return { lat: 14.3940, lng: 120.8540 };
+        if (norm.includes('naic')) return { lat: 14.3167, lng: 120.7667 };
+        if (norm.includes('carmona')) return { lat: 14.3167, lng: 121.0500 };
+        return { lat: 14.3294, lng: 120.9367 };
+    };
+
+    const buildMarketAddressPayload = function (streetAddress, city, postalCode, latitude, longitude) {
         const street = String(streetAddress || '').trim();
         const cityName = String(city || '').trim();
         const zip = normalizePostalCode(postalCode);
         const cityWithZip = [cityName, zip].filter(Boolean).join(' ');
         const fullAddress = [street, cityWithZip].filter(Boolean).join(', ');
+        let lat = (latitude !== undefined && latitude !== null && latitude !== '') ? parseFloat(latitude) : null;
+        let lng = (longitude !== undefined && longitude !== null && longitude !== '') ? parseFloat(longitude) : null;
+        if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0) {
+            const fallback = getCityCoordinatesFallback(cityName || street);
+            lat = fallback.lat;
+            lng = fallback.lng;
+        }
         return {
             street_address: street,
             city: cityName,
             postal_code: zip,
-            full_address: fullAddress
+            full_address: fullAddress,
+            latitude: lat,
+            longitude: lng
         };
     };
 
@@ -1140,10 +3040,13 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     const persistMarketAddressPayload = function (payload) {
-        const normalized = buildMarketAddressPayload(payload?.street_address, payload?.city, payload?.postal_code);
+        const lat = payload?.latitude ?? payload?.lat ?? null;
+        const lng = payload?.longitude ?? payload?.lng ?? null;
+        const normalized = buildMarketAddressPayload(payload?.street_address, payload?.city, payload?.postal_code, lat, lng);
         try {
             localStorage.setItem(marketAddressStorageKey, JSON.stringify(normalized));
             localStorage.setItem('market_address', normalized.full_address);
+            window.dispatchEvent(new CustomEvent('marketAddressChanged', { detail: normalized }));
         } catch (error) {
             // Best-effort persistence only.
         }
@@ -1167,10 +3070,32 @@ document.addEventListener('DOMContentLoaded', function () {
         return normalized;
     };
 
+    const formatHeaderLocationDisplay = function (address, maxLength) {
+        maxLength = maxLength || 38;
+        if (!address || address === 'Select your address') {
+            return 'Select your address';
+        }
+        const trimmed = String(address).trim();
+        if (trimmed.length > maxLength) {
+            let cut = trimmed.slice(0, maxLength);
+            const lastComma = cut.lastIndexOf(',');
+            if (lastComma > 18) {
+                cut = cut.slice(0, lastComma);
+            }
+            return cut.replace(/,\s*$/, '').trim() + ' etc....';
+        }
+        return trimmed;
+    };
+
     const renderMarketAddressDisplay = function (payload) {
         if (!marketAddressDisplay) return;
         const normalized = buildMarketAddressPayload(payload?.street_address, payload?.city, payload?.postal_code);
-        marketAddressDisplay.textContent = normalized.full_address || 'Select your address';
+        const fullAddress = normalized.full_address || 'Select your address';
+        marketAddressDisplay.textContent = formatHeaderLocationDisplay(fullAddress);
+        marketAddressDisplay.title = fullAddress;
+        if (marketAddressToggle) {
+            marketAddressToggle.title = fullAddress;
+        }
     };
 
     const applyAddress = function () {
@@ -1420,6 +3345,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }, 70);
         });
     };
+    window.openHeaderMapModal = openMapModal;
 
     const closeMapModal = function () {
         if (!marketMapModal) return;
@@ -1526,11 +3452,75 @@ document.addEventListener('DOMContentLoaded', function () {
     const marketQuickAddressSubmitBtn = document.getElementById('marketQuickAddressSubmitBtn');
     const marketAddressPills = document.querySelectorAll('#marketAddressPopover .market-address-pill');
 
+    // Header location Leaflet map
+    let headerMap = null;
+    let headerMarker = null;
+
+    const initHeaderMap = function() {
+        const headerMapEl = document.getElementById('headerMap');
+        if (!headerMapEl || typeof L === 'undefined' || headerMap) return;
+
+        let startLat = 14.3294;
+        let startLng = 120.9367;
+
+        headerMap = L.map('headerMap').setView([startLat, startLng], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(headerMap);
+
+        headerMarker = L.marker([startLat, startLng], {
+            draggable: true
+        }).addTo(headerMap);
+
+        const geocodeHeaderCoords = async (lat, lng) => {
+            try {
+                if (marketQuickStreetInput) marketQuickStreetInput.value = "Locating...";
+                const endpoint = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&countrycodes=ph&lat=${lat}&lon=${lng}`;
+                const response = await fetch(endpoint, {
+                    headers: { Accept: 'application/json' }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.display_name) {
+                        const addr = data.display_name;
+                        if (marketQuickStreetInput) marketQuickStreetInput.value = addr;
+                        const city = data.address?.city || data.address?.town || data.address?.municipality || 'Cavite';
+                        const payload = { street_address: addr, city: city, postal_code: data.address?.postcode || '', latitude: String(lat), longitude: String(lng) };
+                        fillMarketAddressInputs(payload, { includeMapFields: true });
+                        const stored = persistMarketAddressPayload(payload);
+                        renderMarketAddressDisplay(stored);
+                    }
+                }
+            } catch (e) {
+                console.error("Header map geocoding error:", e);
+            }
+        };
+
+        headerMarker.on('dragend', function() {
+            const pos = headerMarker.getLatLng();
+            geocodeHeaderCoords(pos.lat, pos.lng);
+        });
+
+        headerMap.on('click', function(e) {
+            const pos = e.latlng;
+            headerMarker.setLatLng(pos);
+            geocodeHeaderCoords(pos.lat, pos.lng);
+        });
+    };
+
     const openAddressPopover = function () {
         if (!marketAddressWrap) return;
         marketAddressWrap.classList.add('is-open');
         if (marketSearchBackdrop) marketSearchBackdrop.classList.add('is-active');
         if (marketQuickStreetInput) marketQuickStreetInput.focus();
+        
+        setTimeout(function() {
+            initHeaderMap();
+            if (headerMap) {
+                headerMap.invalidateSize();
+            }
+        }, 120);
     };
 
     const closeAddressPopover = function () {
@@ -1550,11 +3540,47 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    const applyQuickAddressSelection = function (street, city) {
-        const payload = buildMarketAddressPayload(street || '', city || 'Cavite', '');
+    const saveMarketLocationToUserDatabase = async function(payload) {
+        if (!payload || (!payload.street_address && !payload.full_address)) return;
+        const bodyData = new URLSearchParams();
+        bodyData.append('label', 'Saved Location');
+        bodyData.append('street_address', payload.street_address || payload.full_address);
+        bodyData.append('city_name', payload.city || 'Cavite');
+        bodyData.append('full_address', payload.full_address || payload.street_address);
+        bodyData.append('latitude', String(payload.latitude || ''));
+        bodyData.append('longitude', String(payload.longitude || ''));
+        bodyData.append('is_default', '1');
+
+        try {
+            const apiEndpoint = '<?php echo $path_prefix; ?>api/save_user_address.php';
+            const response = await fetch(apiEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: bodyData
+            });
+            const data = await response.json();
+            if (data && data.success) {
+                if (typeof window.dispatchEvent === 'function') {
+                    window.dispatchEvent(new CustomEvent('marketAddressUpdated', { 
+                        detail: {
+                            ...payload,
+                            address_id: data.saved_address_id || 0,
+                            addresses: data.addresses || []
+                        }
+                    }));
+                }
+            }
+        } catch (err) {
+            console.error('Header save location error:', err);
+        }
+    };
+
+    const applyQuickAddressSelection = function (street, city, lat, lng) {
+        const payload = buildMarketAddressPayload(street || '', city || 'Cavite', '', lat, lng);
         fillMarketAddressInputs(payload, { includeMapFields: true });
         const stored = persistMarketAddressPayload(payload);
         renderMarketAddressDisplay(stored);
+        saveMarketLocationToUserDatabase(stored);
         closeAddressPopover();
     };
 
@@ -1562,8 +3588,9 @@ document.addEventListener('DOMContentLoaded', function () {
         pill.addEventListener('click', function () {
             const city = pill.dataset.city || 'Cavite';
             const street = pill.dataset.street || (city + ', Cavite');
+            const fallback = getCityCoordinatesFallback(city);
             if (marketQuickStreetInput) marketQuickStreetInput.value = street;
-            applyQuickAddressSelection(street, city);
+            applyQuickAddressSelection(street, city, fallback.lat, fallback.lng);
         });
     });
 
@@ -1575,6 +3602,30 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
             applyQuickAddressSelection(rawVal, 'Cavite');
+        });
+    }
+
+    const headerSaveBtn = document.getElementById('headerSaveLocationBtn');
+    if (headerSaveBtn) {
+        headerSaveBtn.addEventListener('click', function () {
+            const rawVal = marketQuickStreetInput ? marketQuickStreetInput.value.trim() : '';
+            let lat = '', lng = '';
+            if (headerMarker) {
+                const pos = headerMarker.getLatLng();
+                lat = pos.lat;
+                lng = pos.lng;
+            }
+            const streetText = rawVal || (lat ? 'Pinned Location' : '');
+            if (!streetText) {
+                showSwalError('Please select or pin a location first.', 'Location Required');
+                return;
+            }
+            const payload = buildMarketAddressPayload(streetText, 'Cavite', '', lat, lng);
+            fillMarketAddressInputs(payload, { includeMapFields: true });
+            const stored = persistMarketAddressPayload(payload);
+            renderMarketAddressDisplay(stored);
+            saveMarketLocationToUserDatabase(stored);
+            closeAddressPopover();
         });
     }
 
@@ -1623,7 +3674,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 marketLocateMeBtn.disabled = false;
                 marketLocateMeBtn.innerHTML = originalBtnHtml;
 
-                const finalPayload = resolvedPayload || { street_address: 'General Trias, Cavite', city: 'General Trias', postal_code: '' };
+                if (!resolvedPayload) {
+                    if (marketQuickStreetInput) {
+                        marketQuickStreetInput.focus();
+                        marketQuickStreetInput.placeholder = 'Please enter your address manually...';
+                    }
+                    return;
+                }
+
+                const finalPayload = resolvedPayload;
                 if (marketQuickStreetInput) {
                     marketQuickStreetInput.value = finalPayload.street_address;
                 }
@@ -1634,12 +3693,10 @@ document.addEventListener('DOMContentLoaded', function () {
             }).catch(function (error) {
                 marketLocateMeBtn.disabled = false;
                 marketLocateMeBtn.innerHTML = originalBtnHtml;
-                const defaultPayload = { street_address: 'General Trias, Cavite', city: 'General Trias', postal_code: '' };
-                if (marketQuickStreetInput) marketQuickStreetInput.value = defaultPayload.street_address;
-                fillMarketAddressInputs(defaultPayload, { includeMapFields: true });
-                const storedPayload = persistMarketAddressPayload(defaultPayload);
-                renderMarketAddressDisplay(storedPayload);
-                closeAddressPopover();
+                if (marketQuickStreetInput) {
+                    marketQuickStreetInput.focus();
+                    marketQuickStreetInput.placeholder = 'Location access denied. Type address manually...';
+                }
             });
         });
     }
@@ -1886,6 +3943,44 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     };
 
+    const checkStockReminders = async function () {
+        if (!favoritesFeatureEnabled || !favoritesApiUrl) return;
+        if (sessionStorage.getItem('fav_stock_reminder_shown') === '1') return;
+        try {
+            const response = await fetch(favoritesApiUrl + '?action=in_stock_reminders', {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' }
+            });
+            if (!response.ok) return;
+            const payload = await response.json();
+            if (payload && payload.success && payload.count > 0) {
+                sessionStorage.setItem('fav_stock_reminder_shown', '1');
+                if (typeof Swal !== 'undefined' && Swal) {
+                    const firstItem = payload.items[0];
+                    const itemText = payload.count === 1
+                        ? `"${firstItem.name}" is back in stock!`
+                        : `${payload.count} of your favorite dishes are back in stock!`;
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'success',
+                        title: '⚡ Favorite Stock Alert',
+                        text: itemText,
+                        showConfirmButton: true,
+                        confirmButtonText: 'View Favorites',
+                        confirmButtonColor: '#15803d',
+                        timer: 8000,
+                        timerProgressBar: true
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            window.location.href = favoritesPageUrl;
+                        }
+                    });
+                }
+            }
+        } catch (e) {}
+    };
+
     const requestFavoritesCount = async function () {
         if (!favoritesFeatureEnabled || !favoritesApiUrl) return;
         try {
@@ -1897,6 +3992,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const payload = await response.json();
             if (!payload || !payload.success) return;
             updateFavoritesBadge(payload.count || 0);
+            checkStockReminders();
         } catch (error) {
             // Ignore transient count fetch failures.
         }
@@ -1979,10 +4075,213 @@ document.addEventListener('DOMContentLoaded', function () {
         const favoriteButton = event.target.closest('[data-favorite-toggle]');
         if (!favoriteButton) return;
         event.preventDefault();
+        event.stopPropagation();
         toggleFavorite(favoriteButton);
     });
 
     requestFavoritesCount();
+
+    // User Profile Menu & Notifications Dropdown toggles
+    const userMenuWrappers = Array.from(document.querySelectorAll('.user-menu-wrapper'));
+    const notificationWrappers = Array.from(document.querySelectorAll('.notification-wrapper'));
+    const notificationDropdown = document.getElementById('notificationDropdown');
+    const notificationBadge = document.getElementById('notificationBadge');
+    const notificationApiPath = <?php echo json_encode($path_prefix . 'api/get_notifications.php'); ?>;
+
+    function escapeNotificationText(value) {
+        return String(value ?? '').replace(/[&<>'"]/g, function (character) {
+            return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character];
+        });
+    }
+
+    function getNotificationStatus(notification) {
+        const type = String(notification.type || '').toLowerCase();
+        if (type.includes('approved')) return { label: 'APPROVED', className: 'is-approved', icon: 'fa-circle-check' };
+        if (type.includes('rejected')) return { label: 'REJECTED', className: 'is-rejected', icon: 'fa-circle-xmark' };
+        if (type.includes('incomplete')) return { label: 'INCOMPLETE', className: 'is-incomplete', icon: 'fa-triangle-exclamation' };
+        return { label: 'UPDATE', className: 'is-default', icon: 'fa-circle-info' };
+    }
+
+    let userNotifications = [];
+    let userNotificationPage = 0;
+    const userNotificationPageSize = 3;
+
+    function renderUserNotifications(notifications) {
+        if (!notificationDropdown) return;
+        userNotifications = Array.isArray(notifications) ? notifications : [];
+        const totalPages = Math.max(1, Math.ceil(userNotifications.length / userNotificationPageSize));
+        userNotificationPage = Math.min(Math.max(0, userNotificationPage), totalPages - 1);
+        if (userNotifications.length === 0) {
+            notificationDropdown.innerHTML = '<div class="notification-header">Notifications</div><div class="notification-empty">No notifications yet.</div>';
+            return;
+        }
+
+        const pageStart = userNotificationPage * userNotificationPageSize;
+        const pageNotifications = userNotifications.slice(pageStart, pageStart + userNotificationPageSize);
+        const html = pageNotifications.map(function (notification) {
+            const status = getNotificationStatus(notification);
+            const rawMessage = String(notification.message || '');
+            const reasonMatch = rawMessage.match(/(?:^|\n)Reason:\s*([^\n]*)/i);
+            const businessMatch = rawMessage.match(/(?:^|\n)Business:\s*([^\n]*)/i);
+            const deadlineMatch = rawMessage.match(/(?:^|\n)Deadline:\s*([^\n]*)/i);
+            const reason = reasonMatch ? reasonMatch[1].trim() : rawMessage.replace(/^Status:\s*[^\n]*\n?/i, '').trim();
+            const business = businessMatch ? businessMatch[1].trim() : '';
+            const deadline = deadlineMatch ? deadlineMatch[1].trim() : '';
+            const notifType = String(notification.type || '').toLowerCase();
+            const isRead = Number(notification.is_read || 0) === 1;
+            const notifId = parseInt(notification.id || '0', 10) || 0;
+            const target = 'my_notifications.php?id=' + encodeURIComponent(notifId);
+            const createdAt = notification.created_at ? new Date(String(notification.created_at).replace(' ', 'T')) : null;
+            const timeLabel = createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+
+            const readBg = isRead ? 'background:#fcfcfd;opacity:0.85;' : 'background:#ffffff;border-left:3px solid #b3261e;';
+            const unreadDot = !isRead ? '<span style="width:7px;height:7px;border-radius:50%;background:#b3261e;display:inline-block;margin-left:auto;"></span>' : '';
+            return '<a href="' + target + '" class="notification-status-item js-user-notification" data-notification-id="' + notifId + '" style="' + readBg + '">' +
+                '<div class="notification-status-line ' + status.className + '"><i class="fas ' + status.icon + '"></i><span>' + status.label + '</span>' + unreadDot + '</div>' +
+                '<div class="notification-reason"><strong>Reason:</strong> ' + escapeNotificationText(reason || 'No additional reason provided.') + '</div>' +
+                (deadline ? '<div style="color:#b54708;font-size:.74rem;font-weight:700;margin-top:3px;"><i class="fas fa-calendar-day"></i> Deadline: ' + escapeNotificationText(deadline) + '</div>' : '') +
+                (business ? '<div class="notification-business">' + escapeNotificationText(business) + '</div>' : '') +
+                (timeLabel ? '<time class="notification-time">' + escapeNotificationText(timeLabel) + '</time>' : '') +
+                '</a>';
+        }).join('');
+        notificationDropdown.innerHTML = '<div class="notification-header">Notifications</div><div class="notification-list">' + html + '</div>' +
+            '<div class="notification-pagination">' +
+            '<button type="button" class="notification-page-btn js-notification-prev" aria-label="Previous notifications"' + (userNotificationPage === 0 ? ' disabled' : '') + '><i class="fas fa-chevron-left"></i></button>' +
+            '<span class="notification-page-label">' + (userNotificationPage + 1) + ' / ' + totalPages + '</span>' +
+            '<button type="button" class="notification-page-btn js-notification-next" aria-label="Next notifications"' + (userNotificationPage >= totalPages - 1 ? ' disabled' : '') + '><i class="fas fa-chevron-right"></i></button>' +
+            '</div>';
+    }
+
+    function loadUserNotifications() {
+        if (!notificationDropdown || !notificationApiPath) return;
+        fetch(notificationApiPath + '?action=get_unread', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+            .then(function (response) { return response.json(); })
+            .then(function (payload) {
+                const notifications = Array.isArray(payload.notifications) ? payload.notifications : [];
+                renderUserNotifications(notifications);
+                const unreadCount = typeof payload.unread_count === 'number'
+                    ? payload.unread_count
+                    : notifications.filter(function(n) { return Number(n.is_read) === 0; }).length;
+                if (notificationBadge) {
+                    notificationBadge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+                    notificationBadge.style.display = unreadCount > 0 ? 'inline-flex' : 'none';
+                }
+            })
+            .catch(function (error) { console.error('User notification load error:', error); });
+    }
+
+    if (notificationDropdown) {
+        loadUserNotifications();
+        window.setInterval(loadUserNotifications, 30000);
+        notificationDropdown.addEventListener('click', function (event) {
+            const previousButton = event.target.closest('.js-notification-prev');
+            const nextButton = event.target.closest('.js-notification-next');
+            if (previousButton || nextButton) {
+                event.preventDefault();
+                if (previousButton && userNotificationPage > 0) userNotificationPage--;
+                if (nextButton && userNotificationPage < Math.ceil(userNotifications.length / userNotificationPageSize) - 1) userNotificationPage++;
+                renderUserNotifications(userNotifications);
+                return;
+            }
+            const notificationLink = event.target.closest('.js-user-notification');
+            if (!notificationLink) return;
+            const notificationId = parseInt(notificationLink.dataset.notificationId || '0', 10);
+            const matchedNotif = userNotifications.find(function(n) { return parseInt(n.id, 10) === notificationId; });
+
+            if (notificationId > 0 && matchedNotif && Number(matchedNotif.is_read) === 0) {
+                matchedNotif.is_read = 1;
+                fetch(notificationApiPath + '?action=mark_read&id=' + encodeURIComponent(notificationId), { credentials: 'same-origin' }).catch(function () {});
+                const unreadRemaining = userNotifications.filter(function(n) { return Number(n.is_read) === 0; }).length;
+                if (notificationBadge) {
+                    notificationBadge.textContent = unreadRemaining > 99 ? '99+' : String(unreadRemaining);
+                    notificationBadge.style.display = unreadRemaining > 0 ? 'inline-flex' : 'none';
+                }
+                renderUserNotifications(userNotifications);
+            }
+        });
+    }
+
+    const closeAllUserMenus = function () {
+        userMenuWrappers.forEach(function (wrap) {
+            wrap.classList.remove('is-open', 'active');
+            const btn = wrap.querySelector('.user-avatar-btn');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+        });
+    };
+
+    const closeAllNotificationMenus = function () {
+        notificationWrappers.forEach(function (wrap) {
+            wrap.classList.remove('is-open', 'active');
+            const btn = wrap.querySelector('.icon-btn');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+        });
+    };
+
+    document.addEventListener('click', function (event) {
+        const userAvatarBtn = event.target.closest('.user-avatar-btn');
+        if (userAvatarBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            const wrapper = userAvatarBtn.closest('.user-menu-wrapper');
+            if (wrapper) {
+                const isCurrentlyOpen = wrapper.classList.contains('is-open') || wrapper.classList.contains('active');
+                closeAllUserMenus();
+                closeAllNotificationMenus();
+                if (!isCurrentlyOpen) {
+                    wrapper.classList.add('is-open', 'active');
+                    userAvatarBtn.setAttribute('aria-expanded', 'true');
+                }
+            }
+            return;
+        }
+
+        const notifBtn = event.target.closest('.notification-wrapper > .icon-btn');
+        if (notifBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            const wrapper = notifBtn.closest('.notification-wrapper');
+            if (wrapper) {
+                const isCurrentlyOpen = wrapper.classList.contains('is-open') || wrapper.classList.contains('active');
+                closeAllUserMenus();
+                closeAllNotificationMenus();
+                if (!isCurrentlyOpen) {
+                    wrapper.classList.add('is-open', 'active');
+                    notifBtn.setAttribute('aria-expanded', 'true');
+                }
+            }
+            return;
+        }
+
+        let clickedInsideUserMenu = false;
+        userMenuWrappers.forEach(function (wrap) {
+            if (wrap.contains(event.target)) {
+                clickedInsideUserMenu = true;
+                if (event.target.closest('.user-dropdown-item')) {
+                    closeAllUserMenus();
+                }
+            }
+        });
+        if (!clickedInsideUserMenu) {
+            closeAllUserMenus();
+        }
+
+        let clickedInsideNotifMenu = false;
+        notificationWrappers.forEach(function (wrap) {
+            if (wrap.contains(event.target)) {
+                clickedInsideNotifMenu = true;
+            }
+        });
+        if (!clickedInsideNotifMenu) {
+            closeAllNotificationMenus();
+        }
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+            closeAllUserMenus();
+            closeAllNotificationMenus();
+        }
+    });
 
     document.addEventListener('click', function (event) {
         if (marketAddressWrap && marketAddressWrap.classList.contains('is-open')) {
@@ -1999,5 +4298,305 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
     });
+
+    window.openFranchiseNotificationModal = function(notification) {
+        const modal = document.getElementById('franchiseNotifModal');
+        if (!modal) return;
+
+        const rawMessage = String(notification.message || '');
+        const reasonMatch = rawMessage.match(/(?:^|\n)Reason:\s*([^\n]*)/i);
+        const businessMatch = rawMessage.match(/(?:^|\n)Business:\s*([^\n]*)/i);
+        const deadlineMatch = rawMessage.match(/(?:^|\n)Deadline:\s*([^\n]*)/i);
+
+        const reason = reasonMatch ? reasonMatch[1].trim() : rawMessage.replace(/^Status:\s*[^\n]*\n?/i, '').trim();
+        const business = businessMatch ? businessMatch[1].trim() : 'Your Business Application';
+        const deadline = deadlineMatch ? deadlineMatch[1].trim() : '';
+
+        const notifType = String(notification.type || '').toLowerCase();
+        const badgeWrap = document.getElementById('fnmStatusBadgeWrap');
+        const iconWrap = document.getElementById('fnmIconWrap');
+        const icon = document.getElementById('fnmIcon');
+        const title = document.getElementById('fnmTitle');
+        const businessElem = document.getElementById('fnmBusinessName');
+        const deadlineBox = document.getElementById('fnmDeadlineBox');
+        const deadlineVal = document.getElementById('fnmDeadlineValue');
+        const reasonElem = document.getElementById('fnmReason');
+        const instructionsElem = document.getElementById('fnmInstructions');
+        const actionBtn = document.getElementById('fnmActionBtn');
+
+        businessElem.textContent = business;
+        reasonElem.textContent = reason || 'No specific reason provided.';
+
+        if (notifType.includes('incomplete')) {
+            badgeWrap.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;background:#fffaeb;color:#b54708;border:1px solid #fedf89;padding:4px 12px;border-radius:999px;font-size:0.82rem;font-weight:700;"><i class="fas fa-triangle-exclamation"></i> INCOMPLETE REQUIREMENTS</span>';
+            iconWrap.style.background = '#fffaeb';
+            iconWrap.style.color = '#b54708';
+            icon.className = 'fas fa-triangle-exclamation';
+            title.textContent = 'Application Action Required: Incomplete';
+
+            if (deadline) {
+                deadlineBox.style.display = 'block';
+                deadlineVal.textContent = deadline;
+            } else {
+                deadlineBox.style.display = 'none';
+            }
+
+            instructionsElem.innerHTML = '<i class="fas fa-info-circle text-warning me-1"></i> <strong>What to do next:</strong> Click the button below to re-upload only the marked/flagged documents. All previously approved documents and business details have been preserved.';
+            actionBtn.style.display = 'inline-flex';
+            actionBtn.href = 'franchise_application.php';
+            actionBtn.innerHTML = '<i class="fas fa-arrow-rotate-right"></i> Open Application & Resubmit';
+        } else if (notifType.includes('rejected')) {
+            badgeWrap.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;background:#fff1f0;color:#b3261e;border:1px solid #fee4e2;padding:4px 12px;border-radius:999px;font-size:0.82rem;font-weight:700;"><i class="fas fa-circle-xmark"></i> APPLICATION REJECTED</span>';
+            iconWrap.style.background = '#fff1f0';
+            iconWrap.style.color = '#b3261e';
+            icon.className = 'fas fa-circle-xmark';
+            title.textContent = 'Franchise Application Not Approved';
+            deadlineBox.style.display = 'none';
+            instructionsElem.innerHTML = '<i class="fas fa-info-circle text-danger me-1"></i> <strong>Evaluation Policy:</strong> Applicants get up to 2 total attempts. A 3-day cooldown period is required before submitting a final retry application.';
+            actionBtn.style.display = 'inline-flex';
+            actionBtn.href = 'franchise_application.php';
+            actionBtn.innerHTML = '<i class="fas fa-file-lines"></i> View Application Status';
+        } else if (notifType.includes('approved')) {
+            badgeWrap.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;background:#ecfdf3;color:#027a48;border:1px solid #abefc6;padding:4px 12px;border-radius:999px;font-size:0.82rem;font-weight:700;"><i class="fas fa-circle-check"></i> APPLICATION APPROVED</span>';
+            iconWrap.style.background = '#ecfdf3';
+            iconWrap.style.color = '#027a48';
+            icon.className = 'fas fa-circle-check';
+            title.textContent = 'Franchise Application Approved!';
+            deadlineBox.style.display = 'none';
+            instructionsElem.innerHTML = '<i class="fas fa-check-circle text-success me-1"></i> <strong>Welcome Partner:</strong> Your partner trial access has been activated. You can now access your partner store dashboard.';
+            actionBtn.style.display = 'inline-flex';
+            actionBtn.href = 'admin/index.php';
+            actionBtn.innerHTML = '<i class="fas fa-store"></i> Open Partner Dashboard';
+        } else {
+            badgeWrap.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;background:#eff8ff;color:#175cd3;border:1px solid #b2ddff;padding:4px 12px;border-radius:999px;font-size:0.82rem;font-weight:700;"><i class="fas fa-info-circle"></i> APPLICATION UPDATE</span>';
+            iconWrap.style.background = '#eff8ff';
+            iconWrap.style.color = '#175cd3';
+            icon.className = 'fas fa-info-circle';
+            title.textContent = notification.title || 'Franchise Application Notice';
+            deadlineBox.style.display = 'none';
+            instructionsElem.textContent = '';
+            actionBtn.style.display = 'inline-flex';
+            actionBtn.href = 'my_account.php#franchise';
+            actionBtn.innerHTML = '<i class="fas fa-user"></i> View in Account';
+        }
+
+        modal.style.display = 'flex';
+        modal.setAttribute('aria-hidden', 'false');
+    };
+
+    window.closeFranchiseNotificationModal = function() {
+        const modal = document.getElementById('franchiseNotifModal');
+        if (modal) {
+            modal.style.display = 'none';
+            modal.setAttribute('aria-hidden', 'true');
+        }
+    };
 });
 </script>
+
+<!-- Franchise Notification Detail Modal -->
+<div id="franchiseNotifModal" class="franchise-notif-modal-overlay" style="display:none;" aria-hidden="true" role="dialog" aria-labelledby="fnmTitle">
+    <div class="franchise-notif-modal-card">
+        <div class="franchise-notif-modal-header">
+            <div class="franchise-notif-modal-icon-wrap" id="fnmIconWrap">
+                <i class="fas fa-store" id="fnmIcon"></i>
+            </div>
+            <div style="flex:1; min-width:0;">
+                <h4 class="franchise-notif-modal-title" id="fnmTitle">Franchise Application Notice</h4>
+                <p class="franchise-notif-modal-subtitle" id="fnmSubtitle">Official Super Admin Review Decision</p>
+            </div>
+            <button type="button" class="franchise-notif-modal-close" onclick="closeFranchiseNotificationModal()" aria-label="Close modal">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="franchise-notif-modal-body">
+            <div id="fnmStatusBadgeWrap" style="margin-bottom:14px;"></div>
+
+            <div class="franchise-notif-field-box">
+                <div class="franchise-notif-field-label"><i class="fas fa-building"></i> Business Details</div>
+                <div class="franchise-notif-field-value" id="fnmBusinessName">-</div>
+            </div>
+
+            <div class="franchise-notif-field-box" id="fnmDeadlineBox" style="display:none;">
+                <div class="franchise-notif-field-label" style="color:#b54708;"><i class="fas fa-calendar-day"></i> Compliance / Resubmission Deadline</div>
+                <div class="franchise-notif-field-value" id="fnmDeadlineValue" style="color:#b3261e; font-weight:700;">-</div>
+                <small style="color:#667085; display:block; margin-top:2px;">Please upload all flagged requirements before this date to ensure application processing.</small>
+            </div>
+
+            <div class="franchise-notif-field-box">
+                <div class="franchise-notif-field-label"><i class="fas fa-comment-dots"></i> Super Admin Feedback / Reason</div>
+                <div class="franchise-notif-reason-text" id="fnmReason">-</div>
+            </div>
+
+            <div id="fnmInstructions" style="margin-top:12px; font-size:0.84rem; color:#475467; line-height:1.5;"></div>
+        </div>
+
+        <div class="franchise-notif-modal-footer">
+            <button type="button" class="btn-franchise-notif-secondary" onclick="closeFranchiseNotificationModal()">Close</button>
+            <a href="franchise_application.php" class="btn-franchise-notif-primary" id="fnmActionBtn">
+                <i class="fas fa-arrow-right"></i> Open Application
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+.franchise-notif-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(16, 24, 40, 0.6);
+    backdrop-filter: blur(2px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+}
+.franchise-notif-modal-card {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px -5px rgba(16, 24, 40, 0.15);
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: fnmFadeIn 0.18s ease-out;
+}
+@keyframes fnmFadeIn {
+    from { opacity: 0; transform: scale(0.96) translateY(6px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.franchise-notif-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 20px;
+    border-bottom: 1px solid #eaecf0;
+}
+.franchise-notif-modal-icon-wrap {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    flex-shrink: 0;
+}
+.franchise-notif-modal-title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #101828;
+}
+.franchise-notif-modal-subtitle {
+    margin: 2px 0 0;
+    font-size: 0.8rem;
+    color: #667085;
+}
+.franchise-notif-modal-close {
+    background: transparent;
+    border: none;
+    color: #667085;
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.franchise-notif-modal-close:hover {
+    background: #f2f4f7;
+    color: #101828;
+}
+.franchise-notif-modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+.franchise-notif-field-box {
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+}
+.franchise-notif-field-label {
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #475467;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+.franchise-notif-field-value {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #101828;
+}
+.franchise-notif-reason-text {
+    font-size: 0.9rem;
+    color: #344054;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-top: 6px;
+}
+.franchise-notif-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 20px;
+    border-top: 1px solid #eaecf0;
+    background: #fafafa;
+}
+.btn-franchise-notif-secondary {
+    background: #ffffff;
+    border: 1px solid #d0d5dd;
+    color: #344054;
+    font-size: 0.88rem;
+    font-weight: 600;
+    padding: 9px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.btn-franchise-notif-secondary:hover {
+    background: #f2f4f7;
+}
+.btn-franchise-notif-primary {
+    background: #b3261e;
+    border: 1px solid #b3261e;
+    color: #ffffff !important;
+    font-size: 0.88rem;
+    font-weight: 600;
+    padding: 9px 18px;
+    border-radius: 8px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.btn-franchise-notif-primary:hover {
+    background: #981b15;
+    border-color: #981b15;
+}
+</style>

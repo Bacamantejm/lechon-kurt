@@ -1,5 +1,5 @@
 ---
-description: Run the application backend and frontend test suites
+description: Run the application backend PHP linting and schema validation checks
 type: automation
 command: /test
 ---
@@ -7,23 +7,25 @@ command: /test
 # Run Tests Workflow
 
 ## 1. Safety & Context Verification
-- Ensure test runner packages are installed and environment variables configured for test execution.
+- Ensure PHP CLI is available in Laragon environment.
 
 ## 2. Step-by-Step Procedure
-- **Execute Backend Tests**: Run PHPUnit/Pest or backend test suite.
-- **Execute Frontend Tests**: Run Vitest/Jest or frontend test suite.
+- **Execute PHP Linting**: Lint modified PHP files using `php -l`.
+- **Execute Schema Updates & Integrity Verification**: Run `database/schema_updates/run.php` to verify DB schema alignment.
 
 ## 3. Automation Scripts & Tools (if applicable)
 ```powershell
-# Run backend tests (Laravel / PHP):
-php artisan test
+# 1. Lint primary application pages
+php -l my_account.php
+php -l my_orders.php
+php -l help_center.php
 
-# Run frontend tests (JS / React):
-npm run test
+# 2. Run DB schema check script
+php database/schema_updates/run.php
 ```
 
 ## 4. Expected Output Specification
-- Return test execution results, total tests passed/failed, and error logs directly without emojis or fluff.
+- Return PHP syntax check results and database schema update status directly without fluff or emojis.
 
 ## 5. Verification Plan
-- Verify all tests pass with 0 failures.
+- Verify all modified files pass `php -l` with 0 syntax errors.
