@@ -712,7 +712,7 @@ if (is_array($store_initials_parts)) {
 }
 if ($store_initials === '') $store_initials = 'LD';
 
-$mobile_quick_order_bottom = (isset($_SESSION['user_id']) && !empty($_SESSION['user_id']) && isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'customer') ? '86px' : '14px';
+$mobile_quick_order_bottom = '98px';
 
 $store_recent_reviews = [];
 $product_ids_for_reviews = array_values(array_map('intval', array_keys($product_details)));
@@ -1289,7 +1289,7 @@ if (is_file(__DIR__ . '/images/hero-bg.jpg')) {
         <h1 class="fp-store-title"><?php echo htmlspecialchars($store_display_name); ?></h1>
         
         <div class="fp-rating-row">
-            <span class="fp-rating-badge"><i class="fas fa-star"></i> <?php echo number_format($store_rating_weighted > 0 ? $store_rating_weighted : 4.9, 1); ?></span>
+            <span class="fp-rating-badge"><i class="fas fa-star"></i> <?php echo number_format($store_rating_value > 0 ? $store_rating_value : 4.9, 1); ?></span>
             <span class="fp-rating-count">(<?php echo max(50, $store_review_total > 0 ? $store_review_total : 120); ?>+ ratings)</span>
             <span class="fp-dot">•</span>
             <a href="javascript:void(0);" class="fp-see-reviews-btn js-open-store-reviews">See reviews</a>
@@ -1321,14 +1321,7 @@ if (is_file(__DIR__ . '/images/hero-bg.jpg')) {
             </div>
         </div>
 
-        <!-- Free Delivery Promo Highlight -->
-        <div class="fp-promo-highlight">
-            <div class="fp-promo-icon"><i class="fas fa-crown"></i></div>
-            <div class="fp-promo-copy">
-                <strong>Free delivery</strong>
-                <span>minimum ₱200 and special savings for marketplace members</span>
-            </div>
-        </div>
+
     </div>
 </div>
 
@@ -6438,11 +6431,11 @@ body.dark-mode .product-favorite-btn.is-active {
         left: 10px;
         right: 10px;
         bottom: calc(<?php echo $mobile_quick_order_bottom; ?> + env(safe-area-inset-bottom, 0px));
-        z-index: 1004;
+        z-index: 1260;
     }
 
     .menu-section {
-        padding-bottom: 210px;
+        padding-bottom: 240px !important;
     }
 
     .cart-toggle-btn {
@@ -7872,8 +7865,8 @@ body.dark-mode .store-review-filter-btn.active {
         position: fixed !important;
         left: 14px !important;
         right: 14px !important;
-        bottom: 84px !important;
-        z-index: 1240 !important;
+        bottom: calc(98px + env(safe-area-inset-bottom, 0px)) !important;
+        z-index: 1260 !important;
     }
     .mobile-quick-order-inner {
         background: rgba(255, 255, 255, 0.94) !important;

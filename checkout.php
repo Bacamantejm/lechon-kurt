@@ -424,6 +424,14 @@ if ($overview_eta === '' && $overview_distance_km > 0) {
     $overview_eta = '35 - 50 mins';
 }
 
+// Ensure pickup store fallback
+$pickup_store = $selected_store;
+if (!$pickup_store && !empty($stores)) {
+    $pickup_store = $stores[0];
+}
+$pickup_store_name = (string)($pickup_store['name'] ?? ($pickup_store['store_name'] ?? 'All Star Lechon Main Branch'));
+$pickup_store_address = (string)($pickup_store['address'] ?? 'General Luna, Metro Manila');
+
 $vat_rate = 0.12;
 $vat_amount = round($subtotal * $vat_rate, 2);
 
@@ -569,8 +577,9 @@ $remaining = $total - $downpayment;
             
             <!-- Checkout Form -->
             <div class="checkout-form">
-                <h3>Complete Your Order</h3>
-                <div class="checkout-flow">
+                <div id="deliveryCheckoutHeader" style="<?php echo ($current_checkout_delivery_option === 'pickup') ? 'display: none;' : ''; ?>">
+                    <h3>Complete Your Order</h3>
+                    <div class="checkout-flow">
                     <div class="checkout-flow-step is-active" data-step="1" style="cursor: pointer;"><span>1</span>Contact</div>
                     <div class="checkout-flow-step" data-step="2" style="cursor: pointer;"><span>2</span>Address</div>
                     <div class="checkout-flow-step" data-step="3" style="cursor: pointer;"><span>3</span>Payment</div>
@@ -668,8 +677,193 @@ $remaining = $total - $downpayment;
                         </a>
                     </div>
                 <?php endif; ?>
+                </div><!-- /#deliveryCheckoutHeader -->
                 <form id="checkoutForm" action="process_order.php" method="POST" novalidate>
-                    <!-- Step 1: Contact Details -->
+                    <!-- ================= FOODPANDA PICK-UP VIEW ================= -->
+                    <div id="foodpandaPickupView" style="<?php echo ($current_checkout_delivery_option === 'pickup') ? 'display: block;' : 'display: none;'; ?>">
+                        <!-- Top Header -->
+                        <div class="fp-checkout-header">
+                            <button type="button" class="fp-back-btn" onclick="window.history.length > 1 ? window.history.back() : window.location.href='menu.php'" aria-label="Go back">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <div class="fp-checkout-title-wrap">
+                                <h2 class="fp-checkout-title">Checkout</h2>
+                                <p class="fp-checkout-subtitle" id="fpStoreSubtitle">
+                                    <?php echo htmlspecialchars($pickup_store_name); ?>
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- 1. Pickup Address Card -->
+                        <div class="fp-card fp-pickup-address-card">
+                            <div class="fp-card-header">
+                                <h3 class="fp-section-title">Pickup address</h3>
+                                <div class="fp-mode-pill-toggle">
+                                    <button type="button" class="fp-mode-pill-btn" onclick="switchCheckoutFulfillmentMode('delivery')">
+                                        <i class="fas fa-motorcycle"></i> Delivery
+                                    </button>
+                                    <button type="button" class="fp-mode-pill-btn is-active">
+                                        <i class="fas fa-person-walking"></i> Pick-up
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="fp-address-body">
+                                <div class="fp-address-icon-wrap">
+                                    <i class="fas fa-location-dot"></i>
+                                </div>
+                                <div class="fp-address-details">
+                                    <h4 class="fp-store-name" id="fpPickupStoreName">
+                                        <?php echo htmlspecialchars($pickup_store_name); ?>
+                                    </h4>
+                                    <p class="fp-store-address" id="fpPickupStoreAddress">
+                                        <?php echo htmlspecialchars($pickup_store_address); ?>
+                                    </p>
+                                    <?php if (!empty($stores) && count($stores) > 1): ?>
+                                    <div class="fp-store-change-row">
+                                        <select id="fpStoreSelect" class="fp-store-select-compact" onchange="handlePickupStoreChange(this.value)">
+                                            <?php foreach ($stores as $st): ?>
+                                            <?php $stId = (int)($st['id'] ?? $st['store_id'] ?? 1); ?>
+                                            <option value="<?php echo $stId; ?>" <?php echo ($stId === (int)($pickup_store['id'] ?? $pickup_store['store_id'] ?? 1)) ? 'selected' : ''; ?>>
+                                                Change branch: <?php echo htmlspecialchars($st['name'] ?? ($st['store_name'] ?? 'Branch')); ?> (<?php echo htmlspecialchars($st['city'] ?? ''); ?>)
+                                            </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. Pick-up Options Card -->
+                        <div class="fp-card fp-pickup-options-card">
+                            <div class="fp-card-header">
+                                <h3 class="fp-section-title">Pick-up options</h3>
+                            </div>
+                            <div class="fp-options-list">
+                                <!-- Option 1: Standard (10-15 mins) -->
+                                <div class="fp-option-row is-active" id="fpOptionStandard" onclick="selectPickupOption('standard')">
+                                    <div class="fp-radio-circle">
+                                        <span class="fp-radio-dot"></span>
+                                    </div>
+                                    <div class="fp-option-info">
+                                        <span class="fp-option-label">Standard</span>
+                                        <span class="fp-option-subtext">10-15 mins</span>
+                                    </div>
+                                </div>
+
+                                <!-- Option 2: Scheduled (Select a date and time) -->
+                                <div class="fp-option-row" id="fpOptionScheduled" onclick="openPickupScheduleSheet()">
+                                    <div class="fp-radio-circle">
+                                        <span class="fp-radio-dot"></span>
+                                    </div>
+                                    <div class="fp-option-info">
+                                        <span class="fp-option-label">Scheduled</span>
+                                        <span class="fp-option-subtext" id="fpScheduledSubtext">Select a date and time</span>
+                                    </div>
+                                    <i class="fas fa-chevron-right fp-option-chevron"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. Payment Method Card (PayMongo GCash ONLY) -->
+                        <div class="fp-card fp-payment-card">
+                            <div class="fp-card-header">
+                                <h3 class="fp-section-title">Payment method</h3>
+                                <i class="fas fa-chevron-right fp-header-chevron"></i>
+                            </div>
+                            <div class="fp-payment-body">
+                                <div class="fp-payment-row">
+                                    <div class="fp-gcash-badge">
+                                        <span>G</span>
+                                    </div>
+                                    <div class="fp-payment-details">
+                                        <span class="fp-payment-name">GCash (Alipay+ Partner)</span>
+                                        <span class="fp-payment-sub">Pay securely via PayMongo</span>
+                                    </div>
+                                    <div class="fp-payment-amount">
+                                        <span id="fpPaymentAmountDisplay">₱ <?php echo number_format($total, 2); ?></span>
+                                    </div>
+                                </div>
+                                <div class="fp-payment-footer-note">
+                                    <i class="fas fa-shield-alt"></i> Official payment gateway handled securely by PayMongo. Fast, instant GCash verification.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 4. Contact Details & Notes Card -->
+                        <div class="fp-card fp-contact-card">
+                            <div class="fp-card-header">
+                                <h3 class="fp-section-title">Contact details</h3>
+                                <span class="fp-autofill-tag"><i class="fas fa-check-circle"></i> Profile synced</span>
+                            </div>
+                            <div class="fp-contact-body">
+                                <div class="fp-contact-row">
+                                    <i class="fas fa-user"></i>
+                                    <span id="fpContactNameDisplay"><?php echo htmlspecialchars($user['full_name'] ?? 'Guest Customer'); ?></span>
+                                </div>
+                                <div class="fp-contact-row">
+                                    <i class="fas fa-phone"></i>
+                                    <span id="fpContactPhoneDisplay"><?php echo htmlspecialchars($user['phone'] ?? ''); ?></span>
+                                </div>
+                                <div class="fp-order-note-wrap">
+                                    <input type="text" id="fp_order_notes" class="fp-note-input" placeholder="Note to kitchen (optional, e.g. extra sauce, chop into pieces)" oninput="syncOrderNotes(this.value)">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 5. Order Summary Card -->
+                        <div class="fp-card fp-order-summary-card" id="fpOrderSummaryCard">
+                            <div class="fp-card-header">
+                                <h3 class="fp-section-title">Order summary</h3>
+                                <span class="fp-items-count"><?php echo (int)$checkout_item_count; ?> <?php echo $checkout_item_count === 1 ? 'item' : 'items'; ?></span>
+                            </div>
+                            <div class="fp-summary-items-list">
+                                <?php foreach ($_SESSION['cart'] as $item): ?>
+                                <div class="fp-summary-item-row">
+                                    <span class="fp-item-qty"><?php echo (int)$item['quantity']; ?>x</span>
+                                    <div class="fp-item-text">
+                                        <div class="fp-item-name"><?php echo htmlspecialchars($item['name']); ?></div>
+                                        <?php if (!empty($item['size']) && $item['size'] !== 'Regular'): ?>
+                                        <div class="fp-item-variant">Size: <?php echo htmlspecialchars($item['size']); ?></div>
+                                        <?php endif; ?>
+                                        <?php if (!empty($item['addons'])): ?>
+                                        <div class="fp-item-variant">+ <?php echo htmlspecialchars(implode(', ', $item['addons'])); ?></div>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="fp-item-price">₱<?php echo number_format($item['price'] * $item['quantity'], 2); ?></div>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <div class="fp-summary-totals">
+                                <div class="fp-totals-row">
+                                    <span>Subtotal</span>
+                                    <span id="fpSubtotalDisplay">₱<?php echo number_format($subtotal, 2); ?></span>
+                                </div>
+                                <div class="fp-totals-row">
+                                    <span>VAT (12%)</span>
+                                    <span id="fpVatDisplay">₱<?php echo number_format($vat_amount, 2); ?></span>
+                                </div>
+                                <div class="fp-totals-row">
+                                    <span>Delivery Fee</span>
+                                    <span style="color: #027a48; font-weight: 700;">₱0.00 (Free Pick-up)</span>
+                                </div>
+                                <?php if ($voucher_discount > 0): ?>
+                                <div class="fp-totals-row fp-voucher-discount-row">
+                                    <span>Discount (<?php echo htmlspecialchars($applied_voucher_code); ?>)</span>
+                                    <span id="fpVoucherDisplay">- ₱<?php echo number_format($voucher_discount, 2); ?></span>
+                                </div>
+                                <?php endif; ?>
+                                <div class="fp-totals-row fp-grand-total-row">
+                                    <span>Total (incl. fees and tax)</span>
+                                    <span id="fpGrandTotalDisplay">₱<?php echo number_format($total, 2); ?></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- ================= END FOODPANDA PICK-UP VIEW ================= -->
+
+                    <div id="deliveryCheckoutSteps" style="<?php echo ($current_checkout_delivery_option === 'pickup') ? 'display: none;' : ''; ?>">
+                        <!-- Step 1: Contact Details -->
                     <div class="step-content is-active" id="stepContent1">
                         <p class="checkout-section-label"><i class="fas fa-user"></i> Contact Details</p>
                         <div class="form-group">
@@ -867,8 +1061,8 @@ $remaining = $total - $downpayment;
                         </select>
                         
                         <!-- Delivery Date & Time (Auto-set to Today/ASAP) -->
-                        <input type="hidden" name="delivery_date" value="<?php echo date('Y-m-d'); ?>">
-                        <input type="hidden" name="delivery_time" value="ASAP">
+                        <input type="hidden" name="delivery_date" id="delivery_date" value="<?php echo date('Y-m-d'); ?>">
+                        <input type="hidden" name="delivery_time" id="delivery_time" value="Standard (10-15 mins)">
                         
                         <div class="form-group" style="margin-top: 16px;">
                             <label for="order_notes">Order Notes (Optional)</label>
@@ -1142,6 +1336,7 @@ $remaining = $total - $downpayment;
                             </button>
                         </div>
                     </div>
+                    </div><!-- /#deliveryCheckoutSteps -->
                     
                     <!-- Hidden fields for delivery option -->
                     <input type="hidden" id="delivery_option_hidden" name="delivery_option" value="<?php echo htmlspecialchars($current_checkout_delivery_option); ?>">
@@ -1156,6 +1351,56 @@ $remaining = $total - $downpayment;
             </div>
         </div>
     </div>
+<!-- Foodpanda Pick-up Docked Bottom Bar -->
+<div class="fp-docked-bottom-bar" id="fpDockedBottomBar" style="<?php echo ($current_checkout_delivery_option === 'pickup') ? 'display: block;' : 'display: none;'; ?>">
+    <div class="fp-bar-content">
+        <div class="fp-bar-summary-row">
+            <div class="fp-bar-left">
+                <div class="fp-bar-label">Total (incl. fees and tax)</div>
+                <button type="button" class="fp-see-summary-link" onclick="scrollToPickupSummary()">See summary</button>
+            </div>
+            <div class="fp-bar-right">
+                <div class="fp-bar-total" id="fpBarTotalDisplay">₱ <?php echo number_format($total, 2); ?></div>
+                <?php if ($voucher_discount > 0): ?>
+                <div class="fp-bar-original-total" id="fpBarOriginalDisplay">₱ <?php echo number_format($total + $voucher_discount, 2); ?></div>
+                <?php endif; ?>
+            </div>
+        </div>
+        <button type="button" class="fp-place-order-btn" id="fpPlacePickupOrderBtn" onclick="submitPickupCheckout()">
+            Place Pick-Up order
+        </button>
+    </div>
+</div>
+
+<!-- Foodpanda Date & Time Picker Bottom Sheet Modal -->
+<div class="fp-schedule-sheet-backdrop" id="fpScheduleSheetBackdrop" onclick="closePickupScheduleSheet(event)">
+    <div class="fp-schedule-sheet" id="fpScheduleSheet" onclick="event.stopPropagation()">
+        <!-- Drag Handle -->
+        <div class="fp-sheet-handle"></div>
+
+        <!-- Mode Toggle Pill: Delivery | Pick-up -->
+        <div class="fp-sheet-mode-toggle">
+            <button type="button" class="fp-sheet-toggle-btn" id="sheetDeliveryBtn" onclick="handleSheetModeSwitch('delivery')">
+                <i class="fas fa-motorcycle"></i> Delivery
+            </button>
+            <button type="button" class="fp-sheet-toggle-btn is-active" id="sheetPickupBtn" onclick="handleSheetModeSwitch('pickup')">
+                <i class="fas fa-person-walking"></i> Pick-up
+            </button>
+        </div>
+
+        <!-- Slots List Scroll -->
+        <div class="fp-sheet-slots-scroll" id="fpSheetSlotsList">
+            <!-- Dynamic Slots Rendered via JS -->
+        </div>
+
+        <!-- Apply Button -->
+        <div class="fp-sheet-action-footer">
+            <button type="button" class="fp-sheet-apply-btn" id="fpSheetApplyBtn" onclick="applyScheduleSelection()">
+                Apply
+            </button>
+        </div>
+    </div>
+</div>
 </section>
 
 <!-- Add SweetAlert2 CSS & JS -->
@@ -1163,6 +1408,828 @@ $remaining = $total - $downpayment;
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <style>
+/* =========================================================
+   FOODPANDA PICK-UP CHECKOUT STYLES & GLASSMORPHISM
+   ========================================================= */
+/* Hide main storefront bottom navigation on checkout screen */
+.mobile-bottom-nav {
+    display: none !important;
+}
+
+.checkout-section {
+    padding-bottom: 140px !important;
+}
+
+.checkout-section.is-pickup-mode .checkout-grid {
+    display: flex !important;
+    justify-content: center !important;
+}
+
+.checkout-section.is-pickup-mode .checkout-summary {
+    display: none !important;
+}
+
+.checkout-section.is-pickup-mode .checkout-form {
+    max-width: 640px !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+}
+
+#foodpandaPickupView {
+    width: 100%;
+    margin: 0 auto;
+}
+
+.fp-checkout-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.fp-back-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #101828;
+    font-size: 15px;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    flex-shrink: 0;
+}
+
+.fp-back-btn:hover {
+    background: #f8f9fa;
+    border-color: #d0d5dd;
+    transform: scale(1.04);
+}
+
+.fp-checkout-title-wrap {
+    flex: 1;
+}
+
+.fp-checkout-title {
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: #101828;
+    margin: 0;
+    line-height: 1.2;
+    letter-spacing: -0.3px;
+}
+
+.fp-checkout-subtitle {
+    font-size: 0.9rem;
+    color: #667085;
+    margin: 2px 0 0;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.fp-card {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 18px;
+    padding: 20px 22px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.fp-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.fp-section-title {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #101828;
+    margin: 0;
+    letter-spacing: -0.2px;
+}
+
+.fp-header-chevron {
+    color: #98a2b3;
+    font-size: 14px;
+}
+
+.fp-mode-pill-toggle {
+    display: inline-flex;
+    background: #f2f4f7;
+    border-radius: 999px;
+    padding: 3px;
+    gap: 2px;
+}
+
+.fp-mode-pill-btn {
+    border: none;
+    background: transparent;
+    font-size: 12px;
+    font-weight: 700;
+    color: #475467;
+    padding: 6px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.fp-mode-pill-btn.is-active {
+    background: #101828;
+    color: #ffffff;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.1);
+}
+
+.fp-address-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+}
+
+.fp-address-icon-wrap {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #fff1f0;
+    border: 1px solid #fee4e2;
+    color: #b3261e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.fp-address-details {
+    flex: 1;
+}
+
+.fp-store-name {
+    font-size: 15px;
+    font-weight: 800;
+    color: #101828;
+    margin: 0 0 4px;
+}
+
+.fp-store-address {
+    font-size: 13.5px;
+    color: #667085;
+    margin: 0 0 10px;
+    line-height: 1.45;
+}
+
+.fp-store-select-compact {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid #d0d5dd;
+    background: #f8f9fa;
+    font-size: 13px;
+    font-weight: 600;
+    color: #344054;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.fp-store-select-compact:focus {
+    border-color: #b3261e;
+    background: #ffffff;
+}
+
+.fp-options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.fp-option-row {
+    display: flex;
+    align-items: center;
+    padding: 16px 18px;
+    border-radius: 16px;
+    border: 1.5px solid #eaecf0;
+    background: #ffffff;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+}
+
+.fp-option-row:hover {
+    border-color: #d0d5dd;
+    background: #fafafa;
+}
+
+.fp-option-row.is-active {
+    border-color: #101828 !important;
+    background: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);
+}
+
+.fp-radio-circle {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid #d0d5dd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 14px;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+}
+
+.fp-option-row.is-active .fp-radio-circle {
+    border-color: #101828;
+}
+
+.fp-radio-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #101828;
+    transform: scale(0);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fp-option-row.is-active .fp-radio-dot {
+    transform: scale(1);
+}
+
+.fp-option-info {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex: 1;
+}
+
+.fp-option-label {
+    font-size: 15px;
+    font-weight: 800;
+    color: #101828;
+}
+
+.fp-option-subtext {
+    font-size: 13.5px;
+    color: #667085;
+    font-weight: 500;
+}
+
+.fp-option-chevron {
+    color: #98a2b3;
+    font-size: 14px;
+    margin-left: auto;
+    transition: transform 0.2s ease;
+}
+
+.fp-option-row:hover .fp-option-chevron {
+    transform: translateX(2px);
+    color: #101828;
+}
+
+.fp-payment-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.fp-gcash-badge {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #007dfe 0%, #0056b3 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    font-weight: 900;
+    font-size: 20px;
+    letter-spacing: -1px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(0, 125, 254, 0.3);
+}
+
+.fp-payment-details {
+    flex: 1;
+}
+
+.fp-payment-name {
+    font-size: 15px;
+    font-weight: 800;
+    color: #101828;
+    display: block;
+}
+
+.fp-payment-sub {
+    font-size: 12.5px;
+    color: #667085;
+    display: block;
+    margin-top: 2px;
+}
+
+.fp-payment-amount {
+    font-size: 16px;
+    font-weight: 800;
+    color: #101828;
+    flex-shrink: 0;
+}
+
+.fp-payment-footer-note {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed #eaecf0;
+    font-size: 12px;
+    color: #475467;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    line-height: 1.4;
+}
+
+.fp-payment-footer-note i {
+    color: #027a48;
+}
+
+.fp-autofill-tag {
+    font-size: 11px;
+    font-weight: 700;
+    color: #027a48;
+    background: #ecfdf3;
+    border: 1px solid #abefc6;
+    padding: 2px 8px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.fp-contact-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.fp-contact-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: #344054;
+    font-weight: 600;
+}
+
+.fp-contact-row i {
+    color: #667085;
+    width: 16px;
+}
+
+.fp-order-note-wrap {
+    margin-top: 6px;
+}
+
+.fp-note-input {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid #eaecf0;
+    background: #f8f9fa;
+    font-size: 13.5px;
+    color: #101828;
+    outline: none;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+.fp-note-input:focus {
+    border-color: #b3261e;
+    background: #ffffff;
+}
+
+.fp-items-count {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #667085;
+}
+
+.fp-summary-items-list {
+    border-bottom: 1px dashed #eaecf0;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+}
+
+.fp-summary-item-row {
+    display: flex;
+    align-items: flex-start;
+    padding: 8px 0;
+    gap: 10px;
+}
+
+.fp-item-qty {
+    font-size: 14px;
+    font-weight: 800;
+    color: #101828;
+    width: 24px;
+    flex-shrink: 0;
+}
+
+.fp-item-text {
+    flex: 1;
+}
+
+.fp-item-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #101828;
+    line-height: 1.35;
+}
+
+.fp-item-variant {
+    font-size: 12px;
+    color: #667085;
+    margin-top: 2px;
+}
+
+.fp-item-price {
+    font-size: 14px;
+    font-weight: 700;
+    color: #101828;
+    flex-shrink: 0;
+}
+
+.fp-summary-totals {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.fp-totals-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13.5px;
+    color: #475467;
+}
+
+.fp-voucher-discount-row {
+    color: #027a48;
+    font-weight: 700;
+}
+
+.fp-grand-total-row {
+    font-size: 16px;
+    font-weight: 800;
+    color: #101828;
+    border-top: 1px solid #eaecf0;
+    padding-top: 10px;
+    margin-top: 4px;
+}
+
+.fp-docked-bottom-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1260;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 -6px 24px rgba(16, 24, 40, 0.06);
+    padding: 12px 20px calc(14px + env(safe-area-inset-bottom, 0px));
+}
+
+.fp-bar-content {
+    max-width: 620px;
+    margin: 0 auto;
+}
+
+.fp-bar-summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.fp-bar-left {
+    display: flex;
+    flex-direction: column;
+}
+
+.fp-bar-label {
+    font-size: 13px;
+    color: #667085;
+    font-weight: 600;
+}
+
+.fp-see-summary-link {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: #101828;
+    text-decoration: underline;
+    cursor: pointer;
+    text-align: left;
+    margin-top: 2px;
+}
+
+.fp-bar-right {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.fp-bar-total {
+    font-size: 1.25rem;
+    font-weight: 900;
+    color: #b3261e;
+    letter-spacing: -0.3px;
+}
+
+.fp-bar-original-total {
+    font-size: 13px;
+    color: #98a2b3;
+    text-decoration: line-through;
+    font-weight: 600;
+}
+
+.fp-place-order-btn {
+    width: 100%;
+    height: 52px;
+    border-radius: 999px;
+    background: #b3261e;
+    color: #ffffff;
+    border: none;
+    font-size: 16px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(179, 38, 30, 0.28);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    letter-spacing: -0.2px;
+}
+
+.fp-place-order-btn:hover {
+    background: #981b15;
+    box-shadow: 0 6px 18px rgba(179, 38, 30, 0.36);
+    transform: translateY(-1px);
+}
+
+.fp-place-order-btn:active {
+    transform: scale(0.99);
+}
+
+.fp-schedule-sheet-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(16, 24, 40, 0.45);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 1050;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fp-schedule-sheet-backdrop.is-open {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.fp-schedule-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-width: 520px;
+    margin: 0 auto;
+    background: #ffffff;
+    border-radius: 26px 26px 0 0;
+    padding: 14px 22px calc(24px + env(safe-area-inset-bottom, 0px));
+    transform: translateY(100%);
+    transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 -12px 48px rgba(0, 0, 0, 0.18);
+    max-height: 82vh;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+.fp-schedule-sheet-backdrop.is-open .fp-schedule-sheet {
+    transform: translateY(0);
+}
+
+.fp-sheet-handle {
+    width: 44px;
+    height: 4.5px;
+    border-radius: 999px;
+    background: #d0d5dd;
+    margin: 0 auto 16px;
+    flex-shrink: 0;
+}
+
+.fp-sheet-mode-toggle {
+    display: flex;
+    background: #f2f4f7;
+    border-radius: 999px;
+    padding: 4px;
+    margin-bottom: 20px;
+    flex-shrink: 0;
+}
+
+.fp-sheet-toggle-btn {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 10px 18px;
+    border-radius: 999px;
+    font-size: 14.5px;
+    font-weight: 600;
+    color: #475467;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.fp-sheet-toggle-btn.is-active {
+    background: #101828;
+    color: #ffffff;
+    font-weight: 700;
+    box-shadow: 0 2px 6px rgba(16, 24, 40, 0.12);
+}
+
+.fp-sheet-slots-scroll {
+    overflow-y: auto;
+    flex: 1;
+    max-height: 360px;
+    padding-right: 2px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.fp-slot-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-radius: 14px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    color: #475467;
+    font-size: 15px;
+    font-weight: 600;
+    border: 1.5px solid transparent;
+}
+
+.fp-slot-row:hover {
+    background: #f8f9fa;
+    color: #101828;
+}
+
+.fp-slot-row.is-selected {
+    background: #f4f4f7 !important;
+    color: #101828 !important;
+    font-weight: 800 !important;
+    border-color: #eaecf0;
+}
+
+.fp-slot-date {
+    font-size: 15px;
+}
+
+.fp-slot-time {
+    font-size: 15px;
+    color: inherit;
+}
+
+.fp-sheet-action-footer {
+    padding-top: 14px;
+    margin-top: 10px;
+    border-top: 1px solid #eaecf0;
+    flex-shrink: 0;
+}
+
+.fp-sheet-apply-btn {
+    width: 100%;
+    height: 52px;
+    border-radius: 999px;
+    background: #b3261e;
+    color: #ffffff;
+    border: none;
+    font-size: 16px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(179, 38, 30, 0.25);
+    transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.fp-sheet-apply-btn:hover {
+    background: #981b15;
+}
+
+.fp-sheet-apply-btn:active {
+    transform: scale(0.99);
+}
+
+body.dark-mode .fp-card,
+body.dark-mode .fp-schedule-sheet {
+    background: #1e293b;
+    border-color: #334155;
+}
+
+body.dark-mode .fp-checkout-title,
+body.dark-mode .fp-section-title,
+body.dark-mode .fp-store-name,
+body.dark-mode .fp-option-label,
+body.dark-mode .fp-payment-name,
+body.dark-mode .fp-payment-amount,
+body.dark-mode .fp-grand-total-row,
+body.dark-mode .fp-item-name,
+body.dark-mode .fp-item-qty,
+body.dark-mode .fp-item-price {
+    color: #f8fafc;
+}
+
+body.dark-mode .fp-checkout-subtitle,
+body.dark-mode .fp-store-address,
+body.dark-mode .fp-option-subtext,
+body.dark-mode .fp-payment-sub,
+body.dark-mode .fp-bar-label {
+    color: #94a3b8;
+}
+
+body.dark-mode .fp-back-btn {
+    background: #1e293b;
+    border-color: #334155;
+    color: #f8fafc;
+}
+
+body.dark-mode .fp-option-row {
+    background: #0f172a;
+    border-color: #334155;
+}
+
+body.dark-mode .fp-option-row.is-active {
+    border-color: #f8fafc !important;
+}
+
+body.dark-mode .fp-option-row.is-active .fp-radio-circle {
+    border-color: #f8fafc;
+}
+
+body.dark-mode .fp-option-row.is-active .fp-radio-dot {
+    background: #f8fafc;
+}
+
+body.dark-mode .fp-docked-bottom-bar {
+    background: rgba(15, 23, 42, 0.94);
+    border-color: #334155;
+}
+
+body.dark-mode .fp-see-summary-link {
+    color: #f8fafc;
+}
+
+body.dark-mode .fp-mode-pill-toggle,
+body.dark-mode .fp-sheet-mode-toggle {
+    background: #0f172a;
+}
+
+body.dark-mode .fp-mode-pill-btn,
+body.dark-mode .fp-sheet-toggle-btn {
+    color: #94a3b8;
+}
+
+body.dark-mode .fp-mode-pill-btn.is-active,
+body.dark-mode .fp-sheet-toggle-btn.is-active {
+    background: #334155;
+    color: #ffffff;
+}
+
+body.dark-mode .fp-slot-row.is-selected {
+    background: #334155 !important;
+    color: #f8fafc !important;
+}
+
 /* Add new styles for payment breakdown */
 .payment-breakdown {
     margin-top: 20px;
@@ -1635,6 +2702,11 @@ $remaining = $total - $downpayment;
 .btn-secondary:hover {
     background-color: #5a6268;
     transform: translateY(-2px);
+}
+
+/* Hide main storefront bottom navigation on checkout screen */
+.mobile-bottom-nav {
+    display: none !important;
 }
 
 .checkout-section {
@@ -2300,6 +3372,11 @@ body {
         var(--check-cream);
 }
 
+/* Hide main storefront bottom navigation on checkout screen */
+.mobile-bottom-nav {
+    display: none !important;
+}
+
 .checkout-section {
     background: linear-gradient(180deg, #fffaf4 0%, #fff 100%);
     padding-top: 42px;
@@ -2623,7 +3700,12 @@ body {
         display: none !important;
     }
 
-    .checkout-section {
+    /* Hide main storefront bottom navigation on checkout screen */
+.mobile-bottom-nav {
+    display: none !important;
+}
+
+.checkout-section {
         padding: 20px 0 160px !important;
     }
 
@@ -2894,7 +3976,12 @@ body.dark-mode {
     color: #f8fafc !important;
 }
 
-body.dark-mode .checkout-section {
+body.dark-mode /* Hide main storefront bottom navigation on checkout screen */
+.mobile-bottom-nav {
+    display: none !important;
+}
+
+.checkout-section {
     background: #0f172a !important;
 }
 
@@ -3490,10 +4577,454 @@ let latestResolvedAddressText = userAddressSeed || '';
 const psgcCache = new Map();
 const marketAddressPayloadStorageKey = 'market_address_payload';
 
+/* =========================================================
+   FOODPANDA PICK-UP CHECKOUT LOGIC & SCHEDULE MODAL
+   ========================================================= */
+let fpSelectedSchedule = {
+    type: 'standard',
+    dateValue: '<?php echo date('Y-m-d'); ?>',
+    dateLabel: 'Today',
+    timeValue: 'Standard (10-15 mins)',
+    timeLabel: 'Standard (10-15 mins)'
+};
+
+let fpCandidateSchedule = { ...fpSelectedSchedule };
+
+function applyFoodpandaPickupMode(isPickup) {
+    const section = document.querySelector('.checkout-section');
+    const fpView = document.getElementById('foodpandaPickupView');
+    const deliveryView = document.getElementById('deliveryCheckoutSteps');
+    const deliveryHeader = document.getElementById('deliveryCheckoutHeader');
+    const fpBottomBar = document.getElementById('fpDockedBottomBar');
+    const deliverySummary = document.querySelector('.checkout-summary');
+
+    if (section) {
+        section.classList.toggle('is-pickup-mode', isPickup);
+    }
+    if (fpView) {
+        fpView.style.display = isPickup ? 'block' : 'none';
+    }
+    if (deliveryView) {
+        deliveryView.style.display = isPickup ? 'none' : 'block';
+    }
+    if (deliveryHeader) {
+        deliveryHeader.style.display = isPickup ? 'none' : 'block';
+    }
+    if (fpBottomBar) {
+        fpBottomBar.style.display = isPickup ? 'block' : 'none';
+    }
+    if (deliverySummary) {
+        deliverySummary.style.display = isPickup ? 'none' : '';
+    }
+
+    // Strictly PayMongo GCash only for Pickup!
+    const codCard = document.getElementById('paymentMethodCardCod');
+    const paymongoRadio = document.querySelector('input[name="payment_method"][value="paymongo"]');
+    const fullRadio = document.querySelector('input[name="payment_type"][value="full"]');
+
+    if (isPickup) {
+        if (codCard) codCard.style.display = 'none';
+        if (paymongoRadio) {
+            paymongoRadio.checked = true;
+        }
+        if (fullRadio) {
+            fullRadio.checked = true;
+        }
+        currentDeliveryFee = 0;
+        if (typeof recalculateOrderTotals === 'function') {
+            recalculateOrderTotals();
+        }
+        updateFoodpandaTotals();
+    } else {
+        if (codCard) codCard.style.display = 'flex';
+    }
+
+    // Sync sheet mode toggle pill
+    const sheetDeliveryBtn = document.getElementById('sheetDeliveryBtn');
+    const sheetPickupBtn = document.getElementById('sheetPickupBtn');
+    if (sheetDeliveryBtn) sheetDeliveryBtn.classList.toggle('is-active', !isPickup);
+    if (sheetPickupBtn) sheetPickupBtn.classList.toggle('is-active', isPickup);
+}
+
+function selectPickupOption(type) {
+    const standardRow = document.getElementById('fpOptionStandard');
+    const scheduledRow = document.getElementById('fpOptionScheduled');
+    const scheduledSubtext = document.getElementById('fpScheduledSubtext');
+    const dateInput = document.getElementById('delivery_date');
+    const timeInput = document.getElementById('delivery_time');
+
+    if (type === 'standard') {
+        if (standardRow) standardRow.classList.add('is-active');
+        if (scheduledRow) scheduledRow.classList.remove('is-active');
+        if (scheduledSubtext) scheduledSubtext.textContent = 'Select a date and time';
+        fpSelectedSchedule = {
+            type: 'standard',
+            dateValue: '<?php echo date('Y-m-d'); ?>',
+            dateLabel: 'Today',
+            timeValue: 'Standard (10-15 mins)',
+            timeLabel: 'Standard (10-15 mins)'
+        };
+        if (dateInput) dateInput.value = '<?php echo date('Y-m-d'); ?>';
+        if (timeInput) timeInput.value = 'Standard (10-15 mins)';
+    } else {
+        openPickupScheduleSheet();
+    }
+}
+
+function openPickupScheduleSheet() {
+    renderPickupScheduleSlots();
+    const backdrop = document.getElementById('fpScheduleSheetBackdrop');
+    if (backdrop) {
+        backdrop.classList.add('is-open');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function closePickupScheduleSheet(event) {
+    if (event && event.target && event.target.id !== 'fpScheduleSheetBackdrop' && !event.target.classList.contains('fp-schedule-sheet-backdrop')) {
+        return;
+    }
+    const backdrop = document.getElementById('fpScheduleSheetBackdrop');
+    if (backdrop) {
+        backdrop.classList.remove('is-open');
+        document.body.style.overflow = '';
+    }
+}
+
+function handleSheetModeSwitch(mode) {
+    const backdrop = document.getElementById('fpScheduleSheetBackdrop');
+    if (backdrop) {
+        backdrop.classList.remove('is-open');
+        document.body.style.overflow = '';
+    }
+    switchCheckoutFulfillmentMode(mode);
+}
+
+function generatePickupTimeSlots() {
+    const slots = [];
+    const now = new Date();
+
+    // Standard Option
+    slots.push({
+        id: 'slot-standard',
+        dateLabel: now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+        dateValue: now.toISOString().split('T')[0],
+        timeLabel: 'Standard (10 mins)',
+        timeValue: 'Standard (10-15 mins)',
+        isStandard: true
+    });
+
+    const addSlotsForDate = (dateObj, isToday) => {
+        const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        const dateISO = dateObj.toISOString().split('T')[0];
+        
+        let startHour = 10;
+        let startMin = 0;
+        if (isToday) {
+            const currentHour = now.getHours();
+            const currentMin = now.getMinutes();
+            if (currentHour >= 10) {
+                startHour = currentHour;
+                startMin = currentMin >= 30 ? 45 : 15;
+                if (startMin >= 45) {
+                    startHour += 1;
+                    startMin = 0;
+                }
+            }
+        }
+
+        for (let h = Math.max(10, startHour); h <= 21; h++) {
+            for (let m = 0; m < 60; m += 15) {
+                if (isToday && h === startHour && m < startMin) continue;
+                if (h === 21 && m > 30) continue;
+
+                const nextH = (m + 15 >= 60) ? h + 1 : h;
+                const nextM = (m + 15 >= 60) ? 0 : m + 15;
+                const timeFrom = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+                const timeTo = String(nextH).padStart(2, '0') + ':' + String(nextM).padStart(2, '0');
+
+                slots.push({
+                    id: `slot-${dateISO}-${timeFrom}`,
+                    dateLabel: dateStr,
+                    dateValue: dateISO,
+                    timeLabel: `${timeFrom} – ${timeTo}`,
+                    timeValue: `${timeFrom} – ${timeTo}`,
+                    isStandard: false
+                });
+            }
+        }
+    };
+
+    addSlotsForDate(now, true);
+
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    addSlotsForDate(tomorrow, false);
+
+    const dayAfter = new Date(now);
+    dayAfter.setDate(dayAfter.getDate() + 2);
+    addSlotsForDate(dayAfter, false);
+
+    return slots;
+}
+
+let generatedSlotsCache = [];
+
+function renderPickupScheduleSlots() {
+    const container = document.getElementById('fpSheetSlotsList');
+    if (!container) return;
+
+    if (!generatedSlotsCache.length) {
+        generatedSlotsCache = generatePickupTimeSlots();
+    }
+
+    container.innerHTML = generatedSlotsCache.map(slot => {
+        const isSelected = (fpCandidateSchedule.isStandard && slot.isStandard) ||
+            (!fpCandidateSchedule.isStandard && !slot.isStandard && fpCandidateSchedule.dateValue === slot.dateValue && fpCandidateSchedule.timeValue === slot.timeValue);
+
+        return `
+            <div class="fp-slot-row ${isSelected ? 'is-selected' : ''}" data-slot-id="${slot.id}" onclick="selectPickupSlotCandidate('${slot.id}')">
+                <span class="fp-slot-date">${slot.dateLabel}</span>
+                <span class="fp-slot-time">${slot.timeLabel}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function selectPickupSlotCandidate(slotId) {
+    const slot = generatedSlotsCache.find(s => s.id === slotId);
+    if (!slot) return;
+
+    fpCandidateSchedule = {
+        type: slot.isStandard ? 'standard' : 'scheduled',
+        isStandard: slot.isStandard,
+        dateValue: slot.dateValue,
+        dateLabel: slot.dateLabel,
+        timeValue: slot.timeValue,
+        timeLabel: slot.timeLabel
+    };
+
+    document.querySelectorAll('.fp-slot-row').forEach(row => {
+        row.classList.toggle('is-selected', row.getAttribute('data-slot-id') === slotId);
+    });
+}
+
+function applyScheduleSelection() {
+    fpSelectedSchedule = { ...fpCandidateSchedule };
+
+    const dateInput = document.getElementById('delivery_date');
+    const timeInput = document.getElementById('delivery_time');
+    const standardRow = document.getElementById('fpOptionStandard');
+    const scheduledRow = document.getElementById('fpOptionScheduled');
+    const scheduledSubtext = document.getElementById('fpScheduledSubtext');
+
+    if (dateInput) dateInput.value = fpSelectedSchedule.dateValue;
+    if (timeInput) timeInput.value = fpSelectedSchedule.timeValue;
+
+    if (fpSelectedSchedule.isStandard) {
+        if (standardRow) standardRow.classList.add('is-active');
+        if (scheduledRow) scheduledRow.classList.remove('is-active');
+        if (scheduledSubtext) scheduledSubtext.textContent = 'Select a date and time';
+    } else {
+        if (standardRow) standardRow.classList.remove('is-active');
+        if (scheduledRow) scheduledRow.classList.add('is-active');
+        if (scheduledSubtext) {
+            scheduledSubtext.textContent = `${fpSelectedSchedule.dateLabel} • ${fpSelectedSchedule.timeLabel}`;
+        }
+    }
+
+    const backdrop = document.getElementById('fpScheduleSheetBackdrop');
+    if (backdrop) {
+        backdrop.classList.remove('is-open');
+        document.body.style.overflow = '';
+    }
+}
+
+function handlePickupStoreChange(storeId) {
+    const hiddenPickup = document.getElementById('pickup_location_hidden');
+    if (hiddenPickup) hiddenPickup.value = storeId;
+    const stepPickup = document.getElementById('pickup_location_step');
+    if (stepPickup) stepPickup.value = storeId;
+    const formPickup = document.getElementById('pickup_location');
+    if (formPickup) formPickup.value = storeId;
+
+    if (typeof updateDeliveryOption === 'function') {
+        updateDeliveryOption();
+    }
+}
+
+function syncOrderNotes(val) {
+    const mainNotes = document.getElementById('order_notes');
+    if (mainNotes) mainNotes.value = val;
+}
+
+function scrollToPickupSummary() {
+    const summaryCard = document.getElementById('fpOrderSummaryCard');
+    if (summaryCard) {
+        summaryCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+
+function updateFoodpandaTotals() {
+    const totalInput = document.getElementById('total_amount');
+    const totalVal = parseFloat(totalInput?.value || '0') || 0;
+    const formatted = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(totalVal) : `PHP ${totalVal.toFixed(2)}`);
+
+    const fpPayDisplay = document.getElementById('fpPaymentAmountDisplay');
+    const fpBarTotal = document.getElementById('fpBarTotalDisplay');
+    const fpGrandTotal = document.getElementById('fpGrandTotalDisplay');
+
+    if (fpPayDisplay) fpPayDisplay.textContent = formatted;
+    if (fpBarTotal) fpBarTotal.textContent = formatted;
+    if (fpGrandTotal) fpGrandTotal.textContent = formatted;
+}
+
+function submitPickupCheckout() {
+    // 1. Ensure fulfillment mode is pickup
+    const deliveryOptionHidden = document.getElementById('delivery_option_hidden');
+    if (deliveryOptionHidden) deliveryOptionHidden.value = 'pickup';
+
+    // 2. Lock payment method to PayMongo GCash
+    const paymongoRadio = document.querySelector('input[name="payment_method"][value="paymongo"]');
+    if (paymongoRadio) paymongoRadio.checked = true;
+    const fullRadio = document.querySelector('input[name="payment_type"][value="full"]');
+    if (fullRadio) fullRadio.checked = true;
+
+    // 3. Ensure terms agreement
+    const terms = document.querySelector('input[name="terms"]');
+    if (terms) terms.checked = true;
+
+    // 4. Validate contact info
+    const fullNameInput = document.getElementById('full_name');
+    const emailInput = document.getElementById('email');
+    const phoneInput = document.getElementById('phone');
+
+    const fullName = (fullNameInput?.value || '').trim();
+    const email = (emailInput?.value || '').trim();
+    const phone = (phoneInput?.value || '').trim();
+
+    if (!fullName || !email || !phone) {
+        Swal.fire({
+            title: 'Contact Information',
+            html: `
+                <div style="text-align:left; font-size:14px;">
+                    <p style="margin-bottom:12px; color:#475467;">Please verify your contact details for this pick-up order:</p>
+                    <div style="margin-bottom:10px;">
+                        <label style="font-weight:700; color:#101828; display:block; margin-bottom:4px;">Full Name *</label>
+                        <input id="swal_full_name" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${fullName}" placeholder="Your full name">
+                    </div>
+                    <div style="margin-bottom:10px;">
+                        <label style="font-weight:700; color:#101828; display:block; margin-bottom:4px;">Email Address *</label>
+                        <input id="swal_email" type="email" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${email}" placeholder="you@email.com">
+                    </div>
+                    <div style="margin-bottom:10px;">
+                        <label style="font-weight:700; color:#101828; display:block; margin-bottom:4px;">Phone Number *</label>
+                        <input id="swal_phone" type="tel" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${phone}" placeholder="09171234567">
+                    </div>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonColor: '#b3261e',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Continue to Payment',
+            preConfirm: () => {
+                const swalName = (document.getElementById('swal_full_name')?.value || '').trim();
+                const swalEmail = (document.getElementById('swal_email')?.value || '').trim();
+                const swalPhone = (document.getElementById('swal_phone')?.value || '').trim();
+                if (!swalName) {
+                    Swal.showValidationMessage('Please enter your full name.');
+                    return false;
+                }
+                if (!swalEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(swalEmail)) {
+                    Swal.showValidationMessage('Please enter a valid email address.');
+                    return false;
+                }
+                if (!swalPhone || !/^09\d{9}$/.test(swalPhone.replace(/\D/g, ''))) {
+                    Swal.showValidationMessage('Please enter a valid 11-digit mobile number (e.g. 09171234567).');
+                    return false;
+                }
+                return { name: swalName, email: swalEmail, phone: swalPhone };
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                if (fullNameInput) fullNameInput.value = result.value.name;
+                if (emailInput) emailInput.value = result.value.email;
+                if (phoneInput) phoneInput.value = result.value.phone;
+                executePickupOrderSubmission();
+            }
+        });
+        return;
+    }
+
+    executePickupOrderSubmission();
+}
+
+function executePickupOrderSubmission() {
+    const totalInput = document.getElementById('total_amount');
+    const totalAmount = parseFloat(totalInput?.value || '0') || 0;
+    const formattedAmount = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(totalAmount) : `PHP ${totalAmount.toFixed(2)}`);
+    const storeName = document.getElementById('fpPickupStoreName')?.textContent?.trim() || 'Store Branch';
+    const scheduleLabel = fpSelectedSchedule.isStandard ? 'Standard (10-15 mins)' : `${fpSelectedSchedule.dateLabel} • ${fpSelectedSchedule.timeLabel}`;
+
+    Swal.fire({
+        title: 'Confirm Pick-Up Order',
+        html: `
+            <div style="text-align: left; font-size: 14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #eaecf0;">
+                    <span style="color:#667085; font-weight:600;">Branch:</span>
+                    <strong style="color:#101828;">${storeName}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #eaecf0;">
+                    <span style="color:#667085; font-weight:600;">Schedule:</span>
+                    <strong style="color:#027a48;">${scheduleLabel}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #eaecf0;">
+                    <span style="color:#667085; font-weight:600;">Payment Gateway:</span>
+                    <strong style="color:#007dfe;"><i class="fas fa-lock"></i> GCash via PayMongo</strong>
+                </div>
+                <div style="background:#f8f9fa; border:1px solid #eaecf0; border-radius:12px; padding:14px; margin-bottom:12px; text-align:center;">
+                    <span style="font-size:12px; font-weight:700; color:#667085; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:4px;">
+                        Total Amount to Pay via GCash
+                    </span>
+                    <span style="font-size:1.75rem; font-weight:800; color:#b3261e; display:block;">${formattedAmount}</span>
+                </div>
+                <p style="margin:0; font-size:12px; color:#475467; line-height:1.4;">
+                    <i class="fas fa-shield-alt" style="color:#175cd3;"></i> You will be redirected to the secure PayMongo payment page to pay with your GCash wallet.
+                </p>
+            </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#b3261e',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fas fa-lock"></i> Proceed to GCash Payment',
+        cancelButtonText: 'Review Order'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({
+                title: 'Connecting to GCash...',
+                text: 'Redirecting to PayMongo secure payment page',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            const formElement = document.getElementById('checkoutForm');
+            if (typeof submitCheckoutAjax === 'function') {
+                await submitCheckoutAjax(formElement);
+            } else {
+                formElement.submit();
+            }
+        }
+    });
+}
+
 async function switchCheckoutFulfillmentMode(mode) {
     const normalizedMode = (String(mode || '').toLowerCase() === 'delivery') ? 'delivery' : 'pickup';
     const isDelivery = (normalizedMode === 'delivery');
     activeCheckoutDeliveryOption = normalizedMode;
+    applyFoodpandaPickupMode(!isDelivery);
     if (typeof updatePaymentUI === 'function') {
         updatePaymentUI();
     }
@@ -5994,6 +7525,8 @@ document.querySelectorAll('input[name="payment_type"]').forEach(radio => {
     radio.addEventListener('change', updatePaymentUI);
 });
 window.updatePaymentUI = updatePaymentUI;
+// Initialize Foodpanda pickup state
+applyFoodpandaPickupMode(activeCheckoutDeliveryOption === 'pickup');
 updatePaymentUI();
 
 // Bind event listeners for voucher controls
