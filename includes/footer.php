@@ -110,13 +110,13 @@
         left: 16px;
         right: 16px;
         height: 64px;
-        background: rgba(255, 255, 255, 0.85) !important;
-        backdrop-filter: blur(16px) saturate(180%);
-        -webkit-backdrop-filter: blur(16px) saturate(180%);
-        border: 1px solid rgba(234, 236, 240, 0.85);
+        background: rgba(255, 255, 255, 0.78) !important;
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.75);
         border-radius: 26px;
         z-index: 1250;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.08);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.9);
         padding: 4px 12px;
         justify-content: space-around;
         align-items: center;
@@ -206,9 +206,9 @@
         border: 1.5px solid #ffffff;
     }
     body.dark-mode .mobile-bottom-nav {
-        background: rgba(30, 41, 59, 0.85) !important;
-        border-color: rgba(51, 65, 85, 0.8) !important;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35);
+        background: rgba(30, 41, 59, 0.78) !important;
+        border-color: rgba(255, 255, 255, 0.12) !important;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.08);
     }
     body.dark-mode .mob-nav-item.mob-center-action {
         border-color: #1e293b !important;
