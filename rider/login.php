@@ -132,30 +132,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: var(--page-bg);
+            background: 
+                radial-gradient(circle at 12% 15%, rgba(254, 222, 207, 0.55) 0%, transparent 45%),
+                radial-gradient(circle at 88% 85%, rgba(255, 237, 229, 0.6) 0%, transparent 45%),
+                radial-gradient(circle at 50% 50%, rgba(255, 247, 242, 0.45) 0%, transparent 60%),
+                #fcf8f6;
             color: var(--primary-ink);
             margin: 0;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px 16px;
+            padding: 24px 16px;
         }
 
         .rider-login-card {
             width: 100%;
             max-width: 440px;
-            background: #ffffff;
-            border: 1px solid var(--border-neutral);
-            border-radius: 18px;
-            padding: 32px 24px;
-            box-shadow: 0 4px 20px rgba(16, 24, 40, 0.06);
+            background: rgba(255, 255, 255, 0.75) !important;
+            backdrop-filter: blur(20px) saturate(180%) !important;
+            -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.85) !important;
+            border-radius: 24px !important;
+            padding: 36px 28px !important;
+            box-shadow: 0 16px 40px -8px rgba(16, 24, 40, 0.08), 0 4px 14px rgba(16, 24, 40, 0.03), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
         }
 
         .rider-logo-bubble {
             width: 68px;
             height: 68px;
-            background: #fff1f0;
+            background: rgba(255, 241, 240, 0.85);
+            backdrop-filter: blur(8px);
             color: var(--primary-red);
             border-radius: 20px;
             display: flex;
@@ -163,12 +170,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             justify-content: center;
             font-size: 28px;
             margin: 0 auto 16px;
-            border: 1px solid #fee4e2;
+            border: 1px solid rgba(254, 228, 226, 0.9);
+        }
+
+        .form-control {
+            background: rgba(255, 255, 255, 0.65) !important;
+            backdrop-filter: blur(8px) !important;
+            border: 1.5px solid rgba(208, 213, 221, 0.8) !important;
+            border-radius: 12px !important;
         }
 
         .form-control:focus {
+            background: rgba(255, 255, 255, 0.95) !important;
             border-color: var(--primary-red);
-            box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.15);
+            box-shadow: 0 0 0 3.5px rgba(179, 38, 30, 0.12);
+        }
+
+        .input-group-text {
+            background: rgba(255, 255, 255, 0.65) !important;
+            backdrop-filter: blur(8px) !important;
+            border: 1.5px solid rgba(208, 213, 221, 0.8) !important;
+            border-right: none !important;
+            border-radius: 12px 0 0 12px !important;
+        }
+
+        .input-group .form-control {
+            border-left: none !important;
+            border-radius: 0 12px 12px 0 !important;
         }
 
         .btn-rider-submit {
