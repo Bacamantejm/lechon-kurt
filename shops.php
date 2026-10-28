@@ -70,7 +70,13 @@ function shopsGetCityDefaultCoords(string $city_or_address): array {
 // Fetch real store branches from store_locations table
 $shops = [];
 
-$branch_sql = "SELECT store_id, owner_user_id, store_name, address, city, province, phone, email, opening_hours, latitude, longitude, is_active FROM store_locations WHERE is_active = 1 ORDER BY store_name ASC";
+$shops_banner_join = function_exists('userAccountControlColumnExists') && userAccountControlColumnExists($conn, 'business_banner') ? 'u.business_banner, ' : '';
+$branch_sql = "SELECT sl.store_id, sl.owner_user_id, sl.store_name, sl.address, sl.city, sl.province, sl.phone, sl.email, sl.opening_hours, sl.latitude, sl.longitude, sl.is_active,
+                      {$shops_banner_join}u.business_logo, u.profile_image
+               FROM store_locations sl
+               LEFT JOIN users u ON u.id = sl.owner_user_id
+               WHERE sl.is_active = 1
+               ORDER BY sl.store_name ASC";
 $branch_res = @mysqli_query($conn, $branch_sql);
 if ($branch_res) {
     while ($row = mysqli_fetch_assoc($branch_res)) {
@@ -92,6 +98,8 @@ if ($branch_res) {
             $lng = $fallback['lng'];
         }
 
+        $branch_custom_img = !empty($row['business_banner']) ? $row['business_banner'] : (!empty($row['business_logo']) ? $row['business_logo'] : (!empty($row['profile_image']) ? $row['profile_image'] : ''));
+
         $shops[] = [
             'key' => 'branch-' . $store_id,
             'name' => fixMojibakeText(trim((string)$row['store_name'])),
@@ -107,7 +115,7 @@ if ($branch_res) {
             'has_vouchers' => true,
             'latitude' => $lat,
             'longitude' => $lng,
-            'image' => 'images/store-bg.jpg',
+            'image' => resolveDistinctStoreImage($store_id, (string)$row['store_name'], $branch_custom_img),
             'menu_link' => 'menu.php?branch_id=' . $store_id,
             'tags' => ['branch', strtolower($row['store_name']), strtolower($city_label)]
         ];
@@ -117,7 +125,8 @@ if ($branch_res) {
 
 // Fetch approved organization partner sellers from users & franchise_applications
 $latest_approved_partner_sql = "SELECT fa1.* FROM franchise_applications fa1 INNER JOIN (SELECT user_id, MAX(id) AS latest_id FROM franchise_applications WHERE status = 'approved' GROUP BY user_id) latest ON latest.latest_id = fa1.id";
-$seller_sql = "SELECT u.id, u.full_name, u.email, u.phone, u.address, u.business_name, u.business_type, u.business_logo, u.profile_image, fa.business_address, fa.city_name, sl.latitude, sl.longitude
+$shops_banner_col = function_exists('userAccountControlColumnExists') && userAccountControlColumnExists($conn, 'business_banner') ? 'u.business_banner, ' : '';
+$seller_sql = "SELECT u.id, u.full_name, u.email, u.phone, u.address, u.business_name, u.business_type, u.business_logo, {$shops_banner_col}u.profile_image, fa.business_address, fa.city_name, sl.latitude, sl.longitude
               FROM users u
               INNER JOIN ({$latest_approved_partner_sql}) fa ON fa.user_id = u.id
               LEFT JOIN store_locations sl ON sl.owner_user_id = u.id AND sl.is_active = 1
@@ -158,7 +167,7 @@ if ($seller_res) {
             'has_vouchers' => true,
             'latitude' => $lat,
             'longitude' => $lng,
-            'image' => !empty($row['business_logo']) ? $row['business_logo'] : (!empty($row['profile_image']) ? $row['profile_image'] : 'images/store-bg.jpg'),
+            'image' => !empty($row['business_banner']) ? $row['business_banner'] : (!empty($row['business_logo']) ? $row['business_logo'] : (!empty($row['profile_image']) ? $row['profile_image'] : resolveDistinctStoreImage($seller_id, $name))),
             'menu_link' => 'menu.php?seller_id=' . $seller_id,
             'tags' => ['partner', strtolower($name), strtolower($city)]
         ];

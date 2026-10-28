@@ -234,6 +234,7 @@ class SubscriptionAccessService
             'billing_cycle' => (string)($subscription['billing_cycle'] ?? 'monthly'),
             'can_change_store_name' => $tier_level >= self::TIER_HIERARCHY[self::TIER_STARTER],
             'can_change_store_logo' => $tier_level >= self::TIER_HIERARCHY[self::TIER_STARTER],
+            'can_change_store_banner' => $tier_level >= self::TIER_HIERARCHY[self::TIER_STARTER],
             'can_upload_products' => $tier_level >= self::TIER_HIERARCHY[self::TIER_STARTER],
             'can_access_hr' => $tier_level >= self::TIER_HIERARCHY[self::TIER_GROWTH],
             'can_access_inventory_mrp' => $tier_level >= self::TIER_HIERARCHY[self::TIER_GROWTH],

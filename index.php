@@ -46,13 +46,18 @@ if (!function_exists('normalize_store_media_path')) {
         }
         $path = str_replace('\\', '/', trim((string)$value));
         if ($path === '') return '';
-        if (!preg_match('#^uploads/(profile_pictures|business_logos)/[A-Za-z0-9._-]+$#', $path)) return '';
+        if (!preg_match('#^uploads/(profile_pictures|business_logos|business_banners)/[A-Za-z0-9._-]+$#', $path)) return '';
         return $path;
     }
 }
 
 if (!function_exists('user_storefront_image')) {
     function user_storefront_image(array $user_row, $fallback = '') {
+        $business_banner = normalize_store_media_path($user_row['business_banner'] ?? '');
+        if ($business_banner !== '') {
+            return asset_path($business_banner, $fallback !== '' ? $fallback : 'images/store-bg.jpg');
+        }
+
         $business_logo = normalize_store_media_path($user_row['business_logo'] ?? '');
         if ($business_logo !== '') {
             return asset_path($business_logo, $fallback !== '' ? $fallback : 'images/store-bg.jpg');
@@ -219,6 +224,7 @@ $branch_any_by_owner = [];
 $branch_owner_ids = [];
 $branch_owner_images = [];
 $has_business_logo_column = function_exists('userAccountControlColumnExists') ? userAccountControlColumnExists($conn, 'business_logo') : true;
+$has_business_banner_column = function_exists('userAccountControlColumnExists') ? userAccountControlColumnExists($conn, 'business_banner') : true;
 $has_profile_image_column = function_exists('userAccountControlColumnExists') ? userAccountControlColumnExists($conn, 'profile_image') : true;
 sahEnsureStoreLocationAvailabilitySchema($conn);
 $branch_result = mysqli_query($conn, "SELECT store_id, owner_user_id, store_name, address, city, province, phone, email, opening_hours, opening_time, closing_time, operating_days, availability_mode, manual_status, is_active, latitude, longitude FROM store_locations WHERE is_active = 1 ORDER BY store_name");
@@ -302,6 +308,7 @@ if (!empty($branch_owner_ids)) {
     $owner_ids_sql = implode(',', array_map('intval', array_keys($branch_owner_ids)));
     if ($owner_ids_sql !== '') {
         $owner_media_fields = "id";
+        $owner_media_fields .= $has_business_banner_column ? ", business_banner" : ", NULL AS business_banner";
         $owner_media_fields .= $has_business_logo_column ? ", business_logo" : ", NULL AS business_logo";
         $owner_media_fields .= $has_profile_image_column ? ", profile_image" : ", NULL AS profile_image";
         $owner_media_result = mysqli_query($conn, "SELECT {$owner_media_fields} FROM users WHERE id IN ({$owner_ids_sql})");
@@ -351,6 +358,7 @@ if (!empty($_SESSION['user_id']) && isset($conn) && $conn) {
 $stores = [];
 $latest_approved_partner_sql = "SELECT fa1.* FROM franchise_applications fa1 INNER JOIN (SELECT user_id, MAX(id) AS latest_id FROM franchise_applications WHERE status = 'approved' GROUP BY user_id) latest ON latest.latest_id = fa1.id";
 $seller_media_fields = '';
+$seller_media_fields .= $has_business_banner_column ? ", u.business_banner" : ", NULL AS business_banner";
 $seller_media_fields .= $has_business_logo_column ? ", u.business_logo" : ", NULL AS business_logo";
 $seller_media_fields .= $has_profile_image_column ? ", u.profile_image" : ", NULL AS profile_image";
 $seller_scope_filter = ($scoped_partner_seller_id > 0) ? " AND u.id = " . (int)$scoped_partner_seller_id : "";
@@ -421,7 +429,7 @@ if ($seller_result) {
             'raw_address' => $match ? trim((string)($match['address'] ?? '')) : trim((string)$fallback_address),
             'raw_city' => $match ? trim((string)($match['city'] ?? '')) : trim((string)$fallback_city),
             'raw_province' => $match ? trim((string)($match['province'] ?? '')) : trim((string)$fallback_province),
-            'image' => $seller_store_image,
+            'image' => $seller_store_image !== '' ? $seller_store_image : resolveDistinctStoreImage($seller_id, $name),
             'count' => 0,
             'order_volume' => 0,
             'start' => null,
@@ -538,7 +546,7 @@ foreach ($branches as $branch) {
         'raw_province' => trim((string)($branch['province'] ?? '')),
         'image' => !empty($branch_owner_images[(int)($branch['owner_user_id'] ?? 0)])
             ? $branch_owner_images[(int)($branch['owner_user_id'] ?? 0)]
-            : asset_path('images/store-bg.jpg', 'images/hero-bg.jpg'),
+            : resolveDistinctStoreImage((int)$branch['id'], (string)$branch['name']),
         'count' => count($products),
         'order_volume' => 0,
         'start' => $global_min,

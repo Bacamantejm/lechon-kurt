@@ -16,6 +16,7 @@ $is_partner_owner_admin = $seller_scope_id !== null && (int)$seller_scope_id ===
 $shop_sub_details = SubscriptionAccessService::getShopSubscriptionDetails($conn, $current_user_id);
 $can_change_store_name = !empty($shop_sub_details['can_change_store_name']);
 $can_change_store_logo = !empty($shop_sub_details['can_change_store_logo']);
+$can_change_store_banner = !empty($shop_sub_details['can_change_store_banner']) || !empty($shop_sub_details['can_change_store_logo']);
 
 if (!$is_partner_scoped_admin || $seller_scope_id === null) {
     denyAdminAccess('Access denied: Business account settings are only available to approved business partner shops.');
@@ -36,7 +37,7 @@ function baNormalizeMediaPath(string $value): string {
     if ($path === '') {
         return '';
     }
-    if (!preg_match('#^uploads/(profile_pictures|business_logos)/[A-Za-z0-9._-]+$#', $path)) {
+    if (!preg_match('#^uploads/(profile_pictures|business_logos|business_banners)/[A-Za-z0-9._-]+$#', $path)) {
         return '';
     }
     return $path;
@@ -120,6 +121,77 @@ function baUploadBusinessLogo(int $user_id, array $file): array {
     return ['success' => true, 'path' => $relative_target];
 }
 
+function baUploadBusinessBanner(int $user_id, array $file): array {
+    global $conn;
+    if (function_exists('baUploadBusinessBannerHelper')) {
+        return baUploadBusinessBannerHelper($conn, $user_id, $file);
+    }
+    $error_code = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($error_code !== UPLOAD_ERR_OK) {
+        switch ($error_code) {
+            case UPLOAD_ERR_INI_SIZE:
+            case UPLOAD_ERR_FORM_SIZE:
+                return ['success' => false, 'message' => 'Store background picture is too large. Maximum file size is 8MB.'];
+            case UPLOAD_ERR_PARTIAL:
+                return ['success' => false, 'message' => 'Background picture upload was interrupted. Please try again.'];
+            case UPLOAD_ERR_NO_FILE:
+                return ['success' => false, 'message' => 'No background picture file was selected.'];
+            default:
+                return ['success' => false, 'message' => 'Unable to upload store background picture right now.'];
+        }
+    }
+
+    $tmp_name = (string)($file['tmp_name'] ?? '');
+    if ($tmp_name === '' || !is_uploaded_file($tmp_name)) {
+        return ['success' => false, 'message' => 'Invalid background picture upload source.'];
+    }
+
+    $max_size = 8 * 1024 * 1024;
+    if ((int)($file['size'] ?? 0) > $max_size) {
+        return ['success' => false, 'message' => 'Store background picture is too large. Maximum file size is 8MB.'];
+    }
+
+    $allowed_mime = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp'
+    ];
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    if (!$finfo) {
+        return ['success' => false, 'message' => 'Unable to validate uploaded file type.'];
+    }
+    $mime_type = (string)finfo_file($finfo, $tmp_name);
+    finfo_close($finfo);
+
+    if (!isset($allowed_mime[$mime_type])) {
+        return ['success' => false, 'message' => 'Invalid background format. Please use JPG, PNG, or WEBP.'];
+    }
+    if (!@getimagesize($tmp_name)) {
+        return ['success' => false, 'message' => 'Uploaded background picture is not a valid image file.'];
+    }
+
+    $upload_dir = __DIR__ . '/../uploads/business_banners';
+    if (!is_dir($upload_dir) && !mkdir($upload_dir, 0755, true) && !is_dir($upload_dir)) {
+        return ['success' => false, 'message' => 'Unable to prepare store background upload directory.'];
+    }
+
+    try {
+        $token = bin2hex(random_bytes(8));
+    } catch (Throwable $e) {
+        $token = str_replace('.', '', uniqid((string)$user_id, true));
+    }
+    $extension = $allowed_mime[$mime_type];
+    $filename = 'business_banner_' . $user_id . '_' . date('YmdHis') . '_' . $token . '.' . $extension;
+    $absolute_target = $upload_dir . '/' . $filename;
+    $relative_target = 'uploads/business_banners/' . $filename;
+
+    if (!move_uploaded_file($tmp_name, $absolute_target)) {
+        return ['success' => false, 'message' => 'Failed to save the uploaded background picture. Please try again.'];
+    }
+
+    return ['success' => true, 'path' => $relative_target];
+}
+
 function baBindParams(mysqli_stmt $stmt, string $types, array $values): bool {
     if ($types === '') {
         return true;
@@ -156,8 +228,16 @@ function baFetchOwnerBusinessAccount(mysqli $conn, int $owner_user_id, array $co
     return $row ?: null;
 }
 
+if (function_exists('ensureUserStoreBannerSchema')) {
+    ensureUserStoreBannerSchema($conn);
+}
 $has_profile_image_col = baColumnExists($conn, 'profile_image');
 $has_business_logo_col = baColumnExists($conn, 'business_logo');
+$has_business_banner_col = baColumnExists($conn, 'business_banner');
+if (!$has_business_banner_col) {
+    @mysqli_query($conn, "ALTER TABLE users ADD COLUMN business_banner VARCHAR(255) NULL DEFAULT NULL AFTER business_logo");
+    $has_business_banner_col = baColumnExists($conn, 'business_banner');
+}
 $has_business_name_col = baColumnExists($conn, 'business_name');
 $has_business_type_col = baColumnExists($conn, 'business_type');
 $has_business_registration_col = baColumnExists($conn, 'business_registration');
@@ -176,7 +256,8 @@ $editable_columns = array_values(array_filter([
     $has_website_col ? 'website' : null,
     $has_phone_col ? 'phone' : null,
     $has_address_col ? 'address' : null,
-    $logo_column !== '' ? $logo_column : null
+    $logo_column !== '' ? $logo_column : null,
+    $has_business_banner_col ? 'business_banner' : null
 ]));
 
 $business_user = baFetchOwnerBusinessAccount($conn, (int)$seller_scope_id, $editable_columns);
@@ -276,6 +357,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_business_account
         }
     }
 
+    $current_banner_path = $has_business_banner_col ? baNormalizeMediaPath((string)($business_user['business_banner'] ?? '')) : '';
+    $next_banner_path = $current_banner_path;
+    $uploaded_new_banner = false;
+    $remove_banner = isset($_POST['remove_business_banner']) && (string)$_POST['remove_business_banner'] === '1';
+
+    if ($has_business_banner_col) {
+        $banner_file = $_FILES['business_banner'] ?? null;
+        $has_banner_upload = is_array($banner_file) && (int)($banner_file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+
+        if (!$can_change_store_banner && ($remove_banner || $has_banner_upload)) {
+            $errors[] = 'Changing or updating Store Background Picture is restricted. Please upgrade to a Starter, Growth, or Pro Subscription Plan.';
+        } else {
+            if ($remove_banner) {
+                $next_banner_path = '';
+            }
+
+            if ($has_banner_upload) {
+                $upload_banner_result = baUploadBusinessBanner((int)$seller_scope_id, $banner_file);
+                if (!($upload_banner_result['success'] ?? false)) {
+                    $errors[] = (string)($upload_banner_result['message'] ?? 'Unable to upload store background picture.');
+                } else {
+                    $next_banner_path = (string)$upload_banner_result['path'];
+                    $uploaded_new_banner = true;
+                }
+            }
+        }
+    }
+
     if (empty($errors)) {
         $update_fields = [];
         $bind_values = [];
@@ -321,6 +430,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_business_account
             $bind_values[] = $next_logo_path;
             $bind_types .= 's';
         }
+        if ($has_business_banner_col) {
+            $update_fields[] = "business_banner = ?";
+            $bind_values[] = $next_banner_path;
+            $bind_types .= 's';
+        }
         if ($has_updated_at_col) {
             $update_fields[] = "updated_at = NOW()";
         }
@@ -328,6 +442,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_business_account
         if (empty($update_fields)) {
             if ($uploaded_new_logo && $next_logo_path !== '') {
                 baDeleteMediaIfExists($next_logo_path);
+            }
+            if ($uploaded_new_banner && $next_banner_path !== '') {
+                baDeleteMediaIfExists($next_banner_path);
             }
             $_SESSION['error'] = 'No editable business account fields are available in this database schema.';
             header('Location: business_account.php');
@@ -339,6 +456,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_business_account
         if (!$stmt) {
             if ($uploaded_new_logo && $next_logo_path !== '') {
                 baDeleteMediaIfExists($next_logo_path);
+            }
+            if ($uploaded_new_banner && $next_banner_path !== '') {
+                baDeleteMediaIfExists($next_banner_path);
             }
             $_SESSION['error'] = 'Unable to prepare business account update request.';
             header('Location: business_account.php');
@@ -352,6 +472,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_business_account
             if ($uploaded_new_logo && $next_logo_path !== '') {
                 baDeleteMediaIfExists($next_logo_path);
             }
+            if ($uploaded_new_banner && $next_banner_path !== '') {
+                baDeleteMediaIfExists($next_banner_path);
+            }
             $_SESSION['error'] = 'Unable to bind business account update values.';
             header('Location: business_account.php');
             exit;
@@ -363,6 +486,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_business_account
             if ($uploaded_new_logo && $next_logo_path !== '') {
                 baDeleteMediaIfExists($next_logo_path);
             }
+            if ($uploaded_new_banner && $next_banner_path !== '') {
+                baDeleteMediaIfExists($next_banner_path);
+            }
             $_SESSION['error'] = 'Failed to save business account details. Please try again.';
             header('Location: business_account.php');
             exit;
@@ -370,6 +496,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_business_account
 
         if ($current_logo_path !== '' && $current_logo_path !== $next_logo_path) {
             baDeleteMediaIfExists($current_logo_path);
+        }
+        if ($current_banner_path !== '' && $current_banner_path !== $next_banner_path) {
+            baDeleteMediaIfExists($current_banner_path);
         }
 
         if (function_exists('syncUserProfileReferences')) {
@@ -388,6 +517,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_business_account
             if (!empty($fresh_owner['business_name'])) {
                 $_SESSION['business_name'] = (string)$fresh_owner['business_name'];
             }
+            if (isset($fresh_owner['business_banner'])) {
+                $_SESSION['business_banner'] = (string)$fresh_owner['business_banner'];
+            }
         }
 
         $_SESSION['success'] = 'Business account details updated successfully.';
@@ -396,6 +528,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_business_account
     } else {
         if ($uploaded_new_logo && $next_logo_path !== '') {
             baDeleteMediaIfExists($next_logo_path);
+        }
+        if ($uploaded_new_banner && $next_banner_path !== '') {
+            baDeleteMediaIfExists($next_banner_path);
         }
         $_SESSION['error'] = implode("\n", $errors);
         header('Location: business_account.php');
@@ -409,6 +544,12 @@ if ($business_user && $logo_column !== '') {
     $display_logo = baNormalizeMediaPath((string)($business_user[$logo_column] ?? ''));
 }
 $display_logo_url = $display_logo !== '' ? '../' . ltrim($display_logo, '/') : '';
+
+$display_banner = '';
+if ($business_user && $has_business_banner_col) {
+    $display_banner = baNormalizeMediaPath((string)($business_user['business_banner'] ?? ''));
+}
+$display_banner_url = $display_banner !== '' ? '../' . ltrim($display_banner, '/') : '';
 $flash_success = $_SESSION['success'] ?? '';
 $flash_error = $_SESSION['error'] ?? '';
 unset($_SESSION['success'], $_SESSION['error']);
@@ -496,6 +637,68 @@ unset($_SESSION['success'], $_SESSION['error']);
             height: 100%;
             object-fit: cover;
         }
+        .biz-banner-preview-wrap {
+            width: 100%;
+            height: 180px;
+            border-radius: 14px;
+            border: 1.5px dashed #cbd5e1;
+            background: #f8fafc;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        .biz-banner-preview-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .biz-banner-preview-overlay {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            z-index: 2;
+        }
+        .biz-banner-preview-tag {
+            background: rgba(15, 23, 42, 0.78);
+            backdrop-filter: blur(4px);
+            color: #ffffff;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 5px 12px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+        .biz-banner-placeholder {
+            text-align: center;
+            padding: 24px 16px;
+            color: #64748b;
+        }
+        .biz-banner-placeholder i {
+            font-size: 2.2rem;
+            color: #94a3b8;
+            margin-bottom: 8px;
+            display: block;
+        }
+        .biz-banner-placeholder-title {
+            font-weight: 700;
+            color: #334155;
+            font-size: 0.95rem;
+            margin-bottom: 4px;
+        }
+        .biz-banner-placeholder-sub {
+            font-size: 0.82rem;
+            color: #64748b;
+            max-width: 440px;
+            margin: 0 auto;
+            line-height: 1.4;
+        }
         .biz-summary-list {
             list-style: none;
             margin: 0;
@@ -546,6 +749,16 @@ unset($_SESSION['success'], $_SESSION['error']);
             background: #171c26 !important;
             border-color: #2d3748 !important;
             color: #ffffff !important;
+        }
+        body.dark-mode .biz-banner-preview-wrap {
+            background: #171c26 !important;
+            border-color: #2d3748 !important;
+        }
+        body.dark-mode .biz-banner-placeholder-title {
+            color: #f1f5f9 !important;
+        }
+        body.dark-mode .biz-banner-placeholder-sub {
+            color: #94a3b8 !important;
         }
         body.dark-mode .biz-summary-list li {
             background: #171c26 !important;
@@ -677,6 +890,61 @@ unset($_SESSION['success'], $_SESSION['error']);
                                 </div>
                             </div>
 
+                            <?php if ($has_business_banner_col): ?>
+                            <div class="full">
+                                <label class="form-label fw-semibold d-flex align-items-center justify-content-between">
+                                    <span>
+                                        <i class="fas fa-panorama me-1 text-danger"></i> Store Background Picture (Cover Banner)
+                                        <?php if (!$can_change_store_banner): ?>
+                                            <span class="badge ms-2" style="background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-size:0.75rem;"><i class="fas fa-lock"></i> Locked</span>
+                                        <?php endif; ?>
+                                    </span>
+                                    <?php if ($display_banner_url !== ''): ?>
+                                        <span class="badge" style="background:#ecfdf3; color:#027a48; border:1px solid #abefc6; font-size:0.75rem;"><i class="fas fa-check-circle"></i> Custom Cover Active</span>
+                                    <?php else: ?>
+                                        <span class="badge" style="background:#f1f5f9; color:#64748b; font-size:0.75rem;">Default Platform Cover</span>
+                                    <?php endif; ?>
+                                </label>
+                                
+                                <div class="biz-banner-preview-wrap mb-2">
+                                    <?php if ($display_banner_url !== ''): ?>
+                                        <img src="<?php echo htmlspecialchars($display_banner_url); ?>" alt="Store background picture preview" class="biz-banner-preview-img">
+                                        <div class="biz-banner-preview-overlay">
+                                            <span class="biz-banner-preview-tag"><i class="fas fa-store me-1"></i> Current Store Cover</span>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="biz-banner-placeholder">
+                                            <i class="fas fa-image"></i>
+                                            <div class="biz-banner-placeholder-title">No Custom Store Background Uploaded</div>
+                                            <div class="biz-banner-placeholder-sub">Upload an appetizing cover photo (roasted lechon, storefront, dining ambience) to personalize your store page and marketplace cards.</div>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+
+                                <div class="biz-banner-controls">
+                                    <?php if ($can_change_store_banner): ?>
+                                        <input type="file" class="form-control" name="business_banner" id="business_banner" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
+                                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-1">
+                                            <small class="text-muted">Recommended: 1200 &times; 400px (16:9 or 3:1 ratio). JPG, PNG, WEBP up to 8MB. Appears as your storefront hero background.</small>
+                                            <?php if ($display_banner_url !== ''): ?>
+                                                <div class="form-check m-0">
+                                                    <input class="form-check-input" type="checkbox" name="remove_business_banner" id="remove_business_banner" value="1">
+                                                    <label class="form-check-label text-danger fw-semibold" for="remove_business_banner" style="font-size:0.85rem;">
+                                                        <i class="fas fa-trash-can me-1"></i> Remove background picture
+                                                    </label>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php else: ?>
+                                        <input type="file" class="form-control" disabled style="background:#f8f9fa; cursor:not-allowed;">
+                                        <div class="form-text text-danger mt-1">
+                                            <i class="fas fa-lock"></i> Store Background Picture upload is locked. <a href="subscription_plans.php?locked_feature=change_store_banner&required_tier=starter" class="text-danger fw-bold text-decoration-underline">Upgrade to Starter Plan</a> to customize your store background.
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <?php endif; ?>
+
                             <?php if ($has_business_name_col): ?>
                             <div>
                                 <label class="form-label fw-semibold">
@@ -767,6 +1035,16 @@ unset($_SESSION['success'], $_SESSION['error']);
                         <li>
                             <span>Business Type</span>
                             <strong><?php echo htmlspecialchars((string)($business_user['business_type'] ?? 'Not set')); ?></strong>
+                        </li>
+                        <li>
+                            <span>Store Background Picture</span>
+                            <?php if ($display_banner_url !== ''): ?>
+                                <div style="width:100%; height:80px; border-radius:10px; overflow:hidden; margin-top:6px; border:1px solid #e2e8f0;">
+                                    <img src="<?php echo htmlspecialchars($display_banner_url); ?>" alt="Store Background" style="width:100%; height:100%; object-fit:cover; display:block;">
+                                </div>
+                            <?php else: ?>
+                                <strong style="font-size:0.85rem; color:#64748b;"><i class="fas fa-image text-muted me-1"></i> Default Platform Cover</strong>
+                            <?php endif; ?>
                         </li>
                         <li>
                             <span>Member Since</span>

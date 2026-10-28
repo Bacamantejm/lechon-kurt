@@ -4,6 +4,77 @@ $current_page = 'menu';
 $page_title = "Menu & Order | Lechon Delights";
 
 require_once 'includes/config.php';
+
+// Handle AJAX store banner update directly from menu
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_store_banner') {
+    header('Content-Type: application/json; charset=UTF-8');
+
+    if (empty($_SESSION['user_id'])) {
+        echo json_encode(['success' => false, 'message' => 'Please log in to edit store banner.']);
+        exit;
+    }
+
+    if (!function_exists('validateCSRFToken') || !validateCSRFToken($_POST['csrf_token'] ?? '')) {
+        echo json_encode(['success' => false, 'message' => 'Invalid or expired security token. Please refresh.']);
+        exit;
+    }
+
+    $logged_uid = (int)$_SESSION['user_id'];
+    $target_uid = isset($_POST['target_user_id']) ? (int)$_POST['target_user_id'] : $logged_uid;
+    if ($target_uid <= 0) {
+        $target_uid = $logged_uid;
+    }
+
+    $logged_role = strtolower(trim((string)($_SESSION['role_name'] ?? $_SESSION['user_type'] ?? '')));
+    $is_admin = in_array($logged_role, ['admin', 'super_admin'], true);
+
+    $is_authorized = ($target_uid === $logged_uid || $is_admin);
+    if (!$is_authorized && isset($conn) && $conn instanceof mysqli) {
+        $chk_branch = mysqli_query($conn, "SELECT 1 FROM store_locations WHERE owner_user_id = {$logged_uid} LIMIT 1");
+        if ($chk_branch && mysqli_num_rows($chk_branch) > 0) {
+            $is_authorized = true;
+            $target_uid = $logged_uid;
+        }
+    }
+
+    if (!$is_authorized) {
+        echo json_encode(['success' => false, 'message' => 'You are not authorized to update this store banner.']);
+        exit;
+    }
+
+    $banner_file = $_FILES['business_banner'] ?? null;
+    if (!$banner_file || (int)($banner_file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        echo json_encode(['success' => false, 'message' => 'No image file was selected.']);
+        exit;
+    }
+
+    ensureUserStoreBannerSchema($conn);
+    $upload_res = baUploadBusinessBannerHelper($conn, $target_uid, $banner_file);
+    if (!($upload_res['success'] ?? false)) {
+        echo json_encode(['success' => false, 'message' => $upload_res['message'] ?? 'Unable to upload image.']);
+        exit;
+    }
+
+    $new_path = (string)$upload_res['path'];
+    $up_stmt = mysqli_prepare($conn, "UPDATE users SET business_banner = ?, updated_at = NOW() WHERE id = ?");
+    if ($up_stmt) {
+        mysqli_stmt_bind_param($up_stmt, "si", $new_path, $target_uid);
+        mysqli_stmt_execute($up_stmt);
+        mysqli_stmt_close($up_stmt);
+    }
+
+    if ($target_uid === $logged_uid) {
+        $_SESSION['business_banner'] = $new_path;
+    }
+
+    echo json_encode([
+        'success' => true,
+        'message' => 'Store background banner updated successfully!',
+        'banner_url' => $new_path
+    ]);
+    exit;
+}
+
 require_once __DIR__ . '/includes/rider_helper.php';
 if (!empty($_SESSION['user_id']) && isDeliveryDriverUser($conn, (int)$_SESSION['user_id'])) {
     header("Location: rider/index.php");
@@ -141,14 +212,34 @@ if (userAccountControlColumnExists($conn, 'profile_image')) {
 if (userAccountControlColumnExists($conn, 'business_logo')) {
     $storefront_select_fields .= ", business_logo";
 }
+if (userAccountControlColumnExists($conn, 'business_banner')) {
+    $storefront_select_fields .= ", business_banner";
+}
 
-if ($requested_seller_id > 0) {
+$effective_seller_id = $requested_seller_id;
+if ($effective_seller_id <= 0 && $requested_branch_id > 0 && isset($conn) && $conn instanceof mysqli) {
+    $br_check_stmt = mysqli_prepare($conn, "SELECT owner_user_id, store_name FROM store_locations WHERE store_id = ? LIMIT 1");
+    if ($br_check_stmt) {
+        mysqli_stmt_bind_param($br_check_stmt, "i", $requested_branch_id);
+        mysqli_stmt_execute($br_check_stmt);
+        $br_check_res = mysqli_stmt_get_result($br_check_stmt);
+        if ($br_check_res && ($br_check_row = mysqli_fetch_assoc($br_check_res))) {
+            $effective_seller_id = (int)($br_check_row['owner_user_id'] ?? 0);
+            if ($storefront_name === '') {
+                $storefront_name = fixMojibakeText(trim((string)($br_check_row['store_name'] ?? '')));
+            }
+        }
+        mysqli_stmt_close($br_check_stmt);
+    }
+}
+
+if ($effective_seller_id > 0) {
     $store_stmt = mysqli_prepare($conn, "SELECT {$storefront_select_fields}
         FROM users
         WHERE id = ?
         LIMIT 1");
     if ($store_stmt) {
-        mysqli_stmt_bind_param($store_stmt, "i", $requested_seller_id);
+        mysqli_stmt_bind_param($store_stmt, "i", $effective_seller_id);
         mysqli_stmt_execute($store_stmt);
         $store_result = mysqli_stmt_get_result($store_stmt);
         $store_row = $store_result ? mysqli_fetch_assoc($store_result) : null;
@@ -171,6 +262,7 @@ if ($requested_seller_id > 0) {
                 'is_active' => (int)($store_row['is_active'] ?? 0),
                 'profile_image' => trim((string)($store_row['profile_image'] ?? '')),
                 'business_logo' => trim((string)($store_row['business_logo'] ?? '')),
+                'business_banner' => trim((string)($store_row['business_banner'] ?? '')),
             ];
         }
         if ($store_result) mysqli_free_result($store_result);
@@ -297,10 +389,16 @@ if (empty($store_locations)) {
 }
 
 function menuGetStoreImage($store_id, $store_name, $custom_image = '') {
+    if (function_exists('resolveDistinctStoreImage')) {
+        return resolveDistinctStoreImage($store_id, $store_name, $custom_image);
+    }
     $custom = trim((string)$custom_image);
     if ($custom !== '' && $custom !== 'default.jpg') {
         if (str_starts_with($custom, 'http') || str_starts_with($custom, 'images/') || str_starts_with($custom, 'uploads/')) {
             return $custom;
+        }
+        if (file_exists('uploads/business_banners/' . $custom)) {
+            return 'uploads/business_banners/' . $custom;
         }
         if (file_exists('uploads/business_logos/' . $custom)) {
             return 'uploads/business_logos/' . $custom;
@@ -311,24 +409,17 @@ function menuGetStoreImage($store_id, $store_name, $custom_image = '') {
     }
     
     $image_map = [
-        1 => 'images/store-bg.jpg',
+        1 => 'images/panda_fresh_lechon.jpg',
         2 => 'images/panda_preorder_lechon.jpg',
-        3 => 'images/about-us-bg.jpg',
-        4 => 'images/hero-bg.jpg',
-        5 => 'images/panda_fresh_lechon.jpg',
-        6 => 'images/store-bg.jpg',
-        7 => 'images/panda_preorder_lechon.jpg',
+        3 => 'images/menu/lechon.jpg',
+        4 => 'uploads/products/1773731574_69b8fef6a5cc3.jpg',
+        5 => 'uploads/products/1773731101_69b8fd1d0eb94.jpg',
+        6 => 'uploads/products/1773731810_69b8ffe20dddb.jpg',
+        7 => 'uploads/products/1773732340_69b901f4980cc.jpg',
     ];
     if (isset($image_map[$store_id])) {
         return $image_map[$store_id];
     }
-    
-    $name_lower = strtolower((string)$store_name);
-    if (str_contains($name_lower, 'lydia')) return 'images/panda_fresh_lechon.jpg';
-    if (str_contains($name_lower, 'linda')) return 'images/about-us-bg.jpg';
-    if (str_contains($name_lower, 'tagaytay')) return 'images/hero-bg.jpg';
-    if (str_contains($name_lower, 'bacoor')) return 'images/panda_preorder_lechon.jpg';
-    if (str_contains($name_lower, 'imus')) return 'images/about-us-bg.jpg';
     return 'images/store-bg.jpg';
 }
 
@@ -373,11 +464,43 @@ if ($requested_seller_id > 0) {
 // Build unified list of all business shops for the store directory & quick switcher
 $all_menu_shops = [];
 
+// Collect branch owner images from users
+$menu_branch_owner_media = [];
+$b_owner_ids_to_fetch = [];
+foreach ($store_locations as $loc) {
+    $uid = (int)($loc['owner_user_id'] ?? 0);
+    if ($uid > 0) {
+        $b_owner_ids_to_fetch[$uid] = true;
+    }
+}
+if (!empty($b_owner_ids_to_fetch) && isset($conn) && $conn instanceof mysqli) {
+    $b_uids_sql = implode(',', array_map('intval', array_keys($b_owner_ids_to_fetch)));
+    $has_bb = userAccountControlColumnExists($conn, 'business_banner');
+    $has_bl = userAccountControlColumnExists($conn, 'business_logo');
+    $has_pi = userAccountControlColumnExists($conn, 'profile_image');
+    $b_sel = "id";
+    if ($has_bb) $b_sel .= ", business_banner";
+    if ($has_bl) $b_sel .= ", business_logo";
+    if ($has_pi) $b_sel .= ", profile_image";
+    $b_owner_res = mysqli_query($conn, "SELECT {$b_sel} FROM users WHERE id IN ({$b_uids_sql})");
+    if ($b_owner_res) {
+        while ($bo_row = mysqli_fetch_assoc($b_owner_res)) {
+            $bo_id = (int)$bo_row['id'];
+            $cand = !empty($bo_row['business_banner']) ? $bo_row['business_banner'] : (!empty($bo_row['business_logo']) ? $bo_row['business_logo'] : (!empty($bo_row['profile_image']) ? $bo_row['profile_image'] : ''));
+            if ($cand !== '') {
+                $menu_branch_owner_media[$bo_id] = $cand;
+            }
+        }
+        mysqli_free_result($b_owner_res);
+    }
+}
+
 // 1. Physical branches
 foreach ($store_locations as $loc) {
     $b_id = (int)$loc['id'];
     $b_owner = (int)($loc['owner_user_id'] ?? 1);
     $is_partner = ($b_owner > 0 && !in_array($b_owner, $official_owner_ids, true));
+    $b_owner_custom_img = !empty($menu_branch_owner_media[$b_owner]) ? $menu_branch_owner_media[$b_owner] : '';
     $all_menu_shops[] = [
         'id' => $b_id,
         'seller_id' => $b_owner,
@@ -387,14 +510,15 @@ foreach ($store_locations as $loc) {
         'city' => (string)($loc['city'] ?? 'Cavite'),
         'category' => $is_partner ? 'partner' : 'branch',
         'type_label' => $is_partner ? 'Partner Store' : 'Official Branch',
-        'image' => menuGetStoreImage($b_id, (string)$loc['name']),
+        'image' => resolveDistinctStoreImage($b_id, (string)$loc['name'], $b_owner_custom_img),
         'link' => $is_partner ? ('menu.php?seller_id=' . $b_owner) : ('menu.php?branch_id=' . $b_id),
         'is_active_selection' => ($is_partner ? ($requested_seller_id > 0 && $requested_seller_id === $b_owner) : ($requested_branch_id > 0 && $requested_branch_id === $b_id && $requested_seller_id <= 0))
     ];
 }
 
 // 2. Partner organization sellers
-$partner_sql = "SELECT u.id AS seller_id, u.full_name, u.business_name, u.business_type, u.business_logo, u.profile_image, u.address, u.phone,
+$menu_partner_banner_col = function_exists('userAccountControlColumnExists') && userAccountControlColumnExists($conn, 'business_banner') ? 'u.business_banner, ' : '';
+$partner_sql = "SELECT u.id AS seller_id, u.full_name, u.business_name, u.business_type, u.business_logo, {$menu_partner_banner_col}u.profile_image, u.address, u.phone,
                        sl.store_id, sl.city, sl.province
                 FROM users u
                 LEFT JOIN store_locations sl ON sl.owner_user_id = u.id AND sl.is_active = 1
@@ -413,7 +537,7 @@ if ($partner_res) {
         if (!$already_in) {
             $name = trim((string)$p_row['business_name']) ?: (trim((string)$p_row['full_name']) . ' Store');
             $city = !empty($p_row['city']) ? $p_row['city'] : 'Cavite';
-            $p_img = !empty($p_row['business_logo']) ? $p_row['business_logo'] : (!empty($p_row['profile_image']) ? $p_row['profile_image'] : '');
+            $p_img = !empty($p_row['business_banner']) ? $p_row['business_banner'] : (!empty($p_row['business_logo']) ? $p_row['business_logo'] : (!empty($p_row['profile_image']) ? $p_row['profile_image'] : ''));
             $all_menu_shops[] = [
                 'id' => 9000 + $sid,
                 'seller_id' => $sid,
@@ -1242,16 +1366,61 @@ body.dark-mode .storefront-change-shop-btn:hover {
 </div>
 
 <?php
-$store_banner_image = 'images/store-bg.jpg';
-if (is_file(__DIR__ . '/images/hero-bg.jpg')) {
-    $store_banner_image = 'images/hero-bg.jpg';
+$store_banner_image = '';
+$has_custom_store_banner = false;
+$candidate_banner = '';
+if (!empty($storefront_partner_account['business_banner'])) {
+    $candidate_banner = $storefront_partner_account['business_banner'];
+} elseif (!empty($store_row['business_banner'])) {
+    $candidate_banner = $store_row['business_banner'];
+}
+if ($candidate_banner !== '') {
+    $clean_banner = ltrim(str_replace('\\', '/', $candidate_banner), '/');
+    if (is_file(__DIR__ . '/' . $clean_banner)) {
+        $store_banner_image = $clean_banner;
+        $has_custom_store_banner = true;
+    }
+}
+if (!$has_custom_store_banner) {
+    $current_store_seed = $requested_branch_id > 0 ? $requested_branch_id : ($requested_seller_id > 0 ? (9000 + $requested_seller_id) : 1);
+    $store_banner_image = resolveDistinctStoreImage($current_store_seed, $store_display_name);
+}
+
+// Check if current viewer is authorized to edit this storefront's banner
+$can_edit_this_banner = false;
+$banner_target_user_id = 0;
+if (!empty($_SESSION['user_id'])) {
+    $cur_uid = (int)$_SESSION['user_id'];
+    $cur_role = strtolower(trim((string)($_SESSION['role_name'] ?? $_SESSION['user_type'] ?? '')));
+    $is_super = in_array($cur_role, ['admin', 'super_admin'], true);
+
+    if ($requested_seller_id > 0) {
+        if ($requested_seller_id === $cur_uid || $is_super) {
+            $can_edit_this_banner = true;
+            $banner_target_user_id = $requested_seller_id;
+        }
+    } elseif (!empty($effective_seller_id) && $effective_seller_id > 0) {
+        if ($effective_seller_id === $cur_uid || $is_super) {
+            $can_edit_this_banner = true;
+            $banner_target_user_id = $effective_seller_id;
+        }
+    } elseif ($requested_branch_id > 0 && !empty($selected_pickup_branch['owner_user_id'])) {
+        $b_owner_id = (int)$selected_pickup_branch['owner_user_id'];
+        if (($b_owner_id > 0 && $b_owner_id === $cur_uid) || $is_super) {
+            $can_edit_this_banner = true;
+            $banner_target_user_id = $b_owner_id > 0 ? $b_owner_id : $cur_uid;
+        }
+    } elseif ($scoped_partner_seller_id > 0 && $scoped_partner_seller_id === $cur_uid) {
+        $can_edit_this_banner = true;
+        $banner_target_user_id = $cur_uid;
+    }
 }
 ?>
 
 <!-- Foodpanda Mobile Hero Header (Mobile Viewport Only) -->
 <div class="fp-mobile-hero-header">
     <div class="fp-hero-banner">
-        <img src="<?php echo htmlspecialchars($store_banner_image); ?>" alt="<?php echo htmlspecialchars($store_display_name); ?>" class="fp-hero-img">
+        <img src="<?php echo htmlspecialchars($store_banner_image); ?>" alt="<?php echo htmlspecialchars($store_display_name); ?>" class="fp-hero-img" fetchpriority="high">
         <div class="fp-hero-overlay"></div>
         
         <!-- Floating Navigation Over Banner (Back on Left, Actions on Right) -->
@@ -1260,6 +1429,11 @@ if (is_file(__DIR__ . '/images/hero-bg.jpg')) {
                 <i class="fas fa-arrow-left"></i>
             </a>
             <div class="fp-hero-actions-group">
+                <?php if ($can_edit_this_banner): ?>
+                    <button type="button" class="fp-floating-round-btn menu-edit-banner-btn js-open-banner-modal" data-target-user-id="<?php echo (int)$banner_target_user_id; ?>" title="Change Store Background Picture" aria-label="Change Store Background Picture" style="background:#b3261e; color:#ffffff;">
+                        <i class="fas fa-camera"></i>
+                    </button>
+                <?php endif; ?>
                 <button type="button" class="fp-floating-round-btn js-open-store-reviews" aria-label="Store Information">
                     <i class="fas fa-circle-info"></i>
                 </button>
@@ -1326,7 +1500,7 @@ if (is_file(__DIR__ . '/images/hero-bg.jpg')) {
     </div>
 </div>
 
-<section class="storefront-header desktop-storefront-header">
+<section class="storefront-header desktop-storefront-header<?php echo $has_custom_store_banner ? ' has-custom-store-banner' : ''; ?>"<?php if ($has_custom_store_banner): ?> style="--storefront-banner-bg: url('<?php echo htmlspecialchars($store_banner_image); ?>');"<?php endif; ?>>
     <div class="container">
         <nav class="store-breadcrumb" aria-label="Breadcrumb">
             <a href="index.php" style="color: #b3261e; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;"><i class="fas fa-arrow-left"></i> Back</a>
@@ -1354,6 +1528,9 @@ if (is_file(__DIR__ . '/images/hero-bg.jpg')) {
                     <span><i class="fas fa-utensils"></i> <?php echo $has_selected_store ? (number_format($store_item_count) . ' items') : (count($all_menu_shops) . ' shops available'); ?></span>
                 </div>
                 <div class="storefront-meta-row storefront-meta-row-secondary">
+                    <?php if ($can_edit_this_banner): ?>
+                        <button type="button" class="storefront-change-banner-btn js-open-banner-modal" data-target-user-id="<?php echo (int)$banner_target_user_id; ?>"><i class="fas fa-camera"></i> Change Cover Banner</button>
+                    <?php endif; ?>
                     <?php if ($has_selected_store): ?>
                         <a href="javascript:void(0);" id="openStorefrontReviewsBtn"><i class="fas fa-star" style="color:#f59e0b;"></i> <?php echo htmlspecialchars($store_rating_label); ?> <span style="text-decoration:underline; font-weight:700; margin-left:4px;">See reviews</span></a>
                         <a href="menu.php" class="storefront-change-shop-btn"><i class="fas fa-arrows-rotate"></i> Change Shop</a>
@@ -1389,12 +1566,23 @@ if (is_file(__DIR__ . '/images/hero-bg.jpg')) {
 
                     <div class="menu-shops-directory-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
                         <?php foreach ($all_menu_shops as $shop): ?>
-                            <a href="<?php echo htmlspecialchars($shop['link']); ?>" class="menu-shop-card" style="background: #ffffff; border: 1.5px solid #eaecf0; border-radius: 16px; overflow: hidden; text-decoration: none; display: flex; flex-direction: column; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+                            <?php 
+                            $shop_card_uid = (int)($shop['seller_id'] ?? 0);
+                            $viewer_uid = (int)($_SESSION['user_id'] ?? 0);
+                            $viewer_is_admin = !empty($_SESSION['user_id']) && in_array(strtolower(trim((string)($_SESSION['role_name'] ?? $_SESSION['user_type'] ?? ''))), ['admin', 'super_admin'], true);
+                            $can_edit_this_shop_card = ($viewer_uid > 0 && ($shop_card_uid === $viewer_uid || $viewer_is_admin));
+                            ?>
+                            <a href="<?php echo htmlspecialchars($shop['link']); ?>" class="menu-shop-card" style="background: #ffffff; border: 1.5px solid #eaecf0; border-radius: 16px; overflow: hidden; text-decoration: none; display: flex; flex-direction: column; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04); position: relative;">
                                 <div style="height: 160px; overflow: hidden; position: relative; background: #f8f9fa;">
                                     <img src="<?php echo htmlspecialchars($shop['image']); ?>" alt="<?php echo htmlspecialchars($shop['name']); ?>" style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.25s ease;" onerror="this.src='images/store-bg.jpg'">
                                     <span style="position: absolute; top: 12px; left: 12px; font-size: 0.72rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; background: rgba(16, 24, 40, 0.82); color: #ffffff; backdrop-filter: blur(4px);">
                                         <i class="<?php echo $shop['category'] === 'branch' ? 'fas fa-location-dot' : 'fas fa-shop'; ?>" style="margin-right: 3px;"></i> <?php echo htmlspecialchars($shop['type_label']); ?>
                                     </span>
+                                    <?php if ($can_edit_this_shop_card && $shop_card_uid > 0): ?>
+                                        <button type="button" class="menu-card-edit-banner-btn js-open-banner-modal" data-target-user-id="<?php echo $shop_card_uid; ?>" onclick="event.preventDefault(); event.stopPropagation();" title="Change store cover picture">
+                                            <i class="fas fa-camera"></i> Edit Cover
+                                        </button>
+                                    <?php endif; ?>
                                 </div>
                                 <div style="padding: 18px; display: flex; flex-direction: column; flex: 1;">
                                     <div style="font-size: 0.78rem; color: #b3261e; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 5px;">
@@ -6497,6 +6685,55 @@ body.dark-mode .product-favorite-btn.is-active {
     padding: 32px 0 !important;
     text-align: left !important;
 }
+.storefront-header.has-custom-store-banner {
+    position: relative !important;
+    background-image: linear-gradient(180deg, rgba(16, 24, 40, 0.62) 0%, rgba(16, 24, 40, 0.84) 100%), var(--storefront-banner-bg) !important;
+    background-size: cover !important;
+    background-position: center center !important;
+    background-repeat: no-repeat !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.14) !important;
+    color: #ffffff !important;
+}
+.storefront-header.has-custom-store-banner .store-breadcrumb a,
+.storefront-header.has-custom-store-banner .store-breadcrumb span {
+    color: #f1f5f9 !important;
+}
+.storefront-header.has-custom-store-banner .store-breadcrumb a[href="index.php"] {
+    color: #fedf89 !important;
+}
+.storefront-header.has-custom-store-banner .storefront-copy h1,
+.storefront-header.has-custom-store-banner .storefront-categories,
+.storefront-header.has-custom-store-banner .storefront-subtitle,
+.storefront-header.has-custom-store-banner .storefront-meta-row,
+.storefront-header.has-custom-store-banner .storefront-meta-row span {
+    color: #ffffff !important;
+}
+.storefront-header.has-custom-store-banner .storefront-categories {
+    color: #fedf89 !important;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+.storefront-header.has-custom-store-banner .storefront-subtitle {
+    color: #e2e8f0 !important;
+}
+.storefront-header.has-custom-store-banner .storefront-meta-row a {
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.16) !important;
+    border: 1px solid rgba(255, 255, 255, 0.28) !important;
+    backdrop-filter: blur(8px);
+}
+.storefront-header.has-custom-store-banner .storefront-meta-row a:hover {
+    background: rgba(255, 255, 255, 0.26) !important;
+}
+.storefront-header.has-custom-store-banner .store-logo-tile {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35) !important;
+    border: 3px solid #ffffff !important;
+}
+body.dark-mode .storefront-header.has-custom-store-banner {
+    background-image: linear-gradient(180deg, rgba(15, 23, 42, 0.72) 0%, rgba(15, 23, 42, 0.9) 100%), var(--storefront-banner-bg) !important;
+    color: #f8fafc !important;
+}
 .store-breadcrumb {
     margin-bottom: 16px !important;
     font-size: 0.85rem !important;
@@ -8510,7 +8747,447 @@ body.dark-mode .preview-actions-wrap {
     border-top-color: rgba(51, 65, 85, 0.8) !important;
 }
 
+/* Storefront Banner Edit Controls & Modal */
+.storefront-change-banner-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    background: #b3261e !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 999px !important;
+    padding: 6px 14px !important;
+    font-size: 0.82rem !important;
+    font-weight: 700 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    text-decoration: none !important;
+}
+.storefront-change-banner-btn:hover {
+    background: #981b15 !important;
+    transform: translateY(-1px) !important;
+    color: #ffffff !important;
+}
+.menu-card-edit-banner-btn {
+    position: absolute !important;
+    top: 10px !important;
+    right: 10px !important;
+    background: rgba(179, 38, 30, 0.94) !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 999px !important;
+    padding: 5px 11px !important;
+    font-size: 0.72rem !important;
+    font-weight: 700 !important;
+    cursor: pointer !important;
+    backdrop-filter: blur(4px) !important;
+    z-index: 4 !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2) !important;
+}
+.menu-card-edit-banner-btn:hover {
+    background: #981b15 !important;
+    transform: scale(1.04) !important;
+}
+.menu-banner-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+.menu-banner-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(16, 24, 40, 0.65);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+.menu-banner-modal-dialog {
+    position: relative;
+    z-index: 2;
+    background: #ffffff;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 520px;
+    border: 1px solid #eaecf0;
+    box-shadow: 0 20px 40px rgba(16, 24, 40, 0.2);
+    overflow: hidden;
+    animation: menuBannerModalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes menuBannerModalPop {
+    from { opacity: 0; transform: scale(0.96) translateY(8px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.menu-banner-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px;
+    border-bottom: 1px solid #eaecf0;
+}
+.menu-banner-modal-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #101828;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.menu-banner-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: #667085;
+    cursor: pointer;
+    padding: 4px;
+}
+.menu-banner-modal-body {
+    padding: 20px;
+}
+.menu-banner-help-text {
+    margin: 0 0 16px;
+    font-size: 0.85rem;
+    color: #475467;
+    line-height: 1.5;
+}
+.menu-banner-preview-box {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #f8f9fa;
+    border: 1px dashed #d0d5dd;
+    cursor: pointer;
+    margin-bottom: 16px;
+}
+.menu-banner-preview-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.menu-banner-preview-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(16, 24, 40, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    color: #ffffff;
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+.menu-banner-preview-box:hover .menu-banner-preview-overlay {
+    opacity: 1;
+}
+.menu-banner-file-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.menu-banner-choose-btn {
+    background: #ffffff;
+    border: 1px solid #d0d5dd;
+    color: #344054;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+.menu-banner-choose-btn:hover {
+    background: #f8f9fa;
+    border-color: #98a2b3;
+}
+.menu-banner-file-name {
+    font-size: 0.82rem;
+    color: #667085;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.menu-banner-error {
+    margin-top: 12px;
+    padding: 8px 12px;
+    background: #fff1f0;
+    border: 1px solid #fee4e2;
+    color: #b3261e;
+    border-radius: 8px;
+    font-size: 0.82rem;
+}
+.menu-banner-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 20px;
+    border-top: 1px solid #eaecf0;
+    background: #fcfcfd;
+}
+.menu-banner-btn-secondary {
+    background: #ffffff;
+    border: 1px solid #d0d5dd;
+    color: #344054;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.menu-banner-btn-primary {
+    background: #b3261e;
+    border: none;
+    color: #ffffff;
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+.menu-banner-btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.menu-banner-btn-primary:not(:disabled):hover {
+    background: #981b15;
+}
+body.dark-mode .menu-banner-modal-dialog {
+    background: #1e293b;
+    border-color: #334155;
+    color: #f8fafc;
+}
+body.dark-mode .menu-banner-modal-header {
+    border-color: #334155;
+}
+body.dark-mode .menu-banner-modal-header h3 {
+    color: #f8fafc;
+}
+body.dark-mode .menu-banner-modal-footer {
+    background: #0f172a;
+    border-color: #334155;
+}
+body.dark-mode .menu-banner-preview-box {
+    background: #0f172a;
+    border-color: #475569;
+}
+body.dark-mode .menu-banner-btn-secondary,
+body.dark-mode .menu-banner-choose-btn {
+    background: #334155;
+    border-color: #475569;
+    color: #f8fafc;
+}
+
 </style>
+
+<!-- Store Banner Edit Modal (Shop Owners) -->
+<div id="storeBannerModal" class="menu-banner-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="bannerModalTitle">
+    <div class="menu-banner-modal-backdrop js-close-banner-modal"></div>
+    <div class="menu-banner-modal-dialog">
+        <div class="menu-banner-modal-header">
+            <h3 id="bannerModalTitle"><i class="fas fa-camera"></i> Change Store Cover Banner</h3>
+            <button type="button" class="menu-banner-modal-close js-close-banner-modal" aria-label="Close">&times;</button>
+        </div>
+        <form id="menuStoreBannerForm" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="action" value="update_store_banner">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
+            <input type="hidden" name="target_user_id" id="bannerTargetUserId" value="<?php echo (int)($banner_target_user_id ?? 0); ?>">
+            
+            <div class="menu-banner-modal-body">
+                <p class="menu-banner-help-text">Choose a custom cover photo for your store. This image appears on your menu hero banner and store listings so customers see your unique storefront.</p>
+                
+                <div class="menu-banner-preview-box" id="menuBannerPreviewBox" onclick="document.getElementById('menuBannerFileInput').click();">
+                    <img id="menuBannerPreviewImg" src="<?php echo htmlspecialchars($store_banner_image); ?>" alt="Store Banner Preview">
+                    <div class="menu-banner-preview-overlay">
+                        <span><i class="fas fa-camera"></i> Click to select a new image</span>
+                    </div>
+                </div>
+
+                <div class="menu-banner-file-input-wrap">
+                    <input type="file" id="menuBannerFileInput" name="business_banner" accept="image/jpeg,image/png,image/webp" style="display:none;">
+                    <button type="button" class="menu-banner-choose-btn" onclick="document.getElementById('menuBannerFileInput').click();">
+                        <i class="fas fa-folder-open"></i> Browse Picture
+                    </button>
+                    <span id="menuBannerFileName" class="menu-banner-file-name">No new file chosen</span>
+                </div>
+
+                <div id="menuBannerErrorMsg" class="menu-banner-error" style="display:none;"></div>
+            </div>
+            
+            <div class="menu-banner-modal-footer">
+                <button type="button" class="menu-banner-btn-secondary js-close-banner-modal">Cancel</button>
+                <button type="submit" id="menuBannerSubmitBtn" class="menu-banner-btn-primary" disabled>
+                    <i class="fas fa-cloud-arrow-up"></i> Save & Apply Banner
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(function() {
+    const modal = document.getElementById('storeBannerModal');
+    const fileInput = document.getElementById('menuBannerFileInput');
+    const previewImg = document.getElementById('menuBannerPreviewImg');
+    const fileNameSpan = document.getElementById('menuBannerFileName');
+    const submitBtn = document.getElementById('menuBannerSubmitBtn');
+    const errorDiv = document.getElementById('menuBannerErrorMsg');
+    const form = document.getElementById('menuStoreBannerForm');
+    const targetUserIdInput = document.getElementById('bannerTargetUserId');
+
+    if (!modal || !fileInput || !form) return;
+
+    function openBannerModal(targetUserId) {
+        if (targetUserId) {
+            targetUserIdInput.value = targetUserId;
+        }
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeBannerModal() {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+        fileInput.value = '';
+        fileNameSpan.textContent = 'No new file chosen';
+        submitBtn.disabled = true;
+        errorDiv.style.display = 'none';
+    }
+
+    document.querySelectorAll('.js-open-banner-modal').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const tid = this.getAttribute('data-target-user-id');
+            openBannerModal(tid);
+        });
+    });
+
+    document.querySelectorAll('.js-close-banner-modal').forEach(function(btn) {
+        btn.addEventListener('click', closeBannerModal);
+    });
+
+    fileInput.addEventListener('change', function() {
+        const file = this.files && this.files[0];
+        if (!file) {
+            submitBtn.disabled = true;
+            fileNameSpan.textContent = 'No new file chosen';
+            return;
+        }
+
+        const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!validTypes.includes(file.type)) {
+            errorDiv.textContent = 'Please choose a JPG, PNG, or WEBP image file.';
+            errorDiv.style.display = 'block';
+            submitBtn.disabled = true;
+            return;
+        }
+
+        if (file.size > 8 * 1024 * 1024) {
+            errorDiv.textContent = 'File is too large. Maximum size is 8MB.';
+            errorDiv.style.display = 'block';
+            submitBtn.disabled = true;
+            return;
+        }
+
+        errorDiv.style.display = 'none';
+        fileNameSpan.textContent = file.name;
+        submitBtn.disabled = false;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            previewImg.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+        errorDiv.style.display = 'none';
+
+        const formData = new FormData(form);
+
+        try {
+            const res = await fetch('menu.php', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+
+            if (data.success && data.banner_url) {
+                const bustUrl = data.banner_url + '?t=' + Date.now();
+                // Update mobile hero img
+                const mobileHero = document.querySelector('.fp-hero-img');
+                if (mobileHero) mobileHero.src = bustUrl;
+
+                // Update desktop storefront header
+                const desktopHeader = document.querySelector('.desktop-storefront-header');
+                if (desktopHeader) {
+                    desktopHeader.classList.add('has-custom-store-banner');
+                    desktopHeader.style.setProperty('--storefront-banner-bg', "url('" + bustUrl + "')");
+                }
+
+                // Update any directory cards on this page
+                const tid = targetUserIdInput.value;
+                document.querySelectorAll('.menu-shop-card').forEach(function(card) {
+                    if (card.querySelector('.menu-card-edit-banner-btn[data-target-user-id="' + tid + '"]')) {
+                        const img = card.querySelector('img');
+                        if (img) img.src = bustUrl;
+                    }
+                });
+
+                closeBannerModal();
+
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Banner Updated!',
+                        text: 'Your store cover image has been updated successfully.',
+                        timer: 2500,
+                        showConfirmButton: false,
+                        toast: true,
+                        position: 'top-end'
+                    });
+                } else {
+                    alert('Store banner updated successfully!');
+                }
+            } else {
+                errorDiv.textContent = data.message || 'Unable to update store banner.';
+                errorDiv.style.display = 'block';
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Save & Apply Banner';
+            }
+        } catch (err) {
+            errorDiv.textContent = 'Upload failed. Please check your network connection.';
+            errorDiv.style.display = 'block';
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i> Save & Apply Banner';
+        }
+    });
+})();
+</script>
 
 <?php include 'includes/footer.php'; ?>
 
