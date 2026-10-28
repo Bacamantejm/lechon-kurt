@@ -998,12 +998,12 @@ body.dark-mode .id-digital-tip .tip-desc {
 /* Form Steps */
 .form-step {
     display: none;
-    padding: 30px 40px;
-    animation: slideIn 0.5s ease;
+    padding: 16px 0 0 !important;
+    animation: slideIn 0.4s ease;
 }
 
 @keyframes slideIn {
-    from { opacity: 0; transform: translateX(30px); }
+    from { opacity: 0; transform: translateX(20px); }
     to { opacity: 1; transform: translateX(0); }
 }
 
@@ -1020,26 +1020,31 @@ body.dark-mode .id-digital-tip .tip-desc {
 }
 
 .account-type-card {
-    border: 2px solid #e0e0e0;
-    border-radius: 12px;
-    padding: 30px;
+    border: 1.5px solid rgba(226, 232, 240, 0.8);
+    border-radius: 14px;
+    padding: 24px 18px;
     text-align: center;
     cursor: pointer;
     transition: all 0.3s ease;
-    background: white;
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     -webkit-tap-highlight-color: transparent;
     user-select: none;
+    box-shadow: 0 2px 8px rgba(16, 24, 40, 0.03);
 }
 
 .account-type-card:hover {
     border-color: #b3261e;
-    transform: translateY(-5px);
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    transform: translateY(-3px);
+    background: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 8px 20px rgba(179, 38, 30, 0.08);
 }
 
 .account-type-card.selected {
     border-color: #b3261e;
-    background: linear-gradient(135deg, rgba(198, 40, 40, 0.05) 0%, rgba(139, 0, 0, 0.05) 100%);
+    background: rgba(255, 241, 240, 0.85);
+    box-shadow: 0 4px 14px rgba(179, 38, 30, 0.12);
 }
 
 .account-type-card i {
@@ -1077,23 +1082,28 @@ body.dark-mode .id-digital-tip .tip-desc {
 
 .form-control {
     width: 100%;
-    padding: 15px 18px;
-    border: 2px solid #e0e0e0;
-    border-radius: 10px;
-    font-size: 1rem;
-    transition: all 0.3s;
+    padding: 14px 16px;
+    border: 1.5px solid rgba(208, 213, 221, 0.8) !important;
+    border-radius: 12px !important;
+    font-size: 0.98rem;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     font-family: inherit;
-    background-color: #fafafa;
-    -webkit-appearance: none; /* Remove iOS input styling */
+    background: rgba(255, 255, 255, 0.65) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    -webkit-appearance: none;
     appearance: none;
-    min-height: 50px; /* Better touch target */
+    min-height: 48px;
+    box-shadow: inset 0 1px 2px rgba(16, 24, 40, 0.03) !important;
+    color: #101828 !important;
+    box-sizing: border-box;
 }
 
 .form-control:focus {
     outline: none;
-    border-color: #b3261e;
-    background-color: white;
-    box-shadow: 0 0 0 4px rgba(198, 40, 40, 0.1);
+    border-color: #b3261e !important;
+    background: rgba(255, 255, 255, 0.95) !important;
+    box-shadow: 0 0 0 3.5px rgba(179, 38, 30, 0.12), inset 0 1px 2px rgba(16, 24, 40, 0.02) !important;
 }
 
 .input-with-icon,
@@ -2019,7 +2029,7 @@ body.dark-mode .id-digital-tip .tip-desc {
 }
 
 .registration-body {
-    background: #ffffff;
+    background: transparent !important;
 }
 
 .step.active .step-number {
@@ -2029,13 +2039,15 @@ body.dark-mode .id-digital-tip .tip-desc {
 .account-type-card,
 .form-control,
 .terms-agreement {
-    border: 1px solid #e2e8f0;
-    background: #ffffff;
+    border: 1.5px solid rgba(208, 213, 221, 0.8);
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
 
 .account-type-card.selected {
     border-color: var(--reg-red);
-    background: #fff8f6;
+    background: rgba(255, 241, 240, 0.85);
 }
 
 .account-type-card i,
@@ -2046,7 +2058,8 @@ body.dark-mode .id-digital-tip .tip-desc {
 
 .form-control:focus {
     border-color: var(--reg-red);
-    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.1);
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 0 0 3.5px rgba(179, 38, 30, 0.12);
 }
 
 .btn-primary {
@@ -2282,12 +2295,16 @@ body.dark-mode .id-digital-tip .tip-desc {
 /* Right Form Side */
 .registration-form-side {
     width: 50%;
-    background: #ffffff;
+    background: 
+        radial-gradient(circle at 12% 15%, rgba(254, 222, 207, 0.55) 0%, transparent 45%),
+        radial-gradient(circle at 88% 85%, rgba(255, 237, 229, 0.6) 0%, transparent 45%),
+        radial-gradient(circle at 50% 50%, rgba(255, 247, 242, 0.45) 0%, transparent 60%),
+        #fcf8f6 !important;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    padding: 44px 24px 36px !important;
+    padding: 36px 20px 36px !important;
     height: calc(100vh - var(--site-header-offset, 64px)) !important;
     max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
     overflow-y: auto !important;
@@ -2556,11 +2573,24 @@ body.dark-mode .id-digital-tip .tip-desc {
 }
 
 .registration-form-side-container {
-    max-width: 440px;
+    max-width: 460px;
     width: 100%;
     margin: auto 0;
     display: flex;
     flex-direction: column;
+}
+
+.registration-form-side-container.auth-glass-card {
+    background: rgba(255, 255, 255, 0.75) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.85) !important;
+    border-radius: 24px !important;
+    box-shadow: 0 16px 40px -8px rgba(16, 24, 40, 0.08), 0 4px 14px rgba(16, 24, 40, 0.03), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
+    padding: 34px 28px !important;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 5;
 }
 
 .auth-view-wrapper {
@@ -2575,18 +2605,28 @@ body.dark-mode .id-digital-tip .tip-desc {
 }
 
 @media (max-width: 850px) {
+    .registration-page {
+        height: auto !important;
+        min-height: calc(100vh - 64px) !important;
+    }
     .registration-container {
-        flex-direction: column;
+        flex-direction: column !important;
+        height: auto !important;
+        max-height: none !important;
     }
     .registration-form-side {
-        width: 100%;
-        height: auto;
-        min-height: calc(100vh - 64px);
+        width: 100% !important;
+        height: auto !important;
+        min-height: calc(100vh - 64px) !important;
         transform: none !important;
-        padding-bottom: 120px !important;
+        padding: 24px 16px 140px !important;
+    }
+    .registration-form-side-container.auth-glass-card {
+        padding: 26px 18px !important;
+        border-radius: 20px !important;
     }
     #loginViewWrapper {
-        padding-bottom: 30px !important;
+        padding-bottom: 20px !important;
     }
     .registration-image-side {
         display: none !important;
@@ -2824,12 +2864,28 @@ body.dark-mode .btn-slide-auth:hover {
 }
 
 /* Right Form Side */
-body.dark-mode .registration-form-side,
-body.dark-mode .registration-form-side-container,
+body.dark-mode .registration-form-side {
+    background:
+        radial-gradient(circle at 12% 15%, rgba(179, 38, 30, 0.18) 0%, transparent 45%),
+        radial-gradient(circle at 85% 85%, rgba(30, 58, 138, 0.18) 0%, transparent 45%),
+        #0b1120 !important;
+    background-color: #0b1120 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-form-side-container.auth-glass-card {
+    background: rgba(30, 41, 59, 0.72) !important;
+    background-color: rgba(30, 41, 59, 0.72) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
+}
+
 body.dark-mode .registration-body,
 body.dark-mode .registration-header {
-    background: #0f172a !important;
-    background-color: #0f172a !important;
+    background: transparent !important;
+    background-color: transparent !important;
     color: #f8fafc !important;
 }
 
@@ -2881,9 +2937,11 @@ body.dark-mode input[type="tel"],
 body.dark-mode input[type="date"],
 body.dark-mode select,
 body.dark-mode textarea {
-    background: #1e293b !important;
-    background-color: #1e293b !important;
-    border-color: #334155 !important;
+    background: rgba(15, 23, 42, 0.55) !important;
+    background-color: rgba(15, 23, 42, 0.55) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
     color: #f8fafc !important;
 }
 
@@ -2891,9 +2949,9 @@ body.dark-mode .form-control:focus,
 body.dark-mode .form-select:focus,
 body.dark-mode input:focus,
 body.dark-mode select:focus {
-    background: #0b1120 !important;
+    background: rgba(15, 23, 42, 0.85) !important;
     border-color: #b3261e !important;
-    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+    box-shadow: 0 0 0 3.5px rgba(179, 38, 30, 0.25) !important;
     color: #ffffff !important;
 }
 
@@ -2948,6 +3006,31 @@ body.dark-mode #termsGroup {
 body.dark-mode .terms-group a,
 body.dark-mode .terms-agreement a {
     color: #ef4444 !important;
+}
+
+body.dark-mode .account-type-card,
+body.dark-mode .id-card-panel {
+    background: rgba(15, 23, 42, 0.55) !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .account-type-card.selected {
+    background: rgba(179, 38, 30, 0.2) !important;
+    border-color: #b3261e !important;
+}
+
+body.dark-mode .id-digital-tip {
+    background: rgba(15, 23, 42, 0.6) !important;
+    border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+body.dark-mode .id-digital-tip .tip-title {
+    color: #93c5fd !important;
+}
+
+body.dark-mode .id-digital-tip .tip-desc {
+    color: #bfdbfe !important;
 }
 
 body.dark-mode .btn-secondary {
@@ -3097,11 +3180,11 @@ body.dark-mode .leaflet-container {
 
         <!-- Right Side: Forms Container Panel (Register & Login) -->
         <div class="registration-form-side" id="authFormsPanel">
-            <div class="registration-form-side-container">
+            <div class="registration-form-side-container auth-glass-card">
                 
                 <!-- View 1: Register Form Wizard -->
                 <div id="registerViewWrapper" class="auth-view-wrapper">
-                    <div class="registration-header" style="background:#fff; text-align:center; margin-bottom:24px; padding:0 0 10px;">
+                    <div class="registration-header" style="text-align:center; margin-bottom:24px; padding:0 0 10px;">
                         <h2 style="font-size:1.8rem; font-weight:700; color:#333; margin-bottom:10px;">Create Account</h2>
                         <p style="font-size:1rem; color:#666; margin:0;">Join us to order Cavite's finest lechon dishes.</p>
                     </div>
@@ -3489,7 +3572,7 @@ body.dark-mode .leaflet-container {
 
                 <!-- View 2: Login Form (Smooth Slide Transition) -->
                 <div id="loginViewWrapper" class="auth-view-wrapper" style="display: none; opacity: 0;">
-                    <div class="registration-header" style="background:#fff; text-align:center; margin-bottom:24px; padding:0 0 10px;">
+                    <div class="registration-header" style="text-align:center; margin-bottom:24px; padding:0 0 10px;">
                         <h2 style="font-size:1.8rem; font-weight:700; color:#333; margin-bottom:10px;">Welcome Back!</h2>
                         <p style="font-size:1rem; color:#666; margin:0;">Sign in to continue to your account.</p>
                     </div>

@@ -529,16 +529,35 @@ include 'includes/header.php';
 /* Right Side - Forms */
 .login-right {
     width: 50%;
-    background: #ffffff;
+    background: 
+        radial-gradient(circle at 12% 15%, rgba(254, 222, 207, 0.55) 0%, transparent 45%),
+        radial-gradient(circle at 88% 85%, rgba(255, 237, 229, 0.6) 0%, transparent 45%),
+        radial-gradient(circle at 50% 50%, rgba(255, 247, 242, 0.45) 0%, transparent 60%),
+        #fcf8f6 !important;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: center;
     padding: 44px 24px 36px !important;
     height: calc(100vh - var(--site-header-offset, 64px)) !important;
     max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
     overflow-y: auto !important;
     box-sizing: border-box;
+    position: relative;
+}
+
+/* Glassmorphic Form Card */
+.auth-glass-card {
+    background: rgba(255, 255, 255, 0.75) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.85) !important;
+    border-radius: 24px !important;
+    box-shadow: 0 16px 40px -8px rgba(16, 24, 40, 0.08), 0 4px 14px rgba(16, 24, 40, 0.03), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
+    padding: 38px 34px !important;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 5;
 }
 
 .login-header {
@@ -615,20 +634,26 @@ include 'includes/header.php';
 
 .form-control {
     width: 100%;
-    padding: 15px 18px;
-    border: 2px solid #e0e0e0;
-    border-radius: 10px;
-    font-size: 1rem;
-    transition: all 0.3s;
+    padding: 14px 16px;
+    border: 1.5px solid rgba(208, 213, 221, 0.8) !important;
+    border-radius: 12px !important;
+    font-size: 0.98rem;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     font-family: inherit;
-    background-color: #fafafa;
+    background: rgba(255, 255, 255, 0.65) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    box-shadow: inset 0 1px 2px rgba(16, 24, 40, 0.03) !important;
+    color: #101828 !important;
+    min-height: 48px;
+    box-sizing: border-box;
 }
 
 .form-control:focus {
     outline: none;
-    border-color: #b3261e;
-    background-color: white;
-    box-shadow: 0 0 0 4px rgba(198, 40, 40, 0.1);
+    border-color: #b3261e !important;
+    background: rgba(255, 255, 255, 0.95) !important;
+    box-shadow: 0 0 0 3.5px rgba(179, 38, 30, 0.12), inset 0 1px 2px rgba(16, 24, 40, 0.02) !important;
 }
 
 .input-with-icon {
@@ -936,14 +961,26 @@ include 'includes/header.php';
 
 /* Responsive Design */
 @media (max-width: 850px) {
+    .login-page-container {
+        height: auto !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+    }
     .login-wrapper {
         flex-direction: column;
+        height: auto !important;
+        max-height: none !important;
     }
     .login-right {
-        width: 100%;
-        height: auto;
-        min-height: calc(100vh - 64px);
-        padding: 40px 20px;
+        width: 100% !important;
+        height: auto !important;
+        min-height: calc(100vh - 64px) !important;
+        padding: 24px 16px 140px !important;
+        justify-content: flex-start !important;
+    }
+    .auth-glass-card {
+        padding: 28px 18px !important;
+        border-radius: 20px !important;
     }
     .login-left {
         display: none !important;
@@ -997,13 +1034,14 @@ body {
 }
 
 .form-control {
-    border: 1px solid #e2e8f0;
-    background: #ffffff;
+    border: 1.5px solid rgba(208, 213, 221, 0.8);
+    background: rgba(255, 255, 255, 0.65);
 }
 
 .form-control:focus {
     border-color: var(--auth-red);
-    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.1);
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 0 0 3.5px rgba(179, 38, 30, 0.12);
 }
 
 .btn-primary {
@@ -1086,9 +1124,20 @@ body.dark-mode .features-list li {
 }
 
 body.dark-mode .login-right {
-    background: #0f172a !important;
-    background-color: #0f172a !important;
+    background:
+        radial-gradient(circle at 12% 15%, rgba(179, 38, 30, 0.18) 0%, transparent 45%),
+        radial-gradient(circle at 85% 85%, rgba(30, 58, 138, 0.18) 0%, transparent 45%),
+        #0b1120 !important;
+    background-color: #0b1120 !important;
     color: #f8fafc !important;
+}
+
+body.dark-mode .auth-glass-card {
+    background: rgba(30, 41, 59, 0.72) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
 }
 
 body.dark-mode .login-header h2 {
@@ -1104,15 +1153,19 @@ body.dark-mode .form-group label {
 }
 
 body.dark-mode .form-control {
-    background: #1e293b !important;
-    background-color: #1e293b !important;
-    border-color: #334155 !important;
+    background: rgba(15, 23, 42, 0.55) !important;
+    background-color: rgba(15, 23, 42, 0.55) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
     color: #f8fafc !important;
 }
 
 body.dark-mode .form-control:focus {
-    background: #0b1120 !important;
+    background: rgba(15, 23, 42, 0.85) !important;
     border-color: #b3261e !important;
+    box-shadow: 0 0 0 3.5px rgba(179, 38, 30, 0.25) !important;
+}
     box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
 }
 
@@ -1203,7 +1256,7 @@ body.dark-mode .floating-pig {
 
         <!-- Login Form Section -->
         <div class="login-right">
-            <div style="max-width: 440px; width: 100%; margin: auto 0; display: flex; flex-direction: column;">
+            <div class="auth-glass-card" style="max-width: 440px; width: 100%; margin: auto 0; display: flex; flex-direction: column;">
                 <!-- Login View -->
                 <div id="loginViewContainer" class="auth-panel-view">
                     <div class="login-header" style="text-align: center; margin-bottom: 24px;">
