@@ -366,10 +366,174 @@ function normalizeUserAvatarPath($value) {
     if ($path === '') {
         return '';
     }
-    if (!preg_match('#^uploads/(profile_pictures|business_logos)/[A-Za-z0-9._-]+$#', $path)) {
+    if (!preg_match('#^uploads/(profile_pictures|business_logos|business_banners)/[A-Za-z0-9._-]+$#', $path)) {
         return '';
     }
     return $path;
+}
+
+if (!function_exists('ensureUserStoreBannerSchema')) {
+    function ensureUserStoreBannerSchema($conn) {
+        static $checked = false;
+        if ($checked || !$conn || !($conn instanceof mysqli)) return;
+        $checked = true;
+        if (!userAccountControlColumnExists($conn, 'business_banner')) {
+            @mysqli_query($conn, "ALTER TABLE users ADD COLUMN business_banner VARCHAR(255) NULL DEFAULT NULL AFTER business_logo");
+        }
+    }
+}
+
+if (!function_exists('resolveDistinctStoreImage')) {
+    function resolveDistinctStoreImage($store_id, $store_name = '', $custom_image = ''): string {
+        $custom = trim((string)$custom_image);
+        if ($custom !== '' && $custom !== 'default.jpg') {
+            $clean_custom = ltrim(str_replace('\\', '/', $custom), '/');
+            if (str_starts_with($clean_custom, 'http://') || str_starts_with($clean_custom, 'https://')) {
+                return $clean_custom;
+            }
+            if (is_file(__DIR__ . '/../' . $clean_custom)) {
+                return $clean_custom;
+            }
+            if (is_file(__DIR__ . '/../uploads/business_banners/' . basename($clean_custom))) {
+                return 'uploads/business_banners/' . basename($clean_custom);
+            }
+            if (is_file(__DIR__ . '/../uploads/business_logos/' . basename($clean_custom))) {
+                return 'uploads/business_logos/' . basename($clean_custom);
+            }
+            if (is_file(__DIR__ . '/../images/' . basename($clean_custom))) {
+                return 'images/' . basename($clean_custom);
+            }
+        }
+
+        // Curated pool of verified, distinct appetizing high-quality storefront/lechon images
+        // ensures NO TWO STORES share the identical default banner!
+        $palette = [
+            'images/panda_fresh_lechon.jpg',
+            'images/panda_preorder_lechon.jpg',
+            'images/menu/lechon.jpg',
+            'uploads/products/1773731101_69b8fd1d0eb94.jpg',
+            'uploads/products/1773731574_69b8fef6a5cc3.jpg',
+            'uploads/products/1773731810_69b8ffe20dddb.jpg',
+            'uploads/products/1773732340_69b901f4980cc.jpg',
+            'uploads/products/1773730979_69b8fca383ac6.jpg',
+            'uploads/products/1773731700_69b8ff743fde7.jpg',
+            'images/store-bg.jpg',
+        ];
+
+        // Specific branch mappings for canonical branches so each has a distinct photo
+        $named_map = [
+            1 => 'images/panda_fresh_lechon.jpg',                       // Dasmariñas Branch
+            2 => 'images/panda_preorder_lechon.jpg',                    // Imus Branch
+            3 => 'images/menu/lechon.jpg',                              // General Trias Branch
+            4 => 'uploads/products/1773731574_69b8fef6a5cc3.jpg',       // Bacoor Branch
+            5 => 'uploads/products/1773731101_69b8fd1d0eb94.jpg',       // Tagaytay Branch
+            6 => 'uploads/products/1773731810_69b8ffe20dddb.jpg',       // Silang Branch
+            7 => 'uploads/products/1773732340_69b901f4980cc.jpg',       // jm lechon (fallback until custom banner uploaded)
+        ];
+
+        $sid = (int)$store_id;
+        if (isset($named_map[$sid]) && is_file(__DIR__ . '/../' . $named_map[$sid])) {
+            return $named_map[$sid];
+        }
+
+        // Deterministic hash based on store name/ID so arbitrary seller IDs get stable, unique images
+        $seed_string = (string)$store_name !== '' ? (string)$store_name : ('store_' . $sid);
+        $idx = abs((int)crc32($seed_string)) % count($palette);
+        for ($i = 0; $i < count($palette); $i++) {
+            $candidate = $palette[($idx + $i) % count($palette)];
+            if (is_file(__DIR__ . '/../' . $candidate)) {
+                return $candidate;
+            }
+        }
+
+        return 'images/store-bg.jpg';
+    }
+}
+
+if (!function_exists('baUploadBusinessBannerHelper')) {
+    function baUploadBusinessBannerHelper($conn, int $user_id, array $file): array {
+        $error_code = (int)($file['error'] ?? UPLOAD_ERR_OK);
+        if ($error_code !== UPLOAD_ERR_OK) {
+            switch ($error_code) {
+                case UPLOAD_ERR_INI_SIZE:
+                case UPLOAD_ERR_FORM_SIZE:
+                    return ['success' => false, 'message' => 'Store background picture is too large. Maximum file size is 8MB.'];
+                case UPLOAD_ERR_PARTIAL:
+                    return ['success' => false, 'message' => 'Background picture upload was interrupted. Please try again.'];
+                case UPLOAD_ERR_NO_FILE:
+                    return ['success' => false, 'message' => 'No background picture file was selected.'];
+                default:
+                    return ['success' => false, 'message' => 'Unable to upload store background picture right now.'];
+            }
+        }
+
+        $tmp_name = (string)($file['tmp_name'] ?? '');
+        if ($tmp_name === '' || !is_uploaded_file($tmp_name)) {
+            return ['success' => false, 'message' => 'Invalid background picture upload source.'];
+        }
+
+        $max_size = 8 * 1024 * 1024;
+        if ((int)($file['size'] ?? 0) > $max_size) {
+            return ['success' => false, 'message' => 'Store background picture is too large. Maximum file size is 8MB.'];
+        }
+
+        $allowed_mime = [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/webp' => 'webp'
+        ];
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        if (!$finfo) {
+            return ['success' => false, 'message' => 'Unable to validate uploaded file type.'];
+        }
+        $mime_type = (string)finfo_file($finfo, $tmp_name);
+        finfo_close($finfo);
+
+        if (!isset($allowed_mime[$mime_type])) {
+            return ['success' => false, 'message' => 'Invalid background format. Please use JPG, PNG, or WEBP.'];
+        }
+        if (!@getimagesize($tmp_name)) {
+            return ['success' => false, 'message' => 'Uploaded background picture is not a valid image file.'];
+        }
+
+        $upload_dir = dirname(__DIR__) . '/uploads/business_banners';
+        if (!is_dir($upload_dir) && !mkdir($upload_dir, 0755, true) && !is_dir($upload_dir)) {
+            return ['success' => false, 'message' => 'Unable to prepare store background upload directory.'];
+        }
+
+        try {
+            $token = bin2hex(random_bytes(8));
+        } catch (Throwable $e) {
+            $token = str_replace('.', '', uniqid((string)$user_id, true));
+        }
+        $extension = $allowed_mime[$mime_type];
+        $filename = 'business_banner_' . $user_id . '_' . date('YmdHis') . '_' . $token . '.' . $extension;
+        $target_path = $upload_dir . '/' . $filename;
+
+        if (!move_uploaded_file($tmp_name, $target_path)) {
+            return ['success' => false, 'message' => 'Failed to save store background picture file.'];
+        }
+
+        // Delete old banner if present
+        if ($conn instanceof mysqli && $user_id > 0) {
+            $old_q = mysqli_query($conn, "SELECT business_banner FROM users WHERE id = {$user_id} LIMIT 1");
+            if ($old_q && ($old_row = mysqli_fetch_assoc($old_q))) {
+                $old_banner = trim((string)($old_row['business_banner'] ?? ''));
+                if ($old_banner !== '') {
+                    $old_full = dirname(__DIR__) . '/' . ltrim(str_replace('\\', '/', $old_banner), '/');
+                    if (is_file($old_full) && realpath($old_full) !== realpath($target_path)) {
+                        @unlink($old_full);
+                    }
+                }
+            }
+        }
+
+        return [
+            'success' => true,
+            'path' => 'uploads/business_banners/' . $filename,
+            'filename' => $filename
+        ];
+    }
 }
 
 function ensureUserPersonalInfoSchema($conn) {
@@ -861,6 +1025,7 @@ function loginUser($conn, $email, $password) {
     $select_fields = "id, email, password, full_name, user_type, is_active, account_type, role_id, last_login";
     $has_profile_image_column = userAccountControlColumnExists($conn, 'profile_image');
     $has_business_logo_column = userAccountControlColumnExists($conn, 'business_logo');
+    $has_business_banner_column = userAccountControlColumnExists($conn, 'business_banner');
     $has_splash_column = userAccountControlColumnExists($conn, 'mobile_splash_seen');
 
     if ($has_profile_image_column) {
@@ -868,6 +1033,9 @@ function loginUser($conn, $email, $password) {
     }
     if ($has_business_logo_column) {
         $select_fields .= ", business_logo";
+    }
+    if ($has_business_banner_column) {
+        $select_fields .= ", business_banner";
     }
     if ($has_splash_column) {
         $select_fields .= ", mobile_splash_seen";
@@ -926,6 +1094,9 @@ function loginUser($conn, $email, $password) {
             if ($has_business_logo_column) {
                 $refresh_fields .= ", business_logo";
             }
+            if ($has_business_banner_column) {
+                $refresh_fields .= ", business_banner";
+            }
             $refresh_query = "SELECT {$refresh_fields} FROM users WHERE id = ? LIMIT 1";
             $refresh_stmt = mysqli_prepare($conn, $refresh_query);
             if ($refresh_stmt) {
@@ -941,6 +1112,9 @@ function loginUser($conn, $email, $password) {
                     }
                     if ($has_business_logo_column) {
                         $row['business_logo'] = $fresh['business_logo'] ?? ($row['business_logo'] ?? null);
+                    }
+                    if ($has_business_banner_column) {
+                        $row['business_banner'] = $fresh['business_banner'] ?? ($row['business_banner'] ?? null);
                     }
                 }
                 mysqli_stmt_close($refresh_stmt);
@@ -987,7 +1161,8 @@ function loginUser($conn, $email, $password) {
                 'is_first_login' => $is_first_login,
                 'show_mobile_splash' => $show_first_time_splash,
                 'profile_image' => resolveUserAvatarPathFromRow($row),
-                'business_logo' => $row['business_logo'] ?? null
+                'business_logo' => $row['business_logo'] ?? null,
+                'business_banner' => $row['business_banner'] ?? null
             ];
         }
     }
@@ -1504,12 +1679,16 @@ function authenticateRememberMeUser($conn) {
 
     $has_profile_img = userAccountControlColumnExists($conn, 'profile_image');
     $has_business_logo = userAccountControlColumnExists($conn, 'business_logo');
+    $has_business_banner = userAccountControlColumnExists($conn, 'business_banner');
     $select_fields = "id, email, full_name, user_type, is_active, account_type, role_id";
     if ($has_profile_img) {
         $select_fields .= ", profile_image";
     }
     if ($has_business_logo) {
         $select_fields .= ", business_logo";
+    }
+    if ($has_business_banner) {
+        $select_fields .= ", business_banner";
     }
 
     $query = "SELECT {$select_fields} FROM users WHERE remember_token = ? AND remember_expires > NOW() LIMIT 1";
@@ -1552,6 +1731,7 @@ function authenticateRememberMeUser($conn) {
     $_SESSION['account_type'] = $row['account_type'];
     $_SESSION['profile_image'] = $row['profile_image'] ?? null;
     $_SESSION['business_logo'] = $row['business_logo'] ?? null;
+    $_SESSION['business_banner'] = $row['business_banner'] ?? null;
     $_SESSION['role_id'] = $row['role_id'] ?? null;
     $_SESSION['has_backoffice_access'] = hasBackofficeAccess($conn, (int)$row['id']);
     $_SESSION['permissions'] = getUserPermissions($conn, (int)$row['id']);

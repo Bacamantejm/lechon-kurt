@@ -150,7 +150,7 @@ function myAccountNormalizeAvatarPath($path): string {
         return '';
     }
 
-    if (preg_match('#^uploads/(profile_pictures|business_logos)/[A-Za-z0-9._-]+$#', $clean_path)) {
+    if (preg_match('#^uploads/(profile_pictures|business_logos|business_banners)/[A-Za-z0-9._-]+$#', $clean_path)) {
         return $clean_path;
     }
 

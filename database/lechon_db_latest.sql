@@ -4438,6 +4438,7 @@ CREATE TABLE `users` (
   `address` text COLLATE utf8mb4_general_ci,
   `profile_image` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `business_logo` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `business_banner` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `user_type` enum('customer','admin','employee') COLLATE utf8mb4_general_ci DEFAULT 'customer',
   `role_id` int DEFAULT NULL,
   `account_type` enum('individual','organization') COLLATE utf8mb4_general_ci DEFAULT 'individual',

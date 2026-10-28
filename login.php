@@ -83,7 +83,8 @@ if (isset($_SESSION['user_id'])) {
         $_SESSION['permissions'],
         $_SESSION['has_backoffice_access'],
         $_SESSION['profile_image'],
-        $_SESSION['business_logo']
+        $_SESSION['business_logo'],
+        $_SESSION['business_banner']
     );
 }
 
@@ -138,6 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
             $_SESSION['account_type'] = $result['account_type'];
             $_SESSION['profile_image'] = $result['profile_image'] ?? null;
             $_SESSION['business_logo'] = $result['business_logo'] ?? null;
+            $_SESSION['business_banner'] = $result['business_banner'] ?? null;
             $_SESSION['role_id'] = $result['role_id'] ?? null;  // Store role_id for RBAC
             $_SESSION['has_backoffice_access'] = hasBackofficeAccess($conn, $result['user_id']);
             $_SESSION['permissions'] = getUserPermissions($conn, $result['user_id']);
