@@ -1556,14 +1556,14 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         .map-modal-btn.primary { background:linear-gradient(135deg,#e11d8f,#db2777); color:#fff; }
         .map-modal-btn.secondary:hover { background:#e5e7eb; }
         .map-modal-btn.primary:hover { filter:brightness(.96); transform:translateY(-1px); }
-        /* Foodpanda Style Mobile Ready Layout */
+        /* Premium Glassmorphic Mobile Header Layout */
         @media (max-width: 768px) {
             .site-header {
-                box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04) !important;
-                background: rgba(255, 255, 255, 0.88) !important;
-                backdrop-filter: blur(18px) !important;
-                -webkit-backdrop-filter: blur(18px) !important;
-                border-bottom: 1px solid rgba(234, 236, 240, 0.8) !important;
+                box-shadow: 0 4px 20px 0 rgba(16, 24, 40, 0.05), inset 0 -1px 0 0 rgba(234, 236, 240, 0.5) !important;
+                background: rgba(255, 255, 255, 0.75) !important;
+                backdrop-filter: blur(20px) saturate(190%) contrast(92%) !important;
+                -webkit-backdrop-filter: blur(20px) saturate(190%) contrast(92%) !important;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.65) !important;
                 position: sticky !important;
                 top: 0 !important;
                 z-index: 1200 !important;
@@ -1581,13 +1581,25 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 display: inline-flex !important;
                 width: 36px !important;
                 height: 36px !important;
-                border-radius: 10px !important;
-                border: 1px solid #eaecf0 !important;
-                background: #ffffff !important;
+                border-radius: 12px !important;
+                background: rgba(255, 255, 255, 0.65) !important;
+                backdrop-filter: blur(16px) saturate(180%) !important;
+                -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+                border: 1px solid rgba(255, 255, 255, 0.75) !important;
                 color: #101828 !important;
                 flex-shrink: 0 !important;
                 align-items: center !important;
                 justify-content: center !important;
+                box-shadow: 0 4px 12px rgba(16, 24, 40, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
+                transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            }
+            .mobile-toggle:hover,
+            .mobile-toggle:active {
+                background: rgba(255, 255, 255, 0.88) !important;
+                border-color: rgba(179, 38, 30, 0.35) !important;
+                color: #b3261e !important;
+                transform: scale(0.95) !important;
+                box-shadow: 0 4px 14px rgba(179, 38, 30, 0.14), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
             }
             .market-header-top.has-address-bar .logo-link {
                 display: none !important;
@@ -1646,10 +1658,10 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 max-width: 100% !important;
                 min-height: 38px !important;
                 padding: 0 12px !important;
-                background: rgba(244, 245, 247, 0.85) !important;
-                backdrop-filter: blur(12px) !important;
-                -webkit-backdrop-filter: blur(12px) !important;
-                border: 1px solid rgba(234, 236, 240, 0.85) !important;
+                background: rgba(255, 255, 255, 0.65) !important;
+                backdrop-filter: blur(16px) saturate(180%) !important;
+                -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+                border: 1px solid rgba(255, 255, 255, 0.75) !important;
                 border-radius: 999px !important;
                 font-size: 0.8rem !important;
                 font-weight: 700 !important;
@@ -1657,6 +1669,19 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 align-items: center !important;
                 gap: 6px !important;
                 min-width: 0 !important;
+                box-shadow: 0 4px 14px rgba(16, 24, 40, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
+                transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            }
+            .market-address-trigger:hover,
+            .market-address-trigger:active,
+            .market-address-wrap.is-open .market-address-trigger {
+                background: rgba(255, 255, 255, 0.88) !important;
+                border-color: rgba(179, 38, 30, 0.35) !important;
+                box-shadow: 0 6px 18px rgba(179, 38, 30, 0.12), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
+            }
+            .market-address-trigger i.fa-location-dot {
+                color: #b3261e !important;
+                font-size: 0.85rem !important;
             }
             .market-address-trigger .address-text {
                 white-space: nowrap !important;
@@ -1673,7 +1698,27 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 right: auto !important;
                 width: min(340px, calc(100vw - 20px)) !important;
                 max-width: calc(100vw - 20px) !important;
-                padding: 14px 12px !important;
+                padding: 16px 14px !important;
+                background: rgba(255, 255, 255, 0.85) !important;
+                backdrop-filter: blur(24px) saturate(190%) !important;
+                -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+                border: 1px solid rgba(255, 255, 255, 0.8) !important;
+                box-shadow: 0 20px 48px rgba(15, 23, 42, 0.16), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
+                border-radius: 20px !important;
+            }
+            .market-address-popover .market-address-field-wrap {
+                background: rgba(255, 255, 255, 0.6) !important;
+                backdrop-filter: blur(12px) !important;
+                -webkit-backdrop-filter: blur(12px) !important;
+                border: 1px solid rgba(203, 213, 225, 0.65) !important;
+                box-shadow: inset 0 1px 2px rgba(16, 24, 40, 0.04) !important;
+            }
+            .market-address-popover .market-address-pill {
+                background: rgba(255, 255, 255, 0.65) !important;
+                backdrop-filter: blur(8px) !important;
+                -webkit-backdrop-filter: blur(8px) !important;
+                border: 1px solid rgba(203, 213, 225, 0.7) !important;
+                box-shadow: 0 1px 3px rgba(16, 24, 40, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
             }
             .header-actions {
                 order: 2 !important;
@@ -1689,7 +1734,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 display: inline-flex !important;
                 width: 36px !important;
                 height: 36px !important;
-                border-radius: 10px !important;
+                border-radius: 12px !important;
                 align-items: center !important;
                 justify-content: center !important;
             }
@@ -1698,10 +1743,28 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             .header-actions .notification-wrapper {
                 display: none !important;
             }
-            .header-actions .icon-btn {
+            .header-actions .icon-btn,
+            .mobile-user-btn {
                 width: 36px !important;
                 height: 36px !important;
-                border-radius: 10px !important;
+                border-radius: 12px !important;
+                background: rgba(255, 255, 255, 0.65) !important;
+                backdrop-filter: blur(16px) saturate(180%) !important;
+                -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+                border: 1px solid rgba(255, 255, 255, 0.75) !important;
+                color: #101828 !important;
+                box-shadow: 0 4px 12px rgba(16, 24, 40, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
+                transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            }
+            .header-actions .icon-btn:hover,
+            .header-actions .icon-btn:active,
+            .mobile-user-btn:hover,
+            .mobile-user-btn:active {
+                background: rgba(255, 255, 255, 0.88) !important;
+                border-color: rgba(179, 38, 30, 0.35) !important;
+                color: #b3261e !important;
+                transform: scale(0.95) !important;
+                box-shadow: 0 4px 14px rgba(179, 38, 30, 0.14), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
             }
             .main-nav, .market-home-nav {
                 display: none !important;
@@ -1717,15 +1780,135 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             }
             .market-home-search {
                 min-height: 42px !important;
-                background: rgba(244, 245, 247, 0.85) !important;
-                backdrop-filter: blur(12px) !important;
-                -webkit-backdrop-filter: blur(12px) !important;
-                border: 1px solid rgba(234, 236, 240, 0.85) !important;
+                background: rgba(255, 255, 255, 0.65) !important;
+                backdrop-filter: blur(16px) saturate(180%) !important;
+                -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+                border: 1px solid rgba(255, 255, 255, 0.75) !important;
                 border-radius: 999px !important;
                 padding: 0 16px !important;
+                box-shadow: 0 4px 14px rgba(16, 24, 40, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
+                transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            }
+            .market-home-search:hover,
+            .market-home-search:focus-within,
+            .market-home-search-wrap.is-open .market-home-search {
+                background: rgba(255, 255, 255, 0.88) !important;
+                border-color: rgba(179, 38, 30, 0.45) !important;
+                box-shadow: 0 8px 24px rgba(179, 38, 30, 0.12), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
+            }
+            .market-home-search i {
+                color: #64748b !important;
+                font-size: 0.9rem !important;
+                transition: color 0.2s ease, transform 0.2s ease !important;
+            }
+            .market-home-search:focus-within i,
+            .market-home-search-wrap.is-open .market-home-search i {
+                color: #b3261e !important;
+                transform: scale(1.1) !important;
             }
             .market-home-search input {
                 font-size: 0.88rem !important;
+            }
+            .market-search-popover {
+                background: rgba(255, 255, 255, 0.85) !important;
+                backdrop-filter: blur(24px) saturate(190%) !important;
+                -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+                border: 1px solid rgba(255, 255, 255, 0.8) !important;
+                box-shadow: 0 20px 48px rgba(15, 23, 42, 0.16), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
+                border-radius: 20px !important;
+            }
+            .market-search-tabs {
+                border-bottom: 1px solid rgba(229, 231, 235, 0.6) !important;
+            }
+            .market-search-suggestion {
+                background: rgba(255, 255, 255, 0.65) !important;
+                backdrop-filter: blur(10px) !important;
+                -webkit-backdrop-filter: blur(10px) !important;
+                border: 1px solid rgba(226, 232, 240, 0.7) !important;
+                box-shadow: 0 1px 3px rgba(16, 24, 40, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+            }
+            .market-search-suggestion:hover,
+            .market-search-suggestion:active {
+                background: rgba(255, 255, 255, 0.9) !important;
+                border-color: rgba(179, 38, 30, 0.35) !important;
+                color: #b3261e !important;
+            }
+
+            /* Mobile Header Glassmorphism in Dark Mode */
+            body.dark-mode .site-header {
+                background: rgba(15, 23, 42, 0.78) !important;
+                background-color: rgba(15, 23, 42, 0.78) !important;
+                backdrop-filter: blur(20px) saturate(180%) !important;
+                -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+            }
+            body.dark-mode .market-header-bottom {
+                background: transparent !important;
+                background-color: transparent !important;
+            }
+            body.dark-mode .mobile-toggle,
+            body.dark-mode .header-actions .icon-btn,
+            body.dark-mode .mobile-user-btn {
+                background: rgba(30, 41, 59, 0.65) !important;
+                backdrop-filter: blur(16px) saturate(180%) !important;
+                -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+                border: 1px solid rgba(255, 255, 255, 0.12) !important;
+                color: #f8fafc !important;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
+            }
+            body.dark-mode .mobile-toggle:hover,
+            body.dark-mode .mobile-toggle:active,
+            body.dark-mode .header-actions .icon-btn:hover,
+            body.dark-mode .header-actions .icon-btn:active {
+                background: rgba(51, 65, 85, 0.8) !important;
+                border-color: rgba(255, 255, 255, 0.2) !important;
+                color: #ffffff !important;
+            }
+            body.dark-mode .market-address-trigger {
+                background: rgba(30, 41, 59, 0.65) !important;
+                backdrop-filter: blur(16px) saturate(180%) !important;
+                -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+                border: 1px solid rgba(255, 255, 255, 0.12) !important;
+                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
+            }
+            body.dark-mode .market-address-trigger .address-text {
+                color: #f8fafc !important;
+            }
+            body.dark-mode .market-home-search {
+                background: rgba(30, 41, 59, 0.65) !important;
+                backdrop-filter: blur(16px) saturate(180%) !important;
+                -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+                border: 1px solid rgba(255, 255, 255, 0.12) !important;
+                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
+            }
+            body.dark-mode .market-home-search input {
+                color: #f8fafc !important;
+            }
+            body.dark-mode .market-home-search input::placeholder {
+                color: #94a3b8 !important;
+            }
+            body.dark-mode .market-address-popover,
+            body.dark-mode .market-search-popover {
+                background: rgba(30, 41, 59, 0.85) !important;
+                backdrop-filter: blur(24px) saturate(190%) !important;
+                -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+                border: 1px solid rgba(255, 255, 255, 0.12) !important;
+                box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45) !important;
+                color: #f8fafc !important;
+            }
+            body.dark-mode .market-address-popover .market-address-field-wrap {
+                background: rgba(15, 23, 42, 0.6) !important;
+                border-color: rgba(255, 255, 255, 0.1) !important;
+            }
+            body.dark-mode .market-address-popover .market-address-field-input {
+                color: #f8fafc !important;
+            }
+            body.dark-mode .market-address-popover .market-address-pill,
+            body.dark-mode .market-search-suggestion {
+                background: rgba(51, 65, 85, 0.6) !important;
+                border-color: rgba(255, 255, 255, 0.1) !important;
+                color: #f8fafc !important;
             }
         }
 
@@ -1870,9 +2053,9 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         .mobile-menu-overlay {
             position: fixed !important;
             inset: 0 !important;
-            background: rgba(16, 24, 40, 0.5) !important;
-            backdrop-filter: blur(8px) !important;
-            -webkit-backdrop-filter: blur(8px) !important;
+            background: rgba(16, 24, 40, 0.45) !important;
+            backdrop-filter: blur(10px) !important;
+            -webkit-backdrop-filter: blur(10px) !important;
             z-index: 99998 !important;
             opacity: 0 !important;
             visibility: hidden !important;
@@ -1893,12 +2076,12 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             width: min(320px, 86vw) !important;
             height: 100vh !important;
             height: 100dvh !important;
-            background: rgba(255, 255, 255, 0.98) !important;
-            backdrop-filter: blur(20px) !important;
-            -webkit-backdrop-filter: blur(20px) !important;
-            border-right: 1px solid rgba(234, 236, 240, 0.85) !important;
+            background: rgba(255, 255, 255, 0.82) !important;
+            backdrop-filter: blur(24px) saturate(190%) !important;
+            -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.75) !important;
             border-left: none !important;
-            box-shadow: 14px 0 40px rgba(16, 24, 40, 0.18) !important;
+            box-shadow: 16px 0 48px rgba(16, 24, 40, 0.14), inset -1px 0 0 rgba(255, 255, 255, 0.9) !important;
             z-index: 99999 !important;
             display: flex !important;
             flex-direction: column !important;
@@ -1913,7 +2096,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         }
         .mobile-menu-header {
             padding: 18px 16px;
-            border-bottom: 1px solid rgba(234, 236, 240, 0.85);
+            border-bottom: 1px solid rgba(234, 236, 240, 0.65) !important;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -1922,18 +2105,21 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             width: 36px;
             height: 36px;
             border-radius: 50%;
-            border: 1px solid #eaecf0;
-            background: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.8) !important;
+            background: rgba(255, 255, 255, 0.65) !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
             color: #475467;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
+            box-shadow: 0 2px 6px rgba(16, 24, 40, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
             transition: all 0.18s ease;
         }
         .mobile-menu-close:active {
             transform: scale(0.92);
-            background: #fff1f0;
+            background: rgba(255, 241, 240, 0.85) !important;
             color: #b3261e;
         }
         .mobile-nav {
@@ -1969,20 +2155,27 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         }
         .mobile-nav a:hover,
         .mobile-nav a.active {
-            background: #fff1f0;
+            background: rgba(255, 241, 240, 0.8) !important;
+            backdrop-filter: blur(10px) !important;
+            -webkit-backdrop-filter: blur(10px) !important;
+            border: 1px solid rgba(254, 228, 226, 0.75) !important;
             color: #b3261e;
         }
         body.dark-mode .mobile-menu {
-            background: rgba(30, 41, 59, 0.98) !important;
-            border-color: rgba(51, 65, 85, 0.85) !important;
+            background: rgba(15, 23, 42, 0.85) !important;
+            backdrop-filter: blur(24px) saturate(190%) !important;
+            -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+            border-color: rgba(255, 255, 255, 0.1) !important;
             color: #f8fafc !important;
         }
         body.dark-mode .mobile-menu-header {
-            border-bottom-color: rgba(51, 65, 85, 0.85) !important;
+            border-bottom-color: rgba(255, 255, 255, 0.08) !important;
         }
         body.dark-mode .mobile-menu-close {
-            background: #1e293b !important;
-            border-color: #334155 !important;
+            background: rgba(30, 41, 59, 0.65) !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+            border-color: rgba(255, 255, 255, 0.12) !important;
             color: #cbd5e1 !important;
         }
         body.dark-mode .mobile-nav a {
@@ -1990,7 +2183,8 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         }
         body.dark-mode .mobile-nav a:hover,
         body.dark-mode .mobile-nav a.active {
-            background: #334155 !important;
+            background: rgba(51, 65, 85, 0.65) !important;
+            border-color: rgba(255, 255, 255, 0.1) !important;
             color: #ffffff !important;
         }
 
@@ -2004,7 +2198,11 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 width: min(300px, calc(100vw - 28px)) !important;
                 max-width: calc(100vw - 28px) !important;
                 margin-left: auto !important;
-                box-shadow: 0 14px 40px rgba(16, 24, 40, 0.22) !important;
+                background: rgba(255, 255, 255, 0.85) !important;
+                backdrop-filter: blur(24px) saturate(190%) !important;
+                -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+                border: 1px solid rgba(255, 255, 255, 0.8) !important;
+                box-shadow: 0 16px 44px rgba(16, 24, 40, 0.16), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
                 border-radius: 18px !important;
                 z-index: 99999 !important;
                 max-height: calc(100vh - 120px) !important;
@@ -2020,7 +2218,11 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 width: min(300px, calc(100vw - 28px)) !important;
                 max-width: calc(100vw - 28px) !important;
                 margin-left: auto !important;
-                box-shadow: 0 14px 40px rgba(16, 24, 40, 0.22) !important;
+                background: rgba(255, 255, 255, 0.85) !important;
+                backdrop-filter: blur(24px) saturate(190%) !important;
+                -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+                border: 1px solid rgba(255, 255, 255, 0.8) !important;
+                box-shadow: 0 16px 44px rgba(16, 24, 40, 0.16), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
                 border-radius: 18px !important;
                 z-index: 99999 !important;
             }
@@ -2032,7 +2234,25 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 left: 14px !important;
                 width: auto !important;
                 max-width: none !important;
+                background: rgba(255, 255, 255, 0.82) !important;
+                backdrop-filter: blur(20px) saturate(190%) !important;
+                -webkit-backdrop-filter: blur(20px) saturate(190%) !important;
+                border: 1px solid rgba(255, 255, 255, 0.75) !important;
+                box-shadow: 0 14px 36px rgba(16, 24, 40, 0.16), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
+                border-radius: 18px !important;
                 z-index: 10000 !important;
+            }
+            body.dark-mode .user-dropdown,
+            body.dark-mode .notification-dropdown {
+                background: rgba(30, 41, 59, 0.85) !important;
+                border-color: rgba(255, 255, 255, 0.12) !important;
+                box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45) !important;
+                color: #f8fafc !important;
+            }
+            body.dark-mode .sticky-ongoing-widget {
+                background: rgba(30, 41, 59, 0.82) !important;
+                border-color: rgba(255, 255, 255, 0.12) !important;
+                box-shadow: 0 14px 36px rgba(0, 0, 0, 0.4) !important;
             }
         }
         .sticky-ongoing-close-btn {

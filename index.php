@@ -1475,18 +1475,18 @@ html, body {
 }
 
 .m-ref-promo-banner {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
-    border: 1px solid rgba(234, 236, 240, 0.85);
-    border-radius: 18px;
-    padding: 14px;
-    margin-bottom: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    box-shadow: 0 4px 16px -2px rgba(16, 24, 40, 0.05);
+    background: rgba(255, 255, 255, 0.72) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.75) !important;
+    border-radius: 18px !important;
+    padding: 14px !important;
+    margin-bottom: 16px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
+    box-shadow: 0 8px 24px rgba(16, 24, 40, 0.06), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
     width: 100% !important;
     max-width: 100% !important;
     box-sizing: border-box !important;
@@ -1610,16 +1610,17 @@ html, body {
     width: 60px;
     height: 60px;
     border-radius: 50% !important;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(234, 236, 240, 0.9);
+    background: rgba(255, 255, 255, 0.7) !important;
+    backdrop-filter: blur(16px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.75) !important;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 1.35rem;
     color: #b3261e;
-    box-shadow: 0 4px 14px rgba(16, 24, 40, 0.05);
+    box-shadow: 0 4px 14px rgba(16, 24, 40, 0.06), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
 }
 
 .m-ref-cat-card span {
@@ -1651,40 +1652,46 @@ html, body {
     align-items: center;
     gap: 5px;
     padding: 6px 14px;
-    background: #ffffff;
-    border: 1px solid #e4e7ec;
+    background: rgba(255, 255, 255, 0.65) !important;
+    backdrop-filter: blur(12px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.7) !important;
     border-radius: 999px;
     font-size: 0.78rem;
     font-weight: 600;
     color: #344054;
     text-decoration: none;
     transition: all 0.2s ease;
-    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
+    box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 .m-pop-chip i {
     font-size: 0.72rem;
     color: #027a48;
 }
 .m-pop-chip.active {
-    background: #fff1f0;
-    border-color: #fee4e2;
+    background: rgba(255, 241, 240, 0.85) !important;
+    border-color: rgba(254, 228, 226, 0.85) !important;
     color: #b3261e;
 }
 .m-pop-chip.active i {
     color: #b3261e;
 }
 .m-pop-chip:hover {
-    border-color: #d0d5dd;
-    background: #f8fafc;
+    border-color: rgba(179, 38, 30, 0.3) !important;
+    background: rgba(255, 255, 255, 0.88) !important;
+    transform: translateY(-1px);
 }
 
 /* Dark Mode Overrides for Mobile Reference UI */
 body.dark-mode .m-ref-promo-banner,
 body.dark-mode .m-ref-cat-icon,
 body.dark-mode .m-pop-chip {
-    background: rgba(30, 41, 59, 0.9) !important;
-    border-color: rgba(51, 65, 85, 0.85) !important;
+    background: rgba(30, 41, 59, 0.7) !important;
+    backdrop-filter: blur(16px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
     color: #f8fafc !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
 }
 
 body.dark-mode .m-ref-promo-title,
@@ -1718,17 +1725,25 @@ body.dark-mode .m-ref-cat-card span {
         gap: 8px !important;
         border-radius: 999px !important;
         padding: 8px 18px !important;
-        background: rgba(255, 255, 255, 0.88) !important;
-        backdrop-filter: blur(14px) !important;
-        -webkit-backdrop-filter: blur(14px) !important;
-        border: 1px solid rgba(234, 236, 240, 0.85) !important;
+        background: rgba(255, 255, 255, 0.72) !important;
+        backdrop-filter: blur(16px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.75) !important;
         color: #344054 !important;
         font-size: 0.82rem !important;
         font-weight: 700 !important;
-        box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04) !important;
+        box-shadow: 0 4px 14px rgba(16, 24, 40, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
         margin-bottom: 16px !important;
         cursor: pointer;
         width: auto !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+    .market-sidebar-toggle-btn:hover,
+    .market-sidebar-toggle-btn:active {
+        background: rgba(255, 255, 255, 0.88) !important;
+        border-color: rgba(179, 38, 30, 0.35) !important;
+        color: #b3261e !important;
+        transform: scale(0.97) !important;
     }
 
     .market-explorer > div {
@@ -1780,8 +1795,11 @@ body.dark-mode .m-ref-cat-card span {
         scroll-snap-stop: normal !important;
         touch-action: pan-x pan-y !important;
         border-radius: 16px !important;
-        background: #ffffff !important;
-        border: 1px solid #eaecf0 !important;
+        background: rgba(255, 255, 255, 0.82) !important;
+        backdrop-filter: blur(16px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.7) !important;
+        box-shadow: 0 4px 16px rgba(16, 24, 40, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
         overflow: hidden !important;
         box-sizing: border-box !important;
     }
@@ -1798,8 +1816,11 @@ body.dark-mode .m-ref-cat-card span {
         scroll-snap-stop: normal !important;
         touch-action: pan-x pan-y !important;
         border-radius: 16px !important;
-        background: #ffffff !important;
-        border: 1px solid #eaecf0 !important;
+        background: rgba(255, 255, 255, 0.82) !important;
+        backdrop-filter: blur(16px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.7) !important;
+        box-shadow: 0 4px 16px rgba(16, 24, 40, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
         overflow: hidden !important;
         box-sizing: border-box !important;
         padding: 0 !important;
@@ -1837,8 +1858,11 @@ body.dark-mode .m-ref-cat-card span {
         scroll-snap-stop: normal !important;
         touch-action: pan-x pan-y !important;
         border-radius: 16px !important;
-        background: #ffffff !important;
-        border: 1px solid #eaecf0 !important;
+        background: rgba(255, 255, 255, 0.82) !important;
+        backdrop-filter: blur(16px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.7) !important;
+        box-shadow: 0 4px 16px rgba(16, 24, 40, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
         overflow: hidden !important;
         box-sizing: border-box !important;
         padding: 0 !important;
@@ -1873,8 +1897,11 @@ body.dark-mode .m-ref-cat-card span {
         max-width: clamp(220px, 72vw, 260px) !important;
         scroll-snap-align: start !important;
         border-radius: 16px !important;
-        background: #ffffff !important;
-        border: 1px solid #eaecf0 !important;
+        background: rgba(255, 255, 255, 0.82) !important;
+        backdrop-filter: blur(16px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.7) !important;
+        box-shadow: 0 4px 16px rgba(16, 24, 40, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
         box-sizing: border-box !important;
         padding: 14px !important;
     }
@@ -1912,10 +1939,63 @@ body.dark-mode .m-ref-cat-card span {
         text-overflow: ellipsis !important;
     }
 
+    /* Mobile Glassmorphic Card Floating Badges & Action Buttons */
+    .market-store-favorite-btn {
+        background: rgba(255, 255, 255, 0.72) !important;
+        backdrop-filter: blur(12px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.8) !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+    }
+    .market-time-pill {
+        background: rgba(255, 255, 255, 0.75) !important;
+        backdrop-filter: blur(10px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(10px) saturate(180%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.75) !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+    }
+    .market-type-pill {
+        background: rgba(30, 41, 59, 0.75) !important;
+        backdrop-filter: blur(10px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(10px) saturate(180%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    }
+    .panda-brand-item {
+        background: rgba(255, 255, 255, 0.72) !important;
+        backdrop-filter: blur(14px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(14px) saturate(180%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.7) !important;
+        box-shadow: 0 4px 14px rgba(16, 24, 40, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
+    }
+
+    body.dark-mode .market-sidebar-toggle-btn {
+        background: rgba(30, 41, 59, 0.7) !important;
+        backdrop-filter: blur(16px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+        border-color: rgba(255, 255, 255, 0.12) !important;
+        color: #f8fafc !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
+    }
     body.dark-mode .bestseller-card,
-    body.dark-mode .market-store-row {
-        background: rgba(30, 41, 59, 0.88) !important;
-        border-color: rgba(51, 65, 85, 0.85) !important;
+    body.dark-mode .top-shops-swipe-grid .market-store-row,
+    body.dark-mode .market-store-list.store-list-grid .market-store-row,
+    body.dark-mode .deal-card,
+    body.dark-mode .panda-brand-item {
+        background: rgba(30, 41, 59, 0.78) !important;
+        backdrop-filter: blur(16px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        color: #f8fafc !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+    }
+    body.dark-mode .market-store-favorite-btn {
+        background: rgba(30, 41, 59, 0.75) !important;
+        border-color: rgba(255, 255, 255, 0.15) !important;
+        color: #f43f5e !important;
+    }
+    body.dark-mode .market-time-pill {
+        background: rgba(30, 41, 59, 0.8) !important;
+        border-color: rgba(255, 255, 255, 0.12) !important;
         color: #f8fafc !important;
     }
 }
@@ -3446,12 +3526,20 @@ body:not(.dark-mode) {
 }
 @media (max-width: 768px) {
     .market-sidebar {
-        border-radius: 14px !important;
-        padding: 12px 16px !important;
-        margin-bottom: 14px !important;
+        border-radius: 18px !important;
+        padding: 14px 18px !important;
+        margin-bottom: 16px !important;
         max-width: 100% !important;
-        border: 1px solid #eaecf0 !important;
-        background: #ffffff !important;
+        background: rgba(255, 255, 255, 0.78) !important;
+        backdrop-filter: blur(20px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.75) !important;
+        box-shadow: 0 8px 30px rgba(16, 24, 40, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
+    }
+    body.dark-mode .market-sidebar {
+        background: rgba(30, 41, 59, 0.78) !important;
+        border-color: rgba(255, 255, 255, 0.12) !important;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35) !important;
     }
     .market-sidebar-toggle-btn {
         display: flex !important;
