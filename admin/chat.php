@@ -37,66 +37,76 @@ $unassignedCount = count($unassigned);
     <link rel="stylesheet" href="../css/bootstrap.min.css">
     <link rel="stylesheet" href="style.css">
     <style>
-        /* Enhanced Chat Styles */
+        /* Enhanced Glassmorphism Chat Styles */
         :root {
-            --chat-primary: #c62828;
-            --chat-primary-light: #fff5f5;
-            --chat-bg: #f0f2f5;
-            --chat-sidebar-bg: #ffffff;
-            --chat-border: #e0e0e0;
-            --chat-text: #333;
-            --chat-text-light: #6c757d;
-            --chat-bubble-customer: #ffffff;
-            --chat-bubble-agent: #c62828;
+            --chat-primary: #b3261e;
+            --chat-primary-light: rgba(179, 38, 30, 0.08);
+            --chat-bg: rgba(248, 249, 250, 0.55);
+            --chat-sidebar-bg: rgba(255, 255, 255, 0.65);
+            --chat-border: rgba(234, 236, 240, 0.8);
+            --chat-text: #101828;
+            --chat-text-light: #475467;
+            --chat-bubble-customer: rgba(255, 255, 255, 0.92);
+            --chat-bubble-agent: linear-gradient(135deg, #b3261e 0%, #981b15 100%);
             --chat-bubble-agent-text: #ffffff;
         }
         
         .admin-main.chat-page-main {
             padding: 20px;
-            height: calc(100vh - 70px); /* Adjust for topbar */
+            height: calc(100vh - 70px);
             overflow: hidden;
+            background: radial-gradient(1200px circle at 10% 10%, rgba(179, 38, 30, 0.04) 0%, transparent 65%),
+                        radial-gradient(1000px circle at 90% 90%, rgba(2, 132, 199, 0.04) 0%, transparent 60%),
+                        #f8f9fa;
         }
 
         .chat-wrapper {
             display: flex;
             height: 100%;
-            background: white;
-            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.78) !important;
+            backdrop-filter: blur(24px) saturate(180%) !important;
+            -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+            border-radius: 18px !important;
             overflow: hidden;
-            box-shadow: 0 0 20px rgba(0,0,0,0.05);
-            border: 1px solid var(--chat-border);
+            box-shadow: 0 16px 40px -10px rgba(16, 24, 40, 0.08), 0 2px 8px rgba(16, 24, 40, 0.04) !important;
+            border: 1px solid rgba(255, 255, 255, 0.8) !important;
         }
 
         .chat-list-sidebar {
             width: 320px;
-            background: white;
-            border-right: 1px solid #e9ecef;
+            background: rgba(255, 255, 255, 0.62) !important;
+            backdrop-filter: blur(16px) !important;
+            -webkit-backdrop-filter: blur(16px) !important;
+            border-right: 1px solid rgba(234, 236, 240, 0.75) !important;
             display: flex;
             flex-direction: column;
             z-index: 2;
         }
 
         .chat-list-header {
-            padding: 15px 20px;
-            background: #fff;
-            border-bottom: 1px solid #e9ecef;
+            padding: 16px 20px;
+            background: rgba(255, 255, 255, 0.6) !important;
+            border-bottom: 1px solid rgba(234, 236, 240, 0.75) !important;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 12px;
         }
 
         .chat-search-input {
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
+            background: rgba(248, 249, 250, 0.8) !important;
+            backdrop-filter: blur(8px) !important;
+            border: 1px solid rgba(208, 213, 221, 0.7) !important;
             border-radius: 20px;
-            padding: 8px 15px;
-            font-size: 0.9rem;
+            padding: 8px 16px;
+            font-size: 0.88rem;
             color: var(--chat-text);
+            transition: all 0.2s ease;
         }
         .chat-search-input:focus {
-            background: #fff;
-            border-color: var(--chat-primary);
-            box-shadow: none;
+            background: rgba(255, 255, 255, 0.95) !important;
+            border-color: #b3261e !important;
+            box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.1) !important;
+            outline: none;
         }
 
         .chat-list-header h2 {
@@ -227,14 +237,16 @@ $unassignedCount = count($unassigned);
             flex: 1;
             display: flex;
             flex-direction: column;
-            background: #fff;
+            background: rgba(255, 255, 255, 0.48) !important;
             position: relative;
         }
 
         .chat-header {
-            padding: 15px 20px;
-            background: #fff;
-            border-bottom: 1px solid #e9ecef;
+            padding: 14px 22px;
+            background: rgba(255, 255, 255, 0.75) !important;
+            backdrop-filter: blur(14px) !important;
+            -webkit-backdrop-filter: blur(14px) !important;
+            border-bottom: 1px solid rgba(234, 236, 240, 0.75) !important;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -423,9 +435,11 @@ $unassignedCount = count($unassigned);
         }
 
         .chat-input-area {
-            padding: 20px;
-            background: white;
-            border-top: 1px solid #e9ecef;
+            padding: 16px 20px;
+            background: rgba(255, 255, 255, 0.78) !important;
+            backdrop-filter: blur(16px) !important;
+            -webkit-backdrop-filter: blur(16px) !important;
+            border-top: 1px solid rgba(234, 236, 240, 0.75) !important;
             display: flex;
             flex-direction: column;
             gap: 10px;
@@ -435,10 +449,13 @@ $unassignedCount = count($unassigned);
             display: flex;
             gap: 10px;
             align-items: flex-end;
-            background: #f8f9fa;
-            padding: 8px;
-            border-radius: 12px;
-            border: 1px solid #e9ecef;
+            background: rgba(255, 255, 255, 0.88) !important;
+            backdrop-filter: blur(8px) !important;
+            -webkit-backdrop-filter: blur(8px) !important;
+            padding: 8px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(208, 213, 221, 0.75) !important;
+            box-shadow: 0 2px 6px rgba(16, 24, 40, 0.02) !important;
         }
 
         #messageInput {
@@ -703,6 +720,106 @@ $unassignedCount = count($unassigned);
         @keyframes typingSidebar {
             0%, 80%, 100% { transform: scale(0); } 
             40% { transform: scale(1); }
+        }
+
+        /* Glassmorphism Dark Mode for Admin Chat */
+        body.dark-mode .admin-main.chat-page-main {
+            background: radial-gradient(1200px circle at 10% 10%, rgba(179, 38, 30, 0.12) 0%, transparent 65%),
+                        #0f172a !important;
+        }
+        body.dark-mode .chat-wrapper {
+            background: rgba(22, 28, 42, 0.82) !important;
+            border-color: rgba(255, 255, 255, 0.1) !important;
+            box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.5) !important;
+        }
+        body.dark-mode .chat-list-sidebar {
+            background: rgba(26, 33, 50, 0.65) !important;
+            border-right-color: rgba(255, 255, 255, 0.08) !important;
+        }
+        body.dark-mode .chat-list-header {
+            background: rgba(26, 33, 50, 0.7) !important;
+            border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+        }
+        body.dark-mode .chat-list-header h2 {
+            color: #f1f5f9;
+        }
+        body.dark-mode .chat-search-input {
+            background: rgba(15, 23, 42, 0.7) !important;
+            border-color: rgba(255, 255, 255, 0.12) !important;
+            color: #f1f5f9 !important;
+        }
+        body.dark-mode .chat-list-tabs {
+            background: rgba(15, 23, 42, 0.5) !important;
+            border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+        }
+        body.dark-mode .chat-list-tab {
+            color: #94a3b8;
+        }
+        body.dark-mode .chat-list-tab.active {
+            background: rgba(30, 41, 59, 0.95) !important;
+            color: #f87171 !important;
+            border-color: rgba(255, 255, 255, 0.12) !important;
+        }
+        body.dark-mode .conversation-item {
+            border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+        }
+        body.dark-mode .conversation-item:hover {
+            background: rgba(255, 255, 255, 0.05) !important;
+        }
+        body.dark-mode .conversation-item.active {
+            background: rgba(179, 38, 30, 0.18) !important;
+            border-left-color: #f87171 !important;
+        }
+        body.dark-mode .conversation-item-customer {
+            color: #f1f5f9;
+        }
+        body.dark-mode .conversation-item-preview {
+            color: #94a3b8;
+        }
+        body.dark-mode .chat-panel {
+            background: rgba(15, 23, 42, 0.4) !important;
+        }
+        body.dark-mode .chat-header {
+            background: rgba(26, 33, 50, 0.8) !important;
+            border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+        }
+        body.dark-mode .chat-header-info h2 {
+            color: #f1f5f9;
+        }
+        body.dark-mode .chat-messages {
+            background: rgba(15, 23, 42, 0.5) !important;
+        }
+        body.dark-mode .message.customer .message-content {
+            background: rgba(30, 41, 59, 0.9) !important;
+            color: #f1f5f9 !important;
+            border-color: rgba(255, 255, 255, 0.1) !important;
+        }
+        body.dark-mode .chat-input-area {
+            background: rgba(26, 33, 50, 0.8) !important;
+            border-top-color: rgba(255, 255, 255, 0.08) !important;
+        }
+        body.dark-mode .message-input-container {
+            background: rgba(15, 23, 42, 0.8) !important;
+            border-color: rgba(255, 255, 255, 0.12) !important;
+        }
+        body.dark-mode #messageInput {
+            color: #f1f5f9;
+        }
+        body.dark-mode .order-context-panel {
+            background: rgba(26, 33, 50, 0.65) !important;
+            border-left-color: rgba(255, 255, 255, 0.08) !important;
+        }
+        body.dark-mode .order-context-header {
+            background: rgba(26, 33, 50, 0.8) !important;
+            border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+            color: #f1f5f9;
+        }
+        body.dark-mode .context-section {
+            background: rgba(30, 41, 59, 0.7) !important;
+            border-color: rgba(255, 255, 255, 0.08) !important;
+        }
+        body.dark-mode .context-item-value {
+            color: #f1f5f9;
         }
     </style>
 </head>

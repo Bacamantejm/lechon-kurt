@@ -135,54 +135,63 @@ class ChatService {
         return '';
     }
 
-    private function getApprovedPartnerOwnerId(int $user_id): int {
+    public function getApprovedPartnerOwnerId(int $user_id): int {
         if ($user_id <= 0) {
             return 0;
         }
 
-        $query = "SELECT fa.user_id
-                  FROM franchise_applications fa
-                  WHERE fa.user_id = ?
-                    AND fa.status = 'approved'
-                  LIMIT 1";
-        $stmt = $this->conn->prepare($query);
-        if ($stmt) {
-            $stmt->bind_param("i", $user_id);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            $row = $result ? $result->fetch_assoc() : null;
-            $stmt->close();
-            if (!empty($row['user_id'])) {
-                return (int)$row['user_id'];
+        // 1. If global auth scope function is defined, use it
+        if (function_exists('getFranchiseSellerScopeOwnerId')) {
+            $scoped_owner = (int)(getFranchiseSellerScopeOwnerId($this->conn, $user_id) ?? 0);
+            if ($scoped_owner > 0) {
+                return $scoped_owner;
             }
         }
 
-        $query = "SELECT fa.user_id
-                  FROM users u
-                  INNER JOIN franchise_applications fa ON fa.user_id = u.id AND fa.status = 'approved'
-                  WHERE u.id = ?
-                    AND u.account_type = 'organization'
-                  LIMIT 1";
-        $stmt = $this->conn->prepare($query);
-        if ($stmt) {
-            $stmt->bind_param("i", $user_id);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            $row = $result ? $result->fetch_assoc() : null;
-            $stmt->close();
-            if (!empty($row['user_id'])) {
-                return (int)$row['user_id'];
+        // 2. Physical store locations (official branches and partner branches)
+        if ($this->tableExists('store_locations') && $this->columnExists('store_locations', 'owner_user_id')) {
+            $query = "SELECT owner_user_id FROM store_locations WHERE owner_user_id = ? AND is_active = 1 LIMIT 1";
+            $stmt = $this->conn->prepare($query);
+            if ($stmt) {
+                $stmt->bind_param("i", $user_id);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $row = $result ? $result->fetch_assoc() : null;
+                $stmt->close();
+                if (!empty($row['owner_user_id'])) {
+                    return (int)$row['owner_user_id'];
+                }
             }
         }
 
+        // 3. Direct approved franchise application
+        if ($this->tableExists('franchise_applications')) {
+            $query = "SELECT fa.user_id
+                      FROM franchise_applications fa
+                      WHERE fa.user_id = ?
+                        AND fa.status = 'approved'
+                      LIMIT 1";
+            $stmt = $this->conn->prepare($query);
+            if ($stmt) {
+                $stmt->bind_param("i", $user_id);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $row = $result ? $result->fetch_assoc() : null;
+                $stmt->close();
+                if (!empty($row['user_id'])) {
+                    return (int)$row['user_id'];
+                }
+            }
+        }
+
+        // 4. Partner/Shop-managed sub-users inherit the partner/shop owner's seller scope
         if (
             $this->tableExists('partner_user_links')
             && $this->columnExists('partner_user_links', 'owner_user_id')
             && $this->columnExists('partner_user_links', 'managed_user_id')
         ) {
-            $query = "SELECT fa.user_id
+            $query = "SELECT pul.owner_user_id
                       FROM partner_user_links pul
-                      INNER JOIN franchise_applications fa ON fa.user_id = pul.owner_user_id AND fa.status = 'approved'
                       WHERE pul.managed_user_id = ?
                       LIMIT 1";
             $stmt = $this->conn->prepare($query);
@@ -192,46 +201,20 @@ class ChatService {
                 $result = $stmt->get_result();
                 $row = $result ? $result->fetch_assoc() : null;
                 $stmt->close();
-                if (!empty($row['user_id'])) {
-                    return (int)$row['user_id'];
+                if (!empty($row['owner_user_id'])) {
+                    return (int)$row['owner_user_id'];
                 }
             }
         }
 
-        if (
-            $this->tableExists('users')
-            && $this->tableExists('roles')
-            && $this->columnExists('users', 'role_id')
-            && $this->columnExists('roles', 'owner_user_id')
-        ) {
-            $query = "SELECT fa.user_id
-                      FROM users u
-                      INNER JOIN roles r ON r.id = u.role_id
-                      INNER JOIN franchise_applications fa ON fa.user_id = r.owner_user_id AND fa.status = 'approved'
-                      WHERE u.id = ?
-                        AND r.owner_user_id IS NOT NULL
-                      LIMIT 1";
-            $stmt = $this->conn->prepare($query);
-            if ($stmt) {
-                $stmt->bind_param("i", $user_id);
-                $stmt->execute();
-                $result = $stmt->get_result();
-                $row = $result ? $result->fetch_assoc() : null;
-                $stmt->close();
-                if (!empty($row['user_id'])) {
-                    return (int)$row['user_id'];
-                }
-            }
-        }
-
+        // 5. Employees assigned to store owner
         if (
             $this->tableExists('employees')
             && $this->columnExists('employees', 'owner_user_id')
             && $this->columnExists('employees', 'user_id')
         ) {
-            $query = "SELECT fa.user_id
+            $query = "SELECT e.owner_user_id
                       FROM employees e
-                      INNER JOIN franchise_applications fa ON fa.user_id = e.owner_user_id AND fa.status = 'approved'
                       WHERE e.user_id = ?
                       LIMIT 1";
             $stmt = $this->conn->prepare($query);
@@ -241,9 +224,33 @@ class ChatService {
                 $result = $stmt->get_result();
                 $row = $result ? $result->fetch_assoc() : null;
                 $stmt->close();
-                if (!empty($row['user_id'])) {
-                    return (int)$row['user_id'];
+                if (!empty($row['owner_user_id'])) {
+                    return (int)$row['owner_user_id'];
                 }
+            }
+        }
+
+        // 6. Users configured as sellers or having products/chat conversations
+        $query = "SELECT u.id
+                  FROM users u
+                  LEFT JOIN roles r ON u.role_id = r.id
+                  WHERE u.id = ?
+                    AND (
+                        u.user_type = 'seller'
+                        OR LOWER(TRIM(COALESCE(r.name, ''))) IN ('business_owner', 'partner_owner', 'store_owner', 'shop_owner')
+                        OR EXISTS (SELECT 1 FROM products p WHERE p.seller_id = u.id)
+                        OR EXISTS (SELECT 1 FROM chat_conversations cc WHERE cc.seller_id = u.id)
+                    )
+                  LIMIT 1";
+        $stmt = $this->conn->prepare($query);
+        if ($stmt) {
+            $stmt->bind_param("i", $user_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $row = $result ? $result->fetch_assoc() : null;
+            $stmt->close();
+            if (!empty($row['id'])) {
+                return (int)$row['id'];
             }
         }
 

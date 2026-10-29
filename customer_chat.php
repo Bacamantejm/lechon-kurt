@@ -640,21 +640,28 @@ include 'includes/header.php';
             font-weight: 500;
         }
 
-        /* Customer Chat Visual Refresh */
+        /* Customer Chat Visual Refresh - Glassmorphism UI/UX */
         .chat-section {
             padding-bottom: 80px;
+            background: radial-gradient(1200px circle at 15% 15%, rgba(179, 38, 30, 0.04) 0%, transparent 65%),
+                        radial-gradient(1000px circle at 85% 85%, rgba(2, 132, 199, 0.04) 0%, transparent 60%),
+                        #f8f9fa;
         }
 
         .chat-container {
-            border-radius: 16px;
-            border: 1px solid #e7ebf1;
-            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
-            background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+            border-radius: 20px !important;
+            border: 1px solid rgba(255, 255, 255, 0.85) !important;
+            box-shadow: 0 16px 40px -10px rgba(16, 24, 40, 0.08), 0 2px 8px rgba(16, 24, 40, 0.04) !important;
+            background: rgba(255, 255, 255, 0.78) !important;
+            backdrop-filter: blur(24px) saturate(180%) !important;
+            -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
         }
 
         .chat-header {
-            background: linear-gradient(180deg, #fffafa 0%, #ffffff 100%);
-            border-bottom: 1px solid #eceff4;
+            background: rgba(255, 255, 255, 0.72) !important;
+            backdrop-filter: blur(16px) !important;
+            -webkit-backdrop-filter: blur(16px) !important;
+            border-bottom: 1px solid rgba(234, 236, 240, 0.75) !important;
             height: 74px;
             padding: 16px 20px;
         }
@@ -665,11 +672,11 @@ include 'includes/header.php';
         }
 
         .chat-header-info h2 i {
-            color: #c62828;
+            color: #b3261e;
         }
 
         .header-status {
-            color: #1b8e3e;
+            color: #027a48;
             font-weight: 700;
             font-size: 0.78rem;
             letter-spacing: 0.2px;
@@ -678,20 +685,18 @@ include 'includes/header.php';
         .chat-header-actions button {
             border-radius: 999px;
             font-weight: 700;
-            border-color: #ef9a9a;
-            color: #c62828;
+            border-color: #fee4e2;
+            color: #b3261e;
+            background: rgba(255, 255, 255, 0.9);
         }
 
         .chat-header-actions button:hover {
-            background: #c62828;
+            background: #b3261e;
             color: #fff;
         }
 
         .chat-messages {
-            background:
-                radial-gradient(circle at 88% 6%, rgba(198, 40, 40, 0.05), transparent 34%),
-                radial-gradient(circle at 2% 92%, rgba(13, 110, 253, 0.06), transparent 32%),
-                #f4f7fb;
+            background: rgba(248, 249, 250, 0.55) !important;
             padding: 20px;
             gap: 12px;
         }
@@ -702,18 +707,22 @@ include 'includes/header.php';
 
         .message-content {
             border-radius: 14px;
-            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
+            box-shadow: 0 4px 12px rgba(16, 24, 40, 0.05);
             border: 1px solid transparent;
         }
 
         .message.customer .message-content {
-            background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%);
-            border-color: rgba(255, 255, 255, 0.24);
+            background: linear-gradient(135deg, #b3261e 0%, #981b15 100%) !important;
+            border-color: rgba(255, 255, 255, 0.24) !important;
+            box-shadow: 0 4px 12px rgba(179, 38, 30, 0.2) !important;
         }
 
         .message.agent .message-content {
-            background: #fff;
-            border-color: #e5e9f0;
+            background: rgba(255, 255, 255, 0.92) !important;
+            backdrop-filter: blur(10px) !important;
+            -webkit-backdrop-filter: blur(10px) !important;
+            border-color: rgba(234, 236, 240, 0.8) !important;
+            color: #101828 !important;
         }
 
         .message-body {
@@ -783,22 +792,27 @@ include 'includes/header.php';
         }
 
         .chat-input-area {
-            background: #fff;
-            border-top: 1px solid #eceff4;
+            background: rgba(255, 255, 255, 0.78) !important;
+            backdrop-filter: blur(16px) !important;
+            -webkit-backdrop-filter: blur(16px) !important;
+            border-top: 1px solid rgba(234, 236, 240, 0.75) !important;
             padding: 14px 16px 16px;
         }
 
         .order-selection-panel,
         .order-context-card,
         .refund-form {
-            border-radius: 12px;
-            border: 1px solid #e6ebf2;
-            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.05);
+            border-radius: 14px;
+            border: 1px solid rgba(234, 236, 240, 0.85);
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            box-shadow: 0 4px 12px rgba(16, 24, 40, 0.04);
         }
 
         .order-selection-panel h4 i,
         .refund-form h5 i {
-            color: #c62828;
+            color: #b3261e;
             margin-right: 6px;
         }
 
@@ -810,9 +824,11 @@ include 'includes/header.php';
 
         .message-input-container {
             border-radius: 14px;
-            border-color: #e2e8f0;
-            background: #fff;
-            box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+            border: 1px solid rgba(208, 213, 221, 0.75) !important;
+            background: rgba(255, 255, 255, 0.88) !important;
+            backdrop-filter: blur(8px) !important;
+            -webkit-backdrop-filter: blur(8px) !important;
+            box-shadow: 0 2px 6px rgba(16, 24, 40, 0.02) !important;
         }
 
         #sendBtn {
@@ -848,16 +864,19 @@ include 'includes/header.php';
         }
 
         .chat-sidebar {
-            border-right: 1px solid #eceff4;
-            background: #fff;
+            border-right: 1px solid rgba(234, 236, 240, 0.75) !important;
+            background: rgba(255, 255, 255, 0.62) !important;
+            backdrop-filter: blur(16px) !important;
+            -webkit-backdrop-filter: blur(16px) !important;
             display: flex;
             flex-direction: column;
             min-width: 0;
         }
 
         .sidebar-head {
-            padding: 14px;
-            border-bottom: 1px solid #eceff4;
+            padding: 14px 16px;
+            border-bottom: 1px solid rgba(234, 236, 240, 0.75) !important;
+            background: rgba(255, 255, 255, 0.55) !important;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -867,35 +886,36 @@ include 'includes/header.php';
         .sidebar-title {
             font-size: 1rem;
             font-weight: 800;
-            color: #233046;
+            color: #101828;
             margin: 0;
         }
 
         .sidebar-new-chat {
-            border: 1px solid #ef9a9a;
-            color: #c62828;
-            background: #fff;
+            border: 1px solid #fee4e2;
+            color: #b3261e;
+            background: rgba(255, 255, 255, 0.9);
             border-radius: 999px;
             font-size: 0.72rem;
             font-weight: 700;
-            padding: 6px 10px;
+            padding: 6px 12px;
             cursor: pointer;
+            transition: all 0.2s ease;
         }
 
         .sidebar-new-chat:hover {
-            background: #c62828;
+            background: #b3261e;
             color: #fff;
-            border-color: #c62828;
+            border-color: #b3261e;
         }
 
         .sidebar-search {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 10px 12px;
-            border-bottom: 1px solid #eceff4;
-            background: #f8fafd;
-            color: #8ea0b8;
+            padding: 10px 14px;
+            border-bottom: 1px solid rgba(234, 236, 240, 0.7) !important;
+            background: rgba(248, 249, 250, 0.65) !important;
+            color: #667085;
         }
 
         .sidebar-search input {
@@ -904,7 +924,7 @@ include 'includes/header.php';
             width: 100%;
             outline: none;
             font-size: 0.87rem;
-            color: #233046;
+            color: #101828;
         }
 
         .conversation-list {
@@ -914,7 +934,7 @@ include 'includes/header.php';
 
         .conversation-list-empty {
             padding: 18px 12px;
-            color: #8da0b6;
+            color: #667085;
             text-align: center;
             font-size: 0.86rem;
         }
@@ -922,24 +942,25 @@ include 'includes/header.php';
         .conversation-item {
             width: 100%;
             border: none;
-            border-bottom: 1px solid #edf2f8;
-            background: #fff;
+            border-bottom: 1px solid rgba(234, 236, 240, 0.55) !important;
+            background: transparent !important;
             text-align: left;
-            padding: 10px 12px;
+            padding: 11px 14px;
             display: flex;
             gap: 9px;
             align-items: flex-start;
             cursor: pointer;
+            transition: all 0.2s ease;
         }
 
         .conversation-item:hover {
-            background: #f9fbff;
+            background: rgba(255, 255, 255, 0.7) !important;
         }
 
         .conversation-item.active {
-            background: #fff5f5;
-            border-left: 3px solid #c62828;
-            padding-left: 9px;
+            background: rgba(179, 38, 30, 0.06) !important;
+            border-left: 3px solid #b3261e !important;
+            padding-left: 11px;
         }
 
         .conversation-avatar {
@@ -1158,60 +1179,111 @@ include 'includes/header.php';
         }
 
         /* ==========================================================================
-           CUSTOMER CHAT DARK THEME ENGINE
+           CUSTOMER CHAT DARK THEME ENGINE - Glassmorphism Support
            ========================================================================== */
         body.dark-mode .chat-section {
-            background: #0f172a !important;
+            background: radial-gradient(1200px circle at 15% 15%, rgba(179, 38, 30, 0.12) 0%, transparent 65%), #0f172a !important;
         }
 
-        body.dark-mode .chat-container,
-        body.dark-mode .chat-sidebar,
-        body.dark-mode .thread-pane {
-            background: #1e293b !important;
-            border-color: #334155 !important;
+        body.dark-mode .chat-container {
+            background: rgba(22, 28, 42, 0.82) !important;
+            border-color: rgba(255, 255, 255, 0.1) !important;
+            box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.5) !important;
             color: #f8fafc !important;
         }
 
-        body.dark-mode .chat-header,
-        body.dark-mode .chat-sidebar-header,
-        body.dark-mode .thread-header,
-        body.dark-mode .chat-input-area {
-            background: #1e293b !important;
-            border-color: #334155 !important;
+        body.dark-mode .chat-sidebar {
+            background: rgba(26, 33, 50, 0.65) !important;
+            border-right-color: rgba(255, 255, 255, 0.08) !important;
+        }
+
+        body.dark-mode .sidebar-head {
+            background: rgba(26, 33, 50, 0.7) !important;
+            border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+        }
+
+        body.dark-mode .sidebar-title {
+            color: #f1f5f9 !important;
+        }
+
+        body.dark-mode .sidebar-search {
+            background: rgba(15, 23, 42, 0.5) !important;
+            border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+        }
+
+        body.dark-mode .sidebar-search input {
+            color: #f1f5f9 !important;
+        }
+
+        body.dark-mode .conversation-item {
+            background: transparent !important;
+            border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+        }
+
+        body.dark-mode .conversation-item:hover {
+            background: rgba(255, 255, 255, 0.05) !important;
+        }
+
+        body.dark-mode .conversation-item.active {
+            background: rgba(179, 38, 30, 0.18) !important;
+            border-left-color: #f87171 !important;
+        }
+
+        body.dark-mode .conversation-name {
+            color: #f1f5f9 !important;
+        }
+
+        body.dark-mode .conversation-preview {
+            color: #94a3b8 !important;
+        }
+
+        body.dark-mode .thread-pane {
+            background: rgba(15, 23, 42, 0.4) !important;
+        }
+
+        body.dark-mode .chat-header {
+            background: rgba(26, 33, 50, 0.8) !important;
+            border-bottom-color: rgba(255, 255, 255, 0.08) !important;
         }
 
         body.dark-mode .chat-header h2,
-        body.dark-mode .chat-sidebar-header h3,
-        body.dark-mode .thread-title,
-        body.dark-mode .chat-user-info h4 {
-            color: #f8fafc !important;
+        body.dark-mode .chat-header-info h2,
+        body.dark-mode #chatRouteTitle {
+            color: #f1f5f9 !important;
         }
 
         body.dark-mode .chat-messages {
-            background: #0f172a !important;
+            background: rgba(15, 23, 42, 0.5) !important;
         }
 
         body.dark-mode .message.agent .message-content {
-            background: #1e293b !important;
-            border: 1px solid #334155 !important;
-            color: #f8fafc !important;
+            background: rgba(30, 41, 59, 0.9) !important;
+            border-color: rgba(255, 255, 255, 0.1) !important;
+            color: #f1f5f9 !important;
         }
 
-        body.dark-mode .chat-user-item {
-            border-color: #334155 !important;
-            color: #cbd5e1 !important;
+        body.dark-mode .chat-input-area {
+            background: rgba(26, 33, 50, 0.8) !important;
+            border-top-color: rgba(255, 255, 255, 0.08) !important;
         }
 
-        body.dark-mode .chat-user-item:hover,
-        body.dark-mode .chat-user-item.active {
-            background: #111827 !important;
-            border-color: #ef4444 !important;
+        body.dark-mode .message-input-container {
+            background: rgba(15, 23, 42, 0.8) !important;
+            border-color: rgba(255, 255, 255, 0.12) !important;
         }
 
-        body.dark-mode .chat-input-area textarea {
-            background: #0f172a !important;
-            border-color: #334155 !important;
-            color: #f8fafc !important;
+        body.dark-mode #messageInput {
+            background: transparent !important;
+            border-color: transparent !important;
+            color: #f1f5f9 !important;
+        }
+
+        body.dark-mode .order-selection-panel,
+        body.dark-mode .order-context-card,
+        body.dark-mode .refund-form {
+            background: rgba(26, 33, 50, 0.7) !important;
+            border-color: rgba(255, 255, 255, 0.08) !important;
+            color: #f1f5f9 !important;
         }
     </style>
 

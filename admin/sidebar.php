@@ -1449,48 +1449,70 @@ body.dark-mode .sidebar-menu .menu-item.active i {
     
     .notification-dropdown {
         position: absolute;
-        top: 100%;
+        top: calc(100% + 8px);
         right: 0;
-        width: 320px;
-        height: 430px;
-        max-height: calc(100vh - 90px);
-        background: white;
-        border-radius: 8px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.15);
-        z-index: 1000;
+        width: 380px;
+        max-width: min(380px, calc(100vw - 20px));
+        max-height: 480px;
+        background: rgba(255, 255, 255, 0.84) !important;
+        backdrop-filter: blur(20px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.75) !important;
+        border-radius: 16px !important;
+        box-shadow: 0 16px 40px -8px rgba(16, 24, 40, 0.16), 0 4px 12px rgba(16, 24, 40, 0.05) !important;
+        z-index: 1050;
         display: none;
+        flex-direction: column;
         overflow: hidden;
-        border: 1px solid #eee;
-        margin-top: 10px;
+        margin-top: 0;
     }
     
     .notification-dropdown.show {
-        display: block;
+        display: flex;
         animation: slideDown 0.2s ease;
     }
     
     .notification-header {
-        padding: 12px 15px;
-        border-bottom: 1px solid #eee;
+        padding: 12px 16px;
+        border-bottom: 1px solid rgba(234, 236, 240, 0.85);
         display: flex;
         justify-content: space-between;
         align-items: center;
-        font-weight: 600;
-        background: #f8f9fa;
+        font-weight: 700;
+        font-size: 0.88rem;
+        color: #101828;
+        background: rgba(248, 249, 250, 0.75) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+    }
+
+    .notification-header span {
+        font-weight: 800;
+        letter-spacing: -0.01em;
     }
     
     .mark-read-btn {
-        font-size: 0.8rem;
+        font-size: 0.78rem;
         color: #b3261e;
         text-decoration: none;
         cursor: pointer;
+        font-weight: 600;
+        background: transparent;
+        border: none;
+        padding: 0;
+    }
+
+    .mark-read-btn:hover {
+        text-decoration: underline;
     }
     
     .notification-list {
         flex: 1 1 auto;
         min-height: 0;
-        max-height: 350px;
+        max-height: 410px;
         overflow-y: auto;
+        overflow-x: hidden;
+        overscroll-behavior: contain;
     }
 
     #adminNotifDropdown {
@@ -1502,49 +1524,120 @@ body.dark-mode .sidebar-menu .menu-item.active i {
         display: flex;
     }
 
-    .admin-notification-pagination {
-        flex: 0 0 auto;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 8px 10px;
-        border-top: 1px solid #eee;
-        background: #fff8f3;
-    }
-
-    .admin-notification-page-btn {
-        width: 28px;
-        height: 28px;
-        border: 1px solid #ddd;
-        border-radius: 7px;
-        background: #fff;
-        color: #475467;
-        cursor: pointer;
-    }
-
-    .admin-notification-page-btn:disabled { opacity: .35; cursor: not-allowed; }
-    .admin-notification-page-label { font-size: .72rem; font-weight: 800; color: #667085; }
     .admin-franchise-status { font-size: .76rem; font-weight: 900; letter-spacing: .04em; }
     .admin-franchise-status.approved { color: #027a48; }
     .admin-franchise-status.rejected { color: #b42318; }
     .admin-franchise-status.incomplete { color: #b54708; }
-    .admin-franchise-reason { font-size: .8rem; line-height: 1.35; color: #667085; margin-top: 4px; }
+    .admin-franchise-reason { font-size: .78rem; line-height: 1.35; color: #475467; margin-top: 4px; word-break: break-word; overflow-wrap: anywhere; white-space: normal; }
     
     .notification-item {
-        padding: 12px 15px;
-        border-bottom: 1px solid #f0f0f0;
+        padding: 10px 14px;
+        border-bottom: 1px solid rgba(242, 244, 247, 0.75);
         display: flex;
-        gap: 12px;
-        transition: background 0.2s;
+        gap: 10px;
+        align-items: flex-start;
+        transition: background 0.15s ease;
         cursor: pointer;
+        word-break: break-word;
+        overflow-wrap: anywhere;
     }
     
     .notification-item:hover {
-        background-color: #f9f9f9;
+        background: rgba(255, 255, 255, 0.95);
     }
     
     .notification-item.unread {
-        background-color: #fff5f5;
+        background: rgba(254, 243, 242, 0.65);
+    }
+
+    /* Chat Messages Dropdown Styling */
+    .chat-item {
+        padding: 10px 14px;
+        border-bottom: 1px solid rgba(242, 244, 247, 0.75);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        transition: background 0.15s ease;
+        cursor: pointer;
+        overflow: hidden;
+    }
+
+    .chat-item:hover {
+        background: rgba(255, 255, 255, 0.95);
+    }
+
+    .chat-item.unread {
+        background: rgba(239, 248, 255, 0.65);
+    }
+
+    .chat-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        overflow: hidden;
+        background: #e0f2fe;
+        color: #0284c7;
+        font-weight: 700;
+        font-size: 0.82rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(2, 132, 199, 0.2);
+    }
+
+    .chat-avatar-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .chat-avatar-fallback {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .chat-details {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .chat-name {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2px;
+        font-size: 0.84rem;
+        font-weight: 700;
+        color: #101828;
+    }
+
+    .chat-name span:first-child {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        padding-right: 8px;
+    }
+
+    .chat-time {
+        font-size: 0.7rem;
+        color: #98a2b3;
+        font-weight: 500;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .chat-message-preview {
+        font-size: 0.78rem;
+        color: #475467;
+        line-height: 1.35;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     
     .notif-icon {
@@ -1595,18 +1688,49 @@ body.dark-mode .sidebar-menu .menu-item.active i {
         background: #2f3543;
         border-color: var(--border-color-dark);
     }
-    body.dark-mode .notification-dropdown { background: var(--card-bg-dark); border-color: var(--border-color-dark); }
-    body.dark-mode .notification-header { background: #333; border-color: var(--border-color-dark); color: #e0e0e0; }
-    body.dark-mode .notification-item { border-color: var(--border-color-dark); }
-    body.dark-mode .notification-item:hover { background-color: #3d3d3d; }
-    body.dark-mode .notification-item.unread { background-color: #3a2a2a; }
-    body.dark-mode .notif-title { color: #e0e0e0; }
-    body.dark-mode .notif-message { color: #b0b0b0; }
-    body.dark-mode .notification-empty { color: #b0b0b0; }
-    body.dark-mode .admin-notification-pagination { background: #1f2937; border-color: var(--border-color-dark); }
-    body.dark-mode .admin-notification-page-btn { background: #2f3543; border-color: #475569; color: #cbd5e1; }
-    body.dark-mode .admin-notification-page-label,
+    body.dark-mode .notification-dropdown {
+        background: rgba(20, 26, 38, 0.86) !important;
+        backdrop-filter: blur(20px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.5) !important;
+    }
+    body.dark-mode .notification-header {
+        background: rgba(29, 36, 50, 0.72) !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+        color: #f1f5f9 !important;
+    }
+    body.dark-mode .notification-item {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    body.dark-mode .notification-item:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    body.dark-mode .notification-item.unread {
+        background: rgba(179, 38, 30, 0.18);
+    }
+    body.dark-mode .notif-title { color: #f1f5f9; }
+    body.dark-mode .notif-message,
     body.dark-mode .admin-franchise-reason { color: #94a3b8; }
+    body.dark-mode .notification-empty { color: #94a3b8; }
+    body.dark-mode .chat-item {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    body.dark-mode .chat-item:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    body.dark-mode .chat-item.unread {
+        background: rgba(2, 132, 199, 0.18);
+    }
+    body.dark-mode .chat-name span:first-child {
+        color: #f1f5f9;
+    }
+    body.dark-mode .chat-time {
+        color: #64748b;
+    }
+    body.dark-mode .chat-message-preview {
+        color: #94a3b8;
+    }
 
     @keyframes bell-shake {
         0% { transform: rotate(0); }
@@ -2257,11 +2381,6 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                             <div class="notification-list" id="adminNotifList">
                                 <div class="notification-empty">Loading...</div>
                             </div>
-                            <div class="admin-notification-pagination" id="adminNotifPagination" hidden>
-                                <button type="button" class="admin-notification-page-btn" id="adminNotifPrev" aria-label="Previous notifications"><i class="fas fa-chevron-left"></i></button>
-                                <span class="admin-notification-page-label" id="adminNotifPageLabel">1 / 1</span>
-                                <button type="button" class="admin-notification-page-btn" id="adminNotifNext" aria-label="Next notifications"><i class="fas fa-chevron-right"></i></button>
-                            </div>
                         </div>
                     </div>
                 `;
@@ -2401,13 +2520,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                 const badge = notifWrapper.querySelector('#adminNotifBadge');
                 const list = notifWrapper.querySelector('#adminNotifList');
                 const markAllBtn = notifWrapper.querySelector('#markAllRead');
-                const pagination = notifWrapper.querySelector('#adminNotifPagination');
-                const previousPageBtn = notifWrapper.querySelector('#adminNotifPrev');
-                const nextPageBtn = notifWrapper.querySelector('#adminNotifNext');
-                const pageLabel = notifWrapper.querySelector('#adminNotifPageLabel');
                 let adminNotifications = [];
-                let adminNotificationPage = 0;
-                const adminNotificationPageSize = 3;
                 
                 // Chat Variables
                 const chatBtn = notifWrapper.querySelector('#adminChatBtn');
@@ -2565,92 +2678,66 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                 }
 
                 function renderAdminNotifications() {
-                    const totalPages = Math.max(1, Math.ceil(adminNotifications.length / adminNotificationPageSize));
-                    adminNotificationPage = Math.min(Math.max(0, adminNotificationPage), totalPages - 1);
                     list.innerHTML = '';
                     if (adminNotifications.length === 0) {
                         list.innerHTML = '<div class="notification-empty">No notifications</div>';
-                        if (pagination) pagination.hidden = true;
                         return;
                     }
 
-                    const pageItems = adminNotifications.slice(adminNotificationPage * adminNotificationPageSize, (adminNotificationPage + 1) * adminNotificationPageSize);
-                    pageItems.forEach(notif => {
-                                const item = document.createElement('div');
-                                item.className = `notification-item ${notif.is_read == 0 ? 'unread' : ''}`;
-                                
-                                // Determine icon based on type
-                                let icon = 'fa-bell';
-                                let color = '#1976d2';
-                                let bg = '#e3f2fd';
-                                const notifType = String(notif.type || '').toLowerCase();
-                                
-                                if (notifType.includes('order')) { icon = 'fa-shopping-cart'; color = '#2e7d32'; bg = '#e8f5e9'; }
-                                else if (notifType.includes('alert')) { icon = 'fa-exclamation-triangle'; color = '#b3261e'; bg = '#ffebee'; }
-                                else if (notifType.includes('user')) { icon = 'fa-user'; color = '#ef6c00'; bg = '#fff3e0'; }
-                                else if (notifType.includes('franchise')) { icon = 'fa-store'; color = '#7c3aed'; bg = '#f3e8ff'; }
-                                const statusMatch = notifType.match(/franchise_(approved|rejected|incomplete)/);
-                                const status = statusMatch ? statusMatch[1].toUpperCase() : '';
-                                const reasonMatch = String(notif.message || '').match(/(?:^|\n)Reason:\s*([^\n]*)/i);
-                                const reason = reasonMatch ? reasonMatch[1].trim() : String(notif.message || '').replace(/^Status:\s*[^\n]*\n?/i, '').trim();
-                                const titleMarkup = status
-                                    ? `<div class="admin-franchise-status ${status.toLowerCase()}">${status}</div>`
-                                    : `<div class="notif-title">${escapeInlineHtml(notif.title)}</div>`;
-                                item.innerHTML = `
-                                    <div class="notif-icon" style="color: ${color}; background: ${bg}">
-                                        <i class="fas ${icon}"></i>
-                                    </div>
-                                    <div class="notif-content">
-                                        ${titleMarkup}
-                                        <div class="${status ? 'admin-franchise-reason' : 'notif-message'}">${status ? '<strong>Reason:</strong> ' + escapeInlineHtml(reason || 'No additional reason provided.') : escapeInlineHtml(notif.message)}</div>
-                                        <div class="notif-time">${escapeInlineHtml(notif.time_ago)}</div>
-                                    </div>
-                                `;
-                                
-                                item.addEventListener('click', () => {
-                                    // Mark as read on click
-                                    if (notif.is_read == 0) {
-                                        const formData = new FormData();
-                                        formData.append('id', notif.id);
-                                        fetch('get_notifications.php?action=mark_read', {
-                                            method: 'POST',
-                                            body: formData
-                                        }).then(() => loadNotificationCount());
-                                        item.classList.remove('unread');
-                                    }
-                                    
-                                    // Redirect if related_id exists (basic mapping)
-                                    if (notif.related_type === 'order') window.location.href = `orders.php?search=${notif.related_id}`;
-                                    else if (notif.related_type === 'pre_order') window.location.href = `preorders.php?search=${notif.related_id}`;
-                                    else if (notif.related_type === 'franchise_application') window.location.href = `notifications.php?id=${encodeURIComponent(notif.id)}`;
-                                    else window.location.href = `notifications.php?id=${encodeURIComponent(notif.id)}`;
-                                });
-                                
-                                list.appendChild(item);
-                            });
-
-                    if (pagination) pagination.hidden = totalPages <= 1;
-                    if (pageLabel) pageLabel.textContent = `${adminNotificationPage + 1} / ${totalPages}`;
-                    if (previousPageBtn) previousPageBtn.disabled = adminNotificationPage === 0;
-                    if (nextPageBtn) nextPageBtn.disabled = adminNotificationPage >= totalPages - 1;
-                }
-
-                if (previousPageBtn) previousPageBtn.addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    if (adminNotificationPage > 0) {
-                        adminNotificationPage--;
-                        renderAdminNotifications();
-                    }
-                });
-
-                if (nextPageBtn) nextPageBtn.addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    if (adminNotificationPage < Math.ceil(adminNotifications.length / adminNotificationPageSize) - 1) {
-                        adminNotificationPage++;
-                        renderAdminNotifications();
-                    }
-                });
-                
+                    adminNotifications.forEach(notif => {
+                        const item = document.createElement('div');
+                        item.className = `notification-item ${notif.is_read == 0 ? 'unread' : ''}`;
+                        
+                        // Determine icon based on type
+                        let icon = 'fa-bell';
+                        let color = '#1976d2';
+                        let bg = '#e3f2fd';
+                        const notifType = String(notif.type || '').toLowerCase();
+                        
+                        if (notifType.includes('order')) { icon = 'fa-shopping-cart'; color = '#2e7d32'; bg = '#e8f5e9'; }
+                        else if (notifType.includes('alert')) { icon = 'fa-exclamation-triangle'; color = '#b3261e'; bg = '#ffebee'; }
+                        else if (notifType.includes('user')) { icon = 'fa-user'; color = '#ef6c00'; bg = '#fff3e0'; }
+                        else if (notifType.includes('franchise')) { icon = 'fa-store'; color = '#7c3aed'; bg = '#f3e8ff'; }
+                        const statusMatch = notifType.match(/franchise_(approved|rejected|incomplete)/);
+                        const status = statusMatch ? statusMatch[1].toUpperCase() : '';
+                        const reasonMatch = String(notif.message || '').match(/(?:^|\n)Reason:\s*([^\n]*)/i);
+                        const reason = reasonMatch ? reasonMatch[1].trim() : String(notif.message || '').replace(/^Status:\s*[^\n]*\n?/i, '').trim();
+                        const titleMarkup = status
+                            ? `<div class="admin-franchise-status ${status.toLowerCase()}">${status}</div>`
+                            : `<div class="notif-title">${escapeInlineHtml(notif.title)}</div>`;
+                        item.innerHTML = `
+                            <div class="notif-icon" style="color: ${color}; background: ${bg}">
+                                <i class="fas ${icon}"></i>
+                            </div>
+                            <div class="notif-content">
+                                ${titleMarkup}
+                                <div class="${status ? 'admin-franchise-reason' : 'notif-message'}">${status ? '<strong>Reason:</strong> ' + escapeInlineHtml(reason || 'No additional reason provided.') : escapeInlineHtml(notif.message)}</div>
+                                <div class="notif-time">${escapeInlineHtml(notif.time_ago)}</div>
+                            </div>
+                        `;
+                        
+                        item.addEventListener('click', () => {
+                            // Mark as read on click
+                            if (notif.is_read == 0) {
+                                const formData = new FormData();
+                                formData.append('id', notif.id);
+                                fetch('get_notifications.php?action=mark_read', {
+                                    method: 'POST',
+                                    body: formData
+                                }).then(() => loadNotificationCount());
+                                item.classList.remove('unread');
+                            }
+                            
+                            // Redirect if related_id exists (basic mapping)
+                            if (notif.related_type === 'order') window.location.href = `orders.php?search=${notif.related_id}`;
+                            else if (notif.related_type === 'pre_order') window.location.href = `preorders.php?search=${notif.related_id}`;
+                            else if (notif.related_type === 'franchise_application') window.location.href = `notifications.php?id=${encodeURIComponent(notif.id)}`;
+                            else window.location.href = `notifications.php?id=${encodeURIComponent(notif.id)}`;
+                        });
+                        
+                        list.appendChild(item);
+                    });
+                }                
                 // Initial load and polling
                 if (btn && badge) {
                     loadNotificationCount();
