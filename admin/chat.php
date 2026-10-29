@@ -12,7 +12,11 @@ require_once '../includes/ChatService.php';
 
 $user_id = $_SESSION['user_id'];
 $user_name = $_SESSION['user_name'] ?? 'Admin';
-$partner_chat_owner_id = function_exists('getFranchiseSellerScopeOwnerId') ? (int)(getFranchiseSellerScopeOwnerId($conn, $user_id) ?? 0) : 0;
+$chatService = new ChatService($conn);
+$partner_chat_owner_id = $chatService->getApprovedPartnerScopeOwnerId($user_id);
+if ($partner_chat_owner_id <= 0 && function_exists('getFranchiseSellerScopeOwnerId')) {
+    $partner_chat_owner_id = (int)(getFranchiseSellerScopeOwnerId($conn, $user_id) ?? 0);
+}
 $is_partner_chat_user = $partner_chat_owner_id > 0;
 $chat_viewer_role = $is_partner_chat_user ? 'store' : 'platform';
 
@@ -22,7 +26,6 @@ $conversation_id = $_GET['conversation_id'] ?? null;
 $admin_info = getAdminInfo($conn);
 
 // Get unassigned conversation count
-$chatService = new ChatService($conn);
 $unassigned = $chatService->getUnassignedConversations(100);
 $unassignedCount = count($unassigned);
 ?>
@@ -1120,8 +1123,8 @@ $unassignedCount = count($unassigned);
                     { method: 'GET' }
                 );
 
-                const data = await response.json();
-                if (data.success) {
+                const data = await response.json().catch(() => null);
+                if (data && data.success) {
                     // Update last message ID without playing sound on initial load
                     lastKnownMessageId = Number(data.latest_message_id || 0);
 
@@ -1133,12 +1136,13 @@ $unassignedCount = count($unassigned);
                     // Load order context
                     loadOrderContext(conversationId);
                 } else {
-                    showAlert(data.error, 'error');
-                    renderChatLoadError(data.error || 'Unable to open this conversation right now.');
+                    const errMsg = (data && data.error) ? data.error : 'Unable to open this conversation right now.';
+                    showAlert(errMsg, 'error');
+                    renderChatLoadError(errMsg);
                 }
             } catch (error) {
                 console.error('Error loading chat:', error);
-                renderChatLoadError('Unable to load the conversation right now.');
+                renderChatLoadError(error && error.message ? error.message : 'Unable to load the conversation right now.');
             }
         }
 

@@ -1646,6 +1646,27 @@ if ($decision_search !== '') {
     $audit_base_params['decision_search'] = $decision_search;
 }
 $audit_reset_url = 'finance.php?' . http_build_query($audit_base_params) . '#decision-center';
+
+// Pre-calculate visible payroll rows for queue counts
+$approval_query = "SELECT p.id, p.pay_period_start, p.pay_period_end, p.net_pay, p.created_at, e.first_name, e.last_name, e.user_id
+                   FROM payroll p
+                   JOIN employees e ON p.employee_id = e.id
+                   WHERE LOWER(TRIM(COALESCE(p.status, ''))) IN ('', 'pending', 'submitted', 'for_approval', 'for approval')
+                   ORDER BY p.created_at DESC";
+$approval_result = mysqli_query($conn, $approval_query);
+$visible_payroll_rows = [];
+if ($approval_result) {
+    while ($p_row = mysqli_fetch_assoc($approval_result)) {
+        $can_view = true;
+        if (function_exists('hrCanManageEmployeeUserIdInScope')) {
+            $can_view = hrCanManageEmployeeUserIdInScope($conn, (int)($p_row['user_id'] ?? 0));
+        }
+        if ($can_view) {
+            $visible_payroll_rows[] = $p_row;
+        }
+    }
+}
+$pending_payroll_count = count($visible_payroll_rows);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1796,167 +1817,131 @@ $audit_reset_url = 'finance.php?' . http_build_query($audit_base_params) . '#dec
             color: #e5e7eb;
         }
 
-        .finance-intro-card {
-            border: 1px solid #e5e7eb;
-            border-radius: 18px;
-            padding: 20px;
+        /* Clean & Compact Finance UI */
+        .finance-toolbar-card {
+            border: 1px solid #eaecf0;
+            border-radius: 14px;
+            padding: 14px 18px;
+            background: #ffffff;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
             margin-bottom: 18px;
-            background:
-                radial-gradient(circle at top right, rgba(59, 130, 246, 0.10), transparent 30%),
-                radial-gradient(circle at left bottom, rgba(16, 185, 129, 0.10), transparent 30%),
-                linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
         }
 
-        .finance-intro-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 1.3fr) minmax(300px, 0.9fr);
-            gap: 18px;
-            align-items: start;
-        }
-
-        .finance-kicker {
+        .finance-period-badge {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 6px 12px;
-            border-radius: 999px;
-            background: #eff6ff;
-            color: #1d4ed8;
-            font-size: 0.78rem;
+            gap: 6px;
+            font-size: 0.9rem;
             font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            margin-bottom: 10px;
+            color: #101828;
         }
 
-        .finance-intro-title {
-            margin: 0 0 10px;
-            font-size: 1.8rem;
-            font-weight: 800;
-            color: #111827;
-            line-height: 1.15;
-        }
-
-        .finance-intro-text {
-            color: #475569;
-            max-width: 900px;
-            font-size: 0.95rem;
-        }
-
-        .finance-chip-row {
+        .finance-quick-nav {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            margin-top: 14px;
+            align-items: center;
         }
 
-        .finance-chip {
+        .finance-quick-btn {
+            font-size: 0.82rem;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid #d0d5dd;
+            background: #ffffff;
+            color: #344054;
+            text-decoration: none;
+            transition: all 0.2s ease;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            border-radius: 999px;
-            background: #ffffff;
-            border: 1px solid #dbeafe;
-            color: #1e3a8a;
-            font-size: 0.82rem;
-            font-weight: 700;
+            gap: 6px;
         }
 
-        .finance-workflow-grid {
+        .finance-quick-btn:hover {
+            background: #f8f9fa;
+            border-color: #b3261e;
+            color: #b3261e;
+        }
+
+        .finance-stat-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 12px;
-            margin-top: 16px;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 14px;
+            margin-bottom: 20px;
         }
 
-        .finance-workflow-step {
-            border: 1px solid #e2e8f0;
+        .finance-stat-card {
+            border: 1px solid #eaecf0;
             border-radius: 14px;
-            padding: 14px;
-            background: rgba(255,255,255,0.96);
-        }
-
-        .finance-workflow-step strong {
-            display: block;
-            margin-bottom: 6px;
-            color: #0f172a;
-        }
-
-        .finance-workflow-step span {
-            color: #64748b;
-            font-size: 0.88rem;
-        }
-
-        .finance-side-box {
-            border: 1px solid #e2e8f0;
-            border-radius: 16px;
-            padding: 16px;
-            background: rgba(255,255,255,0.96);
-            margin-bottom: 12px;
-        }
-
-        .finance-side-box strong {
-            display: block;
-            margin-bottom: 6px;
-            color: #0f172a;
-        }
-
-        .finance-side-box p {
-            margin: 0;
-            color: #64748b;
-            font-size: 0.9rem;
-        }
-
-        .finance-nav-links {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 10px;
-            margin-top: 12px;
-        }
-
-        .finance-nav-link {
+            padding: 14px 16px;
+            background: #ffffff;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            padding: 12px 14px;
-            border: 1px solid #dbeafe;
-            border-radius: 14px;
-            background: #fff;
-            color: #1d4ed8;
-            font-weight: 700;
-            text-decoration: none;
+            gap: 14px;
         }
 
-        .finance-nav-link:hover {
-            background: #eff6ff;
-            color: #1d4ed8;
+        .finance-stat-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+            flex-shrink: 0;
         }
 
-        .finance-section-note {
-            font-size: 0.85rem;
-            color: #6b7280;
-            margin-top: 6px;
-            margin-bottom: 0;
-        }
-
-        .finance-filter-card .card-body {
-            padding: 18px;
-        }
-
-        .finance-filter-title {
-            font-size: 1rem;
+        .finance-stat-val {
+            font-size: 1.25rem;
             font-weight: 800;
-            color: #111827;
-            margin-bottom: 4px;
+            color: #101828;
+            line-height: 1.2;
+            margin: 0;
         }
 
-        .finance-filter-note {
-            color: #64748b;
-            font-size: 0.88rem;
-            margin-bottom: 14px;
+        .finance-stat-lbl {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #475467;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            margin-bottom: 2px;
+        }
+
+        .finance-stat-sub {
+            font-size: 0.72rem;
+            color: #667085;
+            margin: 0;
+        }
+
+        body.dark-mode .finance-toolbar-card,
+        body.dark-mode .finance-stat-card {
+            background: var(--card-bg-dark) !important;
+            border-color: var(--border-color-dark) !important;
+            color: var(--text-color-dark) !important;
+        }
+
+        body.dark-mode .finance-period-badge,
+        body.dark-mode .finance-stat-val {
+            color: #f8fafc !important;
+        }
+
+        body.dark-mode .finance-stat-lbl,
+        body.dark-mode .finance-stat-sub {
+            color: #94a3b8 !important;
+        }
+
+        body.dark-mode .finance-quick-btn {
+            background: #262626 !important;
+            border-color: #404040 !important;
+            color: #d4d4d4 !important;
+        }
+
+        body.dark-mode .finance-quick-btn:hover {
+            border-color: #ef4444 !important;
+            color: #f87171 !important;
         }
 
         .section-anchor-title {
@@ -2070,26 +2055,7 @@ $audit_reset_url = 'finance.php?' . http_build_query($audit_base_params) . '#dec
             border-color: var(--border-color-dark) !important;
         }
 
-        body.dark-mode .finance-intro-card,
-        body.dark-mode .finance-workflow-step,
-        body.dark-mode .finance-side-box,
-        body.dark-mode .finance-nav-link {
-            background: var(--card-bg-dark) !important;
-            border-color: var(--border-color-dark) !important;
-            color: var(--text-color-dark) !important;
-        }
 
-        body.dark-mode .finance-kicker {
-            background: #1e3a8a;
-            color: #dbeafe;
-        }
-
-        body.dark-mode .finance-intro-title,
-        body.dark-mode .finance-workflow-step strong,
-        body.dark-mode .finance-side-box strong,
-        body.dark-mode .finance-filter-title {
-            color: var(--text-color-dark) !important;
-        }
 
         body.dark-mode .finance-intro-text,
         body.dark-mode .finance-workflow-step span,
@@ -2296,104 +2262,117 @@ $audit_reset_url = 'finance.php?' . http_build_query($audit_base_params) . '#dec
             </div>
             
             <div class="admin-main">
-                <div class="finance-intro-card">
-                    <div class="finance-intro-grid">
-                        <div>
-                            <span class="finance-kicker"><i class="fas fa-compass"></i> Finance Workflow Guide</span>
-                            <h2 class="finance-intro-title">Use Finance for approvals, payout control, and monthly performance review.</h2>
-                            <p class="finance-intro-text">This module is the approval desk for payroll, cancellations, and refunds. It also gives business owners and finance staff a monthly picture of revenue, expenses, and net results. The simplest workflow is to clear approval queues first, verify the audit trail second, and read the financial overview last.</p>
-                            <div class="finance-chip-row">
-                                <span class="finance-chip"><i class="fas fa-wallet"></i> Finance approves money-out decisions</span>
-                                <span class="finance-chip"><i class="fas fa-file-signature"></i> Every approval or rejection is logged</span>
-                                <span class="finance-chip"><i class="fas fa-chart-line"></i> Reports use the selected month and year</span>
-                            </div>
-                            <div class="finance-workflow-grid">
-                                <div class="finance-workflow-step">
-                                    <strong>1. Set reporting period</strong>
-                                    <span>Choose the month and year first so all totals and charts match the period you want to review.</span>
-                                </div>
-                                <div class="finance-workflow-step">
-                                    <strong>2. Clear approval queues</strong>
-                                    <span>Review payroll, then move to cancellation and refund decisions so pending cash obligations do not pile up.</span>
-                                </div>
-                                <div class="finance-workflow-step">
-                                    <strong>3. Confirm accountability</strong>
-                                    <span>Use the signature audit trail to verify who approved, rejected, or completed each finance action.</span>
-                                </div>
-                                <div class="finance-workflow-step">
-                                    <strong>4. Review business health</strong>
-                                    <span>Check revenue, expenses, and monthly net income after the action queues are already up to date.</span>
-                                </div>
-                            </div>
+                <!-- Compact Finance Toolbar & Period Filter -->
+                <div class="finance-toolbar-card" id="finance-period">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="finance-period-badge">
+                                <i class="fas fa-calendar-alt text-primary"></i>
+                                <?= date('F Y', mktime(0, 0, 0, $current_month, 1, $current_year)); ?>
+                            </span>
+                        </div>
+                        <div class="finance-quick-nav">
+                            <a href="#payroll-queue" class="finance-quick-btn">
+                                <i class="fas fa-file-invoice-dollar text-primary"></i> Payroll
+                                <?php if ($pending_payroll_count > 0): ?>
+                                    <span class="badge bg-warning text-dark ms-1"><?= $pending_payroll_count ?></span>
+                                <?php endif; ?>
+                            </a>
+                            <a href="#decision-center" class="finance-quick-btn">
+                                <i class="fas fa-scale-balanced text-primary"></i> Decisions
+                                <?php if ($pending_cancellations_count + $pending_refunds_count > 0): ?>
+                                    <span class="badge bg-danger ms-1"><?= $pending_cancellations_count + $pending_refunds_count ?></span>
+                                <?php endif; ?>
+                            </a>
+                            <a href="#audit-trail" class="finance-quick-btn">
+                                <i class="fas fa-signature text-secondary"></i> Audit Trail
+                            </a>
+                            <a href="#financial-overview" class="finance-quick-btn">
+                                <i class="fas fa-chart-line text-success"></i> Overview
+                            </a>
+                        </div>
+                    </div>
+                    <form method="GET" class="d-flex flex-wrap align-items-center gap-2 pt-2 border-top">
+                        <span class="text-muted small fw-semibold"><i class="fas fa-filter text-secondary"></i> Period:</span>
+                        <select name="month" class="form-select form-select-sm" style="width: auto;">
+                            <?php for ($m = 1; $m <= 12; $m++): ?>
+                                <option value="<?= $m; ?>" <?= ($m == $current_month) ? 'selected' : ''; ?>>
+                                    <?= date('F', mktime(0, 0, 0, $m, 1)); ?>
+                                </option>
+                            <?php endfor; ?>
+                        </select>
+                        <select name="year" class="form-select form-select-sm" style="width: auto;">
+                            <?php for ($y = date('Y'); $y >= date('Y') - 2; $y--): ?>
+                                <option value="<?= $y; ?>" <?= ($y == $current_year) ? 'selected' : ''; ?>><?= $y; ?></option>
+                            <?php endfor; ?>
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-primary px-3"><i class="fas fa-check"></i> Apply</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="window.print()"><i class="fas fa-print"></i> Print</button>
+                    </form>
+                </div>
+
+                <!-- Financial Health Overview Cards -->
+                <div class="finance-stat-grid" id="financial-overview">
+                    <div class="finance-stat-card">
+                        <div class="finance-stat-icon" style="background: #eff8ff; color: #175cd3;">
+                            <i class="fas fa-coins"></i>
                         </div>
                         <div>
-                            <div class="finance-side-box">
-                                <strong>Who should use this page?</strong>
-                                <p>Business owners can oversee the whole finance workflow. Finance employees can review records, but only users with <code>finance.manage</code> can approve or reject money-related actions.</p>
-                            </div>
-                            <div class="finance-side-box">
-                                <strong>What belongs here?</strong>
-                                <p>Payroll approval, cancellation/refund approval, payout completion, signature audit review, and monthly revenue-versus-expense reporting all belong in Finance.</p>
-                            </div>
-                            <div class="finance-side-box">
-                                <strong>Quick navigation</strong>
-                                <div class="finance-nav-links">
-                                    <a href="#finance-period" class="finance-nav-link">Period Filter <i class="fas fa-arrow-right"></i></a>
-                                    <a href="#payroll-queue" class="finance-nav-link">Payroll Queue <i class="fas fa-arrow-right"></i></a>
-                                    <a href="#decision-center" class="finance-nav-link">Decision Center <i class="fas fa-arrow-right"></i></a>
-                                    <a href="#audit-trail" class="finance-nav-link">Audit Trail <i class="fas fa-arrow-right"></i></a>
-                                    <a href="#financial-overview" class="finance-nav-link">Financial Overview <i class="fas fa-arrow-right"></i></a>
-                                </div>
+                            <div class="finance-stat-lbl">Revenue</div>
+                            <h3 class="finance-stat-val">₱<?= number_format($monthly_revenue, 2); ?></h3>
+                            <div class="finance-stat-sub"><?= date('M Y', mktime(0,0,0,$current_month,1, $current_year)); ?></div>
+                        </div>
+                    </div>
+                    <div class="finance-stat-card">
+                        <div class="finance-stat-icon" style="background: #fff1f0; color: #b3261e;">
+                            <i class="fas fa-file-invoice-dollar"></i>
+                        </div>
+                        <div>
+                            <div class="finance-stat-lbl">Expenses</div>
+                            <h3 class="finance-stat-val">₱<?= number_format($monthly_expenses, 2); ?></h3>
+                            <div class="finance-stat-sub">Payroll + Operations</div>
+                        </div>
+                    </div>
+                    <div class="finance-stat-card">
+                        <div class="finance-stat-icon" style="background: #ecfdf3; color: #027a48;">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div>
+                            <div class="finance-stat-lbl">Net Income</div>
+                            <h3 class="finance-stat-val <?= $monthly_net >= 0 ? 'text-success' : 'text-danger'; ?>">
+                                ₱<?= number_format($monthly_net, 2); ?>
+                            </h3>
+                            <div class="finance-stat-sub">
+                                <span class="badge <?= $monthly_net >= 0 ? 'bg-success' : 'bg-danger'; ?>"><?= $monthly_net >= 0 ? 'Profit' : 'Loss'; ?></span>
                             </div>
                         </div>
                     </div>
-                </div>
-
-                <!-- Filter Form -->
-                <div class="card mb-4 finance-filter-card" id="finance-period">
-                    <div class="card-body">
-                        <div class="finance-filter-title">1. Set the reporting period</div>
-                        <div class="finance-filter-note">Choose the month and year first. The finance overview, charts, and expense totals below will follow this selected period.</div>
-                        <form method="GET" class="row g-3 align-items-end">
-                            <div class="col-md-4">
-                                <label>Month</label>
-                                <select name="month" class="form-select">
-                                    <?php for ($m = 1; $m <= 12; $m++): ?>
-                                        <option value="<?php echo $m; ?>" <?php echo ($m == $current_month) ? 'selected' : ''; ?>>
-                                            <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
-                                        </option>
-                                    <?php endfor; ?>
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label>Year</label>
-                                <select name="year" class="form-select">
-                                    <?php for ($y = date('Y'); $y >= date('Y') - 2; $y--): ?>
-                                        <option value="<?php echo $y; ?>" <?php echo ($y == $current_year) ? 'selected' : ''; ?>><?php echo $y; ?></option>
-                                    <?php endfor; ?>
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <button type="submit" class="btn btn-primary w-100"><i class="fas fa-filter"></i> Filter</button>
-                            </div>
-                        </form>
+                    <div class="finance-stat-card">
+                        <div class="finance-stat-icon" style="background: #fffaeb; color: #b54708;">
+                            <i class="fas fa-scale-balanced"></i>
+                        </div>
+                        <div>
+                            <div class="finance-stat-lbl">Open Liability</div>
+                            <h3 class="finance-stat-val">₱<?= number_format($pending_payout_total, 2); ?></h3>
+                            <div class="finance-stat-sub"><?= number_format($pending_cancellations_count + $pending_refunds_count) ?> pending decisions</div>
+                        </div>
                     </div>
                 </div>
                 <!-- Payroll for Approval Section -->
                 <div class="card mb-4" id="payroll-queue">
-                    <div class="card-header bg-warning text-dark">
+                    <div class="card-header bg-white border-bottom py-3">
                         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-                            <div>
-                                <h5 class="mb-0 payroll-header-title">
-                                <i class="fas fa-exclamation-triangle"></i> Payroll for Approval
-                                <span class="finance-scope-badge <?php echo htmlspecialchars($finance_scope_badge_class); ?>">
-                                    <i class="fas <?php echo htmlspecialchars($finance_scope_badge_icon); ?>"></i>
-                                    <?php echo htmlspecialchars($finance_scope_badge_label); ?>
-                                </span>
-                                </h5>
-                                <p class="finance-section-note">2. Review payroll requests here before salaries are finalized. Approving a payroll record also books it into expenses so the monthly finance view stays accurate.</p>
-                            </div>
-                            <span class="finance-scope-hint"><?php echo htmlspecialchars($finance_scope_badge_hint); ?></span>
+                            <h5 class="mb-0 fw-bold d-flex align-items-center gap-2">
+                                <i class="fas fa-file-invoice-dollar text-primary"></i>
+                                <span>Payroll Approvals</span>
+                                <?php if ($pending_payroll_count > 0): ?>
+                                    <span class="badge bg-warning text-dark"><?= $pending_payroll_count ?> pending</span>
+                                <?php endif; ?>
+                            </h5>
+                            <span class="finance-scope-badge <?php echo htmlspecialchars($finance_scope_badge_class); ?>">
+                                <i class="fas <?php echo htmlspecialchars($finance_scope_badge_icon); ?>"></i>
+                                <?php echo htmlspecialchars($finance_scope_badge_label); ?>
+                            </span>
                         </div>
                     </div>
                     <div class="card-body p-0">
@@ -2430,24 +2409,6 @@ $audit_reset_url = 'finance.php?' . http_build_query($audit_base_params) . '#dec
                                 </thead>
                                 <tbody>
                                     <?php
-                                    $approval_query = "SELECT p.id, p.pay_period_start, p.pay_period_end, p.net_pay, p.created_at, e.first_name, e.last_name, e.user_id
-                                                       FROM payroll p
-                                                       JOIN employees e ON p.employee_id = e.id
-                                                       WHERE LOWER(TRIM(COALESCE(p.status, ''))) IN ('', 'pending', 'submitted', 'for_approval', 'for approval')
-                                                       ORDER BY p.created_at DESC";
-                                    $approval_result = mysqli_query($conn, $approval_query);
-                                    $visible_payroll_rows = [];
-                                    if ($approval_result) {
-                                        while ($row = mysqli_fetch_assoc($approval_result)) {
-                                            $can_view = true;
-                                            if (function_exists('hrCanManageEmployeeUserIdInScope')) {
-                                                $can_view = hrCanManageEmployeeUserIdInScope($conn, (int)($row['user_id'] ?? 0));
-                                            }
-                                            if ($can_view) {
-                                                $visible_payroll_rows[] = $row;
-                                            }
-                                        }
-                                    }
                                     if (!empty($visible_payroll_rows)) {
                                         foreach ($visible_payroll_rows as $row) {
                                             $payroll_id = (int)$row['id'];
@@ -2476,13 +2437,12 @@ $audit_reset_url = 'finance.php?' . http_build_query($audit_base_params) . '#dec
                 </div>
 
                 <div class="card mb-4" id="decision-center">
-                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                        <div>
-                            <h5 class="mb-1"><i class="fas fa-scale-balanced text-danger"></i> Refund & Cancellation Decision Center</h5>
-                            <p class="decision-note">Finance owns final approval/rejection to align compliance, cashflow, and customer fairness.</p>
-                            <p class="finance-section-note">3. Use this queue after payroll. Review the request context, confirm refund details, then approve, reject, or complete payout based on store policy and finance controls.</p>
-                        </div>
-                        <a href="cancellations.php" class="btn btn-outline-secondary btn-sm">Open Monitoring Page</a>
+                    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0 fw-bold d-flex align-items-center gap-2">
+                            <i class="fas fa-scale-balanced text-primary"></i>
+                            <span>Refund & Cancellation Decisions</span>
+                        </h5>
+                        <a href="cancellations.php" class="btn btn-outline-secondary btn-sm"><i class="fas fa-external-link-alt"></i> Monitor</a>
                     </div>
                     <div class="card-body">
                         <div class="decision-kpi-grid mb-3">
@@ -2677,12 +2637,12 @@ $audit_reset_url = 'finance.php?' . http_build_query($audit_base_params) . '#dec
                 </div>
 
                 <div class="card mb-4" id="audit-trail">
-                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="mb-0"><i class="fas fa-signature text-secondary"></i> Recent Signature Audit Trail</h6>
-                            <p class="finance-section-note">4. This is the accountability layer. Use it to confirm which finance user signed each approval or rejection and when it happened.</p>
-                        </div>
-                        <span class="decision-note">Approve/Reject records organized by entity</span>
+                    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0 fw-bold d-flex align-items-center gap-2">
+                            <i class="fas fa-signature text-secondary"></i>
+                            <span>Signature Audit Trail</span>
+                        </h6>
+                        <span class="badge bg-light text-muted border"><?= number_format($signature_audit_total) ?> records</span>
                     </div>
                     <div class="audit-toolbar">
                         <form method="GET" class="row g-2 align-items-end">
@@ -2790,54 +2750,12 @@ $audit_reset_url = 'finance.php?' . http_build_query($audit_base_params) . '#dec
                     </div>
                 </div>
 
-                <div class="section-header" id="financial-overview">
-                    <h2>Financial Overview (<?php echo date('F', mktime(0,0,0,$current_month,1)) . ' ' . $current_year; ?>)</h2>
-                    <button class="btn btn-outline-primary" onclick="window.print()">
-                        <i class="fas fa-print"></i> Print Report
-                    </button>
-                </div>
-                <p class="finance-section-note mb-3">5. Finish here. Once approvals and payout decisions are updated, this overview gives the clearest monthly picture of revenue, expenses, and net income for the selected period.</p>
-
-                <!-- Financial Cards -->
-                <div class="dashboard-grid mb-4">
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background: #e3f2fd;">
-                            <i class="fas fa-coins text-primary"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3>₱<?php echo number_format($monthly_revenue, 2); ?></h3>
-                            <p>Monthly Revenue</p>
-                            <small class="text-muted"><?php echo date('F Y', mktime(0,0,0,$current_month,1, $current_year)); ?></small>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background: #ffebee;">
-                            <i class="fas fa-file-invoice-dollar text-danger"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3>₱<?php echo number_format($monthly_expenses, 2); ?></h3>
-                            <p>Monthly Expenses</p>
-                            <small class="text-muted">Payroll + Operational</small>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background: #e8f5e9;">
-                            <i class="fas fa-chart-line text-success"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3>₱<?php echo number_format($monthly_net, 2); ?></h3>
-                            <p>Monthly Net Income</p>
-                            <small class="<?php echo $monthly_net >= 0 ? 'text-success' : 'text-danger'; ?>">
-                                <?php echo $monthly_net >= 0 ? 'Profit' : 'Loss'; ?>
-                            </small>
-                        </div>
-                    </div>
+                <!-- Charts Section -->
+                <div class="d-flex justify-content-between align-items-center mb-3 mt-4" id="financial-charts">
+                    <h5 class="mb-0 fw-bold"><i class="fas fa-chart-line text-primary me-2"></i> Revenue & Expense Trends</h5>
                 </div>
 
-                <!-- Charts -->
-                <div class="row mt-4">
+                <div class="row">
                     <div class="col-md-8">
                         <div class="card">
                             <div class="card-header bg-white">

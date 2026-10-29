@@ -492,11 +492,35 @@ class ChatService {
         if ((int)($conversation['platform_owner_id'] ?? 0) === $user_id || (int)($conversation['assigned_agent_id'] ?? 0) === $user_id) {
             return true;
         }
-        if ((int)($conversation['seller_id'] ?? 0) > 0 && $this->getApprovedPartnerOwnerId($user_id) === (int)$conversation['seller_id']) {
+        $partner_owner_id = $this->getApprovedPartnerScopeOwnerId($user_id);
+        if ($partner_owner_id <= 0) {
+            $partner_owner_id = $this->getApprovedPartnerOwnerId($user_id);
+        }
+        if ((int)($conversation['seller_id'] ?? 0) > 0 && $partner_owner_id > 0 && $partner_owner_id === (int)$conversation['seller_id']) {
             return true;
         }
         if ((int)($conversation['rider_user_id'] ?? 0) === $user_id) {
             return true;
+        }
+
+        // Platform admins and staff previewing unassigned queue tickets
+        if ($this->tableExists('users')) {
+            $stmt = $this->conn->prepare("SELECT user_type, role_id FROM users WHERE id = ? LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param("i", $user_id);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                $u_row = $res ? $res->fetch_assoc() : null;
+                $stmt->close();
+                $u_type = strtolower(trim((string)($u_row['user_type'] ?? '')));
+                $u_role = (int)($u_row['role_id'] ?? 0);
+                if ($u_type === 'admin' && $u_role === 1) {
+                    return true;
+                }
+                if (empty($conversation['assigned_agent_id']) && in_array($u_type, ['admin', 'employee'], true)) {
+                    return true;
+                }
+            }
         }
 
         return false;
@@ -1470,26 +1494,54 @@ class ChatService {
      */
     public function getTypingUsers($conversation_id, $exclude_user_id = null) {
         try {
+            $conversation_id = (int)$conversation_id;
+            $exclude_user_id = $exclude_user_id !== null ? (int)$exclude_user_id : null;
+            if ($conversation_id <= 0) {
+                return [];
+            }
+
+            if (!$this->tableExists('chat_typing_indicators')) {
+                return [];
+            }
+
             $query = "SELECT cti.user_id, u.full_name 
                      FROM chat_typing_indicators cti
                      JOIN users u ON cti.user_id = u.id
                      WHERE cti.conversation_id = ? 
-                     AND cti.created_at > DATE_SUB(NOW(), INTERVAL 30 SECOND)";
+                       AND cti.created_at > DATE_SUB(NOW(), INTERVAL 30 SECOND)";
             
-            if ($exclude_user_id) {
-                $query .= " AND cti.user_id != " . intval($exclude_user_id);
+            if ($exclude_user_id !== null && $exclude_user_id > 0) {
+                $query .= " AND cti.user_id != ?";
+                $stmt = $this->conn->prepare($query);
+                if (!$stmt) {
+                    return [];
+                }
+                $stmt->bind_param("ii", $conversation_id, $exclude_user_id);
+            } else {
+                $stmt = $this->conn->prepare($query);
+                if (!$stmt) {
+                    return [];
+                }
+                $stmt->bind_param("i", $conversation_id);
             }
             
-            $result = $this->conn->query($query);
+            if (!$stmt->execute()) {
+                $stmt->close();
+                return [];
+            }
+
+            $result = $stmt->get_result();
             $typing_users = [];
-            
-            while ($row = $result->fetch_assoc()) {
-                $typing_users[] = $row;
+            if ($result) {
+                while ($row = $result->fetch_assoc()) {
+                    $typing_users[] = $row;
+                }
             }
+            $stmt->close();
             
             return $typing_users;
             
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $this->errors[] = $e->getMessage();
             return [];
         }

@@ -1755,8 +1755,8 @@ include 'includes/header.php';
                     body: JSON.stringify(payload)
                 });
 
-                const data = await response.json();
-                if (data.success) {
+                const data = await response.json().catch(() => null);
+                if (data && data.success) {
                     conversationId = data.conversation.id;
                     activeChannel = payloadChannel;
                     const url = new URL(window.location.href);
@@ -1798,8 +1798,8 @@ include 'includes/header.php';
 
                 const response = await fetch(`${API_BASE}/get_messages.php?${params.toString()}`, { method: 'GET' });
 
-                const data = await response.json();
-                if (data.success) {
+                const data = await response.json().catch(() => null);
+                if (data && data.success) {
                     if (incremental) {
                         if (data.messages.length > 0) {
                             const hasIncomingSupportMessage = data.messages.some(msg => msg.sender_type !== 'customer');
@@ -1974,8 +1974,8 @@ include 'includes/header.php';
                     })
                 });
 
-                const data = await response.json();
-                if (data.success) {
+                const data = await response.json().catch(() => null);
+                if (data && data.success) {
                     input.value = '';
                     input.style.height = 'auto';
                     updateConversationDirectoryActivity(conversationId, message, new Date().toISOString());
@@ -2020,8 +2020,8 @@ include 'includes/header.php';
                     body: formData
                 });
 
-                const data = await response.json();
-                if (data.success) {
+                const data = await response.json().catch(() => null);
+                if (data && data.success) {
                     uploadStatus.textContent = 'Uploaded';
                     setTimeout(() => {
                         uploadStatus.textContent = '';
@@ -2342,8 +2342,8 @@ include 'includes/header.php';
                     })
                 });
 
-                const data = await response.json();
-                if (data.success) {
+                const data = await response.json().catch(() => null);
+                if (data && data.success) {
                     showAlert('Refund request submitted successfully. Our team will review it shortly.', 'success');
                     cancelRefundForm();
                     loadMessages();
