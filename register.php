@@ -8,7 +8,9 @@ require_once 'includes/security.php';
 
 // If already logged in, redirect
 if (isset($_SESSION['user_id'])) {
-    header('Location: index.php');
+    require_once __DIR__ . '/includes/rbac.php';
+    $login_redirect = getUserDashboardRoute($conn, (int)$_SESSION['user_id'], $_SESSION['user_type'] ?? '');
+    header('Location: ' . $login_redirect);
     exit;
 }
 

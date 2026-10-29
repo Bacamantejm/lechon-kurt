@@ -154,7 +154,7 @@ function resolveDeniedAdminRedirectTarget() {
         }
     }
 
-    return '../index.php';
+    return 'index.php';
 }
 
 /**
@@ -198,7 +198,7 @@ function denyAdminBackofficeEntry($message = 'Access Denied: Unauthorized access
         exit;
     }
 
-    header("Location: ../index.php?error=unauthorized");
+    header("Location: index.php?error=unauthorized");
     exit;
 }
 

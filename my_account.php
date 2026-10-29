@@ -257,6 +257,16 @@ if (myAccountTableExists($conn, 'partner_plan_subscriptions') && myAccountTableE
     }
 }
 
+require_once __DIR__ . '/includes/rbac.php';
+$is_backoffice_or_partner = (
+    $is_organization_account ||
+    !empty($partner_subscription) ||
+    (isset($_SESSION['user_type']) && in_array(strtolower((string)$_SESSION['user_type']), ['admin', 'partner', 'employee'], true)) ||
+    (isset($_SESSION['role_name']) && in_array(strtolower((string)$_SESSION['role_name']), ['super_admin', 'business_owner', 'store_manager', 'partner_owner', 'cashier'], true)) ||
+    hasBackofficeAccess($conn, $user_id)
+);
+$backoffice_dash_url = $is_backoffice_or_partner ? resolveBackofficeDashboardRoute($conn, $user_id) : 'admin/index.php';
+
 // Handle profile update
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
     $default_account_tab = 'profile';
@@ -1318,6 +1328,10 @@ body.dark-mode .mobile-segment-btn.active {
                 <?php if ($is_rider_context): ?>
                 <a href="admin/logistics.php" class="hero-action-btn" style="background:#b3261e; color:#ffffff; border-color:#b3261e; font-weight:700;">
                     <i class="fas fa-motorcycle"></i> Rider Dashboard
+                </a>
+                <?php elseif ($is_backoffice_or_partner): ?>
+                <a href="<?php echo htmlspecialchars($backoffice_dash_url); ?>" class="hero-action-btn" style="background:#b3261e; color:#ffffff; border-color:#b3261e; font-weight:700; text-decoration:none;">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
                 </a>
                 <?php endif; ?>
                 <button type="button" class="hero-action-btn market-theme-btn" id="accountHeroThemeBtn" title="Toggle Theme" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;background:#ffffff;border:1px solid #d0d5dd;border-radius:10px;padding:8px 16px;font-size:0.86rem;font-weight:700;color:#344054;">

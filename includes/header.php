@@ -93,8 +93,13 @@ if ($is_logged_in_user) {
 }
 
 require_once __DIR__ . '/rider_helper.php';
+require_once __DIR__ . '/rbac.php';
+
 $is_driver_account = false;
 $is_rider_context = false;
+$is_admin_or_shop_owner = false;
+$backoffice_dash_route = '';
+
 if ($is_logged_in_user) {
     $header_db_conn = (isset($conn) && ($conn instanceof mysqli)) ? $conn : null;
     $is_driver_account = isDeliveryDriverUser($header_db_conn, (int)$_SESSION['user_id']);
@@ -103,8 +108,46 @@ if ($is_logged_in_user) {
         exit();
     }
     $is_rider_context = isRiderSessionActive($header_db_conn);
+
+    $session_uid = (int)$_SESSION['user_id'];
+    $session_utype = strtolower(trim((string)($_SESSION['user_type'] ?? '')));
+    $session_urole = strtolower(trim((string)($_SESSION['role_name'] ?? '')));
+    $session_uacc = strtolower(trim((string)($_SESSION['account_type'] ?? '')));
+
+    $is_admin_or_shop_owner = (
+        $session_utype === 'admin' ||
+        $session_utype === 'partner' ||
+        $session_utype === 'employee' ||
+        $session_uacc === 'organization' ||
+        in_array($session_urole, ['super_admin', 'business_owner', 'store_manager', 'partner_owner', 'cashier'], true) ||
+        hasBackofficeAccess($header_db_conn, $session_uid)
+    );
+
+    if ($is_admin_or_shop_owner) {
+        $backoffice_dash_route = resolveBackofficeDashboardRoute($header_db_conn, $session_uid);
+        $header_current_script = basename($_SERVER['PHP_SELF'] ?? '');
+        $customer_only_pages = [
+            'index.php',
+            'menu.php',
+            'cart.php',
+            'checkout.php',
+            'shops.php',
+            'preorder.php',
+            'order_success.php',
+            'track_order.php',
+            'my_orders.php',
+            'favorites.php'
+        ];
+
+        if (in_array($header_current_script, $customer_only_pages, true)) {
+            header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+            header("Pragma: no-cache");
+            header("Location: " . $path_prefix . $backoffice_dash_route);
+            exit();
+        }
+    }
 }
-$nav_logo_href = $is_rider_context ? ($path_prefix . 'rider/index.php') : ($path_prefix . 'index.php');
+$nav_logo_href = $is_rider_context ? ($path_prefix . 'rider/index.php') : ($is_admin_or_shop_owner && $backoffice_dash_route !== '' ? ($path_prefix . $backoffice_dash_route) : ($path_prefix . 'index.php'));
 
 $ongoing_order_id = 0;
 $ongoing_order_number = '';

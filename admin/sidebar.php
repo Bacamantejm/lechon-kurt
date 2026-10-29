@@ -538,7 +538,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
 <!-- Admin Sidebar Navigation -->
 <nav class="admin-sidebar" id="adminSidebar">
     <div class="sidebar-header">
-        <a href="../menu.php?seller_id=<?php echo (int)($partner_scope_owner_id ?: $user_id); ?>" class="sidebar-brand-link" title="View Your Storefront" style="text-decoration: none; color: inherit; display: block;">
+        <a href="index.php" class="sidebar-brand-link" title="<?php echo htmlspecialchars($sidebar_brand_name); ?> Dashboard" style="text-decoration: none; color: inherit; display: block;">
             <div class="sidebar-brand-mark">
                 <?php if ($sidebar_brand_logo !== ''): ?>
                     <img src="<?php echo htmlspecialchars($sidebar_brand_logo); ?>" alt="<?php echo htmlspecialchars($sidebar_brand_name); ?> logo" class="sidebar-brand-logo">

@@ -64,8 +64,12 @@ if (isset($_SESSION['user_id'])) {
         $custom_redirect = sanitizeRelativePhpRedirect($_GET['redirect'] ?? '');
         if ($custom_redirect !== null) {
             $custom_redirect_path = parse_url($custom_redirect, PHP_URL_PATH) ?: $custom_redirect;
-            if (file_exists(__DIR__ . '/' . ltrim($custom_redirect_path, '/'))) {
-                $redirect = $custom_redirect;
+            $is_backoffice_user = hasBackofficeAccess($conn, $session_user_id) || in_array(strtolower((string)($_SESSION['user_type'] ?? '')), ['admin', 'partner'], true);
+            $is_customer_landing = in_array($custom_redirect_path, ['index.php', 'menu.php', 'cart.php', 'checkout.php', 'shops.php', 'preorder.php'], true) || $custom_redirect_path === '';
+            if (!($is_backoffice_user && $is_customer_landing)) {
+                if (file_exists(__DIR__ . '/' . ltrim($custom_redirect_path, '/'))) {
+                    $redirect = $custom_redirect;
+                }
             }
         }
         header("Location: " . $redirect);
@@ -242,7 +246,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
                         $can_access_employee = ($user_type === 'employee' || $is_employee_record);
                         $target_exists = file_exists(__DIR__ . '/' . ltrim($custom_redirect_path, '/'));
 
-                        if (($is_admin_redirect && $can_access_admin) ||
+                        $is_customer_landing = in_array($custom_redirect_path, ['index.php', 'menu.php', 'cart.php', 'checkout.php', 'shops.php', 'preorder.php'], true) || $custom_redirect_path === '';
+                        if ($can_access_admin && $is_customer_landing) {
+                            // Never redirect admin or shop owner to customer storefront
+                        } elseif (($is_admin_redirect && $can_access_admin) ||
                             ($is_employee_redirect && $can_access_employee) ||
                             (!$is_admin_redirect && !$is_employee_redirect)) {
                             if ($target_exists) {

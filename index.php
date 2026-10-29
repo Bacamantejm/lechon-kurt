@@ -6,6 +6,32 @@ if (!empty($_SESSION['user_id']) && isDeliveryDriverUser($conn, (int)$_SESSION['
     header("Location: rider/index.php");
     exit();
 }
+
+// Strictly prevent admin, shop owner, and backoffice personnel from accessing the customer landing page
+require_once __DIR__ . '/includes/rbac.php';
+if (!empty($_SESSION['user_id'])) {
+    $guard_uid = (int)$_SESSION['user_id'];
+    $guard_utype = strtolower(trim((string)($_SESSION['user_type'] ?? '')));
+    $guard_urole = strtolower(trim((string)($_SESSION['role_name'] ?? '')));
+    $guard_uacc = strtolower(trim((string)($_SESSION['account_type'] ?? '')));
+
+    $guard_is_backoffice = (
+        $guard_utype === 'admin' ||
+        $guard_utype === 'partner' ||
+        $guard_utype === 'employee' ||
+        $guard_uacc === 'organization' ||
+        in_array($guard_urole, ['super_admin', 'business_owner', 'store_manager', 'partner_owner', 'cashier'], true) ||
+        hasBackofficeAccess($conn, $guard_uid)
+    );
+
+    if ($guard_is_backoffice) {
+        $guard_target = resolveBackofficeDashboardRoute($conn, $guard_uid);
+        header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+        header("Pragma: no-cache");
+        header("Location: " . $guard_target);
+        exit();
+    }
+}
 require_once __DIR__ . '/includes/favorites_helper.php';
 require_once __DIR__ . '/includes/store_availability_helper.php';
 require_once __DIR__ . '/includes/partner_advertisement_helper.php';
