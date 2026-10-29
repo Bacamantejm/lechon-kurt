@@ -1210,19 +1210,20 @@ function enforcePartnerRoleScopedPageAccess($conn, $user_id, $current_page) {
     }
 
     $message = 'Access denied: Your assigned role does not include permission for this department module.';
+    $redirect_target = (function_exists('isCashierUser') && isCashierUser($conn, $user_id)) ? 'kiosk.php' : 'index.php';
     if (isAjaxRequest()) {
         http_response_code(403);
         header('Content-Type: application/json');
         echo json_encode([
             'success' => false,
             'message' => $message,
-            'redirect' => 'index.php'
+            'redirect' => $redirect_target
         ]);
         exit;
     }
 
     $_SESSION['error'] = $message;
-    header('Location: index.php');
+    header('Location: ' . $redirect_target);
     exit;
 }
 

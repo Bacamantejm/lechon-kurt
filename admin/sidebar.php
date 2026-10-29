@@ -373,12 +373,16 @@ $is_employee_user = isset($_SESSION['user_type']) && strtolower(trim($_SESSION['
 $current_script_path = str_replace('\\', '/', (string)($_SERVER['PHP_SELF'] ?? ''));
 $is_super_admin_context = strpos($current_script_path, '/super_admin/') !== false;
 
+$is_cashier_user = function_exists('isCashierUser') && isCashierUser($conn, $user_id);
 if ($is_super_admin_user) {
     $dashboard_href = $is_super_admin_context ? 'super_admin_dashboard.php' : '../super_admin/super_admin_dashboard.php';
     $dashboard_active = in_array($current_page, ['super_admin_dashboard.php', 'index.php'], true);
 } elseif ($can_operations_modules && $is_super_admin_context) {
     $dashboard_href = 'operations_dashboard.php';
     $dashboard_active = in_array($current_page, ['operations_dashboard.php', 'index.php'], true);
+} elseif ($is_cashier_user) {
+    $dashboard_href = 'kiosk.php';
+    $dashboard_active = ($current_page === 'kiosk.php');
 } else {
     // In admin pages, keep Dashboard inside admin/index.php.
     $dashboard_href = 'index.php';
@@ -571,15 +575,15 @@ body.dark-mode .sidebar-menu .menu-item.active i {
             <i class="fas fa-search" style="font-size: 20px; display: block; margin: 0 auto 8px; opacity: 0.5;"></i>
             No matching menu items
         </li>
-        <?php if ($can_dashboard): ?>
-            <li class="menu-header">Main</li>
+        <?php if ($can_dashboard || $is_cashier_user): ?>
+            <li class="menu-header"><?php echo $is_cashier_user ? 'POS Workspace' : 'Main'; ?></li>
             <li>
                 <a href="<?php echo htmlspecialchars($dashboard_href); ?>" class="menu-item <?php echo $dashboard_active ? 'active' : ''; ?>">
-                    <i class="fas fa-chart-line"></i>
-                    <span><?php echo $is_super_admin_user ? 'Owner Dashboard' : 'Dashboard'; ?></span>
+                    <i class="<?php echo $is_cashier_user ? 'fas fa-cash-register' : 'fas fa-chart-line'; ?>"></i>
+                    <span><?php echo $is_cashier_user ? 'Walk-in Orders (POS)' : ($is_super_admin_user ? 'Owner Dashboard' : 'Dashboard'); ?></span>
                 </a>
             </li>
-            <?php if ($can_business_account): ?>
+            <?php if ($can_business_account && !$is_cashier_user): ?>
             <li>
                 <a href="business_account.php" class="menu-item <?php echo ($current_page === 'business_account.php') ? 'active' : ''; ?>">
                     <i class="fas fa-id-card"></i>
@@ -589,7 +593,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
             <?php endif; ?>
         <?php endif; ?>
 
-        <?php if (!$is_super_admin_user && $is_partner_scoped_admin && is_array($partner_ops_flow)): ?>
+        <?php if (!$is_super_admin_user && $is_partner_scoped_admin && is_array($partner_ops_flow) && ($is_partner_owner_admin || $is_business_owner_role)): ?>
             <?php
             $pipeline_total_count = 0;
             foreach (($partner_ops_flow['modules'] ?? []) as $flow_mod) {
@@ -1236,12 +1240,6 @@ body.dark-mode .sidebar-menu .menu-item.active i {
             <a href="../employee/dashboard.php" class="logout-btn" style="margin-bottom: 8px; background-color: #475467;">
                 <i class="fas fa-user-clock"></i>
                 <span>Employee Dashboard</span>
-            </a>
-        <?php endif; ?>
-        <?php if ($is_partner_scoped_admin || $is_partner_owner_admin || $is_business_owner_role): ?>
-            <a href="javascript:void(0);" onclick="openShopOwnerTutorial(true)" class="logout-btn" style="margin-bottom: 8px; background: #fff1f0; color: #b3261e; border: 1px solid #fee4e2;" title="Replay Merchant Tour">
-                <i class="fas fa-compass" style="color: #b3261e;"></i>
-                <span>Shop Tour</span>
             </a>
         <?php endif; ?>
         <a href="logout.php" class="logout-btn" id="logoutBtn">
@@ -2227,7 +2225,8 @@ body.dark-mode .sidebar-menu .menu-item.active i {
             role: <?php echo json_encode($sidebar_role_label); ?>,
             currentShop: <?php echo json_encode($topbar_current_shop_label); ?>,
             myAccountLink: <?php echo json_encode($topbar_my_account_link); ?>,
-            billingLink: <?php echo json_encode($topbar_billing_link); ?>
+            billingLink: <?php echo json_encode($topbar_billing_link); ?>,
+            canShopTour: <?php echo json_encode(($is_partner_scoped_admin || $is_partner_owner_admin || $is_business_owner_role) && empty($is_cashier_user)); ?>
         };
 
         function escapeInlineHtml(value) {
@@ -2427,6 +2426,10 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                     const billingMarkup = safeBillingLink !== ''
                         ? `<a href="${safeBillingLink}" class="admin-profile-link"><i class="fas fa-wallet"></i><span>Billing</span></a>`
                         : '';
+                    const canShopTour = Boolean(topbarProfileMenu.canShopTour);
+                    const shopTourMarkup = canShopTour
+                        ? `<a href="javascript:void(0);" id="adminProfileShopTourBtn" class="admin-profile-link"><i class="fas fa-compass" style="color:#b3261e;"></i><span>Shop Tour</span></a>`
+                        : '';
                     adminProfile.insertAdjacentHTML('beforeend', `
                         <div class="admin-profile-dropdown" aria-hidden="true">
                             <div class="admin-profile-dropdown-head">
@@ -2442,6 +2445,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                             <div class="admin-profile-links">
                                 <a href="${safeMyAccountLink}" class="admin-profile-link"><i class="fas fa-user-circle"></i><span>My Account</span></a>
                                 ${billingMarkup}
+                                ${shopTourMarkup}
                                 <a href="../logout.php" class="admin-profile-link text-danger"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
                             </div>
                         </div>
@@ -2450,6 +2454,24 @@ body.dark-mode .sidebar-menu .menu-item.active i {
             }
 
             const profileDropdown = adminProfile ? adminProfile.querySelector('.admin-profile-dropdown') : null;
+            if (profileDropdown) {
+                profileDropdown.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                });
+                const tourBtn = profileDropdown.querySelector('#adminProfileShopTourBtn');
+                if (tourBtn) {
+                    tourBtn.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        closeProfileMenu();
+                        if (typeof window.openShopOwnerTutorial === 'function') {
+                            window.openShopOwnerTutorial(true);
+                        } else {
+                            window.location.href = 'index.php?tour=1';
+                        }
+                    });
+                }
+            }
             const closeProfileMenu = () => {
                 if (adminProfile) {
                     adminProfile.classList.remove('open');

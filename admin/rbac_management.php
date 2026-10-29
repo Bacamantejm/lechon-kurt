@@ -297,6 +297,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     
                     if (mysqli_stmt_execute($insert_stmt)) {
+                        $new_role_id = mysqli_insert_id($conn);
+                        // If cashier role, auto-attach default POS terminal permissions
+                        if (strpos(strtolower($role_name), 'cashier') !== false && $new_role_id > 0) {
+                            $default_perms = ['orders.view', 'orders.create', 'products.view'];
+                            foreach ($default_perms as $p_slug) {
+                                $p_stmt = mysqli_prepare($conn, "SELECT id FROM permissions WHERE name = ? LIMIT 1");
+                                if ($p_stmt) {
+                                    mysqli_stmt_bind_param($p_stmt, "s", $p_slug);
+                                    mysqli_stmt_execute($p_stmt);
+                                    $p_res = mysqli_stmt_get_result($p_stmt);
+                                    if ($p_res && ($p_row = mysqli_fetch_assoc($p_res))) {
+                                        $pid = (int)$p_row['id'];
+                                        mysqli_query($conn, "INSERT IGNORE INTO role_permissions (role_id, permission_id) VALUES ($new_role_id, $pid)");
+                                    }
+                                    mysqli_stmt_close($p_stmt);
+                                }
+                            }
+                        }
                         $_SESSION['success'] = "Role '" . rbacRoleDisplayName($stored_role_name, $is_partner_owner_admin ? $partner_scope_owner_id : 0) . "' created successfully.";
                         logRBACAction($conn, $current_user_id, 'ROLE_CREATED', 'roles', "Created new role: $stored_role_name");
                     } else {
@@ -1799,6 +1817,12 @@ unset($_SESSION['success'], $_SESSION['error']);
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                         <input type="hidden" name="return_tab" value="create">
                         
+                        <div class="mb-3 p-2 bg-light border rounded-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <span class="small fw-semibold text-muted"><i class="fas fa-magic text-secondary me-1"></i> Quick Preset:</span>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="applyCashierPreset()">
+                                <i class="fas fa-cash-register me-1"></i> Cashier (POS Staff)
+                            </button>
+                        </div>
                         <div class="form-group">
                             <label for="role_name">Role Name *</label>
                             <input type="text" name="role_name" id="role_name" class="form-control" 
@@ -1831,6 +1855,13 @@ unset($_SESSION['success'], $_SESSION['error']);
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
     <script>
+        function applyCashierPreset() {
+            const nameEl = document.getElementById('role_name');
+            const descEl = document.getElementById('role_description');
+            if (nameEl) nameEl.value = 'cashier';
+            if (descEl) descEl.value = 'Front counter cashier for walk-in orders and POS terminal processing.';
+        }
+
         // Theme Toggler
         const themeToggler = document.getElementById('themeToggler');
         const body = document.body;

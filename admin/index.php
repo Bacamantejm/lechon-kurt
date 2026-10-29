@@ -17,6 +17,18 @@ if ($is_super_admin_user && basename($_SERVER['PHP_SELF'] ?? '') === 'index.php'
     exit;
 }
 
+// Redirect Cashier to their dedicated Walk-in Order POS terminal
+if (function_exists('isCashierUser') && isCashierUser($conn, $current_user_id)) {
+    header('Location: kiosk.php');
+    exit;
+}
+
+// Redirect any sub-user without dashboard.view permission but with orders.create to kiosk
+if (function_exists('hasPermission') && !hasPermission($conn, $current_user_id, 'dashboard.view') && hasPermission($conn, $current_user_id, 'orders.create')) {
+    header('Location: kiosk.php');
+    exit;
+}
+
 // Fetch linked employee record and role info for prominent dashboard display
 $emp_info_query = mysqli_query($conn, "
     SELECT e.employee_id, e.position, d.department_name 
@@ -547,11 +559,6 @@ if ($seller_scope_id !== null) {
                             <i class="fas fa-moon"></i>
                         </button>
                     <div class="topbar-right">
-                        <?php if ($is_partner_scoped_admin || (isset($is_partner_owner_admin) && $is_partner_owner_admin) || (isset($is_business_owner_role) && $is_business_owner_role)): ?>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="openShopOwnerTutorial(true)" title="Replay Merchant Onboarding Tour" style="display:inline-flex; align-items:center; gap:6px; font-size:0.82rem; font-weight:600; padding:6px 12px; border-radius:8px; border:1px solid #d0d5dd; background:#ffffff; color:#344054;">
-                            <i class="fas fa-compass" style="color:#b3261e;"></i> <span>Shop Tour</span>
-                        </button>
-                        <?php endif; ?>
                         <div class="date-display" id="currentDate"></div>
                         <div class="admin-profile">
                             <span><?php echo htmlspecialchars($admin_info['full_name']); ?></span>

@@ -1530,6 +1530,33 @@ body.dark-mode .mobile-segment-btn.active {
                             </button>
                         </div>
                     </div>
+
+                    <?php if ($is_organization_account || !empty($partner_subscription) || (isset($_SESSION['user_type']) && in_array($_SESSION['user_type'], ['admin', 'partner'], true))): ?>
+                    <!-- Merchant Onboarding Tour Card -->
+                    <div class="acc-panel-card" style="margin-top: 20px;">
+                        <div class="acc-panel-head">
+                            <div>
+                                <h3>Merchant Onboarding &amp; Walkthrough</h3>
+                                <p>Take an interactive walkthrough of your sales cockpit, inventory, and order dispatching.</p>
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 4px;flex-wrap:wrap;gap:14px;">
+                            <div style="display:flex;align-items:center;gap:14px;">
+                                <div style="width:44px;height:44px;border-radius:12px;background:#fff1f0;color:#b3261e;display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;">
+                                    <i class="fas fa-compass"></i>
+                                </div>
+                                <div>
+                                    <strong style="display:block;font-size:0.95rem;color:var(--ink);">Store Management Tour</strong>
+                                    <span style="font-size:0.82rem;color:var(--muted);">Replay the 4-step merchant tour for branch management, catalog, and orders.</span>
+                                </div>
+                            </div>
+                            <a href="admin/index.php?tour=1" class="acc-btn-secondary" style="min-height:38px;padding:0 16px;border-radius:10px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:8px;color:#344054;">
+                                <i class="fas fa-play" style="color:#b3261e;font-size:0.8rem;"></i>
+                                <span>Start Tour</span>
+                            </a>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                 </div>
 
                 <!-- 2. Address Book & Map Pin Tab -->

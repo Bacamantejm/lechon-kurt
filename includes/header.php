@@ -2478,6 +2478,9 @@ document.addEventListener('pointerdown', function(e) {
                     <a href="<?php echo $path_prefix; ?>seller_vouchers.php" class="user-dropdown-item"><i class="fas fa-tags"></i> My Vouchers</a>
                     <a href="<?php echo $path_prefix; ?>seller_advertisements.php" class="user-dropdown-item"><i class="fas fa-bullhorn"></i> My Advertisements</a>
                     <?php endif; ?>
+                    <?php if ($is_shop_owner_or_partner): ?>
+                    <a href="<?php echo $path_prefix; ?>admin/index.php?tour=1" class="user-dropdown-item"><i class="fas fa-compass" style="color:#b3261e;"></i> Shop Tour</a>
+                    <?php endif; ?>
                     <?php if ($normalized_user_type === 'admin'): ?>
                     <a href="<?php echo $path_prefix; ?>admin/index.php" class="user-dropdown-item"><i class="fas fa-gauge-high"></i> Admin Panel</a>
                     <?php endif; ?>
@@ -2622,6 +2625,9 @@ document.addEventListener('pointerdown', function(e) {
                     <a href="<?php echo $path_prefix; ?>seller_products.php" class="user-dropdown-item"><i class="fas fa-box"></i> My Products</a>
                     <a href="<?php echo $path_prefix; ?>seller_vouchers.php" class="user-dropdown-item"><i class="fas fa-tags"></i> My Vouchers</a>
                     <?php endif; ?>
+                    <?php if ($is_shop_owner_or_partner): ?>
+                    <a href="<?php echo $path_prefix; ?>admin/index.php?tour=1" class="user-dropdown-item"><i class="fas fa-compass" style="color:#b3261e;"></i> Shop Tour</a>
+                    <?php endif; ?>
                     <?php if ($normalized_user_type === 'admin'): ?>
                     <a href="<?php echo $path_prefix; ?>admin/index.php" class="user-dropdown-item"><i class="fas fa-gauge-high"></i> Admin Panel</a>
                     <?php endif; ?>
@@ -2693,6 +2699,9 @@ document.addEventListener('pointerdown', function(e) {
         <li><a href="<?php echo $path_prefix; ?>subscription_plans.php" class="<?php echo $current_page === 'subscription_plans' ? 'active' : ''; ?>"><i class="fas fa-layer-group"></i> Subscription Plans</a></li>
         <li><a href="<?php echo $path_prefix; ?>seller_products.php"><i class="fas fa-box"></i> My Products</a></li>
         <li><a href="<?php echo $path_prefix; ?>seller_vouchers.php"><i class="fas fa-tags"></i> My Vouchers</a></li>
+        <?php endif; ?>
+        <?php if ($is_shop_owner_or_partner): ?>
+        <li><a href="<?php echo $path_prefix; ?>admin/index.php?tour=1"><i class="fas fa-compass" style="color:#b3261e;"></i> Shop Tour</a></li>
         <?php endif; ?>
         <li><a href="javascript:void(0);" onclick="confirmLogout()"><i class="fas fa-right-from-bracket"></i> Logout</a></li>
         <?php endif; ?>
