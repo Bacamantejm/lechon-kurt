@@ -1927,9 +1927,16 @@ body.dark-mode .hr-workspace-link.active {
     box-shadow: 0 0 0 4px rgba(198, 40, 40, 0.1);
 }
 
+.form-select {
+    padding-right: 36px;
+    background-position: right 12px center;
+}
+
 .form-select-sm {
-    font-size: 12px;
-    padding: 4px 8px;
+    font-size: 13px;
+    padding: 4px 28px 4px 10px;
+    background-position: right 8px center;
+    background-size: 12px 10px;
 }
 
 /* Modals */

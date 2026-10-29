@@ -1864,6 +1864,36 @@ $pending_payroll_count = count($visible_payroll_rows);
             color: #b3261e;
         }
 
+        .finance-period-select {
+            height: 34px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #101828;
+            background-color: #ffffff;
+            border: 1px solid #d0d5dd;
+            border-radius: 8px;
+            padding: 4px 28px 4px 10px !important;
+            background-position: right 8px center !important;
+            background-size: 12px 10px !important;
+            cursor: pointer;
+        }
+
+        .finance-period-select-month {
+            width: 130px !important;
+            min-width: 130px !important;
+        }
+
+        .finance-period-select-year {
+            width: 95px !important;
+            min-width: 95px !important;
+        }
+
+        body.dark-mode .finance-period-select {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+
         .finance-stat-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -2294,14 +2324,14 @@ $pending_payroll_count = count($visible_payroll_rows);
                     </div>
                     <form method="GET" class="d-flex flex-wrap align-items-center gap-2 pt-2 border-top">
                         <span class="text-muted small fw-semibold"><i class="fas fa-filter text-secondary"></i> Period:</span>
-                        <select name="month" class="form-select form-select-sm" style="width: auto;">
+                        <select name="month" class="form-select form-select-sm finance-period-select finance-period-select-month">
                             <?php for ($m = 1; $m <= 12; $m++): ?>
                                 <option value="<?= $m; ?>" <?= ($m == $current_month) ? 'selected' : ''; ?>>
                                     <?= date('F', mktime(0, 0, 0, $m, 1)); ?>
                                 </option>
                             <?php endfor; ?>
                         </select>
-                        <select name="year" class="form-select form-select-sm" style="width: auto;">
+                        <select name="year" class="form-select form-select-sm finance-period-select finance-period-select-year">
                             <?php for ($y = date('Y'); $y >= date('Y') - 2; $y--): ?>
                                 <option value="<?= $y; ?>" <?= ($y == $current_year) ? 'selected' : ''; ?>><?= $y; ?></option>
                             <?php endfor; ?>
