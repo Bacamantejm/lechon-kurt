@@ -145,7 +145,7 @@ class PartnerExpenseSyncService
             }
             mysqli_stmt_bind_param(
                 $stmt,
-                'ssdssssissi',
+                'ssdssssisi',
                 $expense['category'],
                 $expense['description'],
                 $expense['amount'],
