@@ -887,11 +887,11 @@ $remaining = $total - $downpayment;
                                         <span class="fp-radio-dot"></span>
                                     </div>
                                     <div class="fp-pm-icon-wrap" style="width: 38px; height: 38px; border-radius: 8px; background: #eff8ff; color: #175cd3; display: flex; align-items: center; justify-content: center; font-size: 16px;">
-                                        <i class="fas fa-credit-card"></i>
+                                        <i class="fas fa-wallet"></i>
                                     </div>
                                     <div class="fp-option-info">
-                                        <span class="fp-option-label">Online Payment (GCash / Maya / Cards)</span>
-                                        <span class="fp-option-subtext">Fast and secure online checkout via PayMongo</span>
+                                        <span class="fp-option-label">Online Payment (GCash / Maya)</span>
+                                        <span class="fp-option-subtext">Fast and secure online e-wallet checkout via PayMongo</span>
                                     </div>
                                 </div>
 
@@ -914,7 +914,7 @@ $remaining = $total - $downpayment;
                             <div class="fp-payment-guidance-box" id="fpDeliveryPaymentGuidance" style="margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: #eff8ff; border: 1px solid #b2ddff; font-size: 13px; color: #175cd3; display: flex; align-items: flex-start; gap: 8px;">
                                 <i class="fas fa-shield-alt" style="margin-top: 2px;"></i>
                                 <div id="fpDeliveryGuidanceText">
-                                    Official payment gateway handled securely by PayMongo. Fast, instant GCash, Maya &amp; Card verification.
+                                    Official payment gateway handled securely by PayMongo. Fast, instant GCash &amp; Maya online verification.
                                 </div>
                             </div>
 
@@ -1140,7 +1140,7 @@ $remaining = $total - $downpayment;
                                         </span>
                                         <input type="radio" name="preorder_payment_term" value="full" checked style="accent-color: #b3261e;">
                                     </div>
-                                    <span style="font-size: 0.8rem; color: #475467;">Pay 100% now via PayMongo (GCash / Card).</span>
+                                    <span style="font-size: 0.8rem; color: #475467;">Pay 100% now via PayMongo (GCash / Maya).</span>
                                     <span style="font-size: 0.95rem; font-weight: 800; color: #b3261e; margin-top: 4px;">₱<?php echo number_format($total, 2); ?></span>
                                 </label>
 
@@ -5666,7 +5666,7 @@ function selectDeliveryPaymentMethod(method) {
             guidanceBox.style.color = '#175cd3';
         }
         if (guidanceText) {
-            guidanceText.innerHTML = `<i class="fas fa-shield-alt"></i> Official payment gateway handled securely by PayMongo. Fast, instant GCash, Maya & Card verification.`;
+            guidanceText.innerHTML = `<i class="fas fa-shield-alt"></i> Official payment gateway handled securely by PayMongo. Fast, instant GCash & Maya online verification.`;
         }
     }
 }
@@ -8714,7 +8714,7 @@ function updatePaymentUI() {
         }
         if (amountDisplay) amountDisplay.textContent = formattedAmount;
         if (noteText) {
-            noteText.innerHTML = '<i class="fas fa-lock" style="color: #175cd3; margin-right: 4px;"></i> You will be redirected to PayMongo to complete payment securely via GCash, Maya, or Card.';
+            noteText.innerHTML = '<i class="fas fa-lock" style="color: #175cd3; margin-right: 4px;"></i> You will be redirected to PayMongo to complete payment securely via GCash or Maya.';
         }
         if (submitBtn) {
             submitBtn.innerHTML = `<i class="fas fa-lock"></i> Proceed to Online Payment (${formattedAmount})`;
@@ -9040,7 +9040,7 @@ document.getElementById('checkoutForm').addEventListener('submit', function(e) {
         confirmationHtml += `
                 <div style="background:#eff8ff; border:1px solid #b2ddff; border-radius:8px; padding:10px 12px; font-size:12.5px; color:#175cd3; line-height:1.45;">
                     <i class="fas fa-lock" style="margin-right:4px;"></i>
-                    You will be redirected to PayMongo to complete payment securely via GCash, Maya, or Card.
+                    You will be redirected to PayMongo to complete payment securely via GCash or Maya.
                 </div>
             </div>
         `;

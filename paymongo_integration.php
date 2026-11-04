@@ -142,10 +142,9 @@ class PayMongoIntegration {
                 return ['gcash'];
             case 'paymaya':
                 return ['paymaya'];
-            case 'card':
-                return ['card'];
             default:
-                return ['card', 'gcash', 'paymaya'];
+                // Only online e-wallets (GCash & Maya), card payments removed
+                return ['gcash', 'paymaya'];
         }
     }
     

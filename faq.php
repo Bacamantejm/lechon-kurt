@@ -37,7 +37,7 @@ $faqs = [
         'badge' => 'Recommended Payment',
         'icon' => 'fa-credit-card',
         'question' => 'What is the recommended payment method?',
-        'answer' => 'We recommend PayMongo online payments (GCash, Maya, Credit/Debit Card, Bank Transfer) for instant validation and prioritized kitchen dispatch.'
+        'answer' => 'We recommend PayMongo online payments (GCash and Maya) for instant validation and prioritized kitchen dispatch.'
     ],
     [
         'category' => 'payment',

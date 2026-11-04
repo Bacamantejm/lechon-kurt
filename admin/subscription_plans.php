@@ -951,13 +951,7 @@ $hasBranding = (int)($plan['includes_custom_branding'] ?? 0) === 1;
                                 <span>Maya</span>
                             </div>
                         </label>
-                        <label class="sub-pay-option">
-                            <input type="radio" name="payment_method" value="card">
-                            <div class="sub-pay-card">
-                                <i class="fas fa-credit-card" style="color: #1a1f71;"></i>
-                                <span>Card (Visa/MC)</span>
-                            </div>
-                        </label>
+                        
                         <label class="sub-pay-option">
                             <input type="radio" name="payment_method" value="grab_pay">
                             <div class="sub-pay-card">
