@@ -230,7 +230,7 @@ if (favoritesIsCustomerUserSession()) {
 $sales_map = [];
 $sales_sql = "SELECT p.id, COALESCE(SUM(CASE WHEN o.id IS NOT NULL THEN oi.quantity ELSE 0 END),0) total_sold
               FROM products p
-              LEFT JOIN order_items oi ON (oi.product_id = p.product_id OR oi.product_id = CAST(p.id AS CHAR))
+              LEFT JOIN order_items oi ON (oi.product_id = p.product_id OR oi.product_id = CONVERT(p.id, CHAR) COLLATE utf8mb4_general_ci)
               LEFT JOIN orders o ON oi.order_id = o.id AND o.is_archived = 0 AND o.status <> 'cancelled'
               WHERE p.is_archived = 0
               GROUP BY p.id";
@@ -485,8 +485,12 @@ $global_rating_sum = 0;
 $global_rating_count = 0;
 $global_reviews = 0;
 $product_scope_filter = ($scoped_partner_seller_id > 0) ? " AND p.seller_id = " . (int)$scoped_partner_seller_id : "";
-$product_sql = "SELECT p.id, p.seller_id, p.name, p.category, p.price, p.image, p.avg_rating, p.review_count, COALESCE(NULLIF(TRIM(u.business_name), ''), 'Lechon Delights Kitchen') seller_name
-                FROM products p LEFT JOIN users u ON p.seller_id = u.id
+$product_sql = "SELECT p.id, p.seller_id, p.name, p.category, p.price, p.image, p.avg_rating, p.review_count,
+                       COALESCE(NULLIF(TRIM(u.business_name), ''), NULLIF(TRIM(sl.store_name), ''), NULLIF(TRIM(u.full_name), ''), 'Dasmariñas Main Branch') AS seller_name,
+                       COALESCE(sl.store_id, 0) AS store_branch_id
+                FROM products p
+                LEFT JOIN users u ON p.seller_id = u.id
+                LEFT JOIN store_locations sl ON (sl.owner_user_id = p.seller_id AND sl.is_active = 1)
                 WHERE p.is_archived = 0 AND p.is_active = 1 {$product_scope_filter}
                 ORDER BY p.created_at DESC, p.id DESC";
 $product_result = mysqli_query($conn, $product_sql);
@@ -494,40 +498,64 @@ if ($product_result) {
     while ($row = mysqli_fetch_assoc($product_result)) {
         $seller_id = isset($row['seller_id']) ? (int)$row['seller_id'] : 0;
         $key = $seller_id > 0 ? 'seller-' . $seller_id : 'platform-main';
-        if (!isset($stores[$key])) {
-            continue;
-        }
         $price = (float)$row['price'];
         $rating = (float)$row['avg_rating'];
         $category = trim((string)$row['category']) !== '' ? trim((string)$row['category']) : 'Filipino favorites';
         $image = asset_path($row['image'] ?? '', 'images/menu/whole-lechon.jpg');
-        $stores[$key]['live'] = true;
-        $stores[$key]['count']++;
-        $stores[$key]['order_volume'] += (int)($sales_map[(int)$row['id']] ?? 0);
-        $stores[$key]['start'] = $stores[$key]['start'] === null ? $price : min($stores[$key]['start'], $price);
-        $stores[$key]['reviews'] += (int)$row['review_count'];
-        if ($rating > 0) { $stores[$key]['rating_sum'] += $rating; $stores[$key]['rating_count']++; $global_rating_sum += $rating; $global_rating_count++; }
-        if ($stores[$key]['image'] === '') $stores[$key]['image'] = $image;
-        add_unique_limited($stores[$key]['tags'], $category, 3);
-        add_unique_limited($stores[$key]['items'], $row['name'], 3);
-        $stores[$key]['search_terms'][] = strtolower(trim((string)$row['name']));
-        $stores[$key]['search_terms'][] = strtolower(trim((string)$category));
-        $stores[$key]['search_terms'][] = strtolower(trim((string)$row['seller_name']));
+        $item_sold = (int)($sales_map[(int)$row['id']] ?? 0);
+        $branch_id = (int)($row['store_branch_id'] ?? 0);
+
+        $store_name = '';
+        if (isset($stores[$key])) {
+            $stores[$key]['live'] = true;
+            $stores[$key]['count']++;
+            $stores[$key]['order_volume'] += $item_sold;
+            $stores[$key]['start'] = $stores[$key]['start'] === null ? $price : min($stores[$key]['start'], $price);
+            $stores[$key]['reviews'] += (int)$row['review_count'];
+            if ($rating > 0) { $stores[$key]['rating_sum'] += $rating; $stores[$key]['rating_count']++; $global_rating_sum += $rating; $global_rating_count++; }
+            if ($stores[$key]['image'] === '') $stores[$key]['image'] = $image;
+            add_unique_limited($stores[$key]['tags'], $category, 3);
+            add_unique_limited($stores[$key]['items'], $row['name'], 3);
+            $stores[$key]['search_terms'][] = strtolower(trim((string)$row['name']));
+            $stores[$key]['search_terms'][] = strtolower(trim((string)$category));
+            $stores[$key]['search_terms'][] = strtolower(trim((string)$row['seller_name']));
+            $store_name = $stores[$key]['name'];
+            if ($branch_id <= 0 && !empty($stores[$key]['branch_id'])) {
+                $branch_id = (int)$stores[$key]['branch_id'];
+            }
+        } else {
+            $store_name = trim((string)$row['seller_name']);
+            if ($store_name === '' || strtolower($store_name) === 'admin user' || strtolower($store_name) === 'lechon delights kitchen') {
+                $store_name = 'Dasmariñas Main Branch';
+                $branch_id = 1;
+            }
+        }
+
         $categories[$category] = ($categories[$category] ?? 0) + 1;
         $global_min = $global_min === null ? $price : min($global_min, $price);
         $global_reviews += (int)$row['review_count'];
-        $menu_target = $seller_id > 0 ? 'menu.php?seller_id=' . $seller_id : (!empty($stores[$key]['branch_id']) ? 'menu.php?branch_id=' . $stores[$key]['branch_id'] : 'menu.php');
+
+        $menu_params = [];
+        if ($seller_id > 0) {
+            $menu_params['seller_id'] = $seller_id;
+        } elseif ($branch_id > 0) {
+            $menu_params['branch_id'] = $branch_id;
+        }
+        $menu_params['product_id'] = (int)$row['id'];
+        $menu_target = 'menu.php?' . http_build_query($menu_params);
+
         $products[] = [
             'id' => (int)$row['id'],
             'seller_id' => $seller_id,
+            'branch_id' => $branch_id,
             'menu_link' => $menu_target,
             'name' => trim((string)$row['name']),
-            'store' => $stores[$key]['name'],
+            'store' => $store_name,
             'category' => $category,
             'price' => $price,
             'rating' => $rating,
             'reviews' => (int)$row['review_count'],
-            'sold' => (int)($sales_map[(int)$row['id']] ?? 0),
+            'sold' => $item_sold,
             'image' => $image
         ];
     }
@@ -545,6 +573,52 @@ $global_product_search_terms = array_values(array_unique(array_filter(array_map(
     $category = strtolower(trim((string)($product['category'] ?? '')));
     return trim($name . ' ' . $category);
 }, $products))));
+
+$initial_search_query = trim((string)($_GET['search'] ?? ''));
+$initial_search_foods = [];
+if ($initial_search_query !== '' && isset($conn) && $conn instanceof mysqli) {
+    $search_param = '%' . $initial_search_query . '%';
+    $food_search_sql = "SELECT p.id, p.product_id, p.seller_id, p.name, p.category, p.price, p.image, p.avg_rating, p.review_count,
+                               COALESCE(NULLIF(TRIM(u.business_name), ''), NULLIF(TRIM(sl.store_name), ''), NULLIF(TRIM(u.full_name), ''), 'Dasmariñas Main Branch') AS store_name,
+                               COALESCE(sl.store_id, 0) AS branch_id,
+                               COALESCE(SUM(CASE WHEN o.id IS NOT NULL THEN oi.quantity ELSE 0 END), 0) AS total_sold
+                        FROM products p
+                        LEFT JOIN users u ON p.seller_id = u.id
+                        LEFT JOIN store_locations sl ON (sl.owner_user_id = p.seller_id AND sl.is_active = 1)
+                        LEFT JOIN order_items oi ON (oi.product_id = p.product_id OR oi.product_id = CONVERT(p.id, CHAR) COLLATE utf8mb4_general_ci)
+                        LEFT JOIN orders o ON oi.order_id = o.id AND o.is_archived = 0 AND o.status <> 'cancelled'
+                        WHERE p.is_archived = 0 AND p.is_active = 1
+                          AND (p.name LIKE ? OR p.description LIKE ? OR p.category LIKE ? OR u.business_name LIKE ? OR sl.store_name LIKE ?)
+                        GROUP BY p.id, p.product_id, p.seller_id, p.name, p.category, p.price, p.image, p.avg_rating, p.review_count, store_name, branch_id
+                        ORDER BY total_sold DESC, p.avg_rating DESC, p.id DESC
+                        LIMIT 16";
+    $f_stmt = mysqli_prepare($conn, $food_search_sql);
+    if ($f_stmt) {
+        mysqli_stmt_bind_param($f_stmt, 'sssss', $search_param, $search_param, $search_param, $search_param, $search_param);
+        mysqli_stmt_execute($f_stmt);
+        $f_res = mysqli_stmt_get_result($f_stmt);
+        if ($f_res) {
+            while ($f_row = mysqli_fetch_assoc($f_res)) {
+                $f_seller_id = (int)($f_row['seller_id'] ?? 0);
+                $f_branch_id = (int)($f_row['branch_id'] ?? 0);
+                $f_store = trim((string)$f_row['store_name']);
+                if ($f_store === '' || strtolower($f_store) === 'admin user') {
+                    $f_store = 'Dasmariñas Main Branch';
+                }
+                $f_params = [];
+                if ($f_seller_id > 0) $f_params['seller_id'] = $f_seller_id;
+                elseif ($f_branch_id > 0) $f_params['branch_id'] = $f_branch_id;
+                $f_params['product_id'] = (int)$f_row['id'];
+                $f_row['menu_link'] = 'menu.php?' . http_build_query($f_params);
+                $f_row['store_display_name'] = $f_store;
+                $f_row['image_path'] = asset_path($f_row['image'] ?? '', 'images/menu/whole-lechon.jpg');
+                $initial_search_foods[] = $f_row;
+            }
+            mysqli_free_result($f_res);
+        }
+        mysqli_stmt_close($f_stmt);
+    }
+}
 
 foreach ($branches as $branch) {
     $exists = false;
@@ -2454,7 +2528,7 @@ body.dark-mode .m-ref-cat-card span {
 }
 
 .market-section {
-    padding: 26px 0;
+    padding: 26px 0 140px;
 }
 
 .market-head {
@@ -4620,18 +4694,71 @@ document.addEventListener('DOMContentLoaded', function() {
                     </section>
                     <?php endif; ?>
 
-                    <?php if (!empty($featured_products)): ?>
-                    <!-- Prominent Best Sellers & Top Rated Dishes Section -->
-                    <section class="bestsellers-section" style="margin-bottom: 24px; padding: 18px 20px; background: linear-gradient(135deg, #fff9f2 0%, #ffffff 100%); border: 1px solid #efddcd; border-radius: 16px; box-shadow: 0 6px 18px rgba(42,33,29,0.04);">
+                    <!-- Dedicated Food Search Results Section (Shows when searching dishes) -->
+                    <section class="food-search-results-section" id="foodSearchResultsSection" style="display: <?php echo !empty($initial_search_query) ? 'block' : 'none'; ?>; margin-bottom: 24px; padding: 18px 20px; background: #ffffff; border: 1px solid #eaecf0; border-radius: 16px; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
                         <div class="market-head" style="margin-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 10px;">
                             <div>
-                                <div style="display:inline-flex; align-items:center; gap:5px; padding:3px 10px; background:#fff1f2; border:1px solid #ffe4e6; border-radius:999px; color:#b3261e; font-size:0.72rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">
-                                    <i class="fas fa-fire" style="color:#ef6b2e;"></i> Top Customer Choices
+                                <div style="display:inline-flex; align-items:center; gap:5px; padding:3px 10px; background:#fff1f0; border:1px solid #fee4e2; border-radius:999px; color:#b3261e; font-size:0.72rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">
+                                    <i class="fas fa-utensils"></i> Dish Search Results
                                 </div>
-                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.3rem; font-weight:800; color:#171922; margin:0 0 3px 0;">Best Sellers & Top Rated Dishes</h2>
-                                <p style="font-size:0.82rem; color:#7b6d64; margin:0;">Hand-picked customer favorites with high sales volume and top customer ratings across Cavite.</p>
+                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.3rem; font-weight:800; color:#101828; margin:0 0 3px 0;">
+                                    Dishes matching "<span id="foodSearchQueryText"><?php echo htmlspecialchars($initial_search_query); ?></span>"
+                                </h2>
+                                <p style="font-size:0.82rem; color:#475467; margin:0;">Select any dish to open and order directly from its selling shop.</p>
                             </div>
-                            <a href="menu.php" class="btn-outline btn-sm" style="border-radius:999px; font-weight:700; text-decoration:none; padding:6px 14px; font-size:0.78rem;">
+                            <button type="button" class="btn-outline btn-sm" id="clearFoodSearchBtn" style="border-radius:999px; font-weight:700; padding:6px 14px; font-size:0.78rem; border:1px solid #d0d5dd; color:#344054; background:#ffffff; cursor:pointer;">
+                                <i class="fas fa-times" style="margin-right:4px;"></i> Clear Search
+                            </button>
+                        </div>
+
+                        <div class="bestsellers-grid" id="foodSearchResultsGrid">
+                            <?php if (!empty($initial_search_foods)): ?>
+                                <?php foreach ($initial_search_foods as $f_item): ?>
+                                    <a href="<?php echo htmlspecialchars($f_item['menu_link']); ?>" class="bestseller-card panda-card-link" style="background:#ffffff; border:1px solid #eaecf0; border-radius:14px; overflow:hidden; display:flex; flex-direction:column; transition:transform 0.2s ease, box-shadow 0.2s ease; text-decoration:none; position:relative;">
+                                        <div class="store-card-image-wrap" style="height: 120px; position:relative; overflow:hidden;">
+                                            <div class="market-store-row-thumb" style="background-image: url('<?php echo htmlspecialchars($f_item['image_path']); ?>'); width:100%; height:100%; background-size:cover; background-position:center; transition:transform 0.3s ease;"></div>
+                                            <span style="position:absolute; top:8px; left:8px; background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-weight:800; font-size:0.68rem; padding:3px 8px; border-radius:999px; display:inline-flex; align-items:center; gap:3px; z-index:2;">
+                                                <i class="fas fa-store"></i> <?php echo htmlspecialchars($f_item['store_display_name']); ?>
+                                            </span>
+                                        </div>
+                                        <div class="store-card-details" style="padding: 12px; display:flex; flex-direction:column; flex:1;">
+                                            <h3 style="font-family:'Outfit',sans-serif; font-size:0.92rem; font-weight:800; color:#101828; margin:0 0 6px 0; line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;"><?php echo htmlspecialchars($f_item['name']); ?></h3>
+                                            <div style="margin-top:auto; padding-top:8px; border-top:1px dashed #eaecf0; display:flex; justify-content:space-between; align-items:center;">
+                                                <div>
+                                                    <strong style="font-size:0.95rem; color:#b3261e; font-weight:800; display:block;">₱<?php echo number_format((float)$f_item['price'], 2); ?></strong>
+                                                    <?php if ((int)$f_item['total_sold'] > 0): ?>
+                                                    <span style="font-size:0.68rem; color:#027a48; font-weight:700; background:#ecfdf3; border:1px solid #abefc6; padding:1px 6px; border-radius:4px;"><?php echo number_format((int)$f_item['total_sold']); ?> sold</span>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <span class="btn-primary btn-sm" style="padding:6px 12px; font-size:0.75rem; border-radius:8px; pointer-events:none; background:#b3261e; color:#fff; font-weight:700;">
+                                                    Order from Shop <i class="fas fa-arrow-right" style="font-size:0.7rem; margin-left:3px;"></i>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </a>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <div style="grid-column: 1 / -1; padding: 24px; text-align: center; color: #475467; background: #f8f9fa; border-radius: 12px; border: 1px dashed #d0d5dd;">
+                                    <i class="fas fa-utensils" style="font-size: 1.8rem; color: #98a2b3; margin-bottom: 8px; display: block;"></i>
+                                    <strong style="font-size: 0.95rem; color: #101828; display: block;">No matching dishes found</strong>
+                                    <span style="font-size: 0.82rem;">Try searching for other popular foods like "belly", "lechon", or "sisig".</span>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </section>
+
+                    <?php if (!empty($featured_products)): ?>
+                    <!-- Prominent Most Ordered Items from Partner Stores Section -->
+                    <section class="bestsellers-section" id="mostOrderedSection" style="margin-bottom: 24px; padding: 18px 20px; background: #ffffff; border: 1px solid #eaecf0; border-radius: 16px; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
+                        <div class="market-head" style="margin-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <div style="display:inline-flex; align-items:center; gap:5px; padding:3px 10px; background:#fff1f0; border:1px solid #fee4e2; border-radius:999px; color:#b3261e; font-size:0.72rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">
+                                    <i class="fas fa-fire"></i> Most Ordered Dishes
+                                </div>
+                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.3rem; font-weight:800; color:#101828; margin:0 0 3px 0;">Most Ordered Items of Partner Stores</h2>
+                                <p style="font-size:0.82rem; color:#475467; margin:0;">Customer top choices with highest order volume across our verified partner shops and kitchen hubs.</p>
+                            </div>
+                            <a href="menu.php" class="btn-outline btn-sm" style="border-radius:999px; font-weight:700; text-decoration:none; padding:6px 14px; font-size:0.78rem; border:1px solid #d0d5dd; color:#344054;">
                                 Explore Full Menu <i class="fas fa-arrow-right" style="margin-left:4px;"></i>
                             </a>
                         </div>
@@ -4643,11 +4770,11 @@ document.addEventListener('DOMContentLoaded', function() {
                                 $is_prod_fav = !empty($favorite_product_ids[(int)$prod_id_val]);
                                 $rank_num = $idx + 1;
                                 ?>
-                                <a href="<?php echo htmlspecialchars($product['menu_link'] ?? 'menu.php'); ?>" class="bestseller-card panda-card-link" style="background:#ffffff; border:1px solid #efddcd; border-radius:14px; overflow:hidden; display:flex; flex-direction:column; transition:transform 0.25s ease, box-shadow 0.25s ease; text-decoration:none; position:relative;">
-                                    <div class="store-card-image-wrap" style="height: 115px; position:relative; overflow:hidden;">
-                                        <div class="market-store-row-thumb" style="background-image: url('<?php echo htmlspecialchars($product['image']); ?>'); width:100%; height:100%; background-size:cover; background-position:center; transition:transform 0.4s ease;"></div>
-                                        <span class="bestseller-rank-badge" style="position:absolute; top:8px; left:8px; background:linear-gradient(135deg, #b3261e, #ef6b2e); color:#ffffff; font-weight:800; font-size:0.68rem; padding:3px 8px; border-radius:999px; box-shadow:0 3px 8px rgba(179,38,30,0.25); display:inline-flex; align-items:center; gap:3px; z-index:2;">
-                                            <i class="fas fa-fire"></i> #<?php echo $rank_num; ?> Best Seller
+                                <a href="<?php echo htmlspecialchars($product['menu_link'] ?? 'menu.php'); ?>" class="bestseller-card panda-card-link" style="background:#ffffff; border:1px solid #eaecf0; border-radius:14px; overflow:hidden; display:flex; flex-direction:column; transition:transform 0.2s ease, box-shadow 0.2s ease; text-decoration:none; position:relative;">
+                                    <div class="store-card-image-wrap" style="height: 120px; position:relative; overflow:hidden;">
+                                        <div class="market-store-row-thumb" style="background-image: url('<?php echo htmlspecialchars($product['image']); ?>'); width:100%; height:100%; background-size:cover; background-position:center; transition:transform 0.3s ease;"></div>
+                                        <span class="bestseller-rank-badge" style="position:absolute; top:8px; left:8px; background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-weight:800; font-size:0.68rem; padding:3px 8px; border-radius:999px; display:inline-flex; align-items:center; gap:3px; z-index:2;">
+                                            <i class="fas fa-fire"></i> #<?php echo $rank_num; ?> Most Ordered
                                         </span>
                                         <button
                                             type="button"
@@ -4663,27 +4790,29 @@ document.addEventListener('DOMContentLoaded', function() {
                                         </button>
                                     </div>
 
-                                    <div class="store-card-details" style="padding: 10px 12px; display:flex; flex-direction:column; flex:1;">
-                                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:3px;">
-                                            <h3 style="font-family:'Outfit',sans-serif; font-size:0.88rem; font-weight:800; color:#171922; margin:0; line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; flex:1;"><?php echo htmlspecialchars($product['name']); ?></h3>
+                                    <div class="store-card-details" style="padding: 12px; display:flex; flex-direction:column; flex:1;">
+                                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:4px;">
+                                            <h3 style="font-family:'Outfit',sans-serif; font-size:0.9rem; font-weight:800; color:#101828; margin:0; line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; flex:1;"><?php echo htmlspecialchars($product['name']); ?></h3>
                                             <?php if ($product['rating'] > 0): ?>
-                                            <span style="font-size:0.78rem; font-weight:800; color:#171922; display:inline-flex; align-items:center; gap:2px; white-space:nowrap;">
-                                                <i class="fas fa-star" style="color:#ef6b2e;"></i><?php echo number_format((float)$product['rating'], 1); ?>
+                                            <span style="font-size:0.78rem; font-weight:800; color:#101828; display:inline-flex; align-items:center; gap:2px; white-space:nowrap;">
+                                                <i class="fas fa-star" style="color:#f79009;"></i><?php echo number_format((float)$product['rating'], 1); ?>
                                             </span>
                                             <?php endif; ?>
                                         </div>
                                         
-                                        <div style="font-size:0.75rem; color:#7b6d64; margin-bottom:8px; display:flex; align-items:center; gap:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                                            <i class="fas fa-store" style="color:#ef6b2e;"></i> <span><?php echo htmlspecialchars($product['store']); ?></span>
+                                        <div style="margin-bottom:8px;">
+                                            <span style="font-size:0.75rem; color:#475467; background:#f2f4f7; padding:2px 8px; border-radius:6px; font-weight:600; display:inline-flex; align-items:center; gap:4px; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                                <i class="fas fa-store" style="color:#b3261e;"></i> <span><?php echo htmlspecialchars($product['store']); ?></span>
+                                            </span>
                                         </div>
 
-                                        <div style="margin-top:auto; padding-top:8px; border-top:1px dashed #efddcd; display:flex; justify-content:space-between; align-items:center;">
+                                        <div style="margin-top:auto; padding-top:8px; border-top:1px dashed #eaecf0; display:flex; justify-content:space-between; align-items:center;">
                                             <div>
-                                                <strong style="font-size:0.92rem; color:#b3261e; font-weight:800; display:block;">PHP <?php echo number_format((float)$product['price'], 2); ?></strong>
-                                                <span style="font-size:0.7rem; color:#7b6d64; font-weight:600;"><?php echo number_format((int)$product['sold']); ?> sold</span>
+                                                <strong style="font-size:0.95rem; color:#b3261e; font-weight:800; display:block;">₱<?php echo number_format((float)$product['price'], 2); ?></strong>
+                                                <span style="font-size:0.68rem; color:#027a48; font-weight:700; background:#ecfdf3; border:1px solid #abefc6; padding:1px 6px; border-radius:4px;"><?php echo number_format((int)$product['sold']); ?> sold</span>
                                             </div>
-                                            <span class="btn-primary btn-sm" style="padding:5px 10px; font-size:0.72rem; border-radius:6px; pointer-events:none; background:linear-gradient(135deg, #b3261e, #ef6b2e); color:#fff; font-weight:700;">
-                                                Order Now <i class="fas fa-arrow-right" style="font-size:0.7rem;"></i>
+                                            <span class="btn-primary btn-sm" style="padding:6px 12px; font-size:0.74rem; border-radius:8px; pointer-events:none; background:#b3261e; color:#fff; font-weight:700;">
+                                                Order Now <i class="fas fa-arrow-right" style="font-size:0.7rem; margin-left:3px;"></i>
                                             </span>
                                         </div>
                                     </div>
@@ -5216,6 +5345,97 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    let pageFoodSearchTimer = null;
+    let pageFoodSearchController = null;
+
+    function escapeSearchHtml(str) {
+        return String(str || '').replace(/[&<>"']/g, function (m) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+        });
+    }
+
+    function updateFoodSearchResults(rawQuery) {
+        const foodSection = document.getElementById('foodSearchResultsSection');
+        const foodHeadingText = document.getElementById('foodSearchQueryText');
+        const foodGrid = document.getElementById('foodSearchResultsGrid');
+        if (!foodSection || !foodGrid) return;
+
+        const q = String(rawQuery || '').trim();
+
+        if (pageFoodSearchTimer) {
+            clearTimeout(pageFoodSearchTimer);
+            pageFoodSearchTimer = null;
+        }
+        if (pageFoodSearchController) {
+            pageFoodSearchController.abort();
+            pageFoodSearchController = null;
+        }
+
+        if (q === '') {
+            foodSection.style.display = 'none';
+            return;
+        }
+
+        foodSection.style.display = 'block';
+        if (foodHeadingText) {
+            foodHeadingText.textContent = q;
+        }
+
+        pageFoodSearchTimer = setTimeout(async function () {
+            pageFoodSearchController = new AbortController();
+            try {
+                const res = await fetch('api/search_food.php?q=' + encodeURIComponent(q) + '&limit=16', {
+                    signal: pageFoodSearchController.signal
+                });
+                if (!res.ok) throw new Error('Search request failed');
+                const data = await res.json();
+                if (!foodGrid) return;
+
+                if (!data || !data.foods || data.foods.length === 0) {
+                    foodGrid.innerHTML = `
+                        <div style="grid-column: 1 / -1; padding: 24px; text-align: center; color: #475467; background: #f8f9fa; border-radius: 12px; border: 1px dashed #d0d5dd;">
+                            <i class="fas fa-utensils" style="font-size: 1.8rem; color: #98a2b3; margin-bottom: 8px; display: block;"></i>
+                            <strong style="font-size: 0.95rem; color: #101828; display: block;">No matching dishes found for "${escapeSearchHtml(q)}"</strong>
+                            <span style="font-size: 0.82rem;">Try searching for other popular foods like "belly", "lechon", or "sisig".</span>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = '';
+                data.foods.forEach(function (item) {
+                    html += `
+                        <a href="${item.menu_link}" class="bestseller-card panda-card-link" style="background:#ffffff; border:1px solid #eaecf0; border-radius:14px; overflow:hidden; display:flex; flex-direction:column; transition:transform 0.2s ease, box-shadow 0.2s ease; text-decoration:none; position:relative;">
+                            <div class="store-card-image-wrap" style="height: 120px; position:relative; overflow:hidden;">
+                                <div class="market-store-row-thumb" style="background-image: url('${item.image}'); width:100%; height:100%; background-size:cover; background-position:center; transition:transform 0.3s ease;"></div>
+                                <span style="position:absolute; top:8px; left:8px; background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-weight:800; font-size:0.68rem; padding:3px 8px; border-radius:999px; display:inline-flex; align-items:center; gap:3px; z-index:2;">
+                                    <i class="fas fa-store"></i> ${escapeSearchHtml(item.store_name)}
+                                </span>
+                            </div>
+                            <div class="store-card-details" style="padding: 12px; display:flex; flex-direction:column; flex:1;">
+                                <h3 style="font-family:'Outfit',sans-serif; font-size:0.92rem; font-weight:800; color:#101828; margin:0 0 6px 0; line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">${escapeSearchHtml(item.name)}</h3>
+                                <div style="margin-top:auto; padding-top:8px; border-top:1px dashed #eaecf0; display:flex; justify-content:space-between; align-items:center;">
+                                    <div>
+                                        <strong style="font-size:0.95rem; color:#b3261e; font-weight:800; display:block;">${item.price_formatted}</strong>
+                                        ${item.total_sold > 0 ? `<span style="font-size:0.68rem; color:#027a48; font-weight:700; background:#ecfdf3; border:1px solid #abefc6; padding:1px 6px; border-radius:4px;">${item.total_sold} sold</span>` : ''}
+                                    </div>
+                                    <span class="btn-primary btn-sm" style="padding:6px 12px; font-size:0.75rem; border-radius:8px; pointer-events:none; background:#b3261e; color:#fff; font-weight:700;">
+                                        Order from Shop <i class="fas fa-arrow-right" style="font-size:0.7rem; margin-left:3px;"></i>
+                                    </span>
+                                </div>
+                            </div>
+                        </a>
+                    `;
+                });
+                foodGrid.innerHTML = html;
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error('Food search error:', err);
+                }
+            }
+        }, 220);
+    }
+
     function applyFilters(source, options) {
         const config = options || {};
         const state = getCurrentSearchState(source);
@@ -5239,6 +5459,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         syncInputs(source, rawQuery);
+        updateFoodSearchResults(rawQuery);
         const useServerMatches = shouldUseServerResults && serverMatchedKeys instanceof Set && serverCriteriaSignature === criteriaSignature;
         const orderedRows = storeGrid ? Array.from(storeGrid.querySelectorAll('.market-store-row')) : rows;
         const matchedRows = [];
@@ -5360,6 +5581,18 @@ document.addEventListener('DOMContentLoaded', function () {
     if (heroSearch) heroSearch.addEventListener('input', function () { applyFilters(heroSearch); });
     if (gridSearch) gridSearch.addEventListener('input', function () { applyFilters(gridSearch); });
     if (headerSearch) headerSearch.addEventListener('input', function () { applyFilters(headerSearch); });
+
+    const clearFoodSearchBtn = document.getElementById('clearFoodSearchBtn');
+    if (clearFoodSearchBtn) {
+        clearFoodSearchBtn.addEventListener('click', function () {
+            if (headerSearch) headerSearch.value = '';
+            if (heroSearch) heroSearch.value = '';
+            if (gridSearch) gridSearch.value = '';
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+            applyFilters();
+        });
+    }
     sortInputs.forEach(function (input) {
         input.addEventListener('change', function () {
             currentSort = input.value;

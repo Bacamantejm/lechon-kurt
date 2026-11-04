@@ -1583,6 +1583,20 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         .market-search-suggestions { display:flex; gap:8px; flex-wrap:wrap; }
         .market-search-suggestion { appearance:none; border:1px solid #e5e7eb; background:#f9fafb; color:#374151; border-radius:999px; padding:7px 12px; font-size:.86rem; font-weight:700; cursor:pointer; transition:var(--transition-fast); }
         .market-search-suggestion:hover { border-color:#cbd5e1; background:#fff; color:#111827; }
+        .market-search-food-results { display:none; max-height:420px; overflow-y:auto; background:#ffffff; }
+        .market-search-food-head { padding:10px 14px 6px; font-size:0.72rem; font-weight:800; text-transform:uppercase; letter-spacing:0.05em; color:#475467; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #eaecf0; }
+        .market-search-food-item { display:flex; align-items:center; gap:12px; padding:10px 14px; border-bottom:1px solid #f2f4f7; text-decoration:none; color:inherit; transition:background 0.15s ease; cursor:pointer; }
+        .market-search-food-item:hover, .market-search-food-item:focus { background:#f8f9fa; }
+        .market-search-food-thumb { width:44px; height:44px; border-radius:8px; object-fit:cover; border:1px solid #eaecf0; flex-shrink:0; background-color:#f2f4f7; }
+        .market-search-food-info { flex:1; min-width:0; }
+        .market-search-food-name { font-size:0.88rem; font-weight:700; color:#101828; margin:0 0 3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .market-search-food-store { display:inline-flex; align-items:center; gap:4px; font-size:0.74rem; font-weight:600; color:#475467; background:#f2f4f7; padding:2px 8px; border-radius:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+        .market-search-food-meta { text-align:right; flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:2px; }
+        .market-search-food-price { font-size:0.92rem; font-weight:800; color:#b3261e; }
+        .market-search-food-sold { font-size:0.68rem; font-weight:600; color:#027a48; background:#ecfdf3; border:1px solid #abefc6; padding:1px 6px; border-radius:4px; }
+        .market-search-food-footer { padding:10px 14px; text-align:center; border-top:1px solid #eaecf0; background:#fcfcfd; }
+        .market-search-food-footer-btn { font-size:0.8rem; font-weight:700; color:#b3261e; text-decoration:none; display:inline-flex; align-items:center; gap:6px; background:transparent; border:none; cursor:pointer; padding:4px 8px; }
+        .market-search-food-footer-btn:hover { color:#981b15; text-decoration:underline; }
         .map-modal-overlay { position:fixed; inset:0; background:rgba(8,11,18,.5); z-index:1600; display:none; align-items:center; justify-content:center; padding:16px; overflow-y:auto; }
         .map-modal-overlay.active { display:flex; }
         .map-modal { width:min(720px, 96vw); max-height:min(92vh, 92dvh); background:#fff; border-radius:18px; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 30px 80px rgba(16,24,40,.35); border:1px solid #e7d9cc; margin:auto; }
@@ -2557,32 +2571,35 @@ document.addEventListener('pointerdown', function(e) {
         <div class="market-home-search-wrap" id="marketHeaderSearchWrap">
             <label class="market-home-search" for="marketHeaderSearch"><i class="fas fa-magnifying-glass"></i><input type="search" id="marketHeaderSearch" placeholder="Search for restaurants, cuisines, and dishes" autocomplete="off"></label>
             <div class="market-search-popover" id="marketSearchPopover">
-                <div class="market-search-tabs">
-                    <button type="button" class="market-search-tab active" data-tab="all">All</button>
-                    <button type="button" class="market-search-tab" data-tab="delivery">Delivery</button>
-                    <button type="button" class="market-search-tab" data-tab="shops">Shops</button>
-                </div>
-                <div class="market-search-panel active" data-panel="all">
-                    <p class="market-search-title">Popular searches</p>
-                    <div class="market-search-suggestions">
-                        <button type="button" class="market-search-suggestion" data-term="Lechon belly">Lechon belly</button>
-                        <button type="button" class="market-search-suggestion" data-term="Whole lechon">Whole lechon</button>
-                        <button type="button" class="market-search-suggestion" data-term="Cavite">Cavite</button>
-                        <button type="button" class="market-search-suggestion" data-term="Top rated">Top rated</button>
+                <div class="market-search-food-results" id="marketSearchFoodResults"></div>
+                <div class="market-search-static-content" id="marketSearchStaticContent">
+                    <div class="market-search-tabs">
+                        <button type="button" class="market-search-tab active" data-tab="all">All</button>
+                        <button type="button" class="market-search-tab" data-tab="delivery">Delivery</button>
+                        <button type="button" class="market-search-tab" data-tab="shops">Shops</button>
                     </div>
-                </div>
-                <div class="market-search-panel" data-panel="delivery">
-                    <p class="market-search-title">Delivery picks</p>
-                    <div class="market-search-suggestions">
-                        <button type="button" class="market-search-suggestion" data-term="Fast delivery">Fast delivery</button>
-                        <button type="button" class="market-search-suggestion" data-term="Live menu">Live menu</button>
+                    <div class="market-search-panel active" data-panel="all">
+                        <p class="market-search-title">Popular searches</p>
+                        <div class="market-search-suggestions">
+                            <button type="button" class="market-search-suggestion" data-term="Lechon belly">Lechon belly</button>
+                            <button type="button" class="market-search-suggestion" data-term="Whole lechon">Whole lechon</button>
+                            <button type="button" class="market-search-suggestion" data-term="Cavite">Cavite</button>
+                            <button type="button" class="market-search-suggestion" data-term="Top rated">Top rated</button>
+                        </div>
                     </div>
-                </div>
-                <div class="market-search-panel" data-panel="shops">
-                    <p class="market-search-title">Shops</p>
-                    <div class="market-search-suggestions">
-                        <button type="button" class="market-search-suggestion" data-term="Partner store">Partner store</button>
-                        <button type="button" class="market-search-suggestion" data-term="Marketplace seller">Marketplace seller</button>
+                    <div class="market-search-panel" data-panel="delivery">
+                        <p class="market-search-title">Delivery picks</p>
+                        <div class="market-search-suggestions">
+                            <button type="button" class="market-search-suggestion" data-term="Fast delivery">Fast delivery</button>
+                            <button type="button" class="market-search-suggestion" data-term="Live menu">Live menu</button>
+                        </div>
+                    </div>
+                    <div class="market-search-panel" data-panel="shops">
+                        <p class="market-search-title">Shops</p>
+                        <div class="market-search-suggestions">
+                            <button type="button" class="market-search-suggestion" data-term="Partner store">Partner store</button>
+                            <button type="button" class="market-search-suggestion" data-term="Marketplace seller">Marketplace seller</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -4117,6 +4134,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (marketHeaderSearchWrap && marketHeaderSearch && marketSearchPopover) {
         let activeSearchTab = 'all';
+        const foodResultsBox = document.getElementById('marketSearchFoodResults');
+        const staticSearchContent = document.getElementById('marketSearchStaticContent');
+        let searchFoodTimer = null;
+        let searchFoodController = null;
+
+        const escapeSearchHtml = function (str) {
+            return String(str || '').replace(/[&<>"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+            });
+        };
+
         const setSearchTab = function (tab) {
             activeSearchTab = String(tab || 'all');
             marketSearchTabs.forEach(function (button) {
@@ -4174,7 +4202,119 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         marketHeaderSearch.addEventListener('focus', openSearchPopover);
-        marketHeaderSearch.addEventListener('input', openSearchPopover);
+        marketHeaderSearch.addEventListener('input', function () {
+            openSearchPopover();
+            const q = (marketHeaderSearch.value || '').trim();
+
+            if (searchFoodTimer) {
+                clearTimeout(searchFoodTimer);
+                searchFoodTimer = null;
+            }
+            if (searchFoodController) {
+                searchFoodController.abort();
+                searchFoodController = null;
+            }
+
+            if (q.length < 2) {
+                if (foodResultsBox) {
+                    foodResultsBox.style.display = 'none';
+                    foodResultsBox.innerHTML = '';
+                }
+                if (staticSearchContent) {
+                    staticSearchContent.style.display = 'block';
+                }
+                return;
+            }
+
+            if (staticSearchContent) {
+                staticSearchContent.style.display = 'none';
+            }
+            if (foodResultsBox) {
+                foodResultsBox.style.display = 'block';
+                foodResultsBox.innerHTML = '<div style="padding:16px 14px; text-align:center; color:#667085; font-size:0.84rem;"><i class="fas fa-spinner fa-spin" style="margin-right:6px; color:#b3261e;"></i> Searching dishes & restaurants...</div>';
+            }
+
+            searchFoodTimer = setTimeout(async function () {
+                searchFoodController = new AbortController();
+                try {
+                    const resp = await fetch('<?php echo $path_prefix; ?>api/search_food.php?q=' + encodeURIComponent(q) + '&limit=8', {
+                        signal: searchFoodController.signal
+                    });
+                    if (!resp.ok) throw new Error('Search failed');
+                    const data = await resp.json();
+
+                    if (!foodResultsBox) return;
+
+                    if (!data || !data.foods || data.foods.length === 0) {
+                        foodResultsBox.innerHTML = `
+                            <div style="padding:20px 16px; text-align:center; color:#667085;">
+                                <i class="fas fa-utensils" style="font-size:1.4rem; color:#d0d5dd; display:block; margin-bottom:8px;"></i>
+                                <div style="font-size:0.88rem; font-weight:600; color:#344054;">No food items matching "${escapeSearchHtml(q)}"</div>
+                                <div style="font-size:0.78rem; color:#667085; margin-top:4px;">Press Enter to search for stores across Cavite.</div>
+                            </div>
+                            <div class="market-search-food-footer">
+                                <button type="button" class="market-search-food-footer-btn" id="searchStoresFallbackBtn">
+                                    Search stores for "${escapeSearchHtml(q)}" <i class="fas fa-arrow-right"></i>
+                                </button>
+                            </div>
+                        `;
+                        const fallbackBtn = document.getElementById('searchStoresFallbackBtn');
+                        if (fallbackBtn) {
+                            fallbackBtn.addEventListener('click', function () {
+                                submitMarketHeaderSearch(q);
+                            });
+                        }
+                        return;
+                    }
+
+                    let html = `
+                        <div class="market-search-food-head">
+                            <span><i class="fas fa-bowl-food" style="color:#b3261e; margin-right:4px;"></i> Matching Dishes</span>
+                            <span>${data.foods.length} found</span>
+                        </div>
+                    `;
+
+                    data.foods.forEach(function (item) {
+                        html += `
+                            <a href="<?php echo $path_prefix; ?>${item.menu_link}" class="market-search-food-item" title="Order from ${escapeSearchHtml(item.store_name)}">
+                                <img src="<?php echo $path_prefix; ?>${item.image}" alt="${escapeSearchHtml(item.name)}" class="market-search-food-thumb" onerror="this.src='<?php echo $path_prefix; ?>images/menu/whole-lechon.jpg'">
+                                <div class="market-search-food-info">
+                                    <div class="market-search-food-name">${escapeSearchHtml(item.name)}</div>
+                                    <span class="market-search-food-store">
+                                        <i class="fas fa-store"></i> ${escapeSearchHtml(item.store_name)}
+                                    </span>
+                                </div>
+                                <div class="market-search-food-meta">
+                                    <div class="market-search-food-price">${item.price_formatted}</div>
+                                    ${item.total_sold > 0 ? `<span class="market-search-food-sold">${item.total_sold} sold</span>` : ''}
+                                </div>
+                            </a>
+                        `;
+                    });
+
+                    html += `
+                        <div class="market-search-food-footer">
+                            <button type="button" class="market-search-food-footer-btn" id="searchAllMarketBtn">
+                                View all results for "${escapeSearchHtml(q)}" <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    `;
+
+                    foodResultsBox.innerHTML = html;
+                    const allBtn = document.getElementById('searchAllMarketBtn');
+                    if (allBtn) {
+                        allBtn.addEventListener('click', function () {
+                            submitMarketHeaderSearch(q);
+                        });
+                    }
+                } catch (err) {
+                    if (err.name !== 'AbortError' && foodResultsBox) {
+                        foodResultsBox.innerHTML = '<div style="padding:14px; text-align:center; color:#b42318; font-size:0.82rem;">Could not load dishes right now. Press Enter to search stores.</div>';
+                    }
+                }
+            }, 200);
+        });
+
         marketHeaderSearch.addEventListener('keydown', function (event) {
             if (event.key === 'Escape') closeSearchPopover();
             if (event.key === 'Enter') {
