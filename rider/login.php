@@ -20,60 +20,122 @@ $msg = $_GET['msg'] ?? '';
 $redirect = $_GET['redirect'] ?? 'index.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $identifier = trim($_POST['identifier'] ?? '');
+    $raw_identifier = trim($_POST['identifier'] ?? '');
+    $clean_identifier = strtolower($raw_identifier);
     $password = (string)($_POST['password'] ?? '');
     $remember = !empty($_POST['remember']);
 
-    if (empty($identifier) || empty($password)) {
+    if (empty($raw_identifier) || empty($password)) {
         $error = "Please enter your Rider ID, Email, or Mobile Number, and your Password.";
     } else {
-        // Find user by Rider Code (e.g. RDR-0011, EMP-...), Email, or Phone
+        // Extract numeric digits for phone matching (e.g. 09898987654 or +63 989 898 7654)
+        $phone_digits = preg_replace('/\D/', '', $raw_identifier);
+        $phone_suffix = strlen($phone_digits) >= 10 ? substr($phone_digits, -10) : '';
+
+        // Query user joined with rider and employee details
         $find_sql = "
             SELECT u.id, u.email, u.password, u.full_name, u.phone, u.user_type, u.is_active,
+                   e.id AS employee_pk, e.employee_id, e.phone AS emp_phone, e.email AS emp_email,
                    r.id AS rider_id, r.rider_code, r.verification_status, r.duty_status, r.rider_type
             FROM users u
-            LEFT JOIN riders r ON r.user_id = u.id
-            LEFT JOIN employees e ON r.employee_id = e.id OR e.user_id = u.id
-            WHERE u.email = ?
+            LEFT JOIN employees e ON (e.user_id = u.id OR (u.email IS NOT NULL AND u.email != '' AND LOWER(e.email) = LOWER(u.email)))
+            LEFT JOIN riders r ON (r.user_id = u.id OR (e.id IS NOT NULL AND r.employee_id = e.id))
+            WHERE LOWER(u.email) = ?
+               OR (e.email IS NOT NULL AND LOWER(e.email) = ?)
                OR u.phone = ?
-               OR r.rider_code = ?
-               OR e.employee_id = ?
+               OR (e.phone IS NOT NULL AND e.phone = ?)
+               OR (r.rider_code IS NOT NULL AND LOWER(r.rider_code) = ?)
+               OR (e.employee_id IS NOT NULL AND LOWER(e.employee_id) = ?)
+               OR (u.full_name IS NOT NULL AND LOWER(u.full_name) = ?)
+               OR (CONCAT(e.first_name, ' ', e.last_name) IS NOT NULL AND LOWER(CONCAT(e.first_name, ' ', e.last_name)) = ?)
+               " . ($phone_suffix !== '' ? "OR RIGHT(REPLACE(REPLACE(REPLACE(COALESCE(u.phone, ''), ' ', ''), '-', ''), '+63', '0'), 10) = ? " : "") . "
+               " . ($phone_suffix !== '' ? "OR RIGHT(REPLACE(REPLACE(REPLACE(COALESCE(e.phone, ''), ' ', ''), '-', ''), '+63', '0'), 10) = ? " : "") . "
             LIMIT 1
         ";
 
         $stmt = mysqli_prepare($conn, $find_sql);
         if ($stmt) {
-            mysqli_stmt_bind_param($stmt, "ssss", $identifier, $identifier, $identifier, $identifier);
+            $types = "ssssssss" . ($phone_suffix !== '' ? "ss" : "");
+            $params = [
+                $clean_identifier,
+                $clean_identifier,
+                $raw_identifier,
+                $raw_identifier,
+                $clean_identifier,
+                $clean_identifier,
+                $clean_identifier,
+                $clean_identifier
+            ];
+            if ($phone_suffix !== '') {
+                $params[] = $phone_suffix;
+                $params[] = $phone_suffix;
+            }
+
+            mysqli_stmt_bind_param($stmt, $types, ...$params);
             mysqli_stmt_execute($stmt);
             $res = mysqli_stmt_get_result($stmt);
             $user = mysqli_fetch_assoc($res);
             mysqli_stmt_close($stmt);
 
-            if ($user && password_verify($password, $user['password'])) {
+            // Verify password: check bcrypt, plaintext migration, md5 migration, or trimmed
+            $password_valid = false;
+            if ($user && !empty($user['password'])) {
+                if (password_verify($password, $user['password'])) {
+                    $password_valid = true;
+                } elseif ($user['password'] === $password) {
+                    $password_valid = true;
+                    $hashed = password_hash($password, PASSWORD_DEFAULT);
+                    mysqli_query($conn, "UPDATE users SET password = '" . mysqli_real_escape_string($conn, $hashed) . "' WHERE id = " . (int)$user['id']);
+                } elseif (md5($password) === $user['password']) {
+                    $password_valid = true;
+                    $hashed = password_hash($password, PASSWORD_DEFAULT);
+                    mysqli_query($conn, "UPDATE users SET password = '" . mysqli_real_escape_string($conn, $hashed) . "' WHERE id = " . (int)$user['id']);
+                } elseif (password_verify(trim($password), $user['password'])) {
+                    $password_valid = true;
+                }
+            }
+
+            if ($user && $password_valid) {
                 // Check if active user
                 if (isset($user['is_active']) && (int)$user['is_active'] === 0) {
                     $error = "Your account has been deactivated. Please contact fleet management.";
                 } else {
-                    // Check rider registration
-                    $rider_id = (int)($user['rider_id'] ?? 0);
-                    $v_status = $user['verification_status'] ?? 'pending';
+                    // Automatically sync rider profile using isDeliveryDriverUser
+                    require_once __DIR__ . '/../includes/rider_helper.php';
+                    $is_driver = isDeliveryDriverUser($conn, (int)$user['id']);
 
-                    if ($rider_id === 0) {
-                        // User exists but has not been assigned a rider record yet: check if driver employee
+                    // Fetch the synced rider record
+                    $rider_id = 0;
+                    $v_status = 'pending';
+                    $rider_code = '';
+                    $r_fetch = mysqli_query($conn, "SELECT id, rider_code, verification_status, duty_status FROM riders WHERE user_id = " . (int)$user['id'] . " LIMIT 1");
+                    if ($r_fetch && ($r_data = mysqli_fetch_assoc($r_fetch))) {
+                        $rider_id = (int)$r_data['id'];
+                        $v_status = $r_data['verification_status'];
+                        $rider_code = $r_data['rider_code'];
+                    }
+
+                    // If user is a verified driver or assigned to Logistics & Delivery, ensure active verified profile
+                    if ($is_driver && ($rider_id === 0 || $v_status !== 'verified')) {
                         $u_id = (int)$user['id'];
-                        $emp_sql = mysqli_query($conn, "SELECT id, vehicle_details FROM employees WHERE user_id = $u_id LIMIT 1");
-                        if ($emp_sql && mysqli_num_rows($emp_sql) > 0) {
-                            $emp_row = mysqli_fetch_assoc($emp_sql);
-                            $e_id = (int)$emp_row['id'];
-                            $r_code = 'RDR-' . str_pad($e_id, 4, '0', STR_PAD_LEFT);
-                            mysqli_query($conn, "INSERT INTO riders (user_id, employee_id, rider_code, rider_type, vehicle_type, verification_status, duty_status, rating) VALUES ($u_id, $e_id, '$r_code', 'platform_rider', 'Motorcycle', 'verified', 'online', 5.00)");
-                            $rider_id = mysqli_insert_id($conn);
-                            $v_status = 'verified';
+                        $emp_pk = (int)($user['employee_pk'] ?? 0);
+                        $emp_pk_val = $emp_pk > 0 ? $emp_pk : "NULL";
+                        $r_code = 'RDR-' . str_pad((string)$u_id, 4, '0', STR_PAD_LEFT);
+                        mysqli_query($conn, "
+                            INSERT INTO riders (user_id, employee_id, rider_code, rider_type, vehicle_type, verification_status, duty_status, rating)
+                            VALUES ($u_id, $emp_pk_val, '$r_code', 'shop_rider', 'Motorcycle', 'verified', 'online', 5.00)
+                            ON DUPLICATE KEY UPDATE verification_status = 'verified', duty_status = 'online'
+                        ");
+                        $r_fetch2 = mysqli_query($conn, "SELECT id, rider_code, verification_status, duty_status FROM riders WHERE user_id = $u_id LIMIT 1");
+                        if ($r_fetch2 && ($r2 = mysqli_fetch_assoc($r_fetch2))) {
+                            $rider_id = (int)$r2['id'];
+                            $v_status = $r2['verification_status'];
+                            $rider_code = $r2['rider_code'];
                         }
                     }
 
                     if ($rider_id === 0) {
-                        $error = "Account found, but you are not registered as a delivery rider.";
+                        $error = "Account found, but you are not registered as a delivery rider. If you are an administrator or shop manager, please <a href='../login.php' class='alert-link'>sign in here</a>.";
                     } elseif ($v_status === 'pending') {
                         $error = "Your rider profile is pending approval. You will receive an SMS once verified.";
                     } elseif ($v_status === 'rejected') {
@@ -86,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['email'] = $user['email'];
                         $_SESSION['is_driver'] = true;
                         $_SESSION['rider_id'] = $rider_id;
-                        $_SESSION['rider_code'] = $user['rider_code'] ?? ('RDR-' . $rider_id);
+                        $_SESSION['rider_code'] = !empty($rider_code) ? $rider_code : ('RDR-' . $rider_id);
 
                         // If remember me requested
                         if ($remember) {
@@ -103,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
             } else {
-                $error = "Invalid credentials. Please verify your Rider ID / Email and password.";
+                $error = "Invalid credentials. Please verify your Rider ID / Email / Phone and password.";
             }
         } else {
             $error = "Database connection error. Please try again.";

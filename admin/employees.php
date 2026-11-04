@@ -277,6 +277,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
+    if (isset($_POST['reset_employee_password'])) {
+        $emp_id = intval($_POST['employee_id'] ?? 0);
+        $new_password = (string)($_POST['new_password'] ?? '');
+        if ($is_partner_scoped_hr && !hrEmployeeIdInScope($conn, $emp_id)) {
+            $_SESSION['error'] = "Selected employee is outside your partner HR scope.";
+            header("Location: employees.php");
+            exit();
+        }
+        if (strlen($new_password) < 4) {
+            $_SESSION['error'] = "Password must be at least 4 characters long.";
+            header("Location: employees.php");
+            exit();
+        }
+
+        $lookup = mysqli_query($conn, "SELECT e.*, u.id AS linked_user_id, u.email AS user_email, u.phone AS user_phone FROM employees e LEFT JOIN users u ON (e.user_id = u.id OR (e.email IS NOT NULL AND e.email != '' AND u.email = e.email)) WHERE e.id = $emp_id LIMIT 1");
+        if ($lookup && ($emp_row = mysqli_fetch_assoc($lookup))) {
+            $user_id = (int)($emp_row['linked_user_id'] ?? 0);
+            $hashed = password_hash($new_password, PASSWORD_DEFAULT);
+            if ($user_id > 0) {
+                $upd = mysqli_prepare($conn, "UPDATE users SET password = ? WHERE id = ?");
+                mysqli_stmt_bind_param($upd, "si", $hashed, $user_id);
+                mysqli_stmt_execute($upd);
+                mysqli_stmt_close($upd);
+                if (empty($emp_row['user_id'])) {
+                    mysqli_query($conn, "UPDATE employees SET user_id = $user_id WHERE id = $emp_id");
+                }
+            } else {
+                // If user record doesn't exist yet, create one
+                $full_name = formatEmployeeFullName($emp_row['first_name'] ?? '', $emp_row['middle_initial'] ?? '', $emp_row['last_name'] ?? '', $emp_row['suffix'] ?? '');
+                $role_id = 7; // default employee/driver role
+                $ins_u = mysqli_prepare($conn, "INSERT INTO users (full_name, email, phone, password, user_type, role_id, is_active) VALUES (?, ?, ?, ?, 'employee', ?, 1)");
+                mysqli_stmt_bind_param($ins_u, "ssssi", $full_name, $emp_row['email'], $emp_row['phone'], $hashed, $role_id);
+                mysqli_stmt_execute($ins_u);
+                $user_id = mysqli_insert_id($conn);
+                mysqli_stmt_close($ins_u);
+                mysqli_query($conn, "UPDATE employees SET user_id = $user_id WHERE id = $emp_id");
+            }
+            // Auto sync driver if applicable
+            require_once __DIR__ . '/../includes/rider_helper.php';
+            isDeliveryDriverUser($conn, $user_id);
+            $_SESSION['success'] = "Password for " . htmlspecialchars($emp_row['first_name'] . ' ' . $emp_row['last_name']) . " has been updated successfully! They can now log in using email: " . htmlspecialchars($emp_row['email']) . " or mobile phone.";
+        } else {
+            $_SESSION['error'] = "Employee record not found.";
+        }
+        header("Location: employees.php");
+        exit();
+    }
+
     if (isset($_POST['link_user_account'])) {
         // Enforce action-level permission to create a user account
         if (!$is_partner_scoped_hr) {
@@ -2230,6 +2278,11 @@ if ($roles_query instanceof mysqli_result) {
                                                         <i class="fas fa-user-shield me-2"></i> Reassign Role
                                                     </a>
                                                 </li>
+                                                <li>
+                                                    <a class="dropdown-item py-2 text-warning" href="javascript:void(0)" onclick="openResetPasswordModal(<?php echo $emp_id; ?>, <?php echo $emp_name_js; ?>, <?php echo $emp_email_js; ?>)">
+                                                        <i class="fas fa-key me-2"></i> Reset Password
+                                                    </a>
+                                                </li>
                                                 <?php else: ?>
                                                 <li>
                                                     <a class="dropdown-item py-2 text-primary" href="javascript:void(0)" onclick="openLinkUserModal(<?php echo $emp_id; ?>, <?php echo $emp_name_js; ?>, <?php echo $emp_email_js; ?>)">
@@ -2256,7 +2309,6 @@ if ($roles_query instanceof mysqli_result) {
                                             </ul>
                                         </div>
                                     </div>
-                                </div>
 
                                 <!-- Circular Avatar Section -->
                                 <div class="emp-avatar-section">
@@ -2426,6 +2478,11 @@ if ($roles_query instanceof mysqli_result) {
                                                 <button type="button" class="btn-icon" onclick="editEmployee(<?php echo $emp_id; ?>)" title="Edit Employee">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
+                                                <?php if ($has_user_account): ?>
+                                                <button type="button" class="btn-icon text-warning" onclick="openResetPasswordModal(<?php echo $emp_id; ?>, <?php echo $emp_name_js; ?>, <?php echo $emp_email_js; ?>)" title="Reset Password">
+                                                    <i class="fas fa-key"></i>
+                                                </button>
+                                                <?php endif; ?>
                                                 <a href="attendance.php?employee_id=<?php echo $emp_id; ?>&date_from=<?php echo date('Y-m-d'); ?>&date_to=<?php echo date('Y-m-d'); ?>" class="btn-icon" title="View Attendance">
                                                     <i class="fas fa-calendar-check"></i>
                                                 </a>
@@ -3080,6 +3137,63 @@ if ($roles_query instanceof mysqli_result) {
             </div>
         </div>
     </div>
+
+    <!-- Reset Login Password Modal -->
+    <div class="modal fade emp-modal" id="resetPasswordModal" tabindex="-1" aria-labelledby="resetPasswordModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-header-icon" style="background: #fffaeb; color: #b54708;">
+                        <i class="fas fa-key"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title" id="resetPasswordModalLabel">Reset Login Password</h5>
+                        <p class="modal-subtitle">Set a new login password for this employee account.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form method="POST">
+                    <div class="modal-body" style="padding: 24px; background: #ffffff;">
+                        <input type="hidden" name="reset_employee_password" value="1">
+                        <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                        <input type="hidden" name="employee_id" id="resetEmployeeId">
+
+                        <div class="p-3 mb-3 rounded" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <i class="fas fa-user-circle text-muted"></i>
+                                <strong id="resetEmployeeName" class="text-dark"></strong>
+                            </div>
+                            <div class="small text-muted">
+                                <i class="far fa-envelope me-1"></i> <span id="resetEmployeeEmail"></span>
+                            </div>
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <label class="emp-label">New Password <span class="emp-req-star">*</span></label>
+                            <div class="input-group">
+                                <input type="password" name="new_password" id="resetNewPassword" class="form-control" placeholder="Enter new password" required minlength="4">
+                                <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('resetNewPassword', this)">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-outline-secondary" type="button" onclick="generateRandomPassword('resetNewPassword')">
+                                    <i class="fas fa-random me-1"></i> Generate
+                                </button>
+                            </div>
+                            <div class="form-text mt-2" style="font-size: 11.5px; color: #475467;">
+                                <i class="fas fa-info-circle text-primary"></i> The employee or rider can immediately log in using their email, mobile phone, or rider ID with this new password.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="emp-btn-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="emp-btn-primary" style="background: #b3261e; border-color: #b3261e;">
+                            <i class="fas fa-check"></i> Save New Password
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
     
     <script src="../js/jquery-3.7.1.min.js"></script>
     <script src="../js/bootstrap.bundle.min.js"></script>
@@ -3361,6 +3475,42 @@ if ($roles_query instanceof mysqli_result) {
             }
             var reassignModal = new bootstrap.Modal(document.getElementById('reassignRoleModal'));
             reassignModal.show();
+        }
+
+        function openResetPasswordModal(employeeId, employeeName, employeeEmail) {
+            document.getElementById('resetEmployeeId').value = employeeId;
+            document.getElementById('resetEmployeeName').textContent = employeeName;
+            document.getElementById('resetEmployeeEmail').textContent = employeeEmail || 'No email registered';
+            document.getElementById('resetNewPassword').value = '';
+            document.getElementById('resetNewPassword').type = 'password';
+            var resetModal = new bootstrap.Modal(document.getElementById('resetPasswordModal'));
+            resetModal.show();
+        }
+
+        function togglePasswordVisibility(inputId, btn) {
+            const input = document.getElementById(inputId);
+            const icon = btn.querySelector('i');
+            if (!input) return;
+            if (input.type === 'password') {
+                input.type = 'text';
+                if (icon) icon.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                if (icon) icon.className = 'fas fa-eye';
+            }
+        }
+
+        function generateRandomPassword(inputId) {
+            const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789!@#$';
+            let pass = '';
+            for (let i = 0; i < 8; i++) {
+                pass += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.type = 'text';
+                input.value = pass;
+            }
         }
 
         function switchEmployeeView(mode) {
