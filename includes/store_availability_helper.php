@@ -473,16 +473,14 @@ function sahUpsertPartnerStoreLocation($conn, array $app_data): array
         $conn,
         "SELECT store_id
          FROM store_locations
-         WHERE (owner_user_id IS NOT NULL AND owner_user_id = ?)
-            OR email = ?
-            OR (store_name = ? AND address = ?)
+         WHERE owner_user_id = ?
          ORDER BY store_id ASC
          LIMIT 1"
     );
     if (!$find_stmt) {
         throw new RuntimeException('Unable to prepare store lookup query.');
     }
-    mysqli_stmt_bind_param($find_stmt, "isss", $owner_user_id, $contact_email, $store_name, $address);
+    mysqli_stmt_bind_param($find_stmt, "i", $owner_user_id);
     mysqli_stmt_execute($find_stmt);
     $find_result = mysqli_stmt_get_result($find_stmt);
     $existing = $find_result ? mysqli_fetch_assoc($find_result) : null;
@@ -631,17 +629,6 @@ function sahFetchPartnerStoreLocations($conn, int $owner_user_id): array
 
     sahEnsureStoreLocationAvailabilitySchema($conn);
 
-    $email = '';
-    $email_stmt = mysqli_prepare($conn, "SELECT email FROM users WHERE id = ? LIMIT 1");
-    if ($email_stmt) {
-        mysqli_stmt_bind_param($email_stmt, "i", $owner_user_id);
-        mysqli_stmt_execute($email_stmt);
-        $result = mysqli_stmt_get_result($email_stmt);
-        $row = $result ? mysqli_fetch_assoc($result) : null;
-        mysqli_stmt_close($email_stmt);
-        $email = strtolower(trim((string)($row['email'] ?? '')));
-    }
-
     $rows = [];
     $sql = "SELECT store_id, owner_user_id, store_name, address, city, province, phone, email, opening_hours,
                    opening_time, closing_time, operating_days, availability_mode, manual_status, is_active,
@@ -650,11 +637,6 @@ function sahFetchPartnerStoreLocations($conn, int $owner_user_id): array
             WHERE owner_user_id = ?";
     $types = 'i';
     $params = [$owner_user_id];
-    if ($email !== '') {
-        $sql .= " OR email = ?";
-        $types .= 's';
-        $params[] = $email;
-    }
     $sql .= " ORDER BY store_name ASC, store_id ASC";
 
     $stmt = mysqli_prepare($conn, $sql);
