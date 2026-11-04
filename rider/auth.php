@@ -20,18 +20,31 @@ function checkRiderAccess(): array {
 
     $user_id = (int)$_SESSION['user_id'];
 
-    // Query rider profile joined with user, employee, and hiring store details
+    // Query rider profile joined with user, employee, and hiring store details.
+    // Partner links are optional on older installations.
+    $has_partner_user_links = function_exists('appTableExists')
+        && appTableExists($conn, 'partner_user_links');
+    $partner_owner_select = $has_partner_user_links
+        ? 'pul.owner_user_id AS partner_owner_id'
+        : 'NULL AS partner_owner_id';
+    $partner_link_join = $has_partner_user_links
+        ? 'LEFT JOIN partner_user_links pul ON pul.managed_user_id = u.id'
+        : '';
+    $partner_store_join = $has_partner_user_links
+        ? ' OR (r.store_id IS NULL AND sl.owner_user_id = pul.owner_user_id)'
+        : '';
+
     $sql = "
         SELECT r.*, e.id AS matched_emp_id, e.store_id AS emp_store_id,
                u.full_name, u.email, u.phone AS user_phone, u.profile_image, u.user_type,
                e.first_name, e.last_name, e.phone AS emp_phone, e.vehicle_details AS emp_vehicle,
                sl.store_id AS resolved_store_id, sl.store_name, sl.address AS store_address, sl.city AS store_city, sl.owner_user_id AS store_owner_id,
-               pul.owner_user_id AS partner_owner_id
+               {$partner_owner_select}
         FROM riders r
         JOIN users u ON r.user_id = u.id
         LEFT JOIN employees e ON (r.employee_id = e.id OR e.user_id = u.id OR (u.email IS NOT NULL AND u.email != '' AND e.email = u.email))
-        LEFT JOIN partner_user_links pul ON pul.managed_user_id = u.id
-        LEFT JOIN store_locations sl ON (r.store_id = sl.store_id OR (r.store_id IS NULL AND sl.owner_user_id = pul.owner_user_id))
+        {$partner_link_join}
+        LEFT JOIN store_locations sl ON (r.store_id = sl.store_id{$partner_store_join})
         WHERE r.user_id = ?
         LIMIT 1
     ";

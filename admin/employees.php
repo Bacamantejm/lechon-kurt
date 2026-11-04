@@ -705,7 +705,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       VALUES (?, ?, ?, ?, ?, ?, NULLIF(?,0), ?, ?, ?, ?, ?, NULLIF(?,0), NULLIF(?,0), ?, ?, ?, ?, ?, ?, ?, NULLIF(?,0), 'active')";
             $stmt = mysqli_prepare($conn, $query);
             if ($stmt) {
-                mysqli_stmt_bind_param($stmt, "ssssssisssssiissssddsis", $employee_id, $first_name, $middle_initial, $last_name, $suffix, $email, $user_id_param, $phone, $sss, $philhealth, $pagibig, $tin, $dept_id_param, $pos_id_param, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $photo_db_path, $store_id_param);
+                mysqli_stmt_bind_param($stmt, "ssssssisssssiissssddsi", $employee_id, $first_name, $middle_initial, $last_name, $suffix, $email, $user_id_param, $phone, $sss, $philhealth, $pagibig, $tin, $dept_id_param, $pos_id_param, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $photo_db_path, $store_id_param);
             } else {
                 // Dynamic fallback if optional columns are absent in database schema
                 $all_cols = [
@@ -1224,7 +1224,20 @@ $position_catalog = hrFetchPositionCatalog(
 $all_stores = [];
 $stores_query_sql = "SELECT store_id, store_name, city, owner_user_id FROM store_locations WHERE is_active = 1 ORDER BY store_id ASC";
 if ($is_partner_scoped_hr && $partner_scope_owner_id > 0) {
-    $stores_query_sql = "SELECT store_id, store_name, city, owner_user_id FROM store_locations WHERE is_active = 1 AND owner_user_id = $partner_scope_owner_id ORDER BY store_id ASC";
+    $store_scope_ids = [];
+    foreach (hrScopedUserIds($conn) as $scoped_user_id) {
+        $scoped_user_id = (int)$scoped_user_id;
+        if ($scoped_user_id > 0) {
+            $store_scope_ids[$scoped_user_id] = true;
+        }
+    }
+    $store_scope_ids[$partner_scope_owner_id] = true;
+    $store_scope_ids_sql = implode(',', array_keys($store_scope_ids));
+    $stores_query_sql = "SELECT store_id, store_name, city, owner_user_id
+                         FROM store_locations
+                         WHERE is_active = 1
+                           AND owner_user_id IN ($store_scope_ids_sql)
+                         ORDER BY store_id ASC";
 }
 $st_res = mysqli_query($conn, $stores_query_sql);
 if ($st_res) {
