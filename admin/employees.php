@@ -485,7 +485,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $position_id = intval($_POST['position_id'] ?? 0);
         $position_record = employeesFetchPositionRecord($conn, $position_id);
         if ($position_id > 0 && !$position_record) {
-            $_SESSION['error'] = "Selected position was not found. Please choose a valid job position.";
+            $_SESSION['error'] = "Selected job title was not found. Please choose a valid job title.";
             header("Location: employees.php");
             exit();
         }
@@ -516,7 +516,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user_role_id = isset($_POST['role_id']) ? intval($_POST['role_id']) : 0;
         $user_password = $_POST['password'] ?? '';
         if ($is_partner_scoped_hr && $position_id > 0 && !hrPositionIdInScope($conn, $position_id)) {
-            $_SESSION['error'] = "Selected position is outside your partner HR scope.";
+            $_SESSION['error'] = "Selected job title is outside your partner HR scope.";
             header("Location: employees.php");
             exit();
         }
@@ -823,7 +823,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $position_id = intval($_POST['position_id'] ?? 0);
         $position_record = employeesFetchPositionRecord($conn, $position_id);
         if ($position_id > 0 && !$position_record) {
-            $_SESSION['error'] = "Selected position was not found. Please choose a valid job position.";
+            $_SESSION['error'] = "Selected job title was not found. Please choose a valid job title.";
             header("Location: employees.php");
             exit();
         }
@@ -832,7 +832,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $department_id = (int)$position_record['department_id'];
         }
         if ($is_partner_scoped_hr && $position_id > 0 && !hrPositionIdInScope($conn, $position_id)) {
-            $_SESSION['error'] = "Selected position is outside your partner HR scope.";
+            $_SESSION['error'] = "Selected job title is outside your partner HR scope.";
             header("Location: employees.php");
             exit();
         }
@@ -1228,7 +1228,18 @@ if ($is_partner_scoped_hr && $partner_scope_owner_id > 0) {
 }
 $st_res = mysqli_query($conn, $stores_query_sql);
 if ($st_res) {
+    $seen_store_ids = [];
+    $seen_store_labels = [];
     while ($sr = mysqli_fetch_assoc($st_res)) {
+        $store_id_value = (int)($sr['store_id'] ?? 0);
+        $store_name_value = trim((string)($sr['store_name'] ?? ''));
+        $store_city_value = trim((string)($sr['city'] ?? ''));
+        $store_label_key = strtolower($store_name_value . '|' . $store_city_value);
+        if ($store_id_value <= 0 || isset($seen_store_ids[$store_id_value]) || isset($seen_store_labels[$store_label_key])) {
+            continue;
+        }
+        $seen_store_ids[$store_id_value] = true;
+        $seen_store_labels[$store_label_key] = true;
         $all_stores[] = $sr;
     }
 }
@@ -2380,7 +2391,7 @@ if ($roles_query instanceof mysqli_result) {
                                     <?php endif; ?>
                                 </div>
 
-                                <!-- Full Name & Position Title -->
+                                <!-- Full Name & Job Title -->
                                 <h3 class="emp-card-name" title="<?php echo $full_name_safe; ?>" onclick="loadEmployeeDetails(<?php echo $emp_id; ?>)" data-bs-toggle="modal" data-bs-target="#employeeModal" style="cursor: pointer;">
                                     <?php echo $full_name_safe; ?>
                                 </h3>
@@ -2457,7 +2468,7 @@ if ($roles_query instanceof mysqli_result) {
                                 <tr>
                                     <th><input type="checkbox" class="form-check-input" id="selectAll" onchange="toggleSelectAllEmployees(this)"></th>
                                     <th>Employee</th>
-                                    <th>Position</th>
+                                    <th>Job Title</th>
                                     <th>Department</th>
                                     <th>Contact</th>
                                     <th>Date Hired</th>
@@ -2699,10 +2710,10 @@ if ($roles_query instanceof mysqli_result) {
                             </div>
                         </div>
 
-                        <!-- Section 3: Department, Position & Compensation -->
+                        <!-- Section 3: Department, Job Title & Compensation -->
                         <div class="emp-section-card">
                             <div class="emp-section-head">
-                                <span class="emp-section-title"><i class="fas fa-briefcase"></i> Position & Compensation</span>
+                                <span class="emp-section-title"><i class="fas fa-briefcase"></i> Job Title & Compensation</span>
                                 <span class="emp-req-pill">Required</span>
                             </div>
                             <div class="row g-3">
@@ -2724,11 +2735,11 @@ if ($roles_query instanceof mysqli_result) {
                                 </div>
                                 <div class="col-md-6">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">Position <span class="emp-req-star">*</span></label>
+                                        <label class="emp-label">Job Title <span class="emp-req-star">*</span></label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-user-tag emp-input-icon"></i>
                                             <select name="position_id" id="add_position_id" class="form-select" required>
-                                                <option value="">Select Position</option>
+                                                <option value="">Select Job Title</option>
                                             </select>
                                         </div>
                                         <div class="emp-helper-text">
@@ -2788,7 +2799,11 @@ if ($roles_query instanceof mysqli_result) {
                                             <select name="store_id" id="add_store_id" class="form-select" required>
                                                 <?php foreach ($all_stores as $st): ?>
                                                     <option value="<?php echo (int)$st['store_id']; ?>">
-                                                        <?php echo htmlspecialchars($st['store_name'] . ' (' . ($st['city'] ?? 'Dasmariñas') . ')'); ?>
+                                                        <?php
+                                                        $store_name = trim((string)($st['store_name'] ?? ''));
+                                                        $store_city = trim((string)($st['city'] ?? ''));
+                                                        echo htmlspecialchars($store_city !== '' ? $store_name . ' (' . $store_city . ')' : $store_name);
+                                                        ?>
                                                     </option>
                                                 <?php endforeach; ?>
                                             </select>
@@ -3010,10 +3025,10 @@ if ($roles_query instanceof mysqli_result) {
                             </div>
                         </div>
 
-                        <!-- Section 3: Department, Position & Compensation -->
+                        <!-- Section 3: Department, Job Title & Compensation -->
                         <div class="emp-section-card">
                             <div class="emp-section-head">
-                                <span class="emp-section-title"><i class="fas fa-briefcase"></i> Position & Compensation</span>
+                                <span class="emp-section-title"><i class="fas fa-briefcase"></i> Job Title & Compensation</span>
                                 <span class="emp-req-pill">Required</span>
                             </div>
                             <div class="row g-3">
@@ -3035,11 +3050,11 @@ if ($roles_query instanceof mysqli_result) {
                                 </div>
                                 <div class="col-md-6">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">Position <span class="emp-req-star">*</span></label>
+                                        <label class="emp-label">Job Title <span class="emp-req-star">*</span></label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-user-tag emp-input-icon"></i>
                                             <select name="position_id" id="edit_position_id" class="form-select" required>
-                                                <option value="">Select Position</option>
+                                                <option value="">Select Job Title</option>
                                             </select>
                                         </div>
                                     </div>
@@ -3096,7 +3111,11 @@ if ($roles_query instanceof mysqli_result) {
                                             <select name="store_id" id="edit_store_id" class="form-select" required>
                                                 <?php foreach ($all_stores as $st): ?>
                                                     <option value="<?php echo (int)$st['store_id']; ?>">
-                                                        <?php echo htmlspecialchars($st['store_name'] . ' (' . ($st['city'] ?? 'Dasmariñas') . ')'); ?>
+                                                        <?php
+                                                        $store_name = trim((string)($st['store_name'] ?? ''));
+                                                        $store_city = trim((string)($st['city'] ?? ''));
+                                                        echo htmlspecialchars($store_city !== '' ? $store_name . ' (' . $store_city . ')' : $store_name);
+                                                        ?>
                                                     </option>
                                                 <?php endforeach; ?>
                                             </select>
@@ -3373,7 +3392,7 @@ if ($roles_query instanceof mysqli_result) {
 
             const currentValue = selectEl.value;
             const options = getPositionsForDepartment(departmentEl.value);
-            const optionHtml = ['<option value="">Select Position</option>']
+            const optionHtml = ['<option value="">Select Job Title</option>']
                 .concat(options.map((position) => `<option value="${position.id}" data-department-id="${position.department_id || 0}">${escapeHtml(position.title)}</option>`))
                 .join('');
             selectEl.innerHTML = optionHtml;
@@ -3760,5 +3779,3 @@ if ($roles_query instanceof mysqli_result) {
     </script>
 </body>
 </html>
-
-

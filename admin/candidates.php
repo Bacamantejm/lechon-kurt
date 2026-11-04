@@ -148,9 +148,9 @@ if ($has_job_positions) {
                     <div class="card-body">
                         <form method="GET" class="row g-2 align-items-end">
                             <div class="col-md-5">
-                                <label class="form-label mb-1">Position</label>
+                                <label class="form-label mb-1">Job Title</label>
                                 <select name="position_id" id="positionFilter" class="form-select">
-                                    <option value="0">All Positions</option>
+                                    <option value="0">All Job Titles</option>
                                     <?php if ($positions): ?>
                                         <?php while ($pos = mysqli_fetch_assoc($positions)): ?>
                                             <option value="<?php echo (int)$pos['id']; ?>" <?php echo ((int)$pos['id'] === $position_id) ? 'selected' : ''; ?>>
@@ -310,6 +310,5 @@ if ($has_job_positions) {
     </script>
 </body>
 </html>
-
 
 
