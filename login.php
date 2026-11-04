@@ -124,11 +124,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
     $password = $_POST['password'] ?? '';
     $remember = !empty($_POST['remember']) && in_array(strtolower(trim((string)$_POST['remember'])), ['1', 'true', 'on', 'yes'], true);
     
+    $is_email = filter_var($email, FILTER_VALIDATE_EMAIL);
+    $phone_digits = preg_replace('/\D/', '', $email);
+    $is_phone = (strlen($phone_digits) >= 7 && strlen($phone_digits) <= 15);
+    
     if (empty($email) || empty($password)) {
-        $error = 'Please enter both email and password';
+        $error = 'Please enter both email/phone and password';
         $form_data['email'] = $email;
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $error = 'Please enter a valid email address';
+    } elseif (!$is_email && !$is_phone) {
+        $error = 'Please enter a valid email address or mobile phone number';
         $form_data['email'] = $email;
     } else {
         // Use loginUser function from config.php
@@ -1294,13 +1298,13 @@ body.dark-mode .floating-pig {
                 <!-- Login Form -->
                 <form method="POST" action="" class="login-form" id="loginForm" data-swal-validate="off">
                     <div class="form-group">
-                        <label for="email">Email Address</label>
+                        <label for="email">Email or Mobile Number</label>
                         <div class="input-with-icon">
-                            <i class="fas fa-envelope"></i>
-                            <input type="email" id="email" name="email" class="form-control" required 
-                                placeholder="Enter your email address" 
+                            <i class="fas fa-user"></i>
+                            <input type="text" id="email" name="email" class="form-control" required 
+                                placeholder="Enter your email or mobile number" 
                                 value="<?php echo htmlspecialchars($form_data['email'] ?? ($_COOKIE['remember_email'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
-                                autocomplete="email">
+                                autocomplete="username">
                         </div>
                     </div>
                     

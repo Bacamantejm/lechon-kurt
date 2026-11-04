@@ -1040,15 +1040,35 @@ function loginUser($conn, $email, $password) {
     if ($has_splash_column) {
         $select_fields .= ", mobile_splash_seen";
     }
-    $query = "SELECT {$select_fields} FROM users WHERE email = ?";
-    $stmt = mysqli_prepare($conn, $query);
+
+    $raw_identifier = trim((string)$email);
+    $clean_identifier = strtolower($raw_identifier);
+    $phone_digits = preg_replace('/\D/', '', $raw_identifier);
+    $phone_suffix = strlen($phone_digits) >= 10 ? substr($phone_digits, -10) : '';
+
+    if ($phone_suffix !== '') {
+        $query = "SELECT {$select_fields} FROM users 
+                  WHERE LOWER(email) = ? 
+                     OR phone = ? 
+                     OR RIGHT(REPLACE(REPLACE(REPLACE(COALESCE(phone, ''), ' ', ''), '-', ''), '+63', '0'), 10) = ?
+                  LIMIT 1";
+        $stmt = mysqli_prepare($conn, $query);
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, "sss", $clean_identifier, $raw_identifier, $phone_suffix);
+        }
+    } else {
+        $query = "SELECT {$select_fields} FROM users WHERE LOWER(email) = ? OR phone = ? LIMIT 1";
+        $stmt = mysqli_prepare($conn, $query);
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, "ss", $clean_identifier, $raw_identifier);
+        }
+    }
     
     if (!$stmt) {
         error_log("Login Query Error: " . mysqli_error($conn));
         return ['success' => false, 'message' => 'Database error. Please try again.'];
     }
     
-    mysqli_stmt_bind_param($stmt, "s", $email);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
     
@@ -1063,13 +1083,12 @@ function loginUser($conn, $email, $password) {
             return ['success' => false, 'message' => 'Account is deactivated. Please contact support.'];
         }
         
-        // Verify password - handle both plaintext (for migration) and hashed
+        // Verify password - handle bcrypt, plaintext (migration), md5, and trimmed
         $password_valid = false;
         if (password_verify($password, $row['password'])) {
             $password_valid = true;
         } elseif ($row['password'] === $password) {
             // Temporary: allow plaintext for migration purposes
-            // This will be removed after data migration
             $password_valid = true;
             // Hash the password for next login
             $hashed = password_hash($password, PASSWORD_DEFAULT);
@@ -1080,6 +1099,18 @@ function loginUser($conn, $email, $password) {
                 mysqli_stmt_execute($hash_stmt);
                 mysqli_stmt_close($hash_stmt);
             }
+        } elseif (md5($password) === $row['password']) {
+            $password_valid = true;
+            $hashed = password_hash($password, PASSWORD_DEFAULT);
+            $hash_query = "UPDATE users SET password = ? WHERE id = ?";
+            $hash_stmt = mysqli_prepare($conn, $hash_query);
+            if ($hash_stmt) {
+                mysqli_stmt_bind_param($hash_stmt, "si", $hashed, $row['id']);
+                mysqli_stmt_execute($hash_stmt);
+                mysqli_stmt_close($hash_stmt);
+            }
+        } elseif (password_verify(trim($password), $row['password'])) {
+            $password_valid = true;
         }
         
         if ($password_valid) {
@@ -1168,7 +1199,7 @@ function loginUser($conn, $email, $password) {
     }
     
     mysqli_stmt_close($stmt);
-    return ['success' => false, 'message' => 'Invalid email or password'];
+    return ['success' => false, 'message' => 'Invalid email/phone or password'];
 }
 
 function isLoggedIn() {
