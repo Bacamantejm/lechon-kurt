@@ -74,6 +74,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $updated = mysqli_stmt_execute($stmt);
         mysqli_stmt_close($stmt);
 
+        if ($updated) {
+            if ($type === 'shop_owner') {
+                $_SESSION['shop_tutorial_seen'] = $seen_val;
+            } else {
+                $_SESSION['customer_tutorial_seen'] = $seen_val;
+            }
+        }
+
         echo json_encode([
             'success' => $updated,
             'type' => $type,

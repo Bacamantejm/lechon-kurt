@@ -1086,9 +1086,9 @@ $remaining = $total - $downpayment;
                                 </div>
 
                                 <div class="cal-schedule-policy-bar">
-                                    <span><i class="fas fa-clock"></i> <strong>Lead Time:</strong> <?php echo (int)($store_schedule_config['lead_time_days'] ?? 1); ?> day(s) notice</span>
-                                    <span><i class="fas fa-hourglass-half"></i> <strong>Daily Cutoff:</strong> <?php echo date('g:i A', strtotime($store_schedule_config['cutoff_time'] ?? '18:00:00')); ?></span>
-                                    <span><i class="fas fa-calendar-alt"></i> <strong>Window:</strong> Up to <?php echo (int)($store_schedule_config['max_advance_days'] ?? 30); ?> days ahead</span>
+                                    <span id="calPolicyLeadTime"><i class="fas fa-clock"></i> <strong>Lead Time:</strong> <?php echo (int)($store_schedule_config['lead_time_days'] ?? 1); ?> day(s) notice</span>
+                                    <span id="calPolicyCutoff"><i class="fas fa-hourglass-half"></i> <strong>Daily Cutoff:</strong> <?php echo date('g:i A', strtotime($store_schedule_config['cutoff_time'] ?? '18:00:00')); ?></span>
+                                    <span id="calPolicyWindow"><i class="fas fa-calendar-alt"></i> <strong>Window:</strong> Up to <?php echo (int)($store_schedule_config['max_advance_days'] ?? 30); ?> days ahead</span>
                                 </div>
 
                                 <div class="cal-grid-weekdays">
@@ -1392,7 +1392,7 @@ $remaining = $total - $downpayment;
 }
 
 .checkout-section {
-    padding-bottom: 40px !important;
+    padding-bottom: 140px !important;
     background: #f8f9fa !important;
 }
 body {
@@ -1412,6 +1412,10 @@ body {
     max-width: 640px !important;
     width: 100% !important;
     margin: 0 auto !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
 }
 
 #foodpandaPickupView,
@@ -1419,6 +1423,7 @@ body {
 #foodpandaPreorderView {
     width: 100%;
     margin: 0 auto;
+    box-sizing: border-box;
 }
 
 /* Pre-Order Calendar & Time Slots Widget Styles */
@@ -1485,21 +1490,29 @@ body {
 }
 .cal-grid-weekdays {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 5px;
     margin-bottom: 6px;
     text-align: center;
+    width: 100%;
+    box-sizing: border-box;
 }
 .cal-grid-weekdays div {
     font-size: 0.75rem;
     font-weight: 700;
     color: #667085;
     text-transform: uppercase;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: clip;
+    white-space: nowrap;
 }
 .cal-grid-days {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 6px;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 5px;
+    width: 100%;
+    box-sizing: border-box;
 }
 .cal-day-cell {
     aspect-ratio: 1;
@@ -1509,27 +1522,42 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 3px;
+    padding: 3px 2px;
     border: 1px solid #eaecf0;
     background: #ffffff;
     cursor: pointer;
     transition: all 0.18s ease;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 .cal-day-cell.is-blank {
     background: transparent;
     border-color: transparent;
     cursor: default;
+    pointer-events: none;
 }
 .cal-day-num {
     font-weight: 800;
     font-size: 0.9rem;
     color: #101828;
+    line-height: 1.1;
 }
 .cal-day-sub {
     font-size: 0.65rem;
     font-weight: 700;
     color: #027a48;
     margin-top: 1px;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    width: 100%;
+    display: block;
+    text-align: center;
 }
 .cal-day-sub.muted { color: #98a2b3; }
 .cal-day-sub.full { color: #b3261e; }
@@ -2168,7 +2196,208 @@ body {
         border-radius: 14px !important;
     }
 }
+@media (max-width: 640px) {
+    .checkout-section {
+        padding-top: 16px !important;
+        padding-bottom: 140px !important;
+    }
+    .checkout-section .container {
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+        max-width: 100% !important;
+    }
+    .checkout-section .checkout-form {
+        padding: 0 !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+    .fp-card {
+        padding: 16px 12px !important;
+        border-radius: 16px !important;
+        margin-bottom: 14px !important;
+    }
+    .preorder-cal-widget {
+        padding: 12px 6px !important;
+        border-radius: 14px !important;
+        box-shadow: none !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+    .cal-widget-header {
+        margin-bottom: 10px !important;
+        padding-bottom: 8px !important;
+    }
+    .cal-widget-title {
+        font-size: 0.96rem !important;
+    }
+    .cal-nav-btn {
+        width: 30px !important;
+        height: 30px !important;
+        font-size: 0.78rem !important;
+    }
+    .cal-schedule-policy-bar {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 6px !important;
+        padding: 8px 10px !important;
+        font-size: 0.75rem !important;
+        margin-bottom: 12px !important;
+    }
+    .cal-schedule-policy-bar span {
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        line-height: 1.3 !important;
+    }
+    .cal-grid-weekdays {
+        grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+        gap: 3px !important;
+        margin-bottom: 4px !important;
+        width: 100% !important;
+    }
+    .cal-grid-weekdays div {
+        font-size: 0.68rem !important;
+        padding: 2px 0 !important;
+    }
+    .cal-grid-days {
+        grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+        gap: 3px !important;
+        width: 100% !important;
+    }
+    .cal-day-cell {
+        min-height: unset !important;
+        height: auto !important;
+        aspect-ratio: 1 / 1 !important;
+        border-radius: 8px !important;
+        padding: 2px 1px !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .cal-day-num {
+        font-size: 0.80rem !important;
+        line-height: 1 !important;
+    }
+    .cal-day-sub {
+        font-size: 0.54rem !important;
+        line-height: 1 !important;
+        margin-top: 1px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 100% !important;
+    }
+    .cal-legend-bar {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 6px 8px !important;
+        margin-top: 12px !important;
+        padding-top: 10px !important;
+        justify-content: stretch !important;
+    }
+    .cal-legend-item {
+        font-size: 0.72rem !important;
+        white-space: nowrap !important;
+    }
+    .time-slots-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+    }
+    .time-slot-card {
+        padding: 8px 6px !important;
+    }
+    .slot-time {
+        font-size: 0.82rem !important;
+    }
+    .slot-label {
+        font-size: 0.68rem !important;
+    }
+    .fp-docked-bottom-bar {
+        margin: 16px auto 30px !important;
+        padding: 14px 16px !important;
+        border-radius: 14px !important;
+    }
+}
+
+@media (max-width: 520px) {
+    .fp-payment-terms-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+}
+
 @media (max-width: 360px) {
+    .checkout-section .container {
+        padding-left: 6px !important;
+        padding-right: 6px !important;
+    }
+    .fp-card {
+        padding: 12px 8px !important;
+        border-radius: 12px !important;
+    }
+    .preorder-cal-widget {
+        padding: 8px 4px !important;
+        border-radius: 10px !important;
+    }
+    .cal-widget-title {
+        font-size: 0.88rem !important;
+    }
+    .cal-nav-btn {
+        width: 26px !important;
+        height: 26px !important;
+        font-size: 0.72rem !important;
+    }
+    .cal-schedule-policy-bar {
+        padding: 6px 8px !important;
+        font-size: 0.68rem !important;
+        gap: 4px !important;
+    }
+    .cal-grid-weekdays {
+        gap: 2px !important;
+    }
+    .cal-grid-weekdays div {
+        font-size: 0.60rem !important;
+    }
+    .cal-grid-days {
+        gap: 2px !important;
+    }
+    .cal-day-cell {
+        border-radius: 6px !important;
+        padding: 1px 0 !important;
+    }
+    .cal-day-num {
+        font-size: 0.72rem !important;
+    }
+    .cal-day-sub {
+        font-size: 0.46rem !important;
+        letter-spacing: -0.3px !important;
+    }
+    .cal-legend-bar {
+        gap: 4px 6px !important;
+    }
+    .cal-legend-item {
+        font-size: 0.64rem !important;
+        gap: 4px !important;
+    }
+    .legend-dot {
+        width: 7px !important;
+        height: 7px !important;
+    }
+    .time-slots-grid {
+        gap: 6px !important;
+    }
+    .time-slot-card {
+        padding: 6px 4px !important;
+    }
+    .slot-time {
+        font-size: 0.75rem !important;
+    }
+    .slot-badge {
+        font-size: 0.56rem !important;
+        padding: 1px 4px !important;
+    }
     .fp-mode-pill-btn {
         font-size: 10px !important;
         padding: 6px 2px !important;
@@ -2561,6 +2790,64 @@ body.dark-mode .fp-sheet-toggle-btn.is-active {
 body.dark-mode .fp-slot-row.is-selected {
     background: #334155 !important;
     color: #f8fafc !important;
+}
+
+body.dark-mode .preorder-cal-widget {
+    background: #1e293b;
+    border-color: #334155;
+}
+body.dark-mode .cal-widget-title {
+    color: #f8fafc;
+}
+body.dark-mode .cal-nav-btn {
+    background: #0f172a;
+    border-color: #334155;
+    color: #cbd5e1;
+}
+body.dark-mode .cal-schedule-policy-bar {
+    background: #0f172a;
+    border-color: #334155;
+    color: #94a3b8;
+}
+body.dark-mode .cal-grid-weekdays div {
+    color: #94a3b8;
+}
+body.dark-mode .cal-day-cell {
+    background: #0f172a;
+    border-color: #334155;
+}
+body.dark-mode .cal-day-num {
+    color: #f8fafc;
+}
+body.dark-mode .cal-day-cell.is-disabled {
+    background: #1e293b;
+    border-color: #334155;
+    opacity: 0.45;
+}
+body.dark-mode .cal-day-cell.is-available {
+    background: #0f172a;
+    border-color: #065f46;
+}
+body.dark-mode .cal-day-cell.is-selected {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+}
+body.dark-mode .time-slot-card {
+    background: #0f172a;
+    border-color: #334155;
+}
+body.dark-mode .time-slot-card.is-selected {
+    background: rgba(179, 38, 30, 0.2);
+    border-color: #b3261e;
+}
+body.dark-mode .slot-time {
+    color: #f8fafc;
+}
+body.dark-mode .cal-legend-bar {
+    border-top-color: #334155;
+}
+body.dark-mode .cal-legend-item {
+    color: #94a3b8;
 }
 
 /* Add new styles for payment breakdown */
@@ -5111,6 +5398,20 @@ async function loadCalendarMonth(monthStr) {
             const data = json.data;
             currentCalMonth = data.current_month;
             if (monthTitle) monthTitle.textContent = data.month_title;
+
+            // Dynamically synchronize policy bar with active store rules
+            const leadEl = document.getElementById('calPolicyLeadTime');
+            if (leadEl && data.lead_time_days !== undefined) {
+                leadEl.innerHTML = `<i class="fas fa-clock"></i> <strong>Lead Time:</strong> ${data.lead_time_days} day(s) notice`;
+            }
+            const cutoffEl = document.getElementById('calPolicyCutoff');
+            if (cutoffEl && data.cutoff_time) {
+                cutoffEl.innerHTML = `<i class="fas fa-hourglass-half"></i> <strong>Daily Cutoff:</strong> ${data.cutoff_time}`;
+            }
+            const winEl = document.getElementById('calPolicyWindow');
+            if (winEl && data.max_advance_days) {
+                winEl.innerHTML = `<i class="fas fa-calendar-alt"></i> <strong>Window:</strong> Up to ${data.max_advance_days} days ahead`;
+            }
             
             if (prevBtn) {
                 prevBtn.disabled = !data.prev_month;
@@ -5422,13 +5723,16 @@ function generatePickupTimeSlots() {
     const cutoffTime = cfg.cutoff_time || '18:00:00';
     const maxAdvanceDays = Math.max(7, parseInt(cfg.max_advance_days || 30, 10));
     
-    // Operating days array (1=Mon ... 7=Sun)
-    const operatingDays = (cfg.operating_days || '1,2,3,4,5,6,7').split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+    // Check pickup rules vs preorder roasting rules
+    const operatingDaysRaw = isPickup 
+        ? (cfg.pickup_operating_days || cfg.operating_days || '1,2,3,4,5,6,7') 
+        : (cfg.operating_days || '1,2,3,4,5,6,7');
+    const operatingDays = operatingDaysRaw.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
     
     // Slot interval and start/end times
-    const slotStartTime = cfg.slot_start_time || '08:00:00';
-    const slotEndTime = cfg.slot_end_time || '20:00:00';
-    const slotInterval = Math.max(15, parseInt(cfg.slot_interval_minutes || 60, 10));
+    const slotStartTime = isPickup ? (cfg.pickup_start_time || '09:00:00') : (cfg.slot_start_time || '08:00:00');
+    const slotEndTime = isPickup ? (cfg.pickup_end_time || '19:00:00') : (cfg.slot_end_time || '20:00:00');
+    const slotInterval = Math.max(15, parseInt((isPickup ? (cfg.pickup_interval_minutes || 30) : (cfg.slot_interval_minutes || 60)), 10));
     
     // Blackout dates
     const blackoutDates = (cfg.blackout_dates || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -5445,7 +5749,8 @@ function generatePickupTimeSlots() {
     const [cutoffH, cutoffM] = cutoffTime.split(':').map(n => parseInt(n || 0, 10));
     const isPastCutoff = (currentHour > cutoffH || (currentHour === cutoffH && currentMin >= cutoffM));
 
-    const effectiveLeadTime = isPastCutoff ? (leadTimeDays + 1) : leadTimeDays;
+    // Store pick-ups allow same-day selection (offset 0); advance roasting orders honor notice requirement
+    const effectiveLeadTime = isPickup ? 0 : (isPastCutoff ? (leadTimeDays + 1) : leadTimeDays);
 
     for (let dayOffset = effectiveLeadTime; dayOffset <= Math.min(maxAdvanceDays, 30); dayOffset++) {
         const d = new Date(now);

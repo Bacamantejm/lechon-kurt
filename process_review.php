@@ -1,6 +1,10 @@
 <?php
 session_start();
 require_once 'includes/config.php';
+require_once 'includes/security.php';
+require_once 'includes/partner_dashboard_helper.php';
+
+pdhEnsureProductReviewReplySchema($conn);
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
@@ -8,6 +12,12 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !isset($_POST['submit_review'])) {
+    header('Location: my_orders.php');
+    exit;
+}
+
+if (isset($_POST['csrf_token']) && !validateCSRFToken($_POST['csrf_token'])) {
+    $_SESSION['error_msg'] = "Invalid session token. Please try again.";
     header('Location: my_orders.php');
     exit;
 }
@@ -31,21 +41,49 @@ mysqli_begin_transaction($conn);
 try {
     // Process product reviews
     if (isset($_POST['reviews']) && is_array($_POST['reviews'])) {
-        $review_stmt = mysqli_prepare($conn, "INSERT INTO product_reviews (order_id, product_id, user_id, rating, comment, is_approved, created_at) VALUES (?, ?, ?, ?, ?, 1, NOW())");
+        $review_stmt = mysqli_prepare($conn, "
+            INSERT INTO product_reviews (order_id, product_id, user_id, rating, comment, image, is_approved, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, 1, NOW())
+            ON DUPLICATE KEY UPDATE rating = VALUES(rating), comment = VALUES(comment), image = COALESCE(VALUES(image), product_reviews.image), is_approved = 1, created_at = NOW()
+        ");
         $update_item_stmt = mysqli_prepare($conn, "UPDATE order_items SET is_reviewed = 1 WHERE id = ?");
 
-        // Bind parameters once (by reference)
-        $p_id = 0; $r_val = 0; $c_val = ''; $oi_id = 0;
-        mysqli_stmt_bind_param($review_stmt, "iiiis", $order_id, $p_id, $user_id, $r_val, $c_val);
+        $p_id = 0; $r_val = 0; $c_val = ''; $img_val = null; $oi_id = 0;
+        mysqli_stmt_bind_param($review_stmt, "iiiiss", $order_id, $p_id, $user_id, $r_val, $c_val, $img_val);
         mysqli_stmt_bind_param($update_item_stmt, "i", $oi_id);
 
         $products_to_update = [];
+        $allowed_mimes = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+        $upload_dir = __DIR__ . '/uploads/reviews';
+        if (!is_dir($upload_dir)) {
+            @mkdir($upload_dir, 0755, true);
+        }
 
-        foreach ($_POST['reviews'] as $review_data) {
+        foreach ($_POST['reviews'] as $index => $review_data) {
             $p_id = intval($review_data['product_id']);
             $oi_id = intval($review_data['order_item_id']);
             $r_val = intval($review_data['rating']);
             $c_val = trim($review_data['comment']);
+            $img_val = null;
+
+            // Check if photo was uploaded for this item
+            if (isset($_FILES['review_images']['name'][$index]) && $_FILES['review_images']['error'][$index] === UPLOAD_ERR_OK) {
+                $tmp = $_FILES['review_images']['tmp_name'][$index];
+                $size = (int)$_FILES['review_images']['size'][$index];
+                if ($size <= 5 * 1024 * 1024) {
+                    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                    $mime = finfo_file($finfo, $tmp);
+                    finfo_close($finfo);
+
+                    if (isset($allowed_mimes[$mime])) {
+                        $ext = $allowed_mimes[$mime];
+                        $filename = 'rev_' . $order_id . '_' . $oi_id . '_' . bin2hex(random_bytes(5)) . '.' . $ext;
+                        if (move_uploaded_file($tmp, $upload_dir . '/' . $filename)) {
+                            $img_val = 'uploads/reviews/' . $filename;
+                        }
+                    }
+                }
+            }
 
             if ($r_val >= 1 && $r_val <= 5) {
                 mysqli_stmt_execute($review_stmt);

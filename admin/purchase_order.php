@@ -364,8 +364,20 @@ $page_title = $po_id > 0 ? "Edit PO #" . htmlspecialchars($po['po_number']) : "C
             </div>
             
             <div class="admin-main">
-                <div class="mb-3">
-                    <a href="mrp.php?tab=purchase_orders" class="btn btn-outline-secondary"><i class="fas fa-arrow-left"></i> Back to Procurement</a>
+                <div class="mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <a href="mrp.php?tab=purchase_orders" class="btn btn-outline-secondary"><i class="fas fa-arrow-left"></i> Back to Procurement</a>
+                        <?php if ($po_id > 0 && $po && in_array($po['status'], ['ordered', 'partially_received'], true)): ?>
+                            <a href="mrp.php?tab=purchase_orders&receive_po_id=<?php echo $po_id; ?>" class="btn btn-success ms-2">
+                                <i class="fas fa-box-open me-1"></i> Inspect &amp; Receive Stock
+                            </a>
+                        <?php elseif ($po_id > 0 && $po && $po['status'] === 'completed'): ?>
+                            <span class="badge bg-success ms-2 p-2"><i class="fas fa-check-circle me-1"></i> Stock Fully Received</span>
+                            <a href="mrp.php?tab=budget_payments" class="btn btn-outline-primary ms-2 btn-sm">
+                                <i class="fas fa-hand-holding-dollar me-1"></i> Settle Supplier Payment
+                            </a>
+                        <?php endif; ?>
+                    </div>
                 </div>
 
                 <?php if (isset($_SESSION['success'])): ?>
@@ -449,6 +461,9 @@ $page_title = $po_id > 0 ? "Edit PO #" . htmlspecialchars($po['po_number']) : "C
                                                 <option value="cancelled" <?php echo $po['status'] == 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
                                             </select>
                                         </div>
+                                        <div class="form-text small text-muted mt-1">
+                                            To credit physical materials into inventory, click <strong>Inspect &amp; Receive Stock</strong> at the top.
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -478,7 +493,8 @@ $page_title = $po_id > 0 ? "Edit PO #" . htmlspecialchars($po['po_number']) : "C
                                     <thead>
                                         <tr>
                                             <th>Material</th>
-                                            <th style="width: 130px;">Quantity</th>
+                                            <th style="width: 140px;">Quantity Ordered</th>
+                                            <th style="width: 140px;">Quantity Received</th>
                                             <th style="width: 140px;">Unit Cost</th>
                                             <th style="width: 150px;">Line Total</th>
                                             <th style="width: 60px;" class="text-center">Remove</th>
@@ -486,17 +502,44 @@ $page_title = $po_id > 0 ? "Edit PO #" . htmlspecialchars($po['po_number']) : "C
                                     </thead>
                                     <tbody>
                                         <?php if(empty($po_items)): ?>
-                                            <tr><td colspan="5" class="text-center text-muted py-4">No items added to this purchase order yet.</td></tr>
+                                            <tr><td colspan="6" class="text-center text-muted py-4">No items added to this purchase order yet.</td></tr>
                                         <?php else: ?>
-                                            <?php foreach($po_items as $item): ?>
+                                            <?php foreach($po_items as $item): 
+                                                $qtyOrd = (float)$item['quantity_ordered'];
+                                                $qtyRcv = (float)($item['quantity_received'] ?? 0);
+                                                $rcvClass = $qtyRcv >= $qtyOrd && $qtyOrd > 0 ? 'bg-success' : ($qtyRcv > 0 ? 'bg-warning text-dark' : 'bg-light text-muted border');
+                                            ?>
                                             <tr>
                                                 <td class="fw-semibold"><?php echo htmlspecialchars($item['material_name']); ?> <span class="text-muted small">(<?php echo $item['unit']; ?>)</span></td>
-                                                <td><input type="number" name="quantity[]" class="form-control form-control-sm" value="<?php echo $item['quantity_ordered']; ?>" step="0.01"></td>
-                                                <td><input type="number" name="cost[]" class="form-control form-control-sm" value="<?php echo $item['unit_cost']; ?>" step="0.01"></td>
+                                                <td>
+                                                    <?php if ($po['status'] === 'draft'): ?>
+                                                        <input type="number" name="quantity[]" class="form-control form-control-sm" value="<?php echo $item['quantity_ordered']; ?>" step="0.01">
+                                                    <?php else: ?>
+                                                        <span class="fw-semibold"><?php echo number_format($qtyOrd, 2); ?></span> <span class="text-muted small"><?php echo htmlspecialchars($item['unit']); ?></span>
+                                                        <input type="hidden" name="quantity[]" value="<?php echo $item['quantity_ordered']; ?>">
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <span class="badge <?php echo $rcvClass; ?> px-2 py-1">
+                                                        <?php echo number_format($qtyRcv, 2); ?> / <?php echo number_format($qtyOrd, 2); ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <?php if ($po['status'] === 'draft'): ?>
+                                                        <input type="number" name="cost[]" class="form-control form-control-sm" value="<?php echo $item['unit_cost']; ?>" step="0.01">
+                                                    <?php else: ?>
+                                                        <span>PHP <?php echo number_format((float)$item['unit_cost'], 2); ?></span>
+                                                        <input type="hidden" name="cost[]" value="<?php echo $item['unit_cost']; ?>">
+                                                    <?php endif; ?>
+                                                </td>
                                                 <td class="fw-bold text-dark">PHP <?php echo number_format($item['quantity_ordered'] * $item['unit_cost'], 2); ?></td>
                                                 <td class="text-center">
                                                     <input type="hidden" name="item_id[]" value="<?php echo $item['id']; ?>">
-                                                    <input type="checkbox" name="delete_item[]" value="<?php echo $item['id']; ?>" class="form-check-input">
+                                                    <?php if ($po['status'] === 'draft'): ?>
+                                                        <input type="checkbox" name="delete_item[]" value="<?php echo $item['id']; ?>" class="form-check-input">
+                                                    <?php else: ?>
+                                                        <span class="text-muted small">&mdash;</span>
+                                                    <?php endif; ?>
                                                 </td>
                                             </tr>
                                             <?php endforeach; ?>

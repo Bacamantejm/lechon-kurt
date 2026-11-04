@@ -1763,8 +1763,8 @@ unset($step);
 $simple_flow_steps = [
     [
         'key' => 'need_plan',
-        'title' => '1. Check Needs',
-        'description' => 'Review low stock and suggested reorder quantities.',
+        'title' => '1. Needs Planner',
+        'description' => 'Review low stock and sales-driven shortage alerts.',
         'count' => max((int)$mrp_kpis['critical_materials'], (int)($procurement_health['at_risk_materials'] ?? 0)),
         'count_label' => 'material(s) to review',
         'tab' => 'low_stock',
@@ -1773,33 +1773,53 @@ $simple_flow_steps = [
     ],
     [
         'key' => 'requisition',
-        'title' => '2. Requisition',
-        'description' => 'Create PR, then approve pending requests.',
-        'count' => (int)$mrp_kpis['pending_pr'] + (int)$mrp_kpis['approved_pr'],
-        'count_label' => 'PR task(s)',
+        'title' => '2. Requisitions (PR)',
+        'description' => 'Create and review purchase requisitions.',
+        'count' => (int)$mrp_kpis['pending_pr'],
+        'count_label' => 'pending PR approval',
         'tab' => 'requisitions',
         'action_url' => '?tab=requisitions',
-        'action_label' => 'Open Requisitions'
+        'action_label' => 'Review PRs'
+    ],
+    [
+        'key' => 'budget_approval',
+        'title' => '3. Budget Clearance',
+        'description' => 'Authorize daily finance budget for purchasing.',
+        'count' => ($today_budget_summary['approved_total'] <= 0 ? 1 : 0),
+        'count_label' => $today_budget_summary['approved_total'] > 0 ? 'budget approved today' : 'budget action needed',
+        'tab' => 'budget_payments',
+        'action_url' => '?tab=budget_payments',
+        'action_label' => 'Manage Budget'
+    ],
+    [
+        'key' => 'purchase_orders',
+        'title' => '4. Purchase Orders',
+        'description' => 'Convert approved PRs into official supplier POs.',
+        'count' => (int)$mrp_kpis['approved_pr'],
+        'count_label' => 'approved PR ready for PO',
+        'tab' => 'purchase_orders',
+        'action_url' => '?tab=purchase_orders',
+        'action_label' => 'Create / View POs'
     ],
     [
         'key' => 'receiving',
-        'title' => '3. Receive Deliveries',
-        'description' => 'Track PO, inspect and receive stock.',
+        'title' => '5. Receive Stock',
+        'description' => 'Inspect arrivals and increment warehouse inventory.',
         'count' => (int)$mrp_kpis['open_po'],
-        'count_label' => 'PO task(s)',
+        'count_label' => 'open PO(s) to receive',
         'tab' => 'purchase_orders',
         'action_url' => '?tab=purchase_orders&focus=inspect',
-        'action_label' => 'Open Receiving Queue'
+        'action_label' => 'Receive Deliveries'
     ],
     [
         'key' => 'payments',
-        'title' => '4. Pay Suppliers',
-        'description' => 'Record outstanding supplier payments.',
+        'title' => '6. Supplier Payments',
+        'description' => 'Disburse payments against fulfilled purchase orders.',
         'count' => (int)($payment_kpis['unpaid_po_count'] ?? 0),
-        'count_label' => 'payment task(s)',
+        'count_label' => 'order(s) with balance',
         'tab' => 'budget_payments',
         'action_url' => '?tab=budget_payments',
-        'action_label' => 'Open Payments'
+        'action_label' => 'Record Payments'
     ]
 ];
 
@@ -1827,7 +1847,11 @@ if (!in_array($requested_tab, $valid_tabs, true)) {
     $requested_tab = '';
 }
 
-if ($requested_tab !== '') {
+$auto_receive_po_id = isset($_GET['receive_po_id']) ? (int)$_GET['receive_po_id'] : 0;
+
+if ($auto_receive_po_id > 0) {
+    $tab = 'purchase_orders';
+} elseif ($requested_tab !== '') {
     $tab = $requested_tab;
 } elseif ($next_workflow_step) {
     $tab = $next_workflow_step['tab'];
@@ -2115,7 +2139,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                             <span class="badge bg-success">No urgent tasks right now</span>
                         <?php endif; ?>
                     </div>
-                    <p class="small text-muted mb-2">Follow this order to avoid confusion: <strong>Needs -> Requisition -> Receiving -> Payment</strong>. Supplier list is optional support.</p>
+                    <p class="small text-muted mb-2">Follow the 6-step procurement lifecycle: <strong>1. Needs Planner &rarr; 2. Requisition &rarr; 3. Budget Clearance &rarr; 4. Purchase Order &rarr; 5. Receive Stock &rarr; 6. Supplier Payment</strong>.</p>
                     <div class="simple-flow-grid">
                         <?php foreach ($simple_flow_steps as $simple_step): ?>
                             <div class="simple-step-card <?php echo htmlspecialchars($simple_step['state']); ?>">
@@ -3558,6 +3582,15 @@ unset($_SESSION['success'], $_SESSION['error']);
             if (firstReceiveBtn) {
                 firstReceiveBtn.classList.add('workflow-focus');
                 firstReceiveBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        const autoReceivePoId = <?php echo $auto_receive_po_id; ?>;
+        if (autoReceivePoId > 0) {
+            loadReceiveModal(autoReceivePoId);
+            const rcvModalEl = document.getElementById('receiveStockModal');
+            if (rcvModalEl) {
+                new bootstrap.Modal(rcvModalEl).show();
             }
         }
         

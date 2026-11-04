@@ -650,12 +650,85 @@ function hasBackofficeAccess($conn, $user_id) {
     return $result;
 }
 
+// Check if user is a cashier (POS-dedicated staff)
+function isCashierUser($conn = null, $user_id = 0) {
+    $user_id = (int)$user_id;
+    if ($user_id <= 0) {
+        $user_id = (int)($_SESSION['user_id'] ?? 0);
+    }
+    if ($user_id <= 0) {
+        return false;
+    }
+    if (!$conn) {
+        $conn = (isset($GLOBALS['conn']) && $GLOBALS['conn']) ? $GLOBALS['conn'] : null;
+    }
+    if (!$conn) {
+        return false;
+    }
+
+    static $cashier_user_cache = [];
+    if (array_key_exists($user_id, $cashier_user_cache)) {
+        return $cashier_user_cache[$user_id];
+    }
+
+    // Super Admin or Business Owner is never a restricted cashier
+    if (function_exists('isSuperAdmin') && isSuperAdmin($conn, $user_id)) {
+        return $cashier_user_cache[$user_id] = false;
+    }
+    $session_role = strtolower(trim((string)($_SESSION['role_name'] ?? '')));
+    if (in_array($session_role, ['super_admin', 'business_owner'], true)) {
+        return $cashier_user_cache[$user_id] = false;
+    }
+    if (function_exists('getFranchiseSellerScopeOwnerId')) {
+        $scoped_owner = (int)(getFranchiseSellerScopeOwnerId($conn, $user_id) ?? 0);
+        if ($scoped_owner > 0 && $scoped_owner === $user_id) {
+            return $cashier_user_cache[$user_id] = false;
+        }
+    }
+
+    // 1. Check user role name & description
+    $role_query = mysqli_query($conn, "SELECT r.name, r.description FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = $user_id LIMIT 1");
+    if ($role_query && ($r = mysqli_fetch_assoc($role_query))) {
+        $r_name = strtolower((string)$r['name']);
+        $r_desc = strtolower((string)$r['description']);
+        if (strpos($r_name, 'cashier') !== false || strpos($r_desc, 'cashier') !== false) {
+            return $cashier_user_cache[$user_id] = true;
+        }
+    }
+
+    // 2. Check linked employee position & department name
+    $emp_query = mysqli_query($conn, "SELECT e.position, d.department_name FROM employees e LEFT JOIN departments d ON e.department_id = d.id WHERE e.user_id = $user_id LIMIT 1");
+    if ($emp_query && ($e = mysqli_fetch_assoc($emp_query))) {
+        $pos = strtolower((string)($e['position'] ?? ''));
+        $dept = strtolower((string)($e['department_name'] ?? ''));
+        if (strpos($pos, 'cashier') !== false || strpos($dept, 'cashier') !== false) {
+            return $cashier_user_cache[$user_id] = true;
+        }
+    }
+
+    // 3. Permission fingerprint: Has orders.create / orders.view but lacks executive dashboard/finance/hr/roles permissions
+    if (function_exists('hasPermission')) {
+        $can_orders = hasPermission($conn, $user_id, 'orders.create') || hasPermission($conn, $user_id, 'orders.view');
+        $has_executive = hasPermission($conn, $user_id, 'dashboard.view') || hasPermission($conn, $user_id, 'finance.view') || hasPermission($conn, $user_id, 'hr.view') || hasPermission($conn, $user_id, 'roles.manage');
+        if ($can_orders && !$has_executive) {
+            return $cashier_user_cache[$user_id] = true;
+        }
+    }
+
+    return $cashier_user_cache[$user_id] = false;
+}
+
 // Resolve post-login dashboard route based on RBAC role/permissions
 function resolveBackofficeDashboardRoute($conn = null, $user_id = 0) {
     $user_id = (int)$user_id;
     $super_admin_dashboard = __DIR__ . '/../super_admin/super_admin_dashboard.php';
     if ($conn && $user_id > 0 && isSuperAdmin($conn, $user_id) && file_exists($super_admin_dashboard)) {
         return 'super_admin/super_admin_dashboard.php';
+    }
+
+    // Cashier role lands directly on the Walk-in Order POS terminal
+    if ($conn && $user_id > 0 && isCashierUser($conn, $user_id)) {
+        return 'admin/kiosk.php';
     }
 
     $admin_dashboard = __DIR__ . '/../admin/index.php';

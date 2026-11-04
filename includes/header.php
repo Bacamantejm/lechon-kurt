@@ -93,8 +93,13 @@ if ($is_logged_in_user) {
 }
 
 require_once __DIR__ . '/rider_helper.php';
+require_once __DIR__ . '/rbac.php';
+
 $is_driver_account = false;
 $is_rider_context = false;
+$is_admin_or_shop_owner = false;
+$backoffice_dash_route = '';
+
 if ($is_logged_in_user) {
     $header_db_conn = (isset($conn) && ($conn instanceof mysqli)) ? $conn : null;
     $is_driver_account = isDeliveryDriverUser($header_db_conn, (int)$_SESSION['user_id']);
@@ -103,8 +108,46 @@ if ($is_logged_in_user) {
         exit();
     }
     $is_rider_context = isRiderSessionActive($header_db_conn);
+
+    $session_uid = (int)$_SESSION['user_id'];
+    $session_utype = strtolower(trim((string)($_SESSION['user_type'] ?? '')));
+    $session_urole = strtolower(trim((string)($_SESSION['role_name'] ?? '')));
+    $session_uacc = strtolower(trim((string)($_SESSION['account_type'] ?? '')));
+
+    $is_admin_or_shop_owner = (
+        $session_utype === 'admin' ||
+        $session_utype === 'partner' ||
+        $session_utype === 'employee' ||
+        $session_uacc === 'organization' ||
+        in_array($session_urole, ['super_admin', 'business_owner', 'store_manager', 'partner_owner', 'cashier'], true) ||
+        hasBackofficeAccess($header_db_conn, $session_uid)
+    );
+
+    if ($is_admin_or_shop_owner) {
+        $backoffice_dash_route = resolveBackofficeDashboardRoute($header_db_conn, $session_uid);
+        $header_current_script = basename($_SERVER['PHP_SELF'] ?? '');
+        $customer_only_pages = [
+            'index.php',
+            'menu.php',
+            'cart.php',
+            'checkout.php',
+            'shops.php',
+            'preorder.php',
+            'order_success.php',
+            'track_order.php',
+            'my_orders.php',
+            'favorites.php'
+        ];
+
+        if (in_array($header_current_script, $customer_only_pages, true)) {
+            header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+            header("Pragma: no-cache");
+            header("Location: " . $path_prefix . $backoffice_dash_route);
+            exit();
+        }
+    }
 }
-$nav_logo_href = $is_rider_context ? ($path_prefix . 'rider/index.php') : ($path_prefix . 'index.php');
+$nav_logo_href = $is_rider_context ? ($path_prefix . 'rider/index.php') : ($is_admin_or_shop_owner && $backoffice_dash_route !== '' ? ($path_prefix . $backoffice_dash_route) : ($path_prefix . 'index.php'));
 
 $ongoing_order_id = 0;
 $ongoing_order_number = '';
@@ -2478,6 +2521,9 @@ document.addEventListener('pointerdown', function(e) {
                     <a href="<?php echo $path_prefix; ?>seller_vouchers.php" class="user-dropdown-item"><i class="fas fa-tags"></i> My Vouchers</a>
                     <a href="<?php echo $path_prefix; ?>seller_advertisements.php" class="user-dropdown-item"><i class="fas fa-bullhorn"></i> My Advertisements</a>
                     <?php endif; ?>
+                    <?php if ($is_shop_owner_or_partner): ?>
+                    <a href="<?php echo $path_prefix; ?>admin/index.php?tour=1" class="user-dropdown-item"><i class="fas fa-compass" style="color:#b3261e;"></i> Shop Tour</a>
+                    <?php endif; ?>
                     <?php if ($normalized_user_type === 'admin'): ?>
                     <a href="<?php echo $path_prefix; ?>admin/index.php" class="user-dropdown-item"><i class="fas fa-gauge-high"></i> Admin Panel</a>
                     <?php endif; ?>
@@ -2622,6 +2668,9 @@ document.addEventListener('pointerdown', function(e) {
                     <a href="<?php echo $path_prefix; ?>seller_products.php" class="user-dropdown-item"><i class="fas fa-box"></i> My Products</a>
                     <a href="<?php echo $path_prefix; ?>seller_vouchers.php" class="user-dropdown-item"><i class="fas fa-tags"></i> My Vouchers</a>
                     <?php endif; ?>
+                    <?php if ($is_shop_owner_or_partner): ?>
+                    <a href="<?php echo $path_prefix; ?>admin/index.php?tour=1" class="user-dropdown-item"><i class="fas fa-compass" style="color:#b3261e;"></i> Shop Tour</a>
+                    <?php endif; ?>
                     <?php if ($normalized_user_type === 'admin'): ?>
                     <a href="<?php echo $path_prefix; ?>admin/index.php" class="user-dropdown-item"><i class="fas fa-gauge-high"></i> Admin Panel</a>
                     <?php endif; ?>
@@ -2693,6 +2742,9 @@ document.addEventListener('pointerdown', function(e) {
         <li><a href="<?php echo $path_prefix; ?>subscription_plans.php" class="<?php echo $current_page === 'subscription_plans' ? 'active' : ''; ?>"><i class="fas fa-layer-group"></i> Subscription Plans</a></li>
         <li><a href="<?php echo $path_prefix; ?>seller_products.php"><i class="fas fa-box"></i> My Products</a></li>
         <li><a href="<?php echo $path_prefix; ?>seller_vouchers.php"><i class="fas fa-tags"></i> My Vouchers</a></li>
+        <?php endif; ?>
+        <?php if ($is_shop_owner_or_partner): ?>
+        <li><a href="<?php echo $path_prefix; ?>admin/index.php?tour=1"><i class="fas fa-compass" style="color:#b3261e;"></i> Shop Tour</a></li>
         <?php endif; ?>
         <li><a href="javascript:void(0);" onclick="confirmLogout()"><i class="fas fa-right-from-bracket"></i> Logout</a></li>
         <?php endif; ?>

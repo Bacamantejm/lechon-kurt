@@ -780,7 +780,11 @@ unset($order);
                                     <?php if (in_array(strtolower($order['status']), ['delivered', 'completed'])): ?>
                                         <?php if (in_array($order['id'], $orders_with_unreviewed_items)): ?>
                                             <a href="leave_review.php?order_id=<?php echo (int)$order['id']; ?>" class="btn-action-outline btn-review">
-                                                <i class="fas fa-star"></i> Review
+                                                <i class="fas fa-star"></i> Review Food
+                                            </a>
+                                        <?php else: ?>
+                                            <a href="track_order.php?order_id=<?php echo (int)$order['id']; ?>" class="btn-action-outline" style="color: #027a48; border-color: #abefc6; background: #ecfdf3;">
+                                                <i class="fas fa-check-circle"></i> Reviewed
                                             </a>
                                         <?php endif; ?>
                                         <button type="button" 

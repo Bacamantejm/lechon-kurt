@@ -66,6 +66,28 @@ if (!function_exists('posGetDefaultSchedule')) {
     }
 }
 
+if (!function_exists('posUnpackScheduleCustomSlots')) {
+    function posUnpackScheduleCustomSlots(array $row): array {
+        $row['pickup_operating_days'] = $row['pickup_operating_days'] ?? '1,2,3,4,5,6,7';
+        $row['pickup_start_time'] = $row['pickup_start_time'] ?? '09:00:00';
+        $row['pickup_end_time'] = $row['pickup_end_time'] ?? '19:00:00';
+        $row['pickup_interval_minutes'] = isset($row['pickup_interval_minutes']) ? (int)$row['pickup_interval_minutes'] : 30;
+        $row['pickup_max_orders_per_slot'] = isset($row['pickup_max_orders_per_slot']) ? (int)$row['pickup_max_orders_per_slot'] : 5;
+
+        if (!empty($row['custom_slots_json'])) {
+            $parsed = json_decode((string)$row['custom_slots_json'], true);
+            if (is_array($parsed) && isset($parsed['pickup']) && is_array($parsed['pickup'])) {
+                $row['pickup_operating_days'] = $parsed['pickup']['operating_days'] ?? $row['pickup_operating_days'];
+                $row['pickup_start_time'] = $parsed['pickup']['slot_start_time'] ?? $row['pickup_start_time'];
+                $row['pickup_end_time'] = $parsed['pickup']['slot_end_time'] ?? $row['pickup_end_time'];
+                $row['pickup_interval_minutes'] = (int)($parsed['pickup']['slot_interval_minutes'] ?? $row['pickup_interval_minutes']);
+                $row['pickup_max_orders_per_slot'] = (int)($parsed['pickup']['max_orders_per_slot'] ?? $row['pickup_max_orders_per_slot']);
+            }
+        }
+        return $row;
+    }
+}
+
 if (!function_exists('posGetSellerSchedule')) {
     function posGetSellerSchedule(mysqli $conn, int $seller_id): array {
         posEnsureScheduleSchema($conn);
@@ -79,30 +101,15 @@ if (!function_exists('posGetSellerSchedule')) {
             if ($row = mysqli_fetch_assoc($res)) {
                 mysqli_free_result($res);
                 mysqli_stmt_close($stmt);
-                $row['pickup_operating_days'] = '1,2,3,4,5,6,7';
-                $row['pickup_start_time'] = '09:00:00';
-                $row['pickup_end_time'] = '19:00:00';
-                $row['pickup_interval_minutes'] = 30;
-                $row['pickup_max_orders_per_slot'] = 5;
-                if (!empty($row['custom_slots_json'])) {
-                    $parsed = json_decode((string)$row['custom_slots_json'], true);
-                    if (is_array($parsed) && isset($parsed['pickup']) && is_array($parsed['pickup'])) {
-                        $row['pickup_operating_days'] = $parsed['pickup']['operating_days'] ?? $row['pickup_operating_days'];
-                        $row['pickup_start_time'] = $parsed['pickup']['slot_start_time'] ?? $row['pickup_start_time'];
-                        $row['pickup_end_time'] = $parsed['pickup']['slot_end_time'] ?? $row['pickup_end_time'];
-                        $row['pickup_interval_minutes'] = (int)($parsed['pickup']['slot_interval_minutes'] ?? $row['pickup_interval_minutes']);
-                        $row['pickup_max_orders_per_slot'] = (int)($parsed['pickup']['max_orders_per_slot'] ?? $row['pickup_max_orders_per_slot']);
-                    }
-                }
-                return $row;
+                return posUnpackScheduleCustomSlots($row);
             }
             if ($res) mysqli_free_result($res);
             mysqli_stmt_close($stmt);
         }
 
-        // If specific seller has no schedule and seller > 0, check default main store (seller_id 0 or 1)
-        if ($seller_id > 1) {
-            $stmt_def = mysqli_prepare($conn, "SELECT * FROM shop_preorder_schedules WHERE seller_id IN (0, 1) AND is_active = 1 ORDER BY seller_id ASC LIMIT 1");
+        // If specific seller has no custom schedule, fall back to default HQ schedule (seller_id 0 or 1)
+        if ($seller_id > 0) {
+            $stmt_def = mysqli_prepare($conn, "SELECT * FROM shop_preorder_schedules WHERE seller_id IN (0, 1) AND is_active = 1 ORDER BY (seller_id = 0) DESC LIMIT 1");
             if ($stmt_def) {
                 mysqli_stmt_execute($stmt_def);
                 $res_def = mysqli_stmt_get_result($stmt_def);
@@ -110,7 +117,7 @@ if (!function_exists('posGetSellerSchedule')) {
                     $row_def['seller_id'] = $seller_id;
                     mysqli_free_result($res_def);
                     mysqli_stmt_close($stmt_def);
-                    return $row_def;
+                    return posUnpackScheduleCustomSlots($row_def);
                 }
                 if ($res_def) mysqli_free_result($res_def);
                 mysqli_stmt_close($stmt_def);
@@ -190,6 +197,36 @@ if (!function_exists('posSaveSellerSchedule')) {
 
         $ok = mysqli_stmt_execute($stmt);
         mysqli_stmt_close($stmt);
+
+        if ($ok) {
+            // Automatically keep seller 0 (HQ) and seller 1 (Primary Admin) synchronized
+            $sync_partner_id = ($seller_id === 0) ? 1 : (($seller_id === 1) ? 0 : null);
+            if ($sync_partner_id !== null) {
+                $stmt_sync = mysqli_prepare($conn, $sql);
+                if ($stmt_sync) {
+                    mysqli_stmt_bind_param(
+                        $stmt_sync,
+                        "iisssssiiissi",
+                        $sync_partner_id,
+                        $lead_time_days,
+                        $cutoff_time,
+                        $max_advance_days,
+                        $operating_days,
+                        $slot_start_time,
+                        $slot_end_time,
+                        $slot_interval_minutes,
+                        $max_orders_per_slot,
+                        $max_orders_per_day,
+                        $blackout_dates,
+                        $custom_slots_json,
+                        $is_active
+                    );
+                    mysqli_stmt_execute($stmt_sync);
+                    mysqli_stmt_close($stmt_sync);
+                }
+            }
+        }
+
         return (bool)$ok;
     }
 }
@@ -336,6 +373,7 @@ if (!function_exists('posGetCalendarAvailability')) {
                 } elseif ($date_override['status'] === 'open') {
                     $is_blackout = false;
                     $is_closed_day = false;
+                    $is_cutoff = false; // Admin manual open override bypasses lead time cutoff
                 }
             }
 
@@ -405,6 +443,7 @@ if (!function_exists('posGetCalendarAvailability')) {
             'max_booking_date' => $max_booking_date,
             'lead_time_days' => $schedule['lead_time_days'],
             'cutoff_time' => date('g:i A', strtotime($schedule['cutoff_time'])),
+            'max_advance_days' => (int)$schedule['max_advance_days'],
             'days' => $days_matrix,
             'first_day_weekday' => (int)date('N', strtotime($first_day_of_month)) // 1=Mon .. 7=Sun
         ];
@@ -617,7 +656,22 @@ if (!function_exists('posUpdateDateSchedule')) {
         }
 
         $new_blackout_str = implode(', ', array_keys($blackout_set));
-        $new_custom_json = !empty($custom_slots_data['dates']) ? json_encode($custom_slots_data) : '';
+        $new_custom_json = !empty($custom_slots_data) ? json_encode($custom_slots_data) : '';
+
+        // Ensure row exists before update
+        $chk_stmt = mysqli_prepare($conn, "SELECT id FROM shop_preorder_schedules WHERE seller_id = ? LIMIT 1");
+        if ($chk_stmt) {
+            mysqli_stmt_bind_param($chk_stmt, "i", $seller_id);
+            mysqli_stmt_execute($chk_stmt);
+            $chk_res = mysqli_stmt_get_result($chk_stmt);
+            $has_existing = $chk_res && mysqli_fetch_assoc($chk_res);
+            if ($chk_res) mysqli_free_result($chk_res);
+            mysqli_stmt_close($chk_stmt);
+
+            if (!$has_existing) {
+                posSaveSellerSchedule($conn, $seller_id, $schedule);
+            }
+        }
 
         $stmt = mysqli_prepare($conn, "
             UPDATE shop_preorder_schedules
@@ -631,6 +685,20 @@ if (!function_exists('posUpdateDateSchedule')) {
         mysqli_stmt_bind_param($stmt, "ssi", $new_blackout_str, $new_custom_json, $seller_id);
         $ok = mysqli_stmt_execute($stmt);
         mysqli_stmt_close($stmt);
+
+        if ($ok && ($seller_id === 0 || $seller_id === 1)) {
+            $sync_partner = ($seller_id === 0) ? 1 : 0;
+            $stmt_sync = mysqli_prepare($conn, "
+                UPDATE shop_preorder_schedules
+                SET blackout_dates = ?, custom_slots_json = ?
+                WHERE seller_id = ?
+            ");
+            if ($stmt_sync) {
+                mysqli_stmt_bind_param($stmt_sync, "ssi", $new_blackout_str, $new_custom_json, $sync_partner);
+                mysqli_stmt_execute($stmt_sync);
+                mysqli_stmt_close($stmt_sync);
+            }
+        }
 
         return (bool)$ok;
     }

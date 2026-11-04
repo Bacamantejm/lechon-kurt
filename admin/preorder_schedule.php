@@ -16,6 +16,34 @@ $is_partner_scoped_admin = isApprovedFranchiseSellerAccount($conn, $current_user
 $seller_scope_id = $is_partner_scoped_admin ? getFranchiseSellerScopeOwnerId($conn, $current_user_id) : 0;
 $target_seller_id = ($seller_scope_id > 0) ? (int)$seller_scope_id : 0;
 
+if (!$is_partner_scoped_admin && isset($_REQUEST['seller_id'])) {
+    $target_seller_id = max(0, (int)$_REQUEST['seller_id']);
+}
+
+// Fetch all branches & partner stores for platform admins
+$all_store_choices = [];
+if (!$is_partner_scoped_admin) {
+    $store_q = "
+        SELECT u.id AS seller_id, COALESCE(NULLIF(TRIM(u.business_name), ''), u.full_name) AS name
+        FROM users u
+        WHERE u.id IN (SELECT DISTINCT seller_id FROM products WHERE seller_id IS NOT NULL AND seller_id > 0)
+           OR u.id IN (SELECT DISTINCT owner_user_id FROM store_locations WHERE owner_user_id IS NOT NULL AND owner_user_id > 0)
+           OR u.id IN (SELECT DISTINCT seller_id FROM shop_preorder_schedules WHERE seller_id > 0)
+           OR u.user_type = 'seller'
+           OR u.account_type = 'organization'
+        ORDER BY name ASC
+    ";
+    $store_res = mysqli_query($conn, $store_q);
+    if ($store_res) {
+        while ($s_row = mysqli_fetch_assoc($store_res)) {
+            if ((int)$s_row['seller_id'] !== 1) { // 1 is HQ main admin, covered by HQ (0)
+                $all_store_choices[] = $s_row;
+            }
+        }
+        mysqli_free_result($store_res);
+    }
+}
+
 $current_page = 'preorder_schedule.php';
 $page_title = 'Pick-up & Pre-Order Schedule Manager';
 
@@ -143,8 +171,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_store_rules'])) 
             'is_active' => 1
         ];
 
-        if (posSaveSellerSchedule($conn, $target_seller_id, $save_data)) {
-            $flash_success = 'Store schedule defaults saved successfully!';
+        $save_seller_id = $target_seller_id;
+        if (!$is_partner_scoped_admin && isset($_POST['seller_id'])) {
+            $save_seller_id = max(0, (int)$_POST['seller_id']);
+        }
+
+        if (posSaveSellerSchedule($conn, $save_seller_id, $save_data)) {
+            if (!$is_partner_scoped_admin && !empty($_POST['apply_to_all_stores'])) {
+                foreach ($all_store_choices as $sc) {
+                    $sid = (int)$sc['seller_id'];
+                    if ($sid > 0) {
+                        posSaveSellerSchedule($conn, $sid, $save_data);
+                    }
+                }
+                $flash_success = 'Schedule rules saved and successfully synchronized across ALL stores and branches!';
+            } else {
+                $flash_success = 'Store schedule defaults saved successfully!';
+            }
         } else {
             $flash_error = 'Failed to update schedule rules. Please try again.';
         }
@@ -174,9 +217,10 @@ if (!preg_match('/^\d{4}-\d{2}$/', $req_month)) {
 $cal_data = posGetCalendarAvailability($conn, $target_seller_id, $req_month);
 $current_view_month = $cal_data['current_month'];
 $first_day_ts = strtotime($current_view_month . '-01');
-$prev_month_url = '?month=' . date('Y-m', strtotime('-1 month', $first_day_ts));
-$next_month_url = '?month=' . date('Y-m', strtotime('+1 month', $first_day_ts));
-$today_month_url = '?month=' . date('Y-m');
+$seller_query_param = ($target_seller_id > 0) ? '&seller_id=' . $target_seller_id : '';
+$prev_month_url = '?month=' . date('Y-m', strtotime('-1 month', $first_day_ts)) . $seller_query_param;
+$next_month_url = '?month=' . date('Y-m', strtotime('+1 month', $first_day_ts)) . $seller_query_param;
+$today_month_url = '?month=' . date('Y-m') . $seller_query_param;
 
 $days_map = [
     '1' => 'Monday',
@@ -693,7 +737,20 @@ $active_days_count = count(array_filter($operating_days_arr));
                         <h2><i class="fas fa-calendar-alt text-danger me-2"></i><?php echo htmlspecialchars($shop_display_name); ?> — Pick-Up &amp; Pre-Order Schedule</h2>
                         <p>Configure distinct dates, operating hours, and capacity limits for Store Pick-Up orders vs. Advance Pre-Order roasting batches.</p>
                     </div>
-                    <div class="d-flex align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <?php if (!$is_partner_scoped_admin && !empty($all_store_choices)): ?>
+                            <div class="d-flex align-items-center gap-2 me-1">
+                                <label for="adminBranchSelect" class="form-label-modern mb-0 text-nowrap fw-bold" style="font-size:0.82rem;"><i class="fas fa-store me-1 text-danger"></i> Store Scope:</label>
+                                <select id="adminBranchSelect" class="form-select form-select-sm" style="border-radius:10px; width:auto; font-weight:600; min-width:200px;" onchange="window.location.href='preorder_schedule.php?seller_id=' + this.value">
+                                    <option value="0" <?php echo $target_seller_id === 0 ? 'selected' : ''; ?>>Main Store (HQ / Platform Default)</option>
+                                    <?php foreach ($all_store_choices as $sc): ?>
+                                        <option value="<?php echo (int)$sc['seller_id']; ?>" <?php echo $target_seller_id === (int)$sc['seller_id'] ? 'selected' : ''; ?>>
+                                            <?php echo htmlspecialchars($sc['name']); ?> (ID: <?php echo (int)$sc['seller_id']; ?>)
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        <?php endif; ?>
                         <button type="button" class="btn btn-outline-dark" data-bs-toggle="modal" data-bs-target="#defaultRulesModal" style="border-radius: 10px; font-weight: 600;">
                             <i class="fas fa-sliders me-1"></i> Store Schedule Rules
                         </button>
@@ -1091,6 +1148,7 @@ $active_days_count = count(array_filter($operating_days_arr));
                 <form method="POST">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                     <input type="hidden" name="save_store_rules" value="1">
+                    <input type="hidden" name="seller_id" value="<?php echo (int)$target_seller_id; ?>">
 
                     <div class="modal-header modal-header-modern">
                         <div class="modal-header-content">
@@ -1373,6 +1431,20 @@ $active_days_count = count(array_filter($operating_days_arr));
                         </div>
                     </div>
 
+                    <?php if (!$is_partner_scoped_admin): ?>
+                        <div class="px-4 pb-2">
+                            <div class="form-check form-switch p-3" style="background:#f8f9fa; border:1px solid #eaecf0; border-radius:10px;">
+                                <input class="form-check-input ms-0 me-2" type="checkbox" role="switch" id="apply_to_all_stores" name="apply_to_all_stores" value="1">
+                                <label class="form-check-label fw-bold text-dark" for="apply_to_all_stores" style="font-size:0.875rem;">
+                                    Apply these schedule rules globally to ALL branches and partner stores
+                                </label>
+                                <div class="text-muted ps-0 mt-1" style="font-size:0.75rem;">
+                                    When enabled, saving will synchronize roasting and pickup hours to all registered stores in the system.
+                                </div>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+
                     <div class="modal-footer modal-footer-modern">
                         <button type="button" class="btn btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
                         <button type="submit" class="btn btn-modal-primary">
@@ -1389,6 +1461,7 @@ $active_days_count = count(array_filter($operating_days_arr));
     <script src="../js/sweetalert2.all.min.js"></script>
     <script>
         const CSRF_TOKEN = '<?php echo htmlspecialchars($csrf_token); ?>';
+        const CURRENT_SELLER_ID = <?php echo (int)$target_seller_id; ?>;
         let dateEditorModal = null;
 
         document.addEventListener('DOMContentLoaded', function() {
@@ -1482,7 +1555,7 @@ $active_days_count = count(array_filter($operating_days_arr));
                 modalEl.classList.add('show');
             }
 
-            fetch(`preorder_schedule.php?action=get_date_details&date=${encodeURIComponent(dateStr)}`)
+            fetch(`preorder_schedule.php?action=get_date_details&seller_id=${CURRENT_SELLER_ID}&date=${encodeURIComponent(dateStr)}`)
                 .then(res => res.json())
                 .then(data => {
                     if (!data.success || !data.data) {
@@ -1641,6 +1714,7 @@ $active_days_count = count(array_filter($operating_days_arr));
             const formData = new FormData();
             formData.append('action', 'update_date_schedule');
             formData.append('csrf_token', CSRF_TOKEN);
+            formData.append('seller_id', CURRENT_SELLER_ID);
             formData.append('date', dateStr);
             formData.append('status', statusVal);
             formData.append('use_custom_capacity', useCustom);

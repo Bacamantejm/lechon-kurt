@@ -853,6 +853,7 @@ if (!empty($product_ids_for_reviews)) {
             pr.product_id,
             pr.rating,
             pr.comment,
+            pr.image AS review_image,
             pr.created_at,
             {$review_reply_select}
             p.name AS product_name,
@@ -868,7 +869,7 @@ if (!empty($product_ids_for_reviews)) {
         $reviews_query .= " AND p.seller_id = " . (int)$requested_seller_id;
     }
 
-    $reviews_query .= " ORDER BY pr.created_at DESC LIMIT 18";
+    $reviews_query .= " ORDER BY pr.created_at DESC LIMIT 24";
     $reviews_result = mysqli_query($conn, $reviews_query);
 
     if ($reviews_result) {
@@ -896,6 +897,7 @@ if (!empty($product_ids_for_reviews)) {
                 'first_name' => $first_name !== '' ? $first_name : 'Customer',
                 'rating' => max(1, min(5, (int)($review_row['rating'] ?? 0))),
                 'comment' => trim((string)($review_row['comment'] ?? '')),
+                'image' => trim((string)($review_row['review_image'] ?? '')),
                 'created_at' => $created_at_label,
                 'product_name' => trim((string)($review_row['product_name'] ?? 'Menu Item')),
                 'seller_reply' => trim((string)($review_row['seller_reply'] ?? '')),
@@ -1308,25 +1310,28 @@ body.dark-mode .storefront-change-shop-btn:hover {
             <!-- Filter Pills -->
             <div class="store-review-filters" style="display:flex; gap:8px; margin-bottom:18px; overflow-x:auto; padding-bottom:4px;">
                 <button type="button" class="store-review-filter-btn active" data-filter="top">Top reviews</button>
+                <button type="button" class="store-review-filter-btn" data-filter="photos"><i class="fas fa-camera"></i> With photos</button>
                 <button type="button" class="store-review-filter-btn" data-filter="newest">Newest</button>
                 <button type="button" class="store-review-filter-btn" data-filter="highest">Highest rating</button>
                 <button type="button" class="store-review-filter-btn" data-filter="lowest">Lowest rating</button>
             </div>
             
             <!-- Reviews List -->
-            <div id="storefrontReviewsList" style="max-height:360px; overflow-y:auto; display:flex; flex-direction:column; gap:14px; padding-right:4px;">
+            <div id="storefrontReviewsList" style="max-height:380px; overflow-y:auto; display:flex; flex-direction:column; gap:14px; padding-right:4px;">
                 <?php if (!empty($store_recent_reviews)): ?>
                     <?php foreach ($store_recent_reviews as $review): ?>
                         <?php
                         $r_rating = (int)($review['rating'] ?? 5);
                         $r_date = (string)($review['created_at'] ?? '');
                         $r_comment = trim((string)($review['comment'] ?? ''));
+                        $r_image = trim((string)($review['image'] ?? ''));
                         $r_timestamp = strtotime($r_date) ?: 0;
                         ?>
                         <div class="store-review-item" 
                              data-rating="<?php echo $r_rating; ?>" 
                              data-timestamp="<?php echo $r_timestamp; ?>" 
                              data-has-comment="<?php echo $r_comment !== '' ? '1' : '0'; ?>"
+                             data-has-photo="<?php echo $r_image !== '' ? '1' : '0'; ?>"
                              style="background:#ffffff; border:1px solid #efddcd; border-radius:16px; padding:16px; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                                 <strong style="font-size:0.95rem; font-weight:800; color:#2a211d;"><?php echo htmlspecialchars($review['first_name']); ?></strong>
@@ -1340,6 +1345,18 @@ body.dark-mode .storefront-change-shop-btn:hover {
                             <p style="font-size:0.9rem; color:#2a211d; line-height:1.5; margin:0 0 8px;">
                                 <?php echo htmlspecialchars($r_comment !== '' ? $r_comment : 'Customer did not leave a written comment.'); ?>
                             </p>
+
+                            <?php if ($r_image !== ''): ?>
+                                <div class="store-review-photo-wrap" style="margin:8px 0 10px;">
+                                    <img src="<?php echo htmlspecialchars($r_image); ?>"
+                                         alt="Review photo"
+                                         class="store-review-photo-thumb"
+                                         style="max-height:140px; max-width:180px; border-radius:12px; border:1px solid #eaecf0; object-fit:cover; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.06); transition:transform 0.15s;"
+                                         onclick="openReviewPhotoLightbox('<?php echo htmlspecialchars($r_image, ENT_QUOTES); ?>', 'Photo by <?php echo htmlspecialchars($review['first_name'], ENT_QUOTES); ?> for <?php echo htmlspecialchars($review['product_name'], ENT_QUOTES); ?>')"
+                                         onerror="this.parentElement.style.display='none';">
+                                </div>
+                            <?php endif; ?>
+
                             <?php if ($review['seller_reply'] !== ''): ?>
                                 <div style="background:#fff9f2; border-left:3px solid #ef6b2e; padding:10px 12px; border-radius:0 10px 10px 0; margin-top:8px;">
                                     <div style="font-size:0.8rem; font-weight:700; color:#ef6b2e; margin-bottom:2px;">
@@ -1363,6 +1380,15 @@ body.dark-mode .storefront-change-shop-btn:hover {
         </div>
     </div>
     <div class="preview-overlay" id="storefrontReviewsOverlay"></div>
+</div>
+
+<!-- Photo Lightbox Modal for Reviews -->
+<div id="reviewPhotoLightbox" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.85); align-items:center; justify-content:center; padding:20px; backdrop-filter:blur(4px);">
+    <div style="position:relative; max-width:90vw; max-height:90vh; text-align:center; display:flex; flex-direction:column; align-items:center;">
+        <button type="button" id="closeReviewLightbox" onclick="closeReviewPhotoLightbox()" style="position:absolute; top:-36px; right:0; background:none; border:none; color:#fff; font-size:2rem; cursor:pointer; line-height:1;">&times;</button>
+        <img id="lightboxImg" src="" alt="Full food photo" style="max-width:100%; max-height:78vh; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.5); object-fit:contain;">
+        <div id="lightboxCaption" style="color:#f8fafc; font-size:0.9rem; margin-top:12px; font-weight:600;"></div>
+    </div>
 </div>
 
 <?php
@@ -1920,6 +1946,65 @@ if (!empty($_SESSION['user_id'])) {
         <?php endif; ?>
     </div>
 </section>
+
+<!-- Store Customer Reviews & Photos Section -->
+<?php if (!empty($store_recent_reviews)): ?>
+<section class="store-customer-reviews-section" style="padding: 40px 0 60px; background: #ffffff; border-top: 1px solid #eaecf0;">
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; flex-wrap: wrap; gap: 14px;">
+            <div>
+                <span style="font-size: 0.78rem; font-weight: 700; color: #b3261e; text-transform: uppercase; letter-spacing: 0.8px; display: block; margin-bottom: 4px;">Verified Customer Experiences</span>
+                <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.55rem; font-weight: 800; color: #101828; margin: 0; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-star" style="color: #f59e0b;"></i> Customer Reviews &amp; Photos
+                </h2>
+                <p style="font-size: 0.88rem; color: #667085; margin: 4px 0 0;">
+                    Store Rating: <strong style="color: #101828;"><?php echo $store_rating_value > 0 ? number_format($store_rating_value, 1) . ' / 5.0' : '4.9 / 5.0'; ?></strong> (<?php echo count($store_recent_reviews); ?> reviews)
+                </p>
+            </div>
+            <div>
+                <button type="button" class="js-open-store-reviews" style="background: #fff1f0; border: 1.5px solid #fee4e2; color: #b3261e; font-weight: 700; font-size: 0.88rem; padding: 10px 22px; border-radius: 999px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; box-shadow: 0 1px 3px rgba(179,38,30,0.1);">
+                    <i class="fas fa-comments"></i> See All Reviews
+                </button>
+            </div>
+        </div>
+
+        <!-- Recent Reviews Grid -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px;">
+            <?php foreach (array_slice($store_recent_reviews, 0, 4) as $rev): ?>
+            <div class="store-review-card" style="background: #ffffff; border: 1px solid #eaecf0; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <strong style="font-size: 0.95rem; font-weight: 800; color: #101828;"><?php echo htmlspecialchars($rev['first_name']); ?></strong>
+                        <span style="font-size: 0.78rem; color: #667085;"><?php echo htmlspecialchars($rev['created_at']); ?></span>
+                    </div>
+                    <div style="color: #f59e0b; font-size: 0.88rem; margin-bottom: 10px;">
+                        <?php for ($s = 1; $s <= 5; $s++): ?>
+                            <i class="<?php echo $s <= $rev['rating'] ? 'fas' : 'far'; ?> fa-star"></i>
+                        <?php endfor; ?>
+                    </div>
+                    <?php if (!empty($rev['comment'])): ?>
+                        <p style="font-size: 0.88rem; color: #344054; line-height: 1.5; margin: 0 0 12px;">
+                            <?php echo htmlspecialchars($rev['comment']); ?>
+                        </p>
+                    <?php endif; ?>
+                    <?php if (!empty($rev['image'])): ?>
+                        <div style="margin-bottom: 12px;">
+                            <img src="<?php echo htmlspecialchars($rev['image']); ?>"
+                                 alt="Customer review food photo"
+                                 style="width: 100%; max-height: 160px; object-fit: cover; border-radius: 12px; border: 1px solid #eaecf0; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.06);"
+                                 onclick="openReviewPhotoLightbox('<?php echo htmlspecialchars($rev['image'], ENT_QUOTES); ?>', 'Photo by <?php echo htmlspecialchars($rev['first_name'], ENT_QUOTES); ?> for <?php echo htmlspecialchars($rev['product_name'], ENT_QUOTES); ?>')">
+                        </div>
+                    <?php endif; ?>
+                </div>
+                <div style="font-size: 0.78rem; color: #667085; border-top: 1px solid #eaecf0; padding-top: 10px; margin-top: auto; display: flex; align-items: center; gap: 6px;">
+                    <i class="fas fa-utensils" style="color: #b3261e;"></i> <?php echo htmlspecialchars($rev['product_name']); ?>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+<?php endif; ?>
 
 <!-- Cart Sidebar -->
 <div class="cart-overlay" id="cartOverlay"></div>
@@ -3238,34 +3323,76 @@ document.addEventListener('click', function(e) {
             if (!container) return;
 
             const items = Array.from(container.querySelectorAll('.store-review-item'));
-            items.sort(function(a, b) {
-                const ratingA = parseInt(a.getAttribute('data-rating')) || 0;
-                const ratingB = parseInt(b.getAttribute('data-rating')) || 0;
-                const timeA = parseInt(a.getAttribute('data-timestamp')) || 0;
-                const timeB = parseInt(b.getAttribute('data-timestamp')) || 0;
-                const hasCommentA = parseInt(a.getAttribute('data-has-comment')) || 0;
-                const hasCommentB = parseInt(b.getAttribute('data-has-comment')) || 0;
 
-                if (filter === 'newest') {
-                    return timeB - timeA;
-                } else if (filter === 'highest') {
-                    if (ratingB !== ratingA) return ratingB - ratingA;
-                    return timeB - timeA;
-                } else if (filter === 'lowest') {
-                    if (ratingA !== ratingB) return ratingA - ratingB;
-                    return timeB - timeA;
-                } else {
-                    if (hasCommentB !== hasCommentA) return hasCommentB - hasCommentA;
-                    if (ratingB !== ratingA) return ratingB - ratingA;
-                    return timeB - timeA;
-                }
-            });
+            if (filter === 'photos') {
+                items.forEach(function(item) {
+                    const hasPhoto = item.getAttribute('data-has-photo') === '1';
+                    item.style.display = hasPhoto ? 'block' : 'none';
+                });
+            } else {
+                items.forEach(function(item) {
+                    item.style.display = 'block';
+                });
 
-            items.forEach(function(item) {
-                container.appendChild(item);
-            });
+                items.sort(function(a, b) {
+                    const ratingA = parseInt(a.getAttribute('data-rating')) || 0;
+                    const ratingB = parseInt(b.getAttribute('data-rating')) || 0;
+                    const timeA = parseInt(a.getAttribute('data-timestamp')) || 0;
+                    const timeB = parseInt(b.getAttribute('data-timestamp')) || 0;
+                    const hasCommentA = parseInt(a.getAttribute('data-has-comment')) || 0;
+                    const hasCommentB = parseInt(b.getAttribute('data-has-comment')) || 0;
+
+                    if (filter === 'newest') {
+                        return timeB - timeA;
+                    } else if (filter === 'highest') {
+                        if (ratingB !== ratingA) return ratingB - ratingA;
+                        return timeB - timeA;
+                    } else if (filter === 'lowest') {
+                        if (ratingA !== ratingB) return ratingA - ratingB;
+                        return timeB - timeA;
+                    } else {
+                        if (hasCommentB !== hasCommentA) return hasCommentB - hasCommentA;
+                        if (ratingB !== ratingA) return ratingB - ratingA;
+                        return timeB - timeA;
+                    }
+                });
+
+                items.forEach(function(item) {
+                    container.appendChild(item);
+                });
+            }
         });
     });
+
+    // Review Photo Lightbox
+    window.openReviewPhotoLightbox = function(src, caption) {
+        const box = document.getElementById('reviewPhotoLightbox');
+        const img = document.getElementById('lightboxImg');
+        const cap = document.getElementById('lightboxCaption');
+        if (box && img) {
+            img.src = src;
+            if (cap) cap.textContent = caption || '';
+            box.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+    };
+
+    window.closeReviewPhotoLightbox = function() {
+        const box = document.getElementById('reviewPhotoLightbox');
+        if (box) {
+            box.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+    };
+
+    const reviewLightboxEl = document.getElementById('reviewPhotoLightbox');
+    if (reviewLightboxEl) {
+        reviewLightboxEl.addEventListener('click', function(e) {
+            if (e.target === reviewLightboxEl || e.target.id === 'closeReviewLightbox') {
+                closeReviewPhotoLightbox();
+            }
+        });
+    }
     
     // Cart Sidebar Functions
     const cartSidebar = document.getElementById('cartSidebar');

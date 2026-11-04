@@ -2182,8 +2182,9 @@ if ($roles_query instanceof mysqli_result) {
                                 $is_new_hire = (!empty($hire_date_raw) && (time() - strtotime($hire_date_raw)) <= (45 * 86400));
 
                                 // Photo / Avatar
-                                $photo_path = !empty($emp['photo']) ? '../' . ltrim($emp['photo'], '/') : (!empty($emp['user_profile_image']) ? '../' . ltrim($emp['user_profile_image'], '/') : '');
-                                $has_real_photo = !empty($photo_path) && file_exists(dirname(__DIR__) . '/' . ltrim($photo_path, '../'));
+                                $raw_photo = !empty($emp['photo']) ? preg_replace('#^(\.\./+|/+)#', '', (string)$emp['photo']) : (!empty($emp['user_profile_image']) ? preg_replace('#^(\.\./+|/+)#', '', (string)$emp['user_profile_image']) : '');
+                                $photo_path = !empty($raw_photo) ? '../' . $raw_photo : '';
+                                $has_real_photo = !empty($raw_photo) && file_exists(dirname(__DIR__) . '/' . $raw_photo);
                                 $avatar_gradient = getEmployeeAvatarGradient($full_name);
                                 $initials = strtoupper(substr($emp['first_name'] ?? 'E', 0, 1) . substr($emp['last_name'] ?? '', 0, 1));
 
@@ -2366,8 +2367,9 @@ if ($roles_query instanceof mysqli_result) {
                                         $position_title = !empty($emp['position_label']) ? $emp['position_label'] : (!empty($emp['position']) ? $emp['position'] : 'Staff');
                                         $dept_name = !empty($emp['department_name']) ? $emp['department_name'] : 'Unassigned';
                                         
-                                        $photo_path = !empty($emp['photo']) ? '../' . ltrim($emp['photo'], '/') : (!empty($emp['user_profile_image']) ? '../' . ltrim($emp['user_profile_image'], '/') : '');
-                                        $has_real_photo = !empty($photo_path) && file_exists(dirname(__DIR__) . '/' . ltrim($photo_path, '../'));
+                                        $raw_photo = !empty($emp['photo']) ? preg_replace('#^(\.\./+|/+)#', '', (string)$emp['photo']) : (!empty($emp['user_profile_image']) ? preg_replace('#^(\.\./+|/+)#', '', (string)$emp['user_profile_image']) : '');
+                                        $photo_path = !empty($raw_photo) ? '../' . $raw_photo : '';
+                                        $has_real_photo = !empty($raw_photo) && file_exists(dirname(__DIR__) . '/' . $raw_photo);
                                         $avatar_gradient = getEmployeeAvatarGradient($full_name);
                                         $initials = strtoupper(substr($emp['first_name'] ?? 'E', 0, 1) . substr($emp['last_name'] ?? '', 0, 1));
                                         

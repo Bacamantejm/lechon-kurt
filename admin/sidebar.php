@@ -373,12 +373,16 @@ $is_employee_user = isset($_SESSION['user_type']) && strtolower(trim($_SESSION['
 $current_script_path = str_replace('\\', '/', (string)($_SERVER['PHP_SELF'] ?? ''));
 $is_super_admin_context = strpos($current_script_path, '/super_admin/') !== false;
 
+$is_cashier_user = function_exists('isCashierUser') && isCashierUser($conn, $user_id);
 if ($is_super_admin_user) {
     $dashboard_href = $is_super_admin_context ? 'super_admin_dashboard.php' : '../super_admin/super_admin_dashboard.php';
     $dashboard_active = in_array($current_page, ['super_admin_dashboard.php', 'index.php'], true);
 } elseif ($can_operations_modules && $is_super_admin_context) {
     $dashboard_href = 'operations_dashboard.php';
     $dashboard_active = in_array($current_page, ['operations_dashboard.php', 'index.php'], true);
+} elseif ($is_cashier_user) {
+    $dashboard_href = 'kiosk.php';
+    $dashboard_active = ($current_page === 'kiosk.php');
 } else {
     // In admin pages, keep Dashboard inside admin/index.php.
     $dashboard_href = 'index.php';
@@ -534,7 +538,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
 <!-- Admin Sidebar Navigation -->
 <nav class="admin-sidebar" id="adminSidebar">
     <div class="sidebar-header">
-        <a href="../menu.php?seller_id=<?php echo (int)($partner_scope_owner_id ?: $user_id); ?>" class="sidebar-brand-link" title="View Your Storefront" style="text-decoration: none; color: inherit; display: block;">
+        <a href="index.php" class="sidebar-brand-link" title="<?php echo htmlspecialchars($sidebar_brand_name); ?> Dashboard" style="text-decoration: none; color: inherit; display: block;">
             <div class="sidebar-brand-mark">
                 <?php if ($sidebar_brand_logo !== ''): ?>
                     <img src="<?php echo htmlspecialchars($sidebar_brand_logo); ?>" alt="<?php echo htmlspecialchars($sidebar_brand_name); ?> logo" class="sidebar-brand-logo">
@@ -571,15 +575,15 @@ body.dark-mode .sidebar-menu .menu-item.active i {
             <i class="fas fa-search" style="font-size: 20px; display: block; margin: 0 auto 8px; opacity: 0.5;"></i>
             No matching menu items
         </li>
-        <?php if ($can_dashboard): ?>
-            <li class="menu-header">Main</li>
+        <?php if ($can_dashboard || $is_cashier_user): ?>
+            <li class="menu-header"><?php echo $is_cashier_user ? 'POS Workspace' : 'Main'; ?></li>
             <li>
                 <a href="<?php echo htmlspecialchars($dashboard_href); ?>" class="menu-item <?php echo $dashboard_active ? 'active' : ''; ?>">
-                    <i class="fas fa-chart-line"></i>
-                    <span><?php echo $is_super_admin_user ? 'Owner Dashboard' : 'Dashboard'; ?></span>
+                    <i class="<?php echo $is_cashier_user ? 'fas fa-cash-register' : 'fas fa-chart-line'; ?>"></i>
+                    <span><?php echo $is_cashier_user ? 'Walk-in Orders (POS)' : ($is_super_admin_user ? 'Owner Dashboard' : 'Dashboard'); ?></span>
                 </a>
             </li>
-            <?php if ($can_business_account): ?>
+            <?php if ($can_business_account && !$is_cashier_user): ?>
             <li>
                 <a href="business_account.php" class="menu-item <?php echo ($current_page === 'business_account.php') ? 'active' : ''; ?>">
                     <i class="fas fa-id-card"></i>
@@ -589,7 +593,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
             <?php endif; ?>
         <?php endif; ?>
 
-        <?php if (!$is_super_admin_user && $is_partner_scoped_admin && is_array($partner_ops_flow)): ?>
+        <?php if (!$is_super_admin_user && $is_partner_scoped_admin && is_array($partner_ops_flow) && ($is_partner_owner_admin || $is_business_owner_role)): ?>
             <?php
             $pipeline_total_count = 0;
             foreach (($partner_ops_flow['modules'] ?? []) as $flow_mod) {
@@ -1238,12 +1242,6 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                 <span>Employee Dashboard</span>
             </a>
         <?php endif; ?>
-        <?php if ($is_partner_scoped_admin || $is_partner_owner_admin || $is_business_owner_role): ?>
-            <a href="javascript:void(0);" onclick="openShopOwnerTutorial(true)" class="logout-btn" style="margin-bottom: 8px; background: #fff1f0; color: #b3261e; border: 1px solid #fee4e2;" title="Replay Merchant Tour">
-                <i class="fas fa-compass" style="color: #b3261e;"></i>
-                <span>Shop Tour</span>
-            </a>
-        <?php endif; ?>
         <a href="logout.php" class="logout-btn" id="logoutBtn">
             <i class="fas fa-sign-out-alt"></i>
             <span>Logout</span>
@@ -1449,48 +1447,70 @@ body.dark-mode .sidebar-menu .menu-item.active i {
     
     .notification-dropdown {
         position: absolute;
-        top: 100%;
+        top: calc(100% + 8px);
         right: 0;
-        width: 320px;
-        height: 430px;
-        max-height: calc(100vh - 90px);
-        background: white;
-        border-radius: 8px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.15);
-        z-index: 1000;
+        width: 380px;
+        max-width: min(380px, calc(100vw - 20px));
+        max-height: 480px;
+        background: rgba(255, 255, 255, 0.84) !important;
+        backdrop-filter: blur(20px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.75) !important;
+        border-radius: 16px !important;
+        box-shadow: 0 16px 40px -8px rgba(16, 24, 40, 0.16), 0 4px 12px rgba(16, 24, 40, 0.05) !important;
+        z-index: 1050;
         display: none;
+        flex-direction: column;
         overflow: hidden;
-        border: 1px solid #eee;
-        margin-top: 10px;
+        margin-top: 0;
     }
     
     .notification-dropdown.show {
-        display: block;
+        display: flex;
         animation: slideDown 0.2s ease;
     }
     
     .notification-header {
-        padding: 12px 15px;
-        border-bottom: 1px solid #eee;
+        padding: 12px 16px;
+        border-bottom: 1px solid rgba(234, 236, 240, 0.85);
         display: flex;
         justify-content: space-between;
         align-items: center;
-        font-weight: 600;
-        background: #f8f9fa;
+        font-weight: 700;
+        font-size: 0.88rem;
+        color: #101828;
+        background: rgba(248, 249, 250, 0.75) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+    }
+
+    .notification-header span {
+        font-weight: 800;
+        letter-spacing: -0.01em;
     }
     
     .mark-read-btn {
-        font-size: 0.8rem;
+        font-size: 0.78rem;
         color: #b3261e;
         text-decoration: none;
         cursor: pointer;
+        font-weight: 600;
+        background: transparent;
+        border: none;
+        padding: 0;
+    }
+
+    .mark-read-btn:hover {
+        text-decoration: underline;
     }
     
     .notification-list {
         flex: 1 1 auto;
         min-height: 0;
-        max-height: 350px;
+        max-height: 410px;
         overflow-y: auto;
+        overflow-x: hidden;
+        overscroll-behavior: contain;
     }
 
     #adminNotifDropdown {
@@ -1502,49 +1522,120 @@ body.dark-mode .sidebar-menu .menu-item.active i {
         display: flex;
     }
 
-    .admin-notification-pagination {
-        flex: 0 0 auto;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 8px 10px;
-        border-top: 1px solid #eee;
-        background: #fff8f3;
-    }
-
-    .admin-notification-page-btn {
-        width: 28px;
-        height: 28px;
-        border: 1px solid #ddd;
-        border-radius: 7px;
-        background: #fff;
-        color: #475467;
-        cursor: pointer;
-    }
-
-    .admin-notification-page-btn:disabled { opacity: .35; cursor: not-allowed; }
-    .admin-notification-page-label { font-size: .72rem; font-weight: 800; color: #667085; }
     .admin-franchise-status { font-size: .76rem; font-weight: 900; letter-spacing: .04em; }
     .admin-franchise-status.approved { color: #027a48; }
     .admin-franchise-status.rejected { color: #b42318; }
     .admin-franchise-status.incomplete { color: #b54708; }
-    .admin-franchise-reason { font-size: .8rem; line-height: 1.35; color: #667085; margin-top: 4px; }
+    .admin-franchise-reason { font-size: .78rem; line-height: 1.35; color: #475467; margin-top: 4px; word-break: break-word; overflow-wrap: anywhere; white-space: normal; }
     
     .notification-item {
-        padding: 12px 15px;
-        border-bottom: 1px solid #f0f0f0;
+        padding: 10px 14px;
+        border-bottom: 1px solid rgba(242, 244, 247, 0.75);
         display: flex;
-        gap: 12px;
-        transition: background 0.2s;
+        gap: 10px;
+        align-items: flex-start;
+        transition: background 0.15s ease;
         cursor: pointer;
+        word-break: break-word;
+        overflow-wrap: anywhere;
     }
     
     .notification-item:hover {
-        background-color: #f9f9f9;
+        background: rgba(255, 255, 255, 0.95);
     }
     
     .notification-item.unread {
-        background-color: #fff5f5;
+        background: rgba(254, 243, 242, 0.65);
+    }
+
+    /* Chat Messages Dropdown Styling */
+    .chat-item {
+        padding: 10px 14px;
+        border-bottom: 1px solid rgba(242, 244, 247, 0.75);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        transition: background 0.15s ease;
+        cursor: pointer;
+        overflow: hidden;
+    }
+
+    .chat-item:hover {
+        background: rgba(255, 255, 255, 0.95);
+    }
+
+    .chat-item.unread {
+        background: rgba(239, 248, 255, 0.65);
+    }
+
+    .chat-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        overflow: hidden;
+        background: #e0f2fe;
+        color: #0284c7;
+        font-weight: 700;
+        font-size: 0.82rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(2, 132, 199, 0.2);
+    }
+
+    .chat-avatar-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .chat-avatar-fallback {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .chat-details {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .chat-name {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2px;
+        font-size: 0.84rem;
+        font-weight: 700;
+        color: #101828;
+    }
+
+    .chat-name span:first-child {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        padding-right: 8px;
+    }
+
+    .chat-time {
+        font-size: 0.7rem;
+        color: #98a2b3;
+        font-weight: 500;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .chat-message-preview {
+        font-size: 0.78rem;
+        color: #475467;
+        line-height: 1.35;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     
     .notif-icon {
@@ -1595,18 +1686,49 @@ body.dark-mode .sidebar-menu .menu-item.active i {
         background: #2f3543;
         border-color: var(--border-color-dark);
     }
-    body.dark-mode .notification-dropdown { background: var(--card-bg-dark); border-color: var(--border-color-dark); }
-    body.dark-mode .notification-header { background: #333; border-color: var(--border-color-dark); color: #e0e0e0; }
-    body.dark-mode .notification-item { border-color: var(--border-color-dark); }
-    body.dark-mode .notification-item:hover { background-color: #3d3d3d; }
-    body.dark-mode .notification-item.unread { background-color: #3a2a2a; }
-    body.dark-mode .notif-title { color: #e0e0e0; }
-    body.dark-mode .notif-message { color: #b0b0b0; }
-    body.dark-mode .notification-empty { color: #b0b0b0; }
-    body.dark-mode .admin-notification-pagination { background: #1f2937; border-color: var(--border-color-dark); }
-    body.dark-mode .admin-notification-page-btn { background: #2f3543; border-color: #475569; color: #cbd5e1; }
-    body.dark-mode .admin-notification-page-label,
+    body.dark-mode .notification-dropdown {
+        background: rgba(20, 26, 38, 0.86) !important;
+        backdrop-filter: blur(20px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.5) !important;
+    }
+    body.dark-mode .notification-header {
+        background: rgba(29, 36, 50, 0.72) !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+        color: #f1f5f9 !important;
+    }
+    body.dark-mode .notification-item {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    body.dark-mode .notification-item:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    body.dark-mode .notification-item.unread {
+        background: rgba(179, 38, 30, 0.18);
+    }
+    body.dark-mode .notif-title { color: #f1f5f9; }
+    body.dark-mode .notif-message,
     body.dark-mode .admin-franchise-reason { color: #94a3b8; }
+    body.dark-mode .notification-empty { color: #94a3b8; }
+    body.dark-mode .chat-item {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    body.dark-mode .chat-item:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    body.dark-mode .chat-item.unread {
+        background: rgba(2, 132, 199, 0.18);
+    }
+    body.dark-mode .chat-name span:first-child {
+        color: #f1f5f9;
+    }
+    body.dark-mode .chat-time {
+        color: #64748b;
+    }
+    body.dark-mode .chat-message-preview {
+        color: #94a3b8;
+    }
 
     @keyframes bell-shake {
         0% { transform: rotate(0); }
@@ -2103,7 +2225,8 @@ body.dark-mode .sidebar-menu .menu-item.active i {
             role: <?php echo json_encode($sidebar_role_label); ?>,
             currentShop: <?php echo json_encode($topbar_current_shop_label); ?>,
             myAccountLink: <?php echo json_encode($topbar_my_account_link); ?>,
-            billingLink: <?php echo json_encode($topbar_billing_link); ?>
+            billingLink: <?php echo json_encode($topbar_billing_link); ?>,
+            canShopTour: <?php echo json_encode(($is_partner_scoped_admin || $is_partner_owner_admin || $is_business_owner_role) && empty($is_cashier_user)); ?>
         };
 
         function escapeInlineHtml(value) {
@@ -2257,11 +2380,6 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                             <div class="notification-list" id="adminNotifList">
                                 <div class="notification-empty">Loading...</div>
                             </div>
-                            <div class="admin-notification-pagination" id="adminNotifPagination" hidden>
-                                <button type="button" class="admin-notification-page-btn" id="adminNotifPrev" aria-label="Previous notifications"><i class="fas fa-chevron-left"></i></button>
-                                <span class="admin-notification-page-label" id="adminNotifPageLabel">1 / 1</span>
-                                <button type="button" class="admin-notification-page-btn" id="adminNotifNext" aria-label="Next notifications"><i class="fas fa-chevron-right"></i></button>
-                            </div>
                         </div>
                     </div>
                 `;
@@ -2308,6 +2426,10 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                     const billingMarkup = safeBillingLink !== ''
                         ? `<a href="${safeBillingLink}" class="admin-profile-link"><i class="fas fa-wallet"></i><span>Billing</span></a>`
                         : '';
+                    const canShopTour = Boolean(topbarProfileMenu.canShopTour);
+                    const shopTourMarkup = canShopTour
+                        ? `<a href="javascript:void(0);" id="adminProfileShopTourBtn" class="admin-profile-link"><i class="fas fa-compass" style="color:#b3261e;"></i><span>Shop Tour</span></a>`
+                        : '';
                     adminProfile.insertAdjacentHTML('beforeend', `
                         <div class="admin-profile-dropdown" aria-hidden="true">
                             <div class="admin-profile-dropdown-head">
@@ -2323,6 +2445,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                             <div class="admin-profile-links">
                                 <a href="${safeMyAccountLink}" class="admin-profile-link"><i class="fas fa-user-circle"></i><span>My Account</span></a>
                                 ${billingMarkup}
+                                ${shopTourMarkup}
                                 <a href="../logout.php" class="admin-profile-link text-danger"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
                             </div>
                         </div>
@@ -2331,6 +2454,24 @@ body.dark-mode .sidebar-menu .menu-item.active i {
             }
 
             const profileDropdown = adminProfile ? adminProfile.querySelector('.admin-profile-dropdown') : null;
+            if (profileDropdown) {
+                profileDropdown.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                });
+                const tourBtn = profileDropdown.querySelector('#adminProfileShopTourBtn');
+                if (tourBtn) {
+                    tourBtn.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        closeProfileMenu();
+                        if (typeof window.openShopOwnerTutorial === 'function') {
+                            window.openShopOwnerTutorial(true);
+                        } else {
+                            window.location.href = 'index.php?tour=1';
+                        }
+                    });
+                }
+            }
             const closeProfileMenu = () => {
                 if (adminProfile) {
                     adminProfile.classList.remove('open');
@@ -2401,13 +2542,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                 const badge = notifWrapper.querySelector('#adminNotifBadge');
                 const list = notifWrapper.querySelector('#adminNotifList');
                 const markAllBtn = notifWrapper.querySelector('#markAllRead');
-                const pagination = notifWrapper.querySelector('#adminNotifPagination');
-                const previousPageBtn = notifWrapper.querySelector('#adminNotifPrev');
-                const nextPageBtn = notifWrapper.querySelector('#adminNotifNext');
-                const pageLabel = notifWrapper.querySelector('#adminNotifPageLabel');
                 let adminNotifications = [];
-                let adminNotificationPage = 0;
-                const adminNotificationPageSize = 3;
                 
                 // Chat Variables
                 const chatBtn = notifWrapper.querySelector('#adminChatBtn');
@@ -2565,92 +2700,66 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                 }
 
                 function renderAdminNotifications() {
-                    const totalPages = Math.max(1, Math.ceil(adminNotifications.length / adminNotificationPageSize));
-                    adminNotificationPage = Math.min(Math.max(0, adminNotificationPage), totalPages - 1);
                     list.innerHTML = '';
                     if (adminNotifications.length === 0) {
                         list.innerHTML = '<div class="notification-empty">No notifications</div>';
-                        if (pagination) pagination.hidden = true;
                         return;
                     }
 
-                    const pageItems = adminNotifications.slice(adminNotificationPage * adminNotificationPageSize, (adminNotificationPage + 1) * adminNotificationPageSize);
-                    pageItems.forEach(notif => {
-                                const item = document.createElement('div');
-                                item.className = `notification-item ${notif.is_read == 0 ? 'unread' : ''}`;
-                                
-                                // Determine icon based on type
-                                let icon = 'fa-bell';
-                                let color = '#1976d2';
-                                let bg = '#e3f2fd';
-                                const notifType = String(notif.type || '').toLowerCase();
-                                
-                                if (notifType.includes('order')) { icon = 'fa-shopping-cart'; color = '#2e7d32'; bg = '#e8f5e9'; }
-                                else if (notifType.includes('alert')) { icon = 'fa-exclamation-triangle'; color = '#b3261e'; bg = '#ffebee'; }
-                                else if (notifType.includes('user')) { icon = 'fa-user'; color = '#ef6c00'; bg = '#fff3e0'; }
-                                else if (notifType.includes('franchise')) { icon = 'fa-store'; color = '#7c3aed'; bg = '#f3e8ff'; }
-                                const statusMatch = notifType.match(/franchise_(approved|rejected|incomplete)/);
-                                const status = statusMatch ? statusMatch[1].toUpperCase() : '';
-                                const reasonMatch = String(notif.message || '').match(/(?:^|\n)Reason:\s*([^\n]*)/i);
-                                const reason = reasonMatch ? reasonMatch[1].trim() : String(notif.message || '').replace(/^Status:\s*[^\n]*\n?/i, '').trim();
-                                const titleMarkup = status
-                                    ? `<div class="admin-franchise-status ${status.toLowerCase()}">${status}</div>`
-                                    : `<div class="notif-title">${escapeInlineHtml(notif.title)}</div>`;
-                                item.innerHTML = `
-                                    <div class="notif-icon" style="color: ${color}; background: ${bg}">
-                                        <i class="fas ${icon}"></i>
-                                    </div>
-                                    <div class="notif-content">
-                                        ${titleMarkup}
-                                        <div class="${status ? 'admin-franchise-reason' : 'notif-message'}">${status ? '<strong>Reason:</strong> ' + escapeInlineHtml(reason || 'No additional reason provided.') : escapeInlineHtml(notif.message)}</div>
-                                        <div class="notif-time">${escapeInlineHtml(notif.time_ago)}</div>
-                                    </div>
-                                `;
-                                
-                                item.addEventListener('click', () => {
-                                    // Mark as read on click
-                                    if (notif.is_read == 0) {
-                                        const formData = new FormData();
-                                        formData.append('id', notif.id);
-                                        fetch('get_notifications.php?action=mark_read', {
-                                            method: 'POST',
-                                            body: formData
-                                        }).then(() => loadNotificationCount());
-                                        item.classList.remove('unread');
-                                    }
-                                    
-                                    // Redirect if related_id exists (basic mapping)
-                                    if (notif.related_type === 'order') window.location.href = `orders.php?search=${notif.related_id}`;
-                                    else if (notif.related_type === 'pre_order') window.location.href = `preorders.php?search=${notif.related_id}`;
-                                    else if (notif.related_type === 'franchise_application') window.location.href = `notifications.php?id=${encodeURIComponent(notif.id)}`;
-                                    else window.location.href = `notifications.php?id=${encodeURIComponent(notif.id)}`;
-                                });
-                                
-                                list.appendChild(item);
-                            });
-
-                    if (pagination) pagination.hidden = totalPages <= 1;
-                    if (pageLabel) pageLabel.textContent = `${adminNotificationPage + 1} / ${totalPages}`;
-                    if (previousPageBtn) previousPageBtn.disabled = adminNotificationPage === 0;
-                    if (nextPageBtn) nextPageBtn.disabled = adminNotificationPage >= totalPages - 1;
-                }
-
-                if (previousPageBtn) previousPageBtn.addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    if (adminNotificationPage > 0) {
-                        adminNotificationPage--;
-                        renderAdminNotifications();
-                    }
-                });
-
-                if (nextPageBtn) nextPageBtn.addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    if (adminNotificationPage < Math.ceil(adminNotifications.length / adminNotificationPageSize) - 1) {
-                        adminNotificationPage++;
-                        renderAdminNotifications();
-                    }
-                });
-                
+                    adminNotifications.forEach(notif => {
+                        const item = document.createElement('div');
+                        item.className = `notification-item ${notif.is_read == 0 ? 'unread' : ''}`;
+                        
+                        // Determine icon based on type
+                        let icon = 'fa-bell';
+                        let color = '#1976d2';
+                        let bg = '#e3f2fd';
+                        const notifType = String(notif.type || '').toLowerCase();
+                        
+                        if (notifType.includes('order')) { icon = 'fa-shopping-cart'; color = '#2e7d32'; bg = '#e8f5e9'; }
+                        else if (notifType.includes('alert')) { icon = 'fa-exclamation-triangle'; color = '#b3261e'; bg = '#ffebee'; }
+                        else if (notifType.includes('user')) { icon = 'fa-user'; color = '#ef6c00'; bg = '#fff3e0'; }
+                        else if (notifType.includes('franchise')) { icon = 'fa-store'; color = '#7c3aed'; bg = '#f3e8ff'; }
+                        const statusMatch = notifType.match(/franchise_(approved|rejected|incomplete)/);
+                        const status = statusMatch ? statusMatch[1].toUpperCase() : '';
+                        const reasonMatch = String(notif.message || '').match(/(?:^|\n)Reason:\s*([^\n]*)/i);
+                        const reason = reasonMatch ? reasonMatch[1].trim() : String(notif.message || '').replace(/^Status:\s*[^\n]*\n?/i, '').trim();
+                        const titleMarkup = status
+                            ? `<div class="admin-franchise-status ${status.toLowerCase()}">${status}</div>`
+                            : `<div class="notif-title">${escapeInlineHtml(notif.title)}</div>`;
+                        item.innerHTML = `
+                            <div class="notif-icon" style="color: ${color}; background: ${bg}">
+                                <i class="fas ${icon}"></i>
+                            </div>
+                            <div class="notif-content">
+                                ${titleMarkup}
+                                <div class="${status ? 'admin-franchise-reason' : 'notif-message'}">${status ? '<strong>Reason:</strong> ' + escapeInlineHtml(reason || 'No additional reason provided.') : escapeInlineHtml(notif.message)}</div>
+                                <div class="notif-time">${escapeInlineHtml(notif.time_ago)}</div>
+                            </div>
+                        `;
+                        
+                        item.addEventListener('click', () => {
+                            // Mark as read on click
+                            if (notif.is_read == 0) {
+                                const formData = new FormData();
+                                formData.append('id', notif.id);
+                                fetch('get_notifications.php?action=mark_read', {
+                                    method: 'POST',
+                                    body: formData
+                                }).then(() => loadNotificationCount());
+                                item.classList.remove('unread');
+                            }
+                            
+                            // Redirect if related_id exists (basic mapping)
+                            if (notif.related_type === 'order') window.location.href = `orders.php?search=${notif.related_id}`;
+                            else if (notif.related_type === 'pre_order') window.location.href = `preorders.php?search=${notif.related_id}`;
+                            else if (notif.related_type === 'franchise_application') window.location.href = `notifications.php?id=${encodeURIComponent(notif.id)}`;
+                            else window.location.href = `notifications.php?id=${encodeURIComponent(notif.id)}`;
+                        });
+                        
+                        list.appendChild(item);
+                    });
+                }                
                 // Initial load and polling
                 if (btn && badge) {
                     loadNotificationCount();

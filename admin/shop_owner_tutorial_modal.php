@@ -21,7 +21,9 @@ if ($shop_tut_user_id > 0 && isset($conn) && $conn) {
 }
 
 $shop_tutorial_seen_db = 0;
-if ($is_shop_owner_for_tut && isset($conn) && $conn) {
+if (!empty($_SESSION['shop_tutorial_seen'])) {
+    $shop_tutorial_seen_db = 1;
+} elseif ($is_shop_owner_for_tut && isset($conn) && $conn) {
     $tut_col_check = mysqli_query($conn, "SHOW COLUMNS FROM users LIKE 'tutorial_seen_shop'");
     if ($tut_col_check && mysqli_num_rows($tut_col_check) > 0) {
         $sstmt = mysqli_prepare($conn, "SELECT COALESCE(tutorial_seen_shop, 0) FROM users WHERE id = ? LIMIT 1");
@@ -31,6 +33,9 @@ if ($is_shop_owner_for_tut && isset($conn) && $conn) {
             mysqli_stmt_bind_result($sstmt, $shop_tutorial_seen_db);
             mysqli_stmt_fetch($sstmt);
             mysqli_stmt_close($sstmt);
+            if ($shop_tutorial_seen_db == 1) {
+                $_SESSION['shop_tutorial_seen'] = 1;
+            }
         }
     }
 }
@@ -485,6 +490,8 @@ if ($is_shop_owner_for_tut && isset($conn) && $conn) {
         if (modal) {
             modal.style.display = 'flex';
         }
+        // Always persist immediately so it never auto-triggers repeatedly
+        persistShopOwnerTutorialSeen();
     };
 
     window.closeShopOwnerTutorial = function(markComplete) {
@@ -562,11 +569,13 @@ if ($is_shop_owner_for_tut && isset($conn) && $conn) {
     function persistShopOwnerTutorialSeen() {
         try {
             localStorage.setItem(storageKey, '1');
+            sessionStorage.setItem(storageKey, '1');
         } catch (e) {}
 
         if (currentUserId > 0) {
             try {
-                fetch('../api/user_tutorial_state.php', {
+                const apiPath = window.location.pathname.includes('/admin/') ? '../api/user_tutorial_state.php' : 'api/user_tutorial_state.php';
+                fetch(apiPath, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ type: 'shop_owner', seen: 1 })
@@ -577,14 +586,35 @@ if ($is_shop_owner_for_tut && isset($conn) && $conn) {
 
     // Auto-trigger on first time visit for logged-in shop owner accounts
     document.addEventListener('DOMContentLoaded', function() {
+        // 1. Check if URL has ?tour=1 (manual replay from Profile Settings or dropdown)
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('tour') === '1') {
+                setTimeout(function() {
+                    window.openShopOwnerTutorial(true);
+                }, 350);
+                return;
+            }
+        } catch (e) {}
+
+        // 2. Auto-show ONLY ONCE for new members
         if (isShopOwnerAccount) {
             let seenLocal = false;
+            let seenSession = false;
             try {
                 seenLocal = localStorage.getItem(storageKey) === '1';
+                seenSession = sessionStorage.getItem(storageKey) === '1';
             } catch (e) {}
 
-            // If neither localStorage nor database recorded completion, auto-show modal after short delay
-            if (!seenLocal && dbSeen === 0) {
+            // If neither localStorage, sessionStorage, nor database recorded completion,
+            // schedule the modal and IMMEDIATELY mark as presented so rapid navigation or reloads never loop
+            if (!seenLocal && !seenSession && dbSeen === 0) {
+                try {
+                    localStorage.setItem(storageKey, '1');
+                    sessionStorage.setItem(storageKey, '1');
+                } catch (e) {}
+                persistShopOwnerTutorialSeen();
+
                 setTimeout(function() {
                     window.openShopOwnerTutorial(false);
                 }, 900);

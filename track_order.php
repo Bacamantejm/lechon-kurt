@@ -99,6 +99,17 @@ if ($rev_chk) {
     $rev_chk->close();
 }
 
+// Check if user has already reviewed the food/store
+$existing_food_review = null;
+$food_rev_chk = $conn->prepare("SELECT rating, comment, image, created_at FROM product_reviews WHERE order_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1");
+if ($food_rev_chk) {
+    $food_rev_chk->bind_param("ii", $order_id, $user_id);
+    $food_rev_chk->execute();
+    $food_rev_res = $food_rev_chk->get_result();
+    $existing_food_review = $food_rev_res ? $food_rev_res->fetch_assoc() : null;
+    $food_rev_chk->close();
+}
+
 $page_title = ($is_pickup ? "Pick-up Order #" : "Track Order #") . $order['order_number'];
 include 'includes/header.php';
 ?>
@@ -2763,11 +2774,135 @@ body.dark-mode .fp-btn-link-sec:hover {
                     </div>
                 </div>
 
-                <!-- Delivery Order: 1.7 Driver Star Rating Card -->
+                <!-- Food & Store Review Card (Photo & Star Rating) -->
                 <?php 
                 $is_order_delivered = in_array(strtolower((string)$order['status']), ['delivered', 'completed'], true) 
                                    || in_array(strtolower((string)($tracking_info['current_status'] ?? '')), ['delivered', 'completed'], true);
                 ?>
+                <div class="fp-card fp-rate-food-card" id="fpRateFoodCard" style="<?php echo $is_order_delivered ? '' : 'display:none;'; ?> margin-bottom: 16px; border: 1px solid #eaecf0; border-radius: 16px; padding: 20px; background: #ffffff; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h4 style="font-size:0.98rem; font-weight:800; color:#101828; margin:0; display:flex; align-items:center; gap:8px;">
+                            <i class="fas fa-utensils" style="color:#b3261e;"></i> Rate Your Food &amp; Store
+                        </h4>
+                        <span class="badge" id="rateFoodStatusBadge" style="background:<?php echo $existing_food_review ? '#ecfdf3' : '#fff1f0'; ?>; color:<?php echo $existing_food_review ? '#027a48' : '#b3261e'; ?>; border:1px solid <?php echo $existing_food_review ? '#abefc6' : '#fee4e2'; ?>; font-size:11px; font-weight:700;">
+                            <?php echo $existing_food_review ? '<i class="fas fa-check-circle"></i> Food Reviewed' : '<i class="fas fa-star"></i> Review Food'; ?>
+                        </span>
+                    </div>
+
+                    <!-- Interactive Food Star Rating & Photo Form -->
+                    <div id="rateFoodFormWrap" style="<?php echo $existing_food_review ? 'display:none;' : 'display:block;'; ?>">
+                        <p style="font-size:0.86rem; color:#475467; margin:0 0 14px 0; line-height:1.45;">
+                            How was your food from <strong><?php echo htmlspecialchars($store_details['store_name'] ?? 'the store'); ?></strong>? Your review and photos will appear on the store's menu for other customers to see!
+                        </p>
+
+                        <!-- Star Rating Picker -->
+                        <div style="margin-bottom:14px;">
+                            <label style="display:block; font-size:0.82rem; font-weight:700; color:#344054; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">Overall Food Rating *</label>
+                            <div class="fp-food-star-picker" style="display:flex; align-items:center; gap:10px;">
+                                <div style="display:flex; gap:6px;" id="foodStarRatingGroup">
+                                    <button type="button" class="fp-food-star-btn" data-star="1" style="background:transparent; border:none; cursor:pointer; font-size:1.85rem; color:#d0d5dd; padding:0 2px; transition:transform 0.15s, color 0.15s;"><i class="fas fa-star"></i></button>
+                                    <button type="button" class="fp-food-star-btn" data-star="2" style="background:transparent; border:none; cursor:pointer; font-size:1.85rem; color:#d0d5dd; padding:0 2px; transition:transform 0.15s, color 0.15s;"><i class="fas fa-star"></i></button>
+                                    <button type="button" class="fp-food-star-btn" data-star="3" style="background:transparent; border:none; cursor:pointer; font-size:1.85rem; color:#d0d5dd; padding:0 2px; transition:transform 0.15s, color 0.15s;"><i class="fas fa-star"></i></button>
+                                    <button type="button" class="fp-food-star-btn" data-star="4" style="background:transparent; border:none; cursor:pointer; font-size:1.85rem; color:#d0d5dd; padding:0 2px; transition:transform 0.15s, color 0.15s;"><i class="fas fa-star"></i></button>
+                                    <button type="button" class="fp-food-star-btn" data-star="5" style="background:transparent; border:none; cursor:pointer; font-size:1.85rem; color:#d0d5dd; padding:0 2px; transition:transform 0.15s, color 0.15s;"><i class="fas fa-star"></i></button>
+                                </div>
+                                <span id="foodStarRatingLabel" style="font-size:0.86rem; font-weight:700; color:#eab308;">Select stars</span>
+                            </div>
+                        </div>
+
+                        <input type="hidden" id="selectedFoodRating" value="0">
+
+                        <!-- Review Comment -->
+                        <div style="margin-bottom:14px;">
+                            <label for="rateFoodComment" style="display:block; font-size:0.82rem; font-weight:700; color:#344054; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">Your Review / Comments</label>
+                            <textarea id="rateFoodComment" placeholder="Tell us about the taste, crispiness, seasoning, packaging, etc..." maxlength="1000" style="width:100%; border:1.5px solid #d0d5dd; border-radius:10px; padding:10px 14px; font-size:0.88rem; font-family:inherit; resize:vertical; min-height:75px; box-sizing:border-box; outline:none; transition:border-color 0.2s;"></textarea>
+                        </div>
+
+                        <!-- Image Upload Dropzone -->
+                        <div style="margin-bottom:16px;">
+                            <label style="display:block; font-size:0.82rem; font-weight:700; color:#344054; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">
+                                <i class="fas fa-camera" style="color:#b3261e; margin-right:4px;"></i> Add a Food Photo (Optional)
+                            </label>
+                            <input type="file" id="foodReviewPhotoInput" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="handleFoodReviewPhotoSelect(this)">
+                            
+                            <!-- Prompt Button/Zone -->
+                            <div id="foodPhotoPrompt" onclick="document.getElementById('foodReviewPhotoInput').click()" style="border:1.5px dashed #d0d5dd; border-radius:12px; padding:16px; text-align:center; background:#f9fafb; cursor:pointer; transition:all 0.2s ease;">
+                                <i class="fas fa-cloud-arrow-up" style="font-size:1.6rem; color:#98a2b3; margin-bottom:6px; display:block;"></i>
+                                <div style="font-size:0.88rem; font-weight:700; color:#344054;">Click or tap to upload photo of your food</div>
+                                <div style="font-size:0.76rem; color:#667085; margin-top:2px;">Show other customers your food! JPG, PNG, WEBP up to 5MB</div>
+                            </div>
+
+                            <!-- Preview Box -->
+                            <div id="foodPhotoPreviewWrap" style="display:none; align-items:center; gap:14px; padding:10px; background:#f8f9fa; border:1px solid #eaecf0; border-radius:12px;">
+                                <img src="" alt="Preview" id="foodPhotoPreviewImg" style="width:100px; height:100px; object-fit:cover; border-radius:10px; border:1px solid #d0d5dd; box-shadow:0 2px 6px rgba(0,0,0,0.06);">
+                                <div>
+                                    <div style="font-size:0.84rem; font-weight:700; color:#101828; margin-bottom:4px;">Photo attached</div>
+                                    <button type="button" onclick="clearFoodReviewPhoto()" style="background:#fff1f0; border:1px solid #fee4e2; color:#b3261e; border-radius:8px; padding:6px 12px; font-size:0.78rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:5px;">
+                                        <i class="fas fa-trash-alt"></i> Remove Photo
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Submit Row -->
+                        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <button type="button" id="btnSubmitFoodReview" onclick="submitFoodReview()" style="background:#b3261e; color:#ffffff; border:none; border-radius:10px; padding:11px 22px; font-weight:700; font-size:0.9rem; cursor:pointer; display:inline-flex; align-items:center; gap:8px; box-shadow:0 2px 8px rgba(179,38,30,0.25); transition:background 0.2s;">
+                                    <i class="fas fa-paper-plane"></i> Post Review
+                                </button>
+                                <span id="rateFoodMsg" style="font-size:0.84rem; font-weight:600;"></span>
+                            </div>
+                            <div>
+                                <a href="leave_review.php?order_id=<?php echo (int)$order_id; ?>" style="color:#667085; font-size:0.82rem; font-weight:600; text-decoration:underline;">
+                                    <i class="fas fa-list-check"></i> Review individual items
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Food Review Already Completed View -->
+                    <div id="rateFoodCompletedWrap" style="<?php echo $existing_food_review ? 'display:block;' : 'display:none;'; ?>">
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                            <span style="font-size:1.3rem; color:#eab308;" id="completedFoodStarIcons">
+                                <?php 
+                                $food_rated_stars = (int)($existing_food_review['rating'] ?? 5);
+                                for ($s = 1; $s <= 5; $s++):
+                                    if ($s <= $food_rated_stars) {
+                                        echo '<i class="fas fa-star"></i> ';
+                                    } else {
+                                        echo '<i class="far fa-star" style="color:#d0d5dd;"></i> ';
+                                    }
+                                endfor;
+                                ?>
+                            </span>
+                            <strong style="font-size:0.95rem; color:#101828;" id="completedFoodRatingText"><?php echo $food_rated_stars; ?> / 5 Stars</strong>
+                            <?php if (!empty($existing_food_review['created_at'])): ?>
+                                <span style="font-size:0.78rem; color:#667085; margin-left:auto;">
+                                    <?php echo date('M d, Y', strtotime($existing_food_review['created_at'])); ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+
+                        <?php if (!empty($existing_food_review['comment'])): ?>
+                            <p style="font-size:0.88rem; color:#344054; margin:0 0 10px 0; font-style:italic;" id="completedFoodCommentText">
+                                "<?php echo htmlspecialchars($existing_food_review['comment']); ?>"
+                            </p>
+                        <?php endif; ?>
+
+                        <!-- Attached Review Photo (If present) -->
+                        <div id="completedFoodPhotoWrap" style="<?php echo !empty($existing_food_review['image']) ? 'display:block;' : 'display:none;'; ?> margin-bottom:10px;">
+                            <img src="<?php echo !empty($existing_food_review['image']) ? htmlspecialchars($existing_food_review['image']) : ''; ?>" alt="Your review photo" id="completedFoodPhotoImg" style="max-height:160px; max-width:200px; border-radius:10px; border:1px solid #d0d5dd; object-fit:cover; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.06);" onclick="window.open(this.src, '_blank')">
+                            <div style="font-size:0.75rem; color:#667085; margin-top:4px;"><i class="fas fa-search-plus"></i> Click photo to view full size</div>
+                        </div>
+
+                        <div style="background:#ecfdf3; border:1px solid #abefc6; border-radius:10px; padding:10px 14px; font-size:0.82rem; color:#027a48; display:flex; align-items:center; gap:8px;">
+                            <i class="fas fa-store" style="font-size:1rem;"></i>
+                            <span>Your review is published on <strong><?php echo htmlspecialchars($store_details['store_name'] ?? 'Store'); ?></strong>'s menu page for other customers to see.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Delivery Order: 1.7 Driver Star Rating Card -->
                 <div class="fp-card fp-rate-driver-card" id="fpRateDriverCard" style="<?php echo (!$is_pickup && $is_order_delivered) ? '' : 'display:none;'; ?> margin-bottom: 16px; border: 1px solid #eaecf0; border-radius: 16px; padding: 18px 20px; background: #ffffff; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                         <h4 style="font-size:0.95rem; font-weight:700; color:#101828; margin:0;">
@@ -3421,6 +3556,8 @@ body.dark-mode .fp-btn-link-sec:hover {
             step4.classList.add('is-completed');
             document.getElementById('fpEtaValue').textContent = "Picked Up";
             if (mapEtaStat) mapEtaStat.textContent = "Completed";
+            const foodCard = document.getElementById('fpRateFoodCard');
+            if (foodCard) foodCard.style.display = 'block';
         }
     }
 
@@ -3563,8 +3700,10 @@ body.dark-mode .fp-btn-link-sec:hover {
             else if (status === 'delivered') mobRiderStatus.textContent = 'Delivered';
         }
 
-        // Show Rate Driver Card once delivered
+        // Show Rate Cards once delivered
         if (status === 'delivered') {
+            const foodCard = document.getElementById('fpRateFoodCard');
+            if (foodCard) foodCard.style.display = 'block';
             const rateCard = document.getElementById('fpRateDriverCard');
             if (rateCard) rateCard.style.display = 'block';
         }
@@ -4074,6 +4213,188 @@ body.dark-mode .fp-btn-link-sec:hover {
     }
 
     // ==========================================
+    // Food & Store Review Picker & Submission
+    // ==========================================
+    let currentSelectedFoodRating = 0;
+    const foodStarLabels = {
+        1: '1 Star - Needs Improvement',
+        2: '2 Stars - Fair',
+        3: '3 Stars - Good & Tasty',
+        4: '4 Stars - Very Delicious!',
+        5: '5 Stars - Outstanding Feast!'
+    };
+
+    function initFoodRatingPicker() {
+        const starBtns = document.querySelectorAll('#foodStarRatingGroup .fp-food-star-btn');
+        const label = document.getElementById('foodStarRatingLabel');
+        const hiddenInput = document.getElementById('selectedFoodRating');
+        if (!starBtns.length) return;
+
+        starBtns.forEach(btn => {
+            btn.addEventListener('mouseenter', () => {
+                const val = parseInt(btn.getAttribute('data-star'));
+                highlightFoodStars(val);
+                if (label) label.textContent = foodStarLabels[val] || '';
+            });
+
+            btn.addEventListener('mouseleave', () => {
+                highlightFoodStars(currentSelectedFoodRating);
+                if (label) {
+                    label.textContent = currentSelectedFoodRating > 0 ? (foodStarLabels[currentSelectedFoodRating] || '') : 'Select stars';
+                }
+            });
+
+            btn.addEventListener('click', () => {
+                currentSelectedFoodRating = parseInt(btn.getAttribute('data-star'));
+                if (hiddenInput) hiddenInput.value = currentSelectedFoodRating;
+                highlightFoodStars(currentSelectedFoodRating);
+                if (label) label.textContent = foodStarLabels[currentSelectedFoodRating] || '';
+            });
+        });
+    }
+
+    function highlightFoodStars(val) {
+        const starBtns = document.querySelectorAll('#foodStarRatingGroup .fp-food-star-btn');
+        starBtns.forEach(btn => {
+            const starNum = parseInt(btn.getAttribute('data-star'));
+            if (starNum <= val) {
+                btn.style.color = '#eab308';
+                btn.style.transform = 'scale(1.15)';
+            } else {
+                btn.style.color = '#d0d5dd';
+                btn.style.transform = 'scale(1.0)';
+            }
+        });
+    }
+
+    function handleFoodReviewPhotoSelect(input) {
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+            if (file.size > 5 * 1024 * 1024) {
+                alert('Please select a photo smaller than 5MB.');
+                input.value = '';
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const previewWrap = document.getElementById('foodPhotoPreviewWrap');
+                const promptWrap = document.getElementById('foodPhotoPrompt');
+                const previewImg = document.getElementById('foodPhotoPreviewImg');
+                if (previewImg && previewWrap && promptWrap) {
+                    previewImg.src = e.target.result;
+                    promptWrap.style.display = 'none';
+                    previewWrap.style.display = 'flex';
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    function clearFoodReviewPhoto() {
+        const input = document.getElementById('foodReviewPhotoInput');
+        const previewWrap = document.getElementById('foodPhotoPreviewWrap');
+        const promptWrap = document.getElementById('foodPhotoPrompt');
+        const previewImg = document.getElementById('foodPhotoPreviewImg');
+        if (input) input.value = '';
+        if (previewImg) previewImg.src = '';
+        if (previewWrap) previewWrap.style.display = 'none';
+        if (promptWrap) promptWrap.style.display = 'block';
+    }
+
+    async function submitFoodReview() {
+        const ratingInput = document.getElementById('selectedFoodRating');
+        const commentInput = document.getElementById('rateFoodComment');
+        const photoInput = document.getElementById('foodReviewPhotoInput');
+        const btn = document.getElementById('btnSubmitFoodReview');
+        const msg = document.getElementById('rateFoodMsg');
+
+        const ratingVal = parseInt(ratingInput ? ratingInput.value : 0);
+        const commentVal = commentInput ? commentInput.value.trim() : '';
+
+        if (ratingVal < 1 || ratingVal > 5) {
+            if (msg) {
+                msg.style.color = '#b3261e';
+                msg.textContent = 'Please select 1 to 5 stars.';
+            }
+            return;
+        }
+
+        if (btn) btn.disabled = true;
+        if (msg) {
+            msg.style.color = '#475467';
+            msg.textContent = 'Posting your review & photo...';
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('order_id', orderId);
+            formData.append('rating', ratingVal);
+            formData.append('comment', commentVal);
+            if (photoInput && photoInput.files && photoInput.files[0]) {
+                formData.append('food_image', photoInput.files[0]);
+            }
+
+            const res = await fetch('api/rate_food.php', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                const formWrap = document.getElementById('rateFoodFormWrap');
+                const completedWrap = document.getElementById('rateFoodCompletedWrap');
+                const badge = document.getElementById('rateFoodStatusBadge');
+                const ratingText = document.getElementById('completedFoodRatingText');
+                const commentText = document.getElementById('completedFoodCommentText');
+                const starIconsWrap = document.getElementById('completedFoodStarIcons');
+                const photoWrap = document.getElementById('completedFoodPhotoWrap');
+                const photoImg = document.getElementById('completedFoodPhotoImg');
+
+                if (formWrap) formWrap.style.display = 'none';
+                if (completedWrap) completedWrap.style.display = 'block';
+                if (badge) {
+                    badge.style.background = '#ecfdf3';
+                    badge.style.color = '#027a48';
+                    badge.style.borderColor = '#abefc6';
+                    badge.innerHTML = '<i class="fas fa-check-circle"></i> Food Reviewed';
+                }
+                if (ratingText) ratingText.textContent = `${ratingVal} / 5 Stars`;
+                if (commentText) {
+                    commentText.textContent = commentVal ? `"${commentVal}"` : '';
+                    commentText.style.display = commentVal ? 'block' : 'none';
+                }
+                if (starIconsWrap) {
+                    let starsHtml = '';
+                    for (let i = 1; i <= 5; i++) {
+                        starsHtml += (i <= ratingVal) ? '<i class="fas fa-star"></i> ' : '<i class="far fa-star" style="color:#d0d5dd;"></i> ';
+                    }
+                    starIconsWrap.innerHTML = starsHtml;
+                }
+                if (data.data && data.data.image && photoWrap && photoImg) {
+                    photoImg.src = data.data.image;
+                    photoWrap.style.display = 'block';
+                }
+
+                if (typeof triggerToast === 'function') {
+                    triggerToast('Review Posted!', 'Thank you! Your review and photo are now visible on the store page.');
+                }
+            } else {
+                if (msg) {
+                    msg.style.color = '#b3261e';
+                    msg.textContent = data.message || 'Error posting review.';
+                }
+                if (btn) btn.disabled = false;
+            }
+        } catch (err) {
+            if (msg) {
+                msg.style.color = '#b3261e';
+                msg.textContent = 'Network error. Please try again.';
+            }
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    // ==========================================
     // Driver Star Rating Picker & Submission
     // ==========================================
     let currentSelectedDriverRating = 0;
@@ -4224,6 +4545,7 @@ body.dark-mode .fp-btn-link-sec:hover {
 
     document.addEventListener('DOMContentLoaded', () => {
         initMap();
+        initFoodRatingPicker();
         initDriverRatingPicker();
     });
 </script>

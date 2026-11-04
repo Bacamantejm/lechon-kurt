@@ -2,6 +2,10 @@
 session_start();
 
 require_once 'includes/config.php';
+require_once 'includes/security.php';
+require_once 'includes/partner_dashboard_helper.php';
+
+pdhEnsureProductReviewReplySchema($conn);
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php?redirect=my_orders.php');
@@ -35,7 +39,7 @@ if (!$order) {
 }
 
 // Fetch order items that have not been reviewed yet
-$items_query = "SELECT oi.*, p.id as product_db_id FROM order_items oi JOIN products p ON oi.product_id = p.product_id WHERE oi.order_id = ? AND oi.is_reviewed = 0";
+$items_query = "SELECT oi.*, p.id as product_db_id FROM order_items oi JOIN products p ON (oi.product_id = p.product_id COLLATE utf8mb4_general_ci OR oi.product_id = CAST(p.id AS CHAR) COLLATE utf8mb4_general_ci) WHERE oi.order_id = ? AND oi.is_reviewed = 0";
 $stmt = mysqli_prepare($conn, $items_query);
 mysqli_stmt_bind_param($stmt, "i", $order_id);
 mysqli_stmt_execute($stmt);
@@ -167,7 +171,8 @@ body.dark-mode .form-group textarea:focus {
             <p>Share your experience for Order #<?php echo htmlspecialchars($order['order_number']); ?></p>
         </div>
 
-        <form action="process_review.php" method="POST" class="review-form">
+        <form action="process_review.php" method="POST" enctype="multipart/form-data" class="review-form">
+            <?php echo getCSRFTokenField(); ?>
             <input type="hidden" name="order_id" value="<?php echo $order_id; ?>">
             <input type="hidden" name="submit_review" value="1">
             
@@ -191,6 +196,26 @@ body.dark-mode .form-group textarea:focus {
                 <div class="form-group">
                     <label for="comment<?php echo $index; ?>">Your Review</label>
                     <textarea id="comment<?php echo $index; ?>" name="reviews[<?php echo $index; ?>][comment]" placeholder="How was the product? What did you like or dislike?"></textarea>
+                </div>
+
+                <div class="form-group review-image-upload-group" style="margin-top: 15px;">
+                    <label style="font-weight: 600; color: #344054; margin-bottom: 8px; display: block; font-size: 0.92rem;">
+                        <i class="fas fa-camera" style="color: #b3261e; margin-right: 5px;"></i> Add Photo of Food (Optional)
+                    </label>
+                    <div class="review-upload-dropzone" style="border: 1.5px dashed #d0d5dd; border-radius: 12px; padding: 18px; text-align: center; background: #fafafa; transition: all 0.2s ease;">
+                        <input type="file" name="review_images[<?php echo $index; ?>]" accept="image/jpeg,image/png,image/webp" class="review-file-input" style="display: none;" id="reviewImgInput_<?php echo $index; ?>" onchange="handleReviewPhotoSelect(this, <?php echo $index; ?>)">
+                        <div class="review-upload-prompt" id="prompt_<?php echo $index; ?>" onclick="document.getElementById('reviewImgInput_<?php echo $index; ?>').click();" style="cursor: pointer;">
+                            <i class="fas fa-cloud-arrow-up" style="font-size: 1.8rem; color: #98a2b3; margin-bottom: 6px; display: block;"></i>
+                            <div style="font-size: 0.9rem; font-weight: 700; color: #344054;">Click or tap to upload photo</div>
+                            <div style="font-size: 0.78rem; color: #667085; margin-top: 3px;">JPG, PNG, or WEBP up to 5MB</div>
+                        </div>
+                        <div class="review-upload-preview" id="preview_<?php echo $index; ?>" style="display: none; align-items: center; justify-content: center; gap: 14px;">
+                            <img src="" alt="Photo preview" id="previewImg_<?php echo $index; ?>" style="max-height: 130px; max-width: 160px; border-radius: 10px; border: 1px solid #eaecf0; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.06);">
+                            <button type="button" onclick="clearReviewPhoto(<?php echo $index; ?>)" style="background: #fff1f0; border: 1px solid #fee4e2; color: #b3261e; border-radius: 8px; padding: 7px 14px; font-size: 0.82rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                                <i class="fas fa-trash-alt"></i> Remove
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             <?php endforeach; ?>
@@ -225,6 +250,40 @@ body.dark-mode .form-group textarea:focus {
 <?php include 'includes/footer.php'; ?>
 
 <script>
+function handleReviewPhotoSelect(input, index) {
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        if (file.size > 5 * 1024 * 1024) {
+            Swal.fire({ title: 'File Too Large', text: 'Please select an image smaller than 5MB.', icon: 'warning', confirmButtonColor: '#b3261e' });
+            input.value = '';
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const previewEl = document.getElementById('preview_' + index);
+            const promptEl = document.getElementById('prompt_' + index);
+            const imgEl = document.getElementById('previewImg_' + index);
+            if (imgEl && previewEl && promptEl) {
+                imgEl.src = e.target.result;
+                promptEl.style.display = 'none';
+                previewEl.style.display = 'flex';
+            }
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function clearReviewPhoto(index) {
+    const input = document.getElementById('reviewImgInput_' + index);
+    const previewEl = document.getElementById('preview_' + index);
+    const promptEl = document.getElementById('prompt_' + index);
+    const imgEl = document.getElementById('previewImg_' + index);
+    if (input) input.value = '';
+    if (imgEl) imgEl.src = '';
+    if (previewEl) previewEl.style.display = 'none';
+    if (promptEl) promptEl.style.display = 'block';
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const reviewForm = document.querySelector('.review-form');
 

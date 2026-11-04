@@ -5,19 +5,24 @@
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-session_start();
+ini_set('display_errors', '0');
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+ob_start();
 
 require_once '../includes/config.php';
 require_once '../includes/ChatService.php';
 
 // Check authentication
 if (!isset($_SESSION['user_id'])) {
+    if (ob_get_level() > 0) ob_clean();
     http_response_code(401);
     echo json_encode(['success' => false, 'error' => 'Unauthorized']);
     exit;
 }
 
-$user_id = $_SESSION['user_id'];
+$user_id = (int)$_SESSION['user_id'];
 
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
@@ -73,6 +78,7 @@ try {
 
     $latest_message_id = $chatService->getLatestMessageId($conversation_id);
     
+    if (ob_get_level() > 0) ob_clean();
     echo json_encode([
         'success' => true,
         'messages' => $messages,
@@ -84,7 +90,8 @@ try {
         'mode' => ($after_id !== null) ? 'incremental' : 'snapshot'
     ]);
     
-} catch (Exception $e) {
+} catch (Throwable $e) {
+    if (ob_get_level() > 0) ob_clean();
     http_response_code(400);
     echo json_encode([
         'success' => false,

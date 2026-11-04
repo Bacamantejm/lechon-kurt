@@ -1741,6 +1741,157 @@ body {
     #storePickupMap { height: 210px !important; }
 }
 
+@media (max-width: 640px) {
+    .preorder-cal-widget {
+        padding: 12px 6px !important;
+        border-radius: 14px !important;
+        box-shadow: none !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+    .cal-widget-header {
+        margin-bottom: 10px !important;
+        padding-bottom: 8px !important;
+    }
+    .cal-widget-title {
+        font-size: 0.96rem !important;
+    }
+    .cal-nav-btn {
+        width: 30px !important;
+        height: 30px !important;
+        font-size: 0.78rem !important;
+    }
+    .cal-schedule-policy-bar {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 6px !important;
+        padding: 8px 10px !important;
+        font-size: 0.75rem !important;
+        margin-bottom: 12px !important;
+    }
+    .cal-schedule-policy-bar span {
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        line-height: 1.3 !important;
+    }
+    .cal-grid-weekdays {
+        grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+        gap: 3px !important;
+        margin-bottom: 4px !important;
+        width: 100% !important;
+    }
+    .cal-grid-weekdays div {
+        font-size: 0.68rem !important;
+        padding: 2px 0 !important;
+    }
+    .cal-grid-days {
+        grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+        gap: 3px !important;
+        width: 100% !important;
+    }
+    .cal-day-cell {
+        min-height: unset !important;
+        height: auto !important;
+        aspect-ratio: 1 / 1 !important;
+        border-radius: 8px !important;
+        padding: 2px 1px !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .cal-day-num {
+        font-size: 0.80rem !important;
+        line-height: 1 !important;
+    }
+    .cal-day-sub {
+        font-size: 0.54rem !important;
+        line-height: 1 !important;
+        margin-top: 1px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 100% !important;
+    }
+    .cal-legend-bar {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 6px 8px !important;
+        margin-top: 12px !important;
+        padding-top: 10px !important;
+        justify-content: stretch !important;
+    }
+    .cal-legend-item {
+        font-size: 0.72rem !important;
+        white-space: nowrap !important;
+    }
+    .time-slots-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+    }
+    .time-slot-card {
+        padding: 8px 6px !important;
+    }
+}
+
+@media (max-width: 360px) {
+    .preorder-cal-widget {
+        padding: 8px 4px !important;
+        border-radius: 10px !important;
+    }
+    .cal-widget-title {
+        font-size: 0.88rem !important;
+    }
+    .cal-nav-btn {
+        width: 26px !important;
+        height: 26px !important;
+        font-size: 0.72rem !important;
+    }
+    .cal-schedule-policy-bar {
+        padding: 6px 8px !important;
+        font-size: 0.68rem !important;
+        gap: 4px !important;
+    }
+    .cal-grid-weekdays {
+        gap: 2px !important;
+    }
+    .cal-grid-weekdays div {
+        font-size: 0.60rem !important;
+    }
+    .cal-grid-days {
+        gap: 2px !important;
+    }
+    .cal-day-cell {
+        border-radius: 6px !important;
+        padding: 1px 0 !important;
+    }
+    .cal-day-num {
+        font-size: 0.72rem !important;
+    }
+    .cal-day-sub {
+        font-size: 0.46rem !important;
+        letter-spacing: -0.3px !important;
+    }
+    .cal-legend-bar {
+        gap: 4px 6px !important;
+    }
+    .cal-legend-item {
+        font-size: 0.64rem !important;
+        gap: 4px !important;
+    }
+    .legend-dot {
+        width: 7px !important;
+        height: 7px !important;
+    }
+    .time-slots-grid {
+        gap: 6px !important;
+    }
+    .time-slot-card {
+        padding: 6px 4px !important;
+    }
+}
+
 @media (max-width: 480px) {
     .preorder-section-block { padding: 14px 12px !important; }
     #storePickupMap { height: 190px !important; }
@@ -2362,10 +2513,12 @@ body.dark-mode .leaflet-popup-tip {
 
 .cal-grid-weekdays {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 6px;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 5px;
     margin-bottom: 8px;
     text-align: center;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .cal-grid-weekdays div {
@@ -2375,29 +2528,40 @@ body.dark-mode .leaflet-popup-tip {
     text-transform: uppercase;
     letter-spacing: 0.04em;
     padding: 6px 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: clip;
+    white-space: nowrap;
 }
 
 .cal-grid-days {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 6px;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 5px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .cal-day-cell {
     aspect-ratio: 1;
-    min-height: 52px;
+    min-height: 48px;
     border-radius: 10px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 4px;
+    padding: 3px 2px;
     border: 1px solid #eaecf0;
     background: #ffffff;
     cursor: pointer;
     transition: all 0.18s ease;
     text-decoration: none;
     position: relative;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .cal-day-cell.is-blank {
@@ -2419,6 +2583,13 @@ body.dark-mode .leaflet-popup-tip {
     color: #027a48;
     margin-top: 2px;
     line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    width: 100%;
+    display: block;
+    text-align: center;
 }
 
 .cal-day-sub.muted {
@@ -3109,9 +3280,9 @@ body.dark-mode .preorder-schedule-selected-badge {
                     </div>
 
                     <div class="cal-schedule-policy-bar">
-                        <span><i class="fas fa-clock"></i> <strong>Lead Time:</strong> <?php echo (int)$preorder_schedule['lead_time_days']; ?> day(s) notice</span>
-                        <span><i class="fas fa-hourglass-half"></i> <strong>Daily Cutoff:</strong> <?php echo date('g:i A', strtotime($preorder_schedule['cutoff_time'])); ?></span>
-                        <span><i class="fas fa-calendar-alt"></i> <strong>Window:</strong> Up to <?php echo (int)$preorder_schedule['max_advance_days']; ?> days ahead</span>
+                        <span id="calPolicyLeadTime"><i class="fas fa-clock"></i> <strong>Lead Time:</strong> <?php echo (int)$preorder_schedule['lead_time_days']; ?> day(s) notice</span>
+                        <span id="calPolicyCutoff"><i class="fas fa-hourglass-half"></i> <strong>Daily Cutoff:</strong> <?php echo date('g:i A', strtotime($preorder_schedule['cutoff_time'])); ?></span>
+                        <span id="calPolicyWindow"><i class="fas fa-calendar-alt"></i> <strong>Window:</strong> Up to <?php echo (int)$preorder_schedule['max_advance_days']; ?> days ahead</span>
                     </div>
 
                     <div class="cal-grid-weekdays">
@@ -3700,6 +3871,20 @@ async function loadCalendarMonth(monthStr) {
             const data = json.data;
             currentCalMonth = data.current_month;
             if (monthTitle) monthTitle.textContent = data.month_title;
+
+            // Dynamically synchronize policy bar with active store rules
+            const leadEl = document.getElementById('calPolicyLeadTime');
+            if (leadEl && data.lead_time_days !== undefined) {
+                leadEl.innerHTML = `<i class="fas fa-clock"></i> <strong>Lead Time:</strong> ${data.lead_time_days} day(s) notice`;
+            }
+            const cutoffEl = document.getElementById('calPolicyCutoff');
+            if (cutoffEl && data.cutoff_time) {
+                cutoffEl.innerHTML = `<i class="fas fa-hourglass-half"></i> <strong>Daily Cutoff:</strong> ${data.cutoff_time}`;
+            }
+            const winEl = document.getElementById('calPolicyWindow');
+            if (winEl && data.max_advance_days) {
+                winEl.innerHTML = `<i class="fas fa-calendar-alt"></i> <strong>Window:</strong> Up to ${data.max_advance_days} days ahead`;
+            }
             
             if (prevBtn) {
                 prevBtn.disabled = !data.prev_month;

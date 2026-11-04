@@ -68,6 +68,7 @@ if (!function_exists('pdhEnsureProductReviewReplySchema')) {
         }
 
         $requiredColumns = [
+            'image' => "ALTER TABLE product_reviews ADD COLUMN image VARCHAR(255) DEFAULT NULL AFTER comment",
             'seller_reply' => "ALTER TABLE product_reviews ADD COLUMN seller_reply TEXT DEFAULT NULL AFTER comment",
             'seller_reply_at' => "ALTER TABLE product_reviews ADD COLUMN seller_reply_at DATETIME DEFAULT NULL AFTER seller_reply",
             'seller_reply_by' => "ALTER TABLE product_reviews ADD COLUMN seller_reply_by INT(11) DEFAULT NULL AFTER seller_reply_at"
