@@ -122,7 +122,7 @@ $path_prefix_cust = isset($path_prefix) ? $path_prefix : ((basename(dirname($_SE
                 <h3 class="lechon-tut-title">Flexible & Secure Payments</h3>
                 <p class="lechon-tut-subtitle">Pay your way with full peace of mind</p>
                 <p class="lechon-tut-desc">
-                    Enjoy zero hassle at checkout. We support <strong>Cash on Delivery (COD)</strong>, direct e-wallets like <strong>GCash and Maya</strong>, as well as credit/debit card payments via PayMongo with automated digital invoices.
+                    Enjoy zero hassle at checkout. We support <strong>Cash on Delivery (COD)</strong> and direct online e-wallets like <strong>GCash and Maya</strong> via PayMongo with automated digital invoices.
                 </p>
                 <div class="lechon-tut-features">
                     <div class="lechon-tut-feature-item">

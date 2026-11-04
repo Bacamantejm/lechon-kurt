@@ -884,7 +884,7 @@ unset($order);
                                                 </span>
                                             <?php else: ?>
                                                 <span style="color: #175cd3; font-weight: 600;">
-                                                    <i class="fas fa-credit-card"></i> PayMongo (<?php echo ucfirst($order_ps ?: 'Paid'); ?>)
+                                                    <i class="fas fa-wallet"></i> PayMongo (<?php echo ucfirst($order_ps ?: 'Paid'); ?>)
                                                 </span>
                                             <?php endif; ?>
                                         </span>

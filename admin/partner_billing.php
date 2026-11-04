@@ -577,7 +577,7 @@ $latestReminder = $billingReminders[0] ?? null;
                     <div class="billing-step-list">
                         <div class="billing-pay-step"><strong>1. Invoice is issued</strong><span>The platform owner generates your monthly or annual billing invoice inside the monetization module.</span></div>
                         <div class="billing-pay-step"><strong>2. Partner opens billing</strong><span>Your shop sees the issued invoice here together with due date, amount, and payment actions.</span></div>
-                        <div class="billing-pay-step"><strong>3. Pay via PayMongo</strong><span>Choose GCash, PayMaya, or Card, then continue to the secure PayMongo checkout page.</span></div>
+                        <div class="billing-pay-step"><strong>3. Pay via PayMongo</strong><span>Choose GCash or Maya, then continue to the secure PayMongo checkout page.</span></div>
                         <div class="billing-pay-step"><strong>4. System verifies payment</strong><span>After checkout, the platform verifies the payment session and updates your invoice status.</span></div>
                         <div class="billing-pay-step"><strong>5. Super admin receives it</strong><span>The paid invoice becomes part of the owner's collected revenue and billing records automatically.</span></div>
                     </div>
@@ -618,10 +618,10 @@ $latestReminder = $billingReminders[0] ?? null;
                                     <select name="payment_method" class="form-select" <?php echo $paymongoAvailable ? '' : 'disabled'; ?>>
                                         <option value="gcash">GCash</option>
                                         <option value="paymaya">PayMaya</option>
-                                        <option value="card">Card</option>
+                                        
                                     </select>
                                     <button type="submit" class="btn btn-success" <?php echo $paymongoAvailable ? '' : 'disabled'; ?>>
-                                        <i class="fas fa-credit-card"></i> Continue to PayMongo Checkout
+                                        <i class="fas fa-wallet"></i> Continue to PayMongo Checkout
                                     </button>
                                 </form>
                                 <?php if (!$paymongoAvailable): ?>
@@ -967,7 +967,7 @@ $latestReminder = $billingReminders[0] ?? null;
                                                     <select name="payment_method" class="form-select form-select-sm" <?php echo $paymongoAvailable ? '' : 'disabled'; ?>>
                                                         <option value="gcash">GCash</option>
                                                         <option value="paymaya">PayMaya</option>
-                                                        <option value="card">Card</option>
+                                                        
                                                     </select>
                                                     <button type="submit" class="btn btn-sm btn-success" <?php echo $paymongoAvailable ? '' : 'disabled'; ?>>Pay via PayMongo</button>
                                                 </form>
