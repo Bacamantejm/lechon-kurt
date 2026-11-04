@@ -518,6 +518,12 @@ if (isset($rider['id'])) {
                         <span><?php echo htmlspecialchars($header_name); ?></span>
                     </span>
                 <?php endif; ?>
+                <?php if (!empty($rider['store_name'])): ?>
+                    <span class="d-none d-md-inline-flex align-items-center gap-1 px-2 py-1 rounded-pill" style="font-size:11px; font-weight:700; background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff;" title="Hiring Store Branch">
+                        <i class="fas fa-store"></i>
+                        <span><?php echo htmlspecialchars($rider['store_name']); ?></span>
+                    </span>
+                <?php endif; ?>
                 <!-- Duty status badge on desktop -->
                 <span class="d-none d-sm-inline-flex align-items-center gap-1 px-2 py-1 rounded-pill" style="font-size:11px; font-weight:700; background: <?php echo $rider['duty_status'] === 'online' ? '#ecfdf3' : ($rider['duty_status'] === 'busy' ? '#fff1f0' : '#f2f4f7'); ?>; color: <?php echo $rider['duty_status'] === 'online' ? '#027a48' : ($rider['duty_status'] === 'busy' ? '#b3261e' : '#475467'); ?>; border: 1px solid <?php echo $rider['duty_status'] === 'online' ? '#abefc6' : ($rider['duty_status'] === 'busy' ? '#fee4e2' : '#d0d5dd'); ?>;">
                     <span class="pulse-dot <?php echo $rider['duty_status']; ?>" style="width:6px; height:6px;"></span>

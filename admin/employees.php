@@ -465,6 +465,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email = trim($_POST['email'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
         $department_id = isset($_POST['department_id']) && $_POST['department_id'] !== '' ? intval($_POST['department_id']) : 0;
+        $store_id = isset($_POST['store_id']) && $_POST['store_id'] !== '' ? intval($_POST['store_id']) : 0;
+        if ($store_id <= 0) {
+            if ($is_partner_scoped_hr && $partner_scope_owner_id > 0) {
+                $sl_find = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE owner_user_id = $partner_scope_owner_id LIMIT 1");
+                if ($sl_find && ($sl_row = mysqli_fetch_assoc($sl_find))) {
+                    $store_id = (int)$sl_row['store_id'];
+                }
+            } else {
+                $curr_adm_id = (int)($_SESSION['user_id'] ?? 0);
+                $sl_find = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE owner_user_id = $curr_adm_id LIMIT 1");
+                if ($sl_find && ($sl_row = mysqli_fetch_assoc($sl_find))) {
+                    $store_id = (int)$sl_row['store_id'];
+                } else {
+                    $store_id = 1;
+                }
+            }
+        }
         $position_id = intval($_POST['position_id'] ?? 0);
         $position_record = employeesFetchPositionRecord($conn, $position_id);
         if ($position_id > 0 && !$position_record) {
@@ -682,11 +699,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $dept_id_param = ($department_id > 0) ? (int)$department_id : 0;
             $pos_id_param = ($position_id > 0) ? (int)$position_id : 0;
 
-            $query = "INSERT INTO employees (employee_id, first_name, middle_initial, last_name, suffix, email, user_id, phone, sss_number, philhealth_number, pagibig_number, tin_number, department_id, position_id, position, hire_date, employment_type, employment_basis, salary, daily_rate, photo, status)
-                      VALUES (?, ?, ?, ?, ?, ?, NULLIF(?,0), ?, ?, ?, ?, ?, NULLIF(?,0), NULLIF(?,0), ?, ?, ?, ?, ?, ?, ?, 'active')";
+            $store_id_param = ($store_id > 0) ? (int)$store_id : 0;
+
+            $query = "INSERT INTO employees (employee_id, first_name, middle_initial, last_name, suffix, email, user_id, phone, sss_number, philhealth_number, pagibig_number, tin_number, department_id, position_id, position, hire_date, employment_type, employment_basis, salary, daily_rate, photo, store_id, status)
+                      VALUES (?, ?, ?, ?, ?, ?, NULLIF(?,0), ?, ?, ?, ?, ?, NULLIF(?,0), NULLIF(?,0), ?, ?, ?, ?, ?, ?, ?, NULLIF(?,0), 'active')";
             $stmt = mysqli_prepare($conn, $query);
             if ($stmt) {
-                mysqli_stmt_bind_param($stmt, "ssssssisssssiissssdds", $employee_id, $first_name, $middle_initial, $last_name, $suffix, $email, $user_id_param, $phone, $sss, $philhealth, $pagibig, $tin, $dept_id_param, $pos_id_param, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $photo_db_path);
+                mysqli_stmt_bind_param($stmt, "ssssssisssssiissssddsis", $employee_id, $first_name, $middle_initial, $last_name, $suffix, $email, $user_id_param, $phone, $sss, $philhealth, $pagibig, $tin, $dept_id_param, $pos_id_param, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $photo_db_path, $store_id_param);
             } else {
                 // Dynamic fallback if optional columns are absent in database schema
                 $all_cols = [
@@ -711,6 +730,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'salary' => ['d', $salary],
                     'daily_rate' => ['d', $daily_rate],
                     'photo' => ['s', $photo_db_path],
+                    'store_id' => ['nullif', $store_id_param],
                     'status' => ['s', 'active']
                 ];
 
@@ -752,7 +772,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             mysqli_query($conn, "UPDATE users SET profile_image = '" . mysqli_real_escape_string($conn, $photo_db_path) . "' WHERE id = " . (int)$user_id_for_employee);
                         }
                         require_once __DIR__ . '/../includes/rider_helper.php';
-                        isDeliveryDriverUser($conn, $user_id_for_employee);
+                        isDeliveryDriverUser($conn, $user_id_for_employee, $store_id);
                     }
                     $_SESSION['success'] = (isset($_SESSION['success']) ? $_SESSION['success'] . " Employee added successfully." : "Employee added successfully.");
                 } else {
@@ -783,6 +803,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email = trim($_POST['email'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
         $department_id = isset($_POST['department_id']) && $_POST['department_id'] !== '' ? intval($_POST['department_id']) : 0;
+        $store_id = isset($_POST['store_id']) && $_POST['store_id'] !== '' ? intval($_POST['store_id']) : 0;
+        if ($store_id <= 0) {
+            if ($is_partner_scoped_hr && $partner_scope_owner_id > 0) {
+                $sl_find = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE owner_user_id = $partner_scope_owner_id LIMIT 1");
+                if ($sl_find && ($sl_row = mysqli_fetch_assoc($sl_find))) {
+                    $store_id = (int)$sl_row['store_id'];
+                }
+            } else {
+                $curr_adm_id = (int)($_SESSION['user_id'] ?? 0);
+                $sl_find = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE owner_user_id = $curr_adm_id LIMIT 1");
+                if ($sl_find && ($sl_row = mysqli_fetch_assoc($sl_find))) {
+                    $store_id = (int)$sl_row['store_id'];
+                } else {
+                    $store_id = 1;
+                }
+            }
+        }
         $position_id = intval($_POST['position_id'] ?? 0);
         $position_record = employeesFetchPositionRecord($conn, $position_id);
         if ($position_id > 0 && !$position_record) {
@@ -836,10 +873,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $dept_id_param = ($department_id > 0) ? (int)$department_id : 0;
         $pos_id_param = ($position_id > 0) ? (int)$position_id : 0;
 
-        $query = "UPDATE employees SET first_name=?, middle_initial=?, last_name=?, suffix=?, email=?, phone=?, department_id=NULLIF(?,0), position_id=NULLIF(?,0), position=?, hire_date=?, employment_type=?, employment_basis=?, salary=?, daily_rate=?, sss_number=?, philhealth_number=?, pagibig_number=?, tin_number=? WHERE id=?";
+        $store_id_param = ($store_id > 0) ? (int)$store_id : 0;
+        $query = "UPDATE employees SET first_name=?, middle_initial=?, last_name=?, suffix=?, email=?, phone=?, department_id=NULLIF(?,0), position_id=NULLIF(?,0), position=?, hire_date=?, employment_type=?, employment_basis=?, salary=?, daily_rate=?, sss_number=?, philhealth_number=?, pagibig_number=?, tin_number=?, store_id=NULLIF(?,0) WHERE id=?";
         $stmt = mysqli_prepare($conn, $query);
         if ($stmt) {
-            mysqli_stmt_bind_param($stmt, "ssssssiissssddssssi", $first_name, $middle_initial, $last_name, $suffix, $email, $phone, $dept_id_param, $pos_id_param, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $sss, $philhealth, $pagibig, $tin, $id);
+            mysqli_stmt_bind_param($stmt, "ssssssiissssddssssii", $first_name, $middle_initial, $last_name, $suffix, $email, $phone, $dept_id_param, $pos_id_param, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $sss, $philhealth, $pagibig, $tin, $store_id_param, $id);
         } else {
             // Dynamic fallback update for employees
             $all_upd = [
@@ -861,6 +899,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'philhealth_number' => ['s', $philhealth],
                 'pagibig_number' => ['s', $pagibig],
                 'tin_number' => ['s', $tin],
+                'store_id' => ['nullif', $store_id_param],
             ];
             $upd_sets = [];
             $upd_types = '';
@@ -977,7 +1016,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($sync_user_id > 0) {
                 require_once __DIR__ . '/../includes/rider_helper.php';
-                isDeliveryDriverUser($conn, $sync_user_id);
+                isDeliveryDriverUser($conn, $sync_user_id, $store_id);
             }
 
             $_SESSION['success'] = "Employee updated successfully.";
@@ -1113,10 +1152,12 @@ $jp_join = ($has_jp && $has_pos_col) ? "LEFT JOIN job_positions jp ON jp.id = e.
 
 $employees_query = "SELECT e.*, {$dept_col}, u.user_type, u.email as user_email, u.profile_image as user_profile_image,
                            r.name as system_role_name, r.id as system_role_id,
+                           sl.store_name as store_branch_name,
                            {$jp_col}
                     FROM employees e
                     {$dept_join}
                     {$jp_join}
+                    LEFT JOIN store_locations sl ON e.store_id = sl.store_id
                     LEFT JOIN users u ON e.user_id = u.id
                     LEFT JOIN roles r ON u.role_id = r.id
                     $where_clause
@@ -1178,6 +1219,19 @@ $position_catalog = hrFetchPositionCatalog(
     $is_partner_scoped_hr ? $department_scope_sql : '1=1',
     $is_partner_scoped_hr ? $employee_scope_sql : '1=1'
 );
+
+// Active store locations for branch assignment
+$all_stores = [];
+$stores_query_sql = "SELECT store_id, store_name, city, owner_user_id FROM store_locations WHERE is_active = 1 ORDER BY store_id ASC";
+if ($is_partner_scoped_hr && $partner_scope_owner_id > 0) {
+    $stores_query_sql = "SELECT store_id, store_name, city, owner_user_id FROM store_locations WHERE is_active = 1 AND owner_user_id = $partner_scope_owner_id ORDER BY store_id ASC";
+}
+$st_res = mysqli_query($conn, $stores_query_sql);
+if ($st_res) {
+    while ($sr = mysqli_fetch_assoc($st_res)) {
+        $all_stores[] = $sr;
+    }
+}
 
 // Get roles for user creation
 $has_dept_table = hrTableExists($conn, 'departments');
@@ -1704,14 +1758,14 @@ if ($roles_query instanceof mysqli_result) {
 
         .emp-card-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 20px;
             margin-bottom: 24px;
         }
 
         @media (min-width: 1200px) {
             .emp-card-grid {
-                grid-template-columns: repeat(4, 1fr);
+                grid-template-columns: repeat(auto-fill, minmax(280px, 320px));
             }
         }
 
@@ -1723,6 +1777,8 @@ if ($roles_query instanceof mysqli_result) {
             position: relative;
             display: flex;
             flex-direction: column;
+            width: 100%;
+            max-width: 360px;
             box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04), 0 1px 2px rgba(16, 24, 40, 0.02);
             transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
         }
@@ -2356,6 +2412,10 @@ if ($roles_query instanceof mysqli_result) {
                                         <i class="fas fa-phone-alt"></i>
                                         <span><?php echo $phone_clean !== '' ? $phone_clean : 'No phone'; ?></span>
                                     </div>
+                                    <div class="emp-contact-item" title="Assigned Store Branch">
+                                        <i class="fas fa-store text-danger"></i>
+                                        <span class="fw-semibold text-dark"><?php echo htmlspecialchars($emp['store_branch_name'] ?? 'Dasmariñas Branch'); ?></span>
+                                    </div>
                                 </div>
 
                                 <!-- User Account Role Strip -->
@@ -2720,6 +2780,24 @@ if ($roles_query instanceof mysqli_result) {
                                         </div>
                                     </div>
                                 </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Store / Branch <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-store emp-input-icon"></i>
+                                            <select name="store_id" id="add_store_id" class="form-select" required>
+                                                <?php foreach ($all_stores as $st): ?>
+                                                    <option value="<?php echo (int)$st['store_id']; ?>">
+                                                        <?php echo htmlspecialchars($st['store_name'] . ' (' . ($st['city'] ?? 'Dasmariñas') . ')'); ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <div class="emp-helper-text">
+                                            <i class="fas fa-info-circle"></i> Delivery orders will be strictly bound to this shop branch.
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -3007,6 +3085,24 @@ if ($roles_query instanceof mysqli_result) {
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-money-bill-wave emp-input-icon"></i>
                                             <input type="number" name="base_salary" id="edit_base_salary" class="form-control" step="0.01" min="0" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Store / Branch <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-store emp-input-icon"></i>
+                                            <select name="store_id" id="edit_store_id" class="form-select" required>
+                                                <?php foreach ($all_stores as $st): ?>
+                                                    <option value="<?php echo (int)$st['store_id']; ?>">
+                                                        <?php echo htmlspecialchars($st['store_name'] . ' (' . ($st['city'] ?? 'Dasmariñas') . ')'); ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <div class="emp-helper-text">
+                                            <i class="fas fa-info-circle"></i> Delivery orders will be strictly bound to this shop branch.
                                         </div>
                                     </div>
                                 </div>
@@ -3375,6 +3471,7 @@ if ($roles_query instanceof mysqli_result) {
                     
                     let rate = data.employment_basis === 'monthly' ? data.salary : data.daily_rate;
                     $('#edit_base_salary').val(rate);
+                    $('#edit_store_id').val(data.store_id || '1');
 
                     // Photo preview
                     if (data.photo) {

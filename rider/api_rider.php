@@ -181,22 +181,30 @@ if ($action === 'poll_requests') {
         $snoozed_orders = [];
     }
 
-    // Query pending/preparing delivery orders not yet assigned to a driver
-    $store_filter = "";
-    if ($rider['rider_type'] === 'shop_rider' && !empty($rider['store_id'])) {
-        $s_id = (int)$rider['store_id'];
-        $store_filter = "AND o.pickup_location = $s_id";
+    // Query pending/preparing delivery orders strictly scoped to the store that hired this rider
+    $hiring_store_id = (int)($rider['store_id'] ?? 0);
+    $hiring_owner_id = (int)($rider['store_owner_id'] ?? 0);
+
+    if ($hiring_store_id > 0) {
+        if ($hiring_owner_id > 0) {
+            $store_filter = "AND (o.pickup_location = $hiring_store_id OR o.store_id = $hiring_store_id OR (o.seller_id IS NOT NULL AND o.seller_id = $hiring_owner_id))";
+        } else {
+            $store_filter = "AND (o.pickup_location = $hiring_store_id OR o.store_id = $hiring_store_id)";
+        }
+    } else {
+        // Unassigned riders must never see any store orders
+        $store_filter = "AND 1 = 0";
     }
 
     $sql = "
         SELECT o.id AS order_id, o.order_number, o.customer_name, o.customer_phone,
                o.delivery_address, o.latitude AS customer_latitude, o.longitude AS customer_longitude,
-               o.total_amount, o.delivery_fee, o.payment_method, o.pickup_location, o.created_at,
+               o.total_amount, o.delivery_fee, o.payment_method, o.pickup_location, o.store_id, o.seller_id, o.created_at,
                sl.store_name, sl.address AS store_address, sl.city AS store_city,
                sl.latitude AS store_latitude, sl.longitude AS store_longitude,
                lt.id AS tracking_id, lt.driver_id, lt.current_status
         FROM orders o
-        LEFT JOIN store_locations sl ON o.pickup_location = sl.store_id
+        LEFT JOIN store_locations sl ON (o.pickup_location = sl.store_id OR o.store_id = sl.store_id)
         LEFT JOIN logistics_tracking lt ON lt.order_id = o.id
         WHERE o.status IN ('confirmed', 'preparing')
           AND o.delivery_option = 'delivery'
@@ -283,7 +291,7 @@ if ($action === 'accept_delivery') {
     }
 
     // Verify order is still available
-    $chk_sql = "SELECT id, order_number, status, total_amount, delivery_fee FROM orders WHERE id = ? LIMIT 1";
+    $chk_sql = "SELECT id, order_number, status, total_amount, delivery_fee, pickup_location, store_id, seller_id FROM orders WHERE id = ? LIMIT 1";
     $c_stmt = mysqli_prepare($conn, $chk_sql);
     mysqli_stmt_bind_param($c_stmt, "i", $order_id);
     mysqli_stmt_execute($c_stmt);
@@ -292,6 +300,27 @@ if ($action === 'accept_delivery') {
 
     if (!$ord) {
         jsonRes(['success' => false, 'message' => 'Order not found.'], 404);
+    }
+
+    // Tenant check: Rider can ONLY accept delivery orders from the shop that hired them
+    $hiring_store_id = (int)($rider['store_id'] ?? 0);
+    $hiring_owner_id = (int)($rider['store_owner_id'] ?? 0);
+    $is_own_shop_order = false;
+
+    if ($hiring_store_id > 0) {
+        $ord_pickup = (int)($ord['pickup_location'] ?? 0);
+        $ord_store = (int)($ord['store_id'] ?? 0);
+        $ord_seller = !empty($ord['seller_id']) ? (int)$ord['seller_id'] : 0;
+
+        if ($ord_pickup === $hiring_store_id || $ord_store === $hiring_store_id) {
+            $is_own_shop_order = true;
+        } elseif ($hiring_owner_id > 0 && $ord_seller === $hiring_owner_id) {
+            $is_own_shop_order = true;
+        }
+    }
+
+    if (!$is_own_shop_order) {
+        jsonRes(['success' => false, 'message' => 'Access denied. You can only accept delivery orders from the store branch that hired you.'], 403);
     }
 
     // Check collision in logistics_tracking
@@ -309,9 +338,10 @@ if ($action === 'accept_delivery') {
         }
     }
 
-    // Generate 4-digit Delivery PIN if not yet present
+    // Generate 4-digit Delivery PIN if not yet present & assign rider to order
     $pin = sprintf("%04d", rand(1000, 9999));
-    mysqli_query($conn, "UPDATE orders SET delivery_pin = '$pin', status = 'preparing' WHERE id = $order_id AND (delivery_pin IS NULL OR delivery_pin = '')");
+    mysqli_query($conn, "UPDATE orders SET delivery_pin = '$pin', status = 'preparing', rider_id = $driver_assignee WHERE id = $order_id AND (delivery_pin IS NULL OR delivery_pin = '')");
+    mysqli_query($conn, "UPDATE orders SET rider_id = $driver_assignee WHERE id = $order_id");
 
     // Upsert logistics_tracking
     if ($tracking_id <= 0) {
