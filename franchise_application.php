@@ -3933,7 +3933,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .replace(/ÃƒÂ±/g, 'ñ')
             .replace(/Γö£ΓûÆ/g, 'ñ')
             .replace(/├â╞Æ├é┬▒/g, 'ñ')
-            .replace(/Dasmari(?:[^a-zA-Z0-9\s]{1,6}|n)as/gi, 'Dasmariñas')
+            .replace(/Dasmari(?:[^\w\s]{1,8}|ñ|n|)?(?:as|a)?(?=\b|\s|,|$|\d)/gi, 'Dasmariñas')
             .replace(/\bDasmarinas\b/gi, 'Dasmariñas');
     }
 

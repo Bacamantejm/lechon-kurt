@@ -275,20 +275,73 @@ if (!function_exists('shouldUseGoogleGeocoding')) {
 if (!function_exists('fixMojibakeText')) {
     /**
      * Repair text with broken UTF-8, CP437, Windows-1252, or double-encoded characters.
-     * Specifically fixes corrupted Philippine city/branch names like Dasmariñas (e.g. Dasmari├░as, Dasmari├▒as, DasmariÃ±as).
+     * Specifically fixes corrupted Philippine city/branch names and Philippine Peso symbols:
+     * e.g. Dasmari├▒a, Dasmari├▒as, DasmariÃ±as, Γé▒50, â‚±, ré50.
      */
     function fixMojibakeText($str) {
         if (!is_string($str) || $str === '') {
             return $str;
         }
 
+        // Decode HTML entities if present
+        if (strpos($str, '&') !== false) {
+            $str = html_entity_decode($str, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        }
+
+        // Decode JSON unicode escapes if present
+        if (strpos($str, '\u') !== false) {
+            $str = str_replace(
+                ['\u20b1', '\u251c\u2592', '\u251c\u00e6', '\u00f1', '\u00d1', '\u251C\u2592', '\u251C\u00E6', '\u00F1', '\u00D1'],
+                ['₱', 'ñ', 'Ñ', 'ñ', 'Ñ', 'ñ', 'Ñ', 'ñ', 'Ñ'],
+                $str
+            );
+        }
+
+        // Convert invalid UTF-8 byte streams
+        if (function_exists('mb_check_encoding') && !mb_check_encoding($str, 'UTF-8')) {
+            $str = mb_convert_encoding($str, 'UTF-8', 'Windows-1252');
+        }
+
         static $replacements = [
-            'Dasmari├░as' => 'Dasmariñas',
+            // Philippine Peso mojibake (CP437, CP1252, mixed UTF-8)
+            'Γé▒' => '₱',
+            'Ã¢â€šÂ±' => '₱',
+            'â‚±' => '₱',
+            'â‚' => '₱',
+            '&#8369;' => '₱',
+            'ré50' => '₱50',
+            'ré25' => '₱25',
+            'ré100' => '₱100',
+            'ré15' => '₱15',
+            'ré20' => '₱20',
+
+            // Dasmariñas city variations (with or without terminal 's')
             'Dasmari├▒as' => 'Dasmariñas',
+            'Dasmari├▒a' => 'Dasmariñas',
             'DasmariÃ±as' => 'Dasmariñas',
+            'DasmariÃ±a' => 'Dasmariñas',
+            'Dasmari├æas' => 'Dasmariñas',
+            'Dasmari├æa' => 'Dasmariñas',
+            'DasmariÃ‘as' => 'Dasmariñas',
+            'DasmariÃ‘a' => 'Dasmariñas',
             'DasmariÃƒÂ±as' => 'Dasmariñas',
-            'Dasmari├â╞Æ├é┬▒as' => 'Dasmariñas',
+            'DasmariÃƒÂ±a' => 'Dasmariñas' ,
             'DasmariΓö£ΓûÆas' => 'Dasmariñas',
+            'DasmariΓö£ΓûÆa' => 'Dasmariñas',
+            'Dasmari├â╞Æ├é┬▒as' => 'Dasmariñas',
+            'Dasmari├â╞Æ├é┬▒a' => 'Dasmariñas',
+            'Dasmari├â┬▒as' => 'Dasmariñas',
+            'Dasmari├â┬▒a' => 'Dasmariñas',
+            'City of Dasmarinas' => 'City of Dasmariñas',
+            'City of Dasmarias' => 'City of Dasmariñas',
+            'City of Dasmari├▒as' => 'City of Dasmariñas',
+            'City of Dasmari├▒a' => 'City of Dasmariñas',
+            'City of DasmariÃ±as' => 'City of Dasmariñas',
+            'City of DasmariÃ±a' => 'City of Dasmariñas',
+            'Dasmarias' => 'Dasmariñas',
+            'Dasmaria' => 'Dasmariñas',
+
+            // General ñ / Ñ mojibake
             '├░' => 'ñ',
             '├▒' => 'ñ',
             '├æ' => 'Ñ',
@@ -297,25 +350,40 @@ if (!function_exists('fixMojibakeText')) {
             'Ã±' => 'ñ',
             'Ã‘' => 'Ñ',
             '├â╞Æ├é┬▒' => 'ñ',
+            '├â┬▒' => 'ñ',
             'Γö£ΓûÆ' => 'ñ',
+
+            // Accented letters & typography
             'Ã©' => 'é',
             'Ã¨' => 'è',
             'Ã³' => 'ó',
             'Ã¡' => 'á',
             'Ãº' => 'ú',
-            'â‚±' => '₱',
-            'Γé▒' => '₱',
             'â€¢' => '•',
+            'ΓÇô' => '–',
+            'ΓÇö' => '—',
             'â€“' => '–',
             'â€”' => '—',
+            'ΓÇÿ' => '‘',
+            'ΓÇÖ' => '’',
+            'â€™' => '’',
+            'â€œ' => '“',
+            'â€' => '”',
+            'Cavite╬ô├ç├┤Laguna' => 'Cavite–Laguna',
+            'CaviteΓÇôLaguna' => 'Cavite–Laguna'
         ];
 
         $cleaned = str_replace(array_keys($replacements), array_values($replacements), $str);
+
+        // Regex repairs for loose Dasmari / Parañaque / Peso mojibake
         if (strpos($cleaned, 'Dasmari') !== false) {
-            $cleaned = preg_replace('/Dasmari[^\w\s]{1,8}as/iu', 'Dasmariñas', $cleaned);
+            $cleaned = preg_replace('/Dasmari(?:[^\w\s]{1,8}|ñ|n|)?(?:as|a)?(?=\b|\s|,|$|\d)/iu', 'Dasmariñas', $cleaned);
         }
         if (strpos($cleaned, 'Para') !== false) {
             $cleaned = preg_replace('/Para[^\w\s]{1,8}aque/iu', 'Parañaque', $cleaned);
+        }
+        if (preg_match('/\bré(\d+)/i', $cleaned)) {
+            $cleaned = preg_replace('/\bré(\d+)/i', '₱$1', $cleaned);
         }
 
         return $cleaned;

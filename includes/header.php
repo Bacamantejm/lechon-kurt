@@ -31,11 +31,17 @@ $show_market_header_bottom = in_array($current_page, ['home', 'index', 'shops', 
 $cart_count = isset($_SESSION['cart']) && is_array($_SESSION['cart']) ? count($_SESSION['cart']) : 0;
 
 $current_user_address = trim((string)($current_user_address ?? ($_SESSION['address'] ?? '')));
+if (function_exists('fixMojibakeText')) {
+    $current_user_address = fixMojibakeText($current_user_address);
+}
 $market_header_address_display = $current_user_address !== '' ? $current_user_address : 'Select your address';
 
 if (!function_exists('formatHeaderLocationText')) {
     function formatHeaderLocationText($address, $maxLength = 38) {
         $address = trim((string)$address);
+        if (function_exists('fixMojibakeText')) {
+            $address = fixMojibakeText($address);
+        }
         if ($address === '' || $address === 'Select your address') {
             return 'Select your address';
         }
@@ -3137,6 +3143,28 @@ document.addEventListener('DOMContentLoaded', function () {
         return { lat: 14.3294, lng: 120.9367 };
     };
 
+    const fixMojibakeTextJs = function (str) {
+        if (!str || typeof str !== 'string') return str || '';
+        return str
+            .replace(/Γé▒/g, '₱')
+            .replace(/â‚±/g, '₱')
+            .replace(/\bré(\d+)/gi, '₱$1')
+            .replace(/Dasmari(?:[^\w\s]{1,8}|ñ|n|)?(?:as|a)?(?=\b|\s|,|$|\d)/gi, 'Dasmariñas')
+            .replace(/├▒/g, 'ñ')
+            .replace(/├æ/g, 'Ñ')
+            .replace(/Ã±/g, 'ñ')
+            .replace(/Ã‘/g, 'Ñ')
+            .replace(/├░/g, 'ñ')
+            .replace(/Γö£ΓûÆ/g, 'ñ')
+            .replace(/â€¢/g, '•')
+            .replace(/â€“|ΓÇô/g, '–')
+            .replace(/â€”|ΓÇö/g, '—')
+            .replace(/â€™|ΓÇÖ/g, '’')
+            .replace(/â€˜|ΓÇÿ/g, '‘')
+            .replace(/â€œ/g, '“')
+            .replace(/â€/g, '”');
+    };
+
     const buildMarketAddressPayload = function (streetAddress, city, postalCode, latitude, longitude) {
         const street = String(streetAddress || '').trim();
         const cityName = String(city || '').trim();
@@ -3366,7 +3394,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!address || address === 'Select your address') {
             return 'Select your address';
         }
-        const trimmed = String(address).trim();
+        const trimmed = fixMojibakeTextJs(String(address).trim());
         if (trimmed.length > maxLength) {
             let cut = trimmed.slice(0, maxLength);
             const lastComma = cut.lastIndexOf(',');
