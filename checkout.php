@@ -881,22 +881,8 @@ $remaining = $total - $downpayment;
                                 <h3 class="fp-section-title">Payment method</h3>
                             </div>
                             <div class="fp-options-list">
-                                <!-- Option 1: COD -->
-                                <div class="fp-option-row is-active" id="fpPaymentRowCod" onclick="selectDeliveryPaymentMethod('cod')">
-                                    <div class="fp-radio-circle">
-                                        <span class="fp-radio-dot"></span>
-                                    </div>
-                                    <div class="fp-pm-icon-wrap" style="width: 38px; height: 38px; border-radius: 8px; background: #ecfdf3; color: #027a48; display: flex; align-items: center; justify-content: center; font-size: 16px;">
-                                        <i class="fas fa-money-bill-wave"></i>
-                                    </div>
-                                    <div class="fp-option-info">
-                                        <span class="fp-option-label">Cash on Delivery (COD)</span>
-                                        <span class="fp-option-subtext">Pay exact cash to rider upon food arrival</span>
-                                    </div>
-                                </div>
-
-                                <!-- Option 2: PayMongo Online Payment -->
-                                <div class="fp-option-row" id="fpPaymentRowPaymongo" onclick="selectDeliveryPaymentMethod('paymongo')">
+                                <!-- Option 1: PayMongo Online Payment (Default) -->
+                                <div class="fp-option-row is-active" id="fpPaymentRowPaymongo" onclick="selectDeliveryPaymentMethod('paymongo')">
                                     <div class="fp-radio-circle">
                                         <span class="fp-radio-dot"></span>
                                     </div>
@@ -908,13 +894,27 @@ $remaining = $total - $downpayment;
                                         <span class="fp-option-subtext">Fast and secure online checkout via PayMongo</span>
                                     </div>
                                 </div>
+
+                                <!-- Option 2: COD -->
+                                <div class="fp-option-row" id="fpPaymentRowCod" onclick="selectDeliveryPaymentMethod('cod')">
+                                    <div class="fp-radio-circle">
+                                        <span class="fp-radio-dot"></span>
+                                    </div>
+                                    <div class="fp-pm-icon-wrap" style="width: 38px; height: 38px; border-radius: 8px; background: #ecfdf3; color: #027a48; display: flex; align-items: center; justify-content: center; font-size: 16px;">
+                                        <i class="fas fa-money-bill-wave"></i>
+                                    </div>
+                                    <div class="fp-option-info">
+                                        <span class="fp-option-label">Cash on Delivery (COD)</span>
+                                        <span class="fp-option-subtext">Pay exact cash to rider upon food arrival</span>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Guidance note -->
-                            <div class="fp-payment-guidance-box" id="fpDeliveryPaymentGuidance" style="margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: #fffaeb; border: 1px solid #fedf89; font-size: 13px; color: #b54708; display: flex; align-items: flex-start; gap: 8px;">
-                                <i class="fas fa-hand-holding-dollar" style="margin-top: 2px;"></i>
+                            <div class="fp-payment-guidance-box" id="fpDeliveryPaymentGuidance" style="margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: #eff8ff; border: 1px solid #b2ddff; font-size: 13px; color: #175cd3; display: flex; align-items: flex-start; gap: 8px;">
+                                <i class="fas fa-shield-alt" style="margin-top: 2px;"></i>
                                 <div id="fpDeliveryGuidanceText">
-                                    Please prepare exact cash of <strong>PHP <?php echo number_format($total, 2); ?></strong> for the delivery rider upon arrival.
+                                    Official payment gateway handled securely by PayMongo. Fast, instant GCash, Maya &amp; Card verification.
                                 </div>
                             </div>
 
@@ -1260,8 +1260,8 @@ $remaining = $total - $downpayment;
                     <!-- ================= END FOODPANDA PRE-ORDER VIEW ================= -->
 
                     <!-- Hidden Payment Radios & Terms for process_order.php -->
-                    <input type="radio" name="payment_method" value="cod" <?php echo ($current_checkout_delivery_option === 'delivery') ? 'checked' : ''; ?> style="display:none;" id="radioPaymentMethodCod">
-                    <input type="radio" name="payment_method" value="paymongo" <?php echo ($current_checkout_delivery_option === 'pickup' || $current_checkout_delivery_option === 'preorder') ? 'checked' : ''; ?> style="display:none;" id="radioPaymentMethodPaymongo">
+                    <input type="radio" name="payment_method" value="cod" style="display:none;" id="radioPaymentMethodCod">
+                    <input type="radio" name="payment_method" value="paymongo" checked style="display:none;" id="radioPaymentMethodPaymongo">
                     <input type="radio" name="payment_type" value="full" checked style="display:none;" id="radioPaymentTypeFull">
                     <input type="radio" name="payment_type" value="downpayment" style="display:none;" id="radioPaymentTypeDownpayment">
                     <input type="checkbox" name="terms" checked style="display:none;">
