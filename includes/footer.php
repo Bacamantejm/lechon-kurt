@@ -9,6 +9,194 @@
     $footer_cart_count = isset($_SESSION['cart']) && is_array($_SESSION['cart']) ? count($_SESSION['cart']) : 0;
     $footer_script_parent = basename(dirname($_SERVER['PHP_SELF']));
     $footer_path_prefix = ($footer_script_parent === 'admin') ? '../' : '';
+    if (!isset($conn) || !($conn instanceof mysqli)) {
+        require_once __DIR__ . '/config.php';
+    }
+
+    if (!function_exists('getFooterStoreLocations')) {
+        function getFooterStoreLocations($conn, string $footer_path_prefix = ''): array {
+            if (!isset($conn) || !($conn instanceof mysqli)) {
+                return [];
+            }
+
+            $stores = [];
+            $seen_keys = [];
+
+            // 1. Fetch approved franchise partner shops (organization users)
+            $latest_approved_partner_sql = "SELECT fa1.* FROM franchise_applications fa1 
+                INNER JOIN (
+                    SELECT user_id, MAX(id) AS latest_id 
+                    FROM franchise_applications 
+                    WHERE status = 'approved' 
+                    GROUP BY user_id
+                ) latest ON latest.latest_id = fa1.id";
+
+            $partner_sql = "SELECT u.id, u.full_name, u.business_name, u.address AS user_address,
+                                   fa.city_name, fa.business_address, fa.barangay_name,
+                                   sl.store_id AS branch_id, sl.store_name, sl.address AS branch_address, sl.city AS branch_city
+                            FROM users u
+                            INNER JOIN ({$latest_approved_partner_sql}) fa ON fa.user_id = u.id
+                            LEFT JOIN store_locations sl ON (sl.owner_user_id = u.id AND sl.is_active = 1)
+                            WHERE u.account_type = 'organization' AND u.is_active = 1
+                            ORDER BY COALESCE(NULLIF(TRIM(u.business_name), ''), u.full_name) ASC";
+
+            $partner_res = @mysqli_query($conn, $partner_sql);
+            if ($partner_res) {
+                while ($row = mysqli_fetch_assoc($partner_res)) {
+                    $seller_id = (int)$row['id'];
+                    $branch_id = !empty($row['branch_id']) ? (int)$row['branch_id'] : 0;
+                    $name = trim((string)($row['business_name'] ?: ($row['store_name'] ?: $row['full_name'])));
+                    $name = preg_replace('/\s+/', ' ', $name);
+
+                    // Determine city accurately
+                    $city = '';
+                    $raw_city = trim((string)($row['city_name'] ?: ''));
+                    if ($raw_city !== '') {
+                        $raw_city = preg_replace('/^City of\s+/i', '', $raw_city);
+                        $raw_city = preg_replace('/\s+City$/i', '', $raw_city);
+                        $city = trim($raw_city);
+                    }
+
+                    if ($city === '') {
+                        $full_address = implode(' ', array_filter([
+                            $row['business_address'] ?? '',
+                            $row['user_address'] ?? '',
+                            $row['branch_address'] ?? '',
+                            $row['branch_city'] ?? ''
+                        ]));
+
+                        $known_cities = [
+                            'General Trias' => 'General Trias',
+                            'Gen. Trias' => 'General Trias',
+                            'Silang' => 'Silang',
+                            'Bacoor' => 'Bacoor',
+                            'Imus' => 'Imus',
+                            'Dasmarinas' => 'Dasmariñas',
+                            'Dasmariñas' => 'Dasmariñas',
+                            'Tagaytay' => 'Tagaytay',
+                            'Kawit' => 'Kawit',
+                            'Noveleta' => 'Noveleta',
+                            'Rosario' => 'Rosario',
+                            'Tanza' => 'Tanza',
+                            'Naic' => 'Naic',
+                            'Trece Martires' => 'Trece Martires',
+                            'Carmona' => 'Carmona',
+                            'Indang' => 'Indang',
+                            'Alfonso' => 'Alfonso',
+                            'Mendez' => 'Mendez',
+                            'Amadeo' => 'Amadeo',
+                            'Maragondon' => 'Maragondon',
+                            'Ternate' => 'Ternate'
+                        ];
+
+                        foreach ($known_cities as $needle => $clean) {
+                            if (stripos($full_address, $needle) !== false) {
+                                $city = $clean;
+                                break;
+                            }
+                        }
+                    }
+
+                    if ($city === '' && !empty($row['branch_city'])) {
+                        $city = trim((string)$row['branch_city']);
+                    }
+                    if ($city === '') {
+                        $city = 'Cavite';
+                    }
+
+                    $key = 'seller_' . $seller_id;
+                    if (!isset($seen_keys[$key])) {
+                        $seen_keys[$key] = true;
+                        $menu_params = ['seller_id' => $seller_id];
+                        if ($branch_id > 0) {
+                            $menu_params['branch_id'] = $branch_id;
+                        }
+                        $stores[] = [
+                            'name' => $name,
+                            'city' => $city,
+                            'url' => $footer_path_prefix . 'menu.php?' . http_build_query($menu_params)
+                        ];
+                    }
+                }
+                @mysqli_free_result($partner_res);
+            }
+
+            // 2. Fetch active standalone store locations (branches not already covered by a partner seller)
+            $branch_sql = "SELECT store_id, owner_user_id, store_name, address, city, province, email 
+                           FROM store_locations 
+                           WHERE is_active = 1 
+                           ORDER BY store_id ASC";
+            $branch_res = @mysqli_query($conn, $branch_sql);
+            if ($branch_res) {
+                while ($row = mysqli_fetch_assoc($branch_res)) {
+                    $owner_uid = (int)($row['owner_user_id'] ?? 0);
+                    $branch_id = (int)$row['store_id'];
+                    if ($owner_uid > 0 && isset($seen_keys['seller_' . $owner_uid])) {
+                        continue;
+                    }
+                    $key = 'branch_' . $branch_id;
+                    if (isset($seen_keys[$key])) {
+                        continue;
+                    }
+                    $seen_keys[$key] = true;
+
+                    $name = trim((string)$row['store_name']);
+                    $addr = trim((string)($row['address'] ?? ''));
+                    $email = strtolower(trim((string)($row['email'] ?? '')));
+                    $city = trim((string)($row['city'] ?: ''));
+
+                    if (stripos($email, 'bacoor') !== false || stripos($addr, 'bacoor') !== false || stripos($addr, 'habay') !== false) {
+                        $city = 'Bacoor';
+                        if (stripos($name, 'dasmar') !== false) {
+                            $name = 'Bacoor Branch';
+                        }
+                    } elseif (stripos($email, 'imus') !== false || stripos($addr, 'imus') !== false || stripos($addr, 'nueno') !== false) {
+                        $city = 'Imus';
+                        if (stripos($name, 'dasmar') !== false) {
+                            $name = 'Imus Branch';
+                        }
+                    } elseif (stripos($email, 'tagaytay') !== false || stripos($addr, 'tagaytay') !== false || stripos($addr, 'maharlika') !== false) {
+                        $city = 'Tagaytay';
+                        if (stripos($name, 'dasmar') !== false) {
+                            $name = 'Tagaytay Branch';
+                        }
+                    } elseif (stripos($email, 'dasma') !== false || stripos($addr, 'dasmar') !== false) {
+                        $city = 'Dasmariñas';
+                    }
+
+                    if ($city === '') {
+                        $city = 'Cavite';
+                    }
+
+                    $menu_params = ['branch_id' => $branch_id];
+                    if ($owner_uid > 0) {
+                        $menu_params['seller_id'] = $owner_uid;
+                    }
+
+                    $stores[] = [
+                        'name' => $name,
+                        'city' => $city,
+                        'url' => $footer_path_prefix . 'menu.php?' . http_build_query($menu_params)
+                    ];
+                }
+                @mysqli_free_result($branch_res);
+            }
+
+            // Sort by City ASC, then Store Name ASC
+            usort($stores, static function ($a, $b) {
+                $city_cmp = strcasecmp((string)$a['city'], (string)$b['city']);
+                if ($city_cmp !== 0) {
+                    return $city_cmp;
+                }
+                return strcasecmp((string)$a['name'], (string)$b['name']);
+            });
+
+            return $stores;
+        }
+    }
+
+    $footer_store_locations = getFooterStoreLocations($conn, $footer_path_prefix);
+
     ?>
     </main> <!-- Close main content wrapper from header.php -->
     <!-- Footer -->
@@ -27,14 +215,28 @@
                     </div>
                 </div>
                 
-                <div class="footer-col">
+                <div class="footer-col footer-col-locations">
                     <h4>Cavite Locations</h4>
-                    <ul>
-                        <li><a href="<?php echo $footer_path_prefix; ?>locations.php?search=General+Trias">General Trias</a></li>
-                        <li><a href="<?php echo $footer_path_prefix; ?>locations.php?search=Dasmarinas">Dasmariñas</a></li>
-                        <li><a href="<?php echo $footer_path_prefix; ?>locations.php?search=Imus">Imus</a></li>
-                        <li><a href="<?php echo $footer_path_prefix; ?>locations.php?search=Bacoor">Bacoor</a></li>
-                        <li><a href="<?php echo $footer_path_prefix; ?>locations.php?search=Tagaytay">Tagaytay</a></li>
+                    <ul class="footer-locations-list">
+                        <?php if (!empty($footer_store_locations)): ?>
+                            <?php foreach ($footer_store_locations as $footer_store): 
+                                $f_name = $footer_store['name'];
+                                $f_city = $footer_store['city'];
+                                if (stripos($f_name, $f_city) !== false) {
+                                    $f_label = $f_name;
+                                } else {
+                                    $f_label = $f_city . ' - ' . $f_name;
+                                }
+                            ?>
+                                <li>
+                                    <a href="<?php echo htmlspecialchars($footer_store['url']); ?>" title="View <?php echo htmlspecialchars($f_name); ?> Menu">
+                                        <?php echo htmlspecialchars($f_label); ?>
+                                    </a>
+                                </li>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <li><a href="<?php echo $footer_path_prefix; ?>locations.php">Browse All Locations</a></li>
+                        <?php endif; ?>
                     </ul>
                 </div>
 
@@ -883,6 +1085,31 @@
             line-height: 1.45;
             font-size: 0.8rem;
             max-width: 300px;
+        }
+
+        .footer-locations-list {
+            max-height: 280px;
+            overflow-y: auto;
+            padding-right: 6px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+        }
+
+        .footer-locations-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .footer-locations-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .footer-locations-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+
+        .footer-locations-list::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.4);
         }
 
         .footer-col ul {
