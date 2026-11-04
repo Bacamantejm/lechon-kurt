@@ -6,7 +6,7 @@
  */
 
 if (!function_exists('isDeliveryDriverUser')) {
-    function isDeliveryDriverUser($conn = null, $user_id = null) {
+    function isDeliveryDriverUser($conn = null, $user_id = null, $explicit_store_id = null) {
         if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
             session_start();
         }
@@ -90,7 +90,7 @@ if (!function_exists('isDeliveryDriverUser')) {
         // 3. Check employees table (linked by user_id OR matching email)
         $user_email = trim((string)($user_data['email'] ?? ''));
         $emp_sql = "
-            SELECT e.id, e.user_id, e.first_name, e.last_name, e.email, e.position, e.vehicle_details,
+            SELECT e.id, e.user_id, e.store_id, e.department_id, e.first_name, e.last_name, e.email, e.position, e.vehicle_details,
                    d.department_name, e.position_id, jp.position_title AS job_title
             FROM employees e
             LEFT JOIN departments d ON e.department_id = d.id
@@ -176,22 +176,71 @@ if (!function_exists('isDeliveryDriverUser')) {
             $r_code = 'RDR-' . str_pad((string)$user_id, 4, '0', STR_PAD_LEFT);
             $v_type = !empty($matched_emp['vehicle_details']) ? mysqli_real_escape_string($conn, $matched_emp['vehicle_details']) : 'Motorcycle';
 
-            // Insert or ensure verified
+            // Resolve hiring store branch
+            $store_id_val = 0;
+            if ($explicit_store_id !== null && (int)$explicit_store_id > 0) {
+                $store_id_val = (int)$explicit_store_id;
+            } elseif (!empty($matched_emp['store_id']) && (int)$matched_emp['store_id'] > 0) {
+                $store_id_val = (int)$matched_emp['store_id'];
+            }
+
+            // Check partner_user_links
+            if ($store_id_val <= 0) {
+                $pul_q = mysqli_query($conn, "
+                    SELECT sl.store_id 
+                    FROM partner_user_links pul 
+                    JOIN store_locations sl ON pul.owner_user_id = sl.owner_user_id 
+                    WHERE pul.managed_user_id = $user_id 
+                    LIMIT 1
+                ");
+                if ($pul_q && ($pul_row = mysqli_fetch_assoc($pul_q))) {
+                    $store_id_val = (int)$pul_row['store_id'];
+                }
+            }
+
+            // Check department manager
+            if ($store_id_val <= 0 && !empty($matched_emp['department_id'])) {
+                $dept_q = mysqli_query($conn, "
+                    SELECT sl.store_id 
+                    FROM departments d 
+                    JOIN store_locations sl ON d.manager_id = sl.owner_user_id 
+                    WHERE d.id = " . (int)$matched_emp['department_id'] . " 
+                    LIMIT 1
+                ");
+                if ($dept_q && ($dept_row = mysqli_fetch_assoc($dept_q))) {
+                    $store_id_val = (int)$dept_row['store_id'];
+                }
+            }
+
+            // Fallback default: Store 1 (Dasmariñas Branch)
+            if ($store_id_val <= 0) {
+                $store_id_val = 1;
+            }
+
+            $s_sql_val = $store_id_val > 0 ? $store_id_val : "NULL";
+
+            // Insert or ensure verified and bound to hiring store
             $rider_sync_sql = "
-                INSERT INTO riders (user_id, employee_id, rider_code, rider_type, vehicle_type, verification_status, duty_status, rating)
-                VALUES ($user_id, $emp_id_val, '$r_code', 'shop_rider', '$v_type', 'verified', 'online', 5.00)
+                INSERT INTO riders (user_id, employee_id, rider_code, rider_type, store_id, vehicle_type, verification_status, duty_status, rating)
+                VALUES ($user_id, $emp_id_val, '$r_code', 'shop_rider', $s_sql_val, '$v_type', 'verified', 'online', 5.00)
                 ON DUPLICATE KEY UPDATE 
                     verification_status = 'verified',
+                    rider_type = 'shop_rider',
+                    store_id = COALESCE(riders.store_id, VALUES(store_id)),
                     employee_id = COALESCE(riders.employee_id, VALUES(employee_id))
             ";
             mysqli_query($conn, $rider_sync_sql);
 
             // Set session indicators
             $_SESSION['is_driver'] = true;
-            $r_fetch = mysqli_query($conn, "SELECT id, rider_code FROM riders WHERE user_id = $user_id LIMIT 1");
+            $_SESSION['store_id'] = $store_id_val;
+            $r_fetch = mysqli_query($conn, "SELECT id, rider_code, store_id FROM riders WHERE user_id = $user_id LIMIT 1");
             if ($r_fetch && ($r_data = mysqli_fetch_assoc($r_fetch))) {
                 $_SESSION['rider_id'] = (int)$r_data['id'];
                 $_SESSION['rider_code'] = $r_data['rider_code'];
+                if (!empty($r_data['store_id'])) {
+                    $_SESSION['store_id'] = (int)$r_data['store_id'];
+                }
             }
 
             return true;

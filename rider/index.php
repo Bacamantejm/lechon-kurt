@@ -56,21 +56,30 @@ if ($rev_query) {
     }
 }
 
-// Available Unassigned Orders Pool (Open Deliveries)
+// Available Unassigned Orders Pool (Open Deliveries - strictly scoped to hiring store)
 $initial_available_orders = [];
-$avail_store_filter = "";
-if ($rider['rider_type'] === 'shop_rider' && !empty($rider['store_id'])) {
-    $s_id = (int)$rider['store_id'];
-    $avail_store_filter = "AND o.pickup_location = $s_id";
+$hiring_store_id = (int)($rider['store_id'] ?? 0);
+$hiring_owner_id = (int)($rider['store_owner_id'] ?? 0);
+
+if ($hiring_store_id > 0) {
+    if ($hiring_owner_id > 0) {
+        $avail_store_filter = "AND (o.pickup_location = $hiring_store_id OR o.store_id = $hiring_store_id OR (o.seller_id IS NOT NULL AND o.seller_id = $hiring_owner_id))";
+    } else {
+        $avail_store_filter = "AND (o.pickup_location = $hiring_store_id OR o.store_id = $hiring_store_id)";
+    }
+} else {
+    // Rider has no store assigned - must not see orders from any store
+    $avail_store_filter = "AND 1 = 0";
 }
+
 $init_avail_sql = "
     SELECT o.id AS order_id, o.order_number, o.customer_name, o.customer_phone,
            o.delivery_address, o.latitude AS customer_latitude, o.longitude AS customer_longitude,
-           o.total_amount, o.delivery_fee, o.payment_method, o.pickup_location, o.created_at,
+           o.total_amount, o.delivery_fee, o.payment_method, o.pickup_location, o.store_id, o.seller_id, o.created_at,
            sl.store_name, sl.address AS store_address, sl.city AS store_city,
            lt.id AS tracking_id
     FROM orders o
-    LEFT JOIN store_locations sl ON o.pickup_location = sl.store_id
+    LEFT JOIN store_locations sl ON (o.pickup_location = sl.store_id OR o.store_id = sl.store_id)
     LEFT JOIN logistics_tracking lt ON lt.order_id = o.id
     WHERE o.status IN ('confirmed', 'preparing')
       AND o.delivery_option = 'delivery'
@@ -120,7 +129,7 @@ if ($init_avail_res) {
                                     <i class="fas fa-star text-warning me-1"></i><?php echo number_format((float)($rider['rating'] ?? 5.0), 1); ?>
                                 </span>
                                 <span class="badge" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; font-size:10.5px;">
-                                    <?php echo ($rider['rider_type'] === 'shop_rider') ? 'Shop Fleet' : 'Platform Partner'; ?>
+                                    <i class="fas fa-store me-1"></i><?php echo htmlspecialchars($rider['store_name'] ?? 'Dasmariñas Branch'); ?>
                                 </span>
                             </div>
                         </div>
@@ -339,7 +348,7 @@ if ($init_avail_res) {
                     <?php else: ?>
                         <div class="text-center py-3 text-muted" id="availOrdersEmptyPlaceholder" style="border: 1px dashed var(--border-neutral); border-radius: 10px; background: #fafafa;">
                             <i class="fas fa-satellite-dish me-1 text-muted opacity-75"></i>
-                            <span style="font-size: 11.5px;">No available orders right now. Stay <strong>ONLINE</strong> to receive new delivery orders.</span>
+                            <span style="font-size: 11.5px;">No available orders right now for <strong><?php echo htmlspecialchars($rider['store_name'] ?? 'your assigned branch'); ?></strong>. Stay <strong>ONLINE</strong> to receive new delivery orders.</span>
                         </div>
                     <?php endif; ?>
                 </div>

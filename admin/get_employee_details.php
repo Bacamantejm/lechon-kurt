@@ -17,11 +17,12 @@ if (hrIsPartnerScopeEnabled($conn) && !hrEmployeeIdInScope($conn, $employee_id))
 }
 
 $query = "SELECT e.*, d.department_name, u.user_type, u.email as user_email, u.profile_image as user_profile_image,
-                 r.name as role_name,
+                 r.name as role_name, sl.store_name as store_branch_name,
                  COALESCE(jp.position_title, e.position) AS position_label 
           FROM employees e
           LEFT JOIN departments d ON e.department_id = d.id
           LEFT JOIN job_positions jp ON jp.id = e.position_id
+          LEFT JOIN store_locations sl ON e.store_id = sl.store_id
           LEFT JOIN users u ON e.user_id = u.id
           LEFT JOIN roles r ON u.role_id = r.id
           WHERE e.id = ?";
@@ -104,6 +105,12 @@ $initials = strtoupper(substr($employee['first_name'] ?? 'E', 0, 1) . substr($em
                 <div class="p-2 rounded" style="background: #f8f9fa; border: 1px solid #eaecf0;">
                     <small class="text-muted d-block fw-semibold" style="font-size: 11px; text-transform: uppercase;">Department</small>
                     <span class="fw-semibold" style="color: #344054; font-size: 13px;"><?php echo htmlspecialchars(isset($employee['department_name']) ? $employee['department_name'] : 'Unassigned'); ?></span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="p-2 rounded" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                    <small class="text-muted d-block fw-semibold" style="font-size: 11px; text-transform: uppercase;">Store / Branch</small>
+                    <span class="fw-semibold text-danger" style="font-size: 13px;"><i class="fas fa-store me-1"></i><?php echo htmlspecialchars($employee['store_branch_name'] ?? 'Dasmariñas Branch'); ?></span>
                 </div>
             </div>
             <div class="col-md-6">

@@ -159,6 +159,9 @@ function sahEnsureStoreLocationAvailabilitySchema($conn): void
         // 7. Franchise Applications
         @mysqli_query($conn, "UPDATE franchise_applications SET address = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(address, '├░', 'ñ'), '├▒', 'ñ'), 'Ã±', 'ñ'), 'Γö£ΓûÆ', 'ñ'), 'Dasmari├▒a', 'Dasmariña') WHERE address LIKE '%├%' OR address LIKE '%Ã%'");
         @mysqli_query($conn, "UPDATE franchise_applications SET city_name = 'City of Dasmariñas' WHERE (city_name LIKE 'City of Dasmari%' OR city_name LIKE '%Dasmari%') AND city_name <> 'City of Dasmariñas'");
+
+        // 8. Rider Tenant Store Isolation Self-Heal
+        sahEnsureRiderStoreIsolationSchema($conn);
     }
 
     sahEnsureCaviteBranchesSeed($conn);
@@ -669,4 +672,64 @@ function sahFetchPartnerStoreLocations($conn, int $owner_user_id): array
     mysqli_stmt_close($stmt);
 
     return $rows;
+}
+
+function sahEnsureRiderStoreIsolationSchema($conn): void
+{
+    if (!($conn instanceof mysqli)) {
+        return;
+    }
+
+    // 1. Ensure employees.store_id
+    if (!sahColumnExists($conn, 'employees', 'store_id')) {
+        @mysqli_query($conn, "ALTER TABLE employees ADD COLUMN store_id INT NULL AFTER department_id");
+        @mysqli_query($conn, "ALTER TABLE employees ADD INDEX idx_employees_store_id (store_id)");
+    }
+
+    // 2. Ensure riders.store_id index
+    if (!sahIndexExists($conn, 'riders', 'idx_riders_store_id')) {
+        @mysqli_query($conn, "ALTER TABLE riders ADD INDEX idx_riders_store_id (store_id)");
+    }
+
+    // 3. Auto-populate employees.store_id from department managers or partner user links
+    @mysqli_query($conn, "
+        UPDATE employees e
+        JOIN departments d ON e.department_id = d.id
+        JOIN store_locations sl ON d.manager_id = sl.owner_user_id
+        SET e.store_id = sl.store_id
+        WHERE e.store_id IS NULL OR e.store_id = 0
+    ");
+
+    @mysqli_query($conn, "
+        UPDATE employees e
+        JOIN partner_user_links pul ON e.user_id = pul.managed_user_id
+        JOIN store_locations sl ON pul.owner_user_id = sl.owner_user_id
+        SET e.store_id = sl.store_id
+        WHERE e.store_id IS NULL OR e.store_id = 0
+    ");
+
+    @mysqli_query($conn, "UPDATE employees SET store_id = 1 WHERE store_id IS NULL OR store_id = 0");
+
+    // 4. Enforce shop_rider and sync store_id for all riders
+    @mysqli_query($conn, "
+        UPDATE riders r
+        JOIN partner_user_links pul ON r.user_id = pul.managed_user_id
+        JOIN store_locations sl ON pul.owner_user_id = sl.owner_user_id
+        SET r.store_id = sl.store_id, r.rider_type = 'shop_rider'
+        WHERE r.store_id IS NULL OR r.store_id = 0
+    ");
+
+    @mysqli_query($conn, "
+        UPDATE riders r
+        JOIN employees e ON (r.employee_id = e.id OR r.user_id = e.user_id)
+        SET r.store_id = e.store_id, r.rider_type = 'shop_rider'
+        WHERE (r.store_id IS NULL OR r.store_id = 0) AND e.store_id > 0
+    ");
+
+    // Explicit verified store links
+    @mysqli_query($conn, "UPDATE riders SET store_id = 6, rider_type = 'shop_rider' WHERE id IN (3, 4)");
+    @mysqli_query($conn, "UPDATE riders SET store_id = 7, rider_type = 'shop_rider' WHERE id = 15");
+    @mysqli_query($conn, "UPDATE riders SET store_id = 1, rider_type = 'shop_rider' WHERE id IN (1, 2, 5)");
+
+    @mysqli_query($conn, "UPDATE riders SET store_id = 1, rider_type = 'shop_rider' WHERE store_id IS NULL OR store_id = 0");
 }
