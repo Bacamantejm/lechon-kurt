@@ -565,7 +565,7 @@ $sales_query = "SELECT
                     COALESCE(SUM(CASE WHEN o.id IS NOT NULL THEN oi.quantity ELSE 0 END), 0) AS total_sold
                 FROM products p
                 LEFT JOIN order_items oi
-                    ON (oi.product_id = p.product_id OR oi.product_id = CAST(p.id AS CHAR))
+                    ON (oi.product_id = p.product_id OR oi.product_id = CONVERT(p.id, CHAR) COLLATE utf8mb4_general_ci)
                 LEFT JOIN orders o
                     ON oi.order_id = o.id
                     AND o.is_archived = 0
@@ -2338,16 +2338,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const initialMenuSearch = (menuUrlParams.get('search') || '').trim();
     const initialMenuFilter = (menuUrlParams.get('filter') || 'default').trim().toLowerCase();
     const allowedMenuFilters = new Set(['default', 'lowest_price', 'highest_price', 'best_top_seller', 'near_me']);
-    const initialProductId = (menuUrlParams.get('product_id') || '').trim();
+    const initialProductId = (menuUrlParams.get('product_id') || menuUrlParams.get('item_id') || '').trim();
     let currentProduct = null;
 
     if (initialProductId) {
         setTimeout(function() {
             const targetBtn = document.querySelector(`.add-to-cart[data-id="${initialProductId}"], .add-to-cart[data-product-id="${initialProductId}"]`);
             if (targetBtn) {
+                const card = targetBtn.closest('.menu-item-card, .panda-item-card, .menu-item, .product-card');
+                if (card) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
                 targetBtn.click();
             }
-        }, 300);
+        }, 350);
     }
 
     function toRadians(value) {
