@@ -4525,7 +4525,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                             </div>
                                         </div>
                                         <div class="voucher-ticket-code"><?php echo $sp_code; ?></div>
-                                        <div class="voucher-ticket-desc" title="<?php echo htmlspecialchars((string)$sp['name']); ?>"><?php echo htmlspecialchars((string)$sp['name']); ?></div>
+                                        <div class="voucher-ticket-desc" title="<?php echo htmlspecialchars(fixMojibakeText((string)$sp['name'])); ?>"><?php echo htmlspecialchars(fixMojibakeText((string)$sp['name'])); ?></div>
                                         <div class="voucher-ticket-terms" style="color:#175cd3;"><?php echo htmlspecialchars($sp_min_label); ?></div>
                                         <div style="display:flex; gap:6px;">
                                             <button type="button" class="voucher-pill-btn" onclick="copyWelcomePromoCode('<?php echo $sp_code; ?>', this)" title="Copy promo code" style="flex:0 0 auto; width:auto; padding:5px 9px;">

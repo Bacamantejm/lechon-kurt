@@ -9765,14 +9765,36 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
+    function cleanMojibakeTextJs(str) {
+        if (!str || typeof str !== 'string') return str || '';
+        return str
+            .replace(/Γé▒/g, '₱')
+            .replace(/â‚±/g, '₱')
+            .replace(/\bré(\d+)/gi, '₱$1')
+            .replace(/Dasmari(?:[^\w\s]{1,8}|ñ|n|)?(?:as|a)?(?=\b|\s|,|$|\d)/gi, 'Dasmariñas')
+            .replace(/├▒/g, 'ñ')
+            .replace(/├æ/g, 'Ñ')
+            .replace(/Ã±/g, 'ñ')
+            .replace(/Ã‘/g, 'Ñ')
+            .replace(/├░/g, 'ñ')
+            .replace(/Γö£ΓûÆ/g, 'ñ')
+            .replace(/â€¢/g, '•')
+            .replace(/â€“|ΓÇô/g, '–')
+            .replace(/â€”|ΓÇö/g, '—')
+            .replace(/â€™|ΓÇÖ/g, '’')
+            .replace(/â€˜|ΓÇÿ/g, '‘')
+            .replace(/â€œ/g, '“')
+            .replace(/â€/g, '”');
+    }
+
     function updateDisplayAddressText(streetText, cityText) {
         const streetEl = document.getElementById('displayStreetAddress');
         const cityEl = document.getElementById('displayCityAddress');
         if (streetEl) {
-            streetEl.textContent = streetText || 'No address selected';
+            streetEl.textContent = cleanMojibakeTextJs(streetText) || 'No address selected';
         }
         if (cityEl) {
-            cityEl.textContent = cityText || '';
+            cityEl.textContent = cleanMojibakeTextJs(cityText) || '';
         }
     }
 

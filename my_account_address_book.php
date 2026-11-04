@@ -1540,7 +1540,7 @@ document.addEventListener('DOMContentLoaded', function () {
         text = text.replace(/\u251c\u2592/g, 'ñ');
         text = text.replace(/\u251c\u00e6/g, 'Ñ');
         text = text.replace(/\u0393\u00f6\u00a3\u0393\u00fb\u00c6/g, 'ñ');
-        text = text.replace(/Dasmari(?:[^a-zA-Z0-9\s]{1,6}|n)as/gi, 'Dasmariñas');
+        text = text.replace(/Dasmari(?:[^\w\s]{1,8}|ñ|n|)?(?:as|a)?(?=\b|\s|,|$|\d)/gi, 'Dasmariñas');
         return text.trim();
     };
     const extractAddressParts = (components = []) => {

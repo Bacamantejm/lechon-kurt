@@ -917,7 +917,7 @@ $extra_scripts = <<<'HTML'
             .replace(/\u251c\u2592/g, 'ñ')
             .replace(/\u251c\u00e6/g, 'Ñ')
             .replace(/\u0393\u00f6\u00a3\u0393\u00fb\u00c6/g, 'ñ')
-            .replace(/Dasmari(?:[^a-zA-Z0-9\s<>&]{1,6}|n)as/gi, 'Dasmariñas')
+            .replace(/Dasmari(?:[^\w\s]{1,8}|ñ|n|)?(?:as|a)?(?=\b|\s|,|$|\d)/gi, 'Dasmariñas')
             .replace(/Para(?:[^a-zA-Z0-9\s<>&]{1,6}|n)aque/gi, 'Parañaque')
             .replace(/Las Pi(?:[^a-zA-Z0-9\s<>&]{1,6}|n)as/gi, 'Las Piñas');
     }
