@@ -2844,6 +2844,31 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     applyMenuFilter(menuSortFilter ? menuSortFilter.value : 'default');
 
+    const initialMenuCategory = (menuUrlParams.get('category') || '').trim().toLowerCase();
+    if (initialMenuCategory !== '') {
+        const matchingTab = pandaCatTabs.find(function (t) {
+            const dataCat = (t.getAttribute('data-category') || '').toLowerCase();
+            const tabText = (t.textContent || '').toLowerCase();
+            return dataCat.includes(initialMenuCategory) || tabText.includes(initialMenuCategory) || initialMenuCategory.includes(dataCat);
+        });
+        if (matchingTab) {
+            setPandaCatTabActive(matchingTab);
+            const targetCatSlug = matchingTab.getAttribute('data-category');
+            const targetSection = document.getElementById(targetCatSlug);
+            if (targetSection) {
+                setTimeout(function () {
+                    const isMobile = window.innerWidth <= 768;
+                    const headerOffset = isMobile ? 100 : ((parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--site-header-offset')) || 92) + 75);
+                    const elementPosition = targetSection.getBoundingClientRect().top + window.pageYOffset;
+                    window.scrollTo({
+                        top: Math.max(0, elementPosition - headerOffset),
+                        behavior: 'smooth'
+                    });
+                }, 250);
+            }
+        }
+    }
+
     let menuSideStackSyncFrame = null;
     function scheduleMenuSideStackSync() {
         if (menuSideStackSyncFrame !== null) return;

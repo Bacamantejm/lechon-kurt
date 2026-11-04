@@ -221,6 +221,40 @@ if ($cat_res) {
     @mysqli_free_result($cat_res);
 }
 
+// Map each seller and branch to their product categories for precise filtering
+$shop_product_cats = [];
+$p_cat_sql = "SELECT COALESCE(seller_id, 0) as seller_id, category FROM products WHERE is_archived = 0 AND is_active = 1 AND category IS NOT NULL AND TRIM(category) <> ''";
+$p_cat_res = @mysqli_query($conn, $p_cat_sql);
+if ($p_cat_res) {
+    while ($p_cat_row = mysqli_fetch_assoc($p_cat_res)) {
+        $sid = (int)$p_cat_row['seller_id'];
+        $cname = strtolower(trim((string)$p_cat_row['category']));
+        $ckey = strtolower(preg_replace('/[^a-z0-9]+/', '_', $cname));
+        $shop_product_cats[$sid][$ckey] = true;
+        $shop_product_cats[$sid][$cname] = true;
+        if ($sid <= 1) {
+            $shop_product_cats[0][$ckey] = true;
+            $shop_product_cats[1][$ckey] = true;
+            $shop_product_cats[0][$cname] = true;
+            $shop_product_cats[1][$cname] = true;
+        }
+    }
+    @mysqli_free_result($p_cat_res);
+}
+
+foreach ($shops as &$sh) {
+    $sid = 0;
+    if (str_starts_with($sh['key'], 'seller-')) {
+        $sid = (int)str_replace('seller-', '', $sh['key']);
+    } else {
+        $sid = 1;
+    }
+    $c_keys = array_keys($shop_product_cats[$sid] ?? ($shop_product_cats[1] ?? []));
+    $c_keys[] = $sh['cat_key'];
+    $sh['categories_str'] = implode(' ', array_unique($c_keys));
+}
+unset($sh);
+
 // Featured spotlight store (First available real store or fallback to first branch)
 $featured_shop = !empty($shops) ? $shops[0] : [
     'name' => 'Main Branch Store',
@@ -985,6 +1019,7 @@ body.dark-mode .leaflet-popup-content span {
                                    data-city="<?php echo htmlspecialchars(strtolower($city_label)); ?>"
                                    data-location="<?php echo htmlspecialchars(strtolower($shop['location'] ?? '')); ?>"
                                    data-cat="<?php echo htmlspecialchars($shop['cat_key']); ?>"
+                                   data-categories="<?php echo htmlspecialchars(strtolower($shop['categories_str'] ?? $shop['cat_key'])); ?>"
                                    data-vouchers="<?php echo !empty($shop['has_vouchers']) ? '1' : '0'; ?>"
                                    data-price="<?php echo (float)$shop['start_price']; ?>"
                                    data-rating="<?php echo (float)$shop['rating']; ?>"
@@ -1516,7 +1551,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Check filters
             const matchesVouchers = !vouchersOnly || cardVouchers;
-            const matchesTypes = selectedTypes.length === 0 || selectedTypes.includes(cardCat);
+            const cardCategories = (card.dataset.categories || card.dataset.cat || '').toLowerCase();
+            const matchesTypes = selectedTypes.length === 0 || selectedTypes.some(function (type) {
+                const normType = type.toLowerCase().trim();
+                return cardCategories.includes(normType) || cardCat.toLowerCase().includes(normType);
+            });
             const matchesQuery = !query || cardSearch.includes(query);
 
             let matchesPrice = true;

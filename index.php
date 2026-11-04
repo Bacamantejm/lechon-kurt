@@ -3609,14 +3609,16 @@ body:not(.dark-mode) {
     }
 }
 
-/* First User Welcome Deals Section */
-.first-user-deals-section {
+/* First User Welcome Deals Section & Partner Promos Grid */
+.first-user-deals-section,
+.store-promos-section {
     margin-bottom: 32px;
 }
-.first-user-deals-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 16px;
+.first-user-deals-grid,
+.partner-store-deals-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 320px)) !important;
+    gap: 16px !important;
 }
 /* Minimized Voucher Ticket Cards (Matching compact coupon stub UI) */
 .voucher-deal-ticket {
@@ -3627,7 +3629,10 @@ body:not(.dark-mode) {
     flex-direction: row !important;
     position: relative;
     overflow: hidden;
-    min-height: 124px;
+    max-width: 320px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    min-height: 114px;
     padding: 0 !important;
     box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
     transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
@@ -4156,6 +4161,23 @@ document.addEventListener('DOMContentLoaded', function() {
                             <label class="market-check"><input type="checkbox" id="filterNearbyOnly"> <span>Nearby only</span></label>
                         </div>
                     </div>
+                    <?php if (!empty($categories)): ?>
+                    <div class="market-sidebar-section">
+                        <h4>Product categories</h4>
+                        <div class="market-check-list" id="categoryFilterList">
+                            <?php 
+                            $displayed_cats = array_slice(array_keys($categories), 0, 8);
+                            foreach ($displayed_cats as $cat_name): 
+                                $cat_val = strtolower(trim((string)$cat_name));
+                            ?>
+                                <label class="market-check">
+                                    <input type="checkbox" class="market-cat-filter" value="<?php echo htmlspecialchars($cat_val); ?>">
+                                    <span><?php echo htmlspecialchars($cat_name); ?></span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                     <div class="market-sidebar-section" id="nearestShopsSidebarSection">
                         <h4>Nearest Cavite lechon shops</h4>
                         <p class="market-helper">Allow location access and the page will rank the closest saved Cavite branches first using your browser position and store coordinates.</p>
@@ -5221,8 +5243,13 @@ document.addEventListener('DOMContentLoaded', function () {
         const orderedRows = storeGrid ? Array.from(storeGrid.querySelectorAll('.market-store-row')) : rows;
         const matchedRows = [];
 
+        const selectedCats = Array.from(document.querySelectorAll('.market-cat-filter:checked')).map(function(chk) {
+            return chk.value.toLowerCase().trim();
+        });
+
         orderedRows.forEach(function (row) {
             const search = normalizeSearch(row.dataset.search || '');
+            const tags = normalizeSearch(row.dataset.tags || '');
             const rating = parseFloat(row.dataset.rating || '0');
             const isOpen = row.dataset.open === '1';
             const isBranch = row.dataset.type === 'branch';
@@ -5230,12 +5257,15 @@ document.addEventListener('DOMContentLoaded', function () {
             const distance = parseFloat(row.dataset.distance || '');
             const rowKey = String(row.dataset.storeKey || '');
             const matchQuery = useServerMatches ? serverMatchedKeys.has(rowKey) : (query === '' || search.indexOf(query) !== -1);
+            const matchCategory = selectedCats.length === 0 || selectedCats.some(function(cat) {
+                return tags.indexOf(cat) !== -1 || search.indexOf(cat) !== -1;
+            });
             const matchRatings = useServerMatches ? true : (!filterRatings4 || !filterRatings4.checked || rating >= 4);
             const matchLive = useServerMatches ? true : (!filterLiveOnly || !filterLiveOnly.checked || isOpen);
             const matchPartner = useServerMatches ? true : (!filterPartnerOnly || !filterPartnerOnly.checked || isPartner);
             const matchBranch = useServerMatches ? true : (!filterBranchOnly || !filterBranchOnly.checked || isBranch);
             const matchNearby = !filterNearbyOnly || !filterNearbyOnly.checked || (Number.isFinite(distance) && distance <= 15);
-            if (matchQuery && matchRatings && matchLive && matchPartner && matchBranch && matchNearby) {
+            if (matchQuery && matchCategory && matchRatings && matchLive && matchPartner && matchBranch && matchNearby) {
                 matchedRows.push(row);
             }
         });
@@ -5340,6 +5370,11 @@ document.addEventListener('DOMContentLoaded', function () {
     [filterRatings4, filterLiveOnly, filterPartnerOnly, filterBranchOnly, filterNearbyOnly].forEach(function (control) {
         if (!control) return;
         control.addEventListener('change', function () {
+            applyFilters(heroSearch || gridSearch);
+        });
+    });
+    document.querySelectorAll('.market-cat-filter').forEach(function (chk) {
+        chk.addEventListener('change', function () {
             applyFilters(heroSearch || gridSearch);
         });
     });

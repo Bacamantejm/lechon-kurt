@@ -41,16 +41,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         mysqli_stmt_close($update_stmt);
     }
 
-    // Insert payment log into database if payments table exists
+    // Insert or update payment log into database if payments table exists
     $pmt_check = mysqli_query($conn, "SHOW TABLES LIKE 'payments'");
     if ($pmt_check && mysqli_num_rows($pmt_check) > 0) {
-        $insert_pmt = mysqli_prepare($conn, "INSERT INTO payments (order_id, amount, payment_method, payment_type, transaction_id, status, created_at) VALUES (?, ?, ?, ?, ?, 'paid', NOW())");
-        if ($insert_pmt) {
-            $payment_method_str = (string)($order['payment_method'] ?? 'paymongo');
-            $payment_type_str = $is_downpayment ? 'downpayment' : 'full';
-            mysqli_stmt_bind_param($insert_pmt, "idsss", $order_id, $amount_to_pay, $payment_method_str, $payment_type_str, $txn_id);
-            mysqli_stmt_execute($insert_pmt);
-            mysqli_stmt_close($insert_pmt);
+        $payment_method_str = (string)($order['payment_method'] ?? 'paymongo');
+        $payment_type_str = $is_downpayment ? 'downpayment' : 'full';
+
+        // Check if pending payment record exists for this order
+        $chk_existing = mysqli_prepare($conn, "SELECT id FROM payments WHERE order_id = ? ORDER BY id DESC LIMIT 1");
+        $existing_pmt_id = 0;
+        if ($chk_existing) {
+            mysqli_stmt_bind_param($chk_existing, "i", $order_id);
+            mysqli_stmt_execute($chk_existing);
+            $res_existing = mysqli_stmt_get_result($chk_existing);
+            if ($row_existing = mysqli_fetch_assoc($res_existing)) {
+                $existing_pmt_id = (int)$row_existing['id'];
+            }
+            mysqli_stmt_close($chk_existing);
+        }
+
+        if ($existing_pmt_id > 0) {
+            $update_pmt = mysqli_prepare($conn, "UPDATE payments SET amount = ?, payment_method = ?, payment_type = ?, transaction_id = ?, checkout_session_id = ?, status = 'paid', paid_at = NOW() WHERE id = ?");
+            if ($update_pmt) {
+                mysqli_stmt_bind_param($update_pmt, "dssssi", $amount_to_pay, $payment_method_str, $payment_type_str, $txn_id, $txn_id, $existing_pmt_id);
+                mysqli_stmt_execute($update_pmt);
+                mysqli_stmt_close($update_pmt);
+            }
+        } else {
+            $insert_pmt = mysqli_prepare($conn, "INSERT INTO payments (order_id, amount, payment_method, payment_type, transaction_id, checkout_session_id, status, paid_at, created_at) VALUES (?, ?, ?, ?, ?, ?, 'paid', NOW(), NOW())");
+            if ($insert_pmt) {
+                mysqli_stmt_bind_param($insert_pmt, "idssss", $order_id, $amount_to_pay, $payment_method_str, $payment_type_str, $txn_id, $txn_id);
+                mysqli_stmt_execute($insert_pmt);
+                mysqli_stmt_close($insert_pmt);
+            }
         }
     }
 
