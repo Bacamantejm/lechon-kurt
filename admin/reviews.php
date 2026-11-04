@@ -231,7 +231,16 @@ $reviews_result = mysqli_query($conn, $reviews_query);
                                 <td><?php echo htmlspecialchars($review['product_name']); ?></td>
                                 <td><?php echo htmlspecialchars($review['user_name']); ?></td>
                                 <td><?php $rating = max(0, min(5, (int)$review['rating'])); echo str_repeat('&#9733;', $rating) . str_repeat('&#9734;', 5 - $rating); ?></td>
-                                <td><?php echo htmlspecialchars($review['comment']); ?></td>
+                                <td>
+                                    <?php echo htmlspecialchars($review['comment']); ?>
+                                    <?php if (!empty($review['image'])): ?>
+                                        <div style="margin-top: 6px;">
+                                            <a href="../<?php echo htmlspecialchars($review['image']); ?>" target="_blank" title="Click to view full photo">
+                                                <img src="../<?php echo htmlspecialchars($review['image']); ?>" alt="Review photo" style="max-height: 65px; max-width: 90px; border-radius: 6px; border: 1px solid #d0d5dd; object-fit: cover;">
+                                            </a>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
                                 <td><?php echo date('M d, Y', strtotime($review['created_at'])); ?></td>
                                 <td style="min-width:260px;">
                                     <?php

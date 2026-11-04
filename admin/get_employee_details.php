@@ -42,7 +42,9 @@ if (isset($_GET['json'])) {
     exit;
 }
 
-$photo_src = !empty($employee['photo']) ? '../' . ltrim($employee['photo'], '/') : (!empty($employee['user_profile_image']) ? '../' . ltrim($employee['user_profile_image'], '/') : '');
+$raw_photo = !empty($employee['photo']) ? preg_replace('#^(\.\./+|/+)#', '', (string)$employee['photo']) : (!empty($employee['user_profile_image']) ? preg_replace('#^(\.\./+|/+)#', '', (string)$employee['user_profile_image']) : '');
+$photo_src = !empty($raw_photo) ? '../' . $raw_photo : '';
+$has_real_photo = !empty($raw_photo) && file_exists(dirname(__DIR__) . '/' . $raw_photo);
 $role_display = !empty($employee['role_name']) ? (function_exists('getRoleDisplayName') ? getRoleDisplayName($employee['role_name']) : ucwords(str_replace('_', ' ', $employee['role_name']))) : 'No Login Account';
 $role_display = preg_replace('/\s*\(.*\)\s*/', '', (string)$role_display);
 $initials = strtoupper(substr($employee['first_name'] ?? 'E', 0, 1) . substr($employee['last_name'] ?? '', 0, 1));
@@ -51,7 +53,7 @@ $initials = strtoupper(substr($employee['first_name'] ?? 'E', 0, 1) . substr($em
 <div class="employee-details-wrap">
     <!-- Header Avatar Profile Banner -->
     <div class="d-flex align-items-center gap-3 p-3 mb-3 rounded" style="background: #ffffff; border: 1px solid #eaecf0; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
-        <?php if (!empty($photo_src) && file_exists(dirname(__DIR__) . '/' . ltrim($photo_src, '../'))): ?>
+        <?php if ($has_real_photo): ?>
             <img src="<?php echo htmlspecialchars($photo_src); ?>" alt="Photo" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 3px solid #f2f4f7;">
         <?php else: ?>
             <div style="width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #b3261e, #d93829); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 22px; border: 3px solid #f2f4f7;">
