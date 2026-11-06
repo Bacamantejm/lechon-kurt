@@ -10,6 +10,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../includes/attendance_service.php';
 require_once __DIR__ . '/auth.php';
 
 header('Content-Type: application/json; charset=UTF-8');
@@ -95,6 +96,17 @@ if ($action === 'toggle_status') {
         }
     }
 
+    // If changing to online or busy, enforce attendance (must be Timed In and not Timed Out)
+    if (in_array($new_status, ['online', 'busy'], true)) {
+        $can_work = AttendanceService::canRiderAcceptOrders($conn, (int)$rider['id'], $user_id);
+        if (!$can_work['allowed']) {
+            jsonRes([
+                'success' => false,
+                'message' => $can_work['reason']
+            ], 200);
+        }
+    }
+
     $stmt = mysqli_prepare($conn, "UPDATE riders SET duty_status = ?, last_location_update = NOW() WHERE id = ?");
     mysqli_stmt_bind_param($stmt, "si", $new_status, $rider['id']);
     $ok = mysqli_stmt_execute($stmt);
@@ -158,6 +170,17 @@ if ($action === 'update_location') {
 // 3. POLL AVAILABLE DELIVERY REQUESTS (Section 3)
 // -------------------------------------------------------------
 if ($action === 'poll_requests') {
+    // Check attendance shift status (must be Timed In and not Timed Out)
+    $can_work = AttendanceService::canRiderAcceptOrders($conn, (int)$rider['id'], $user_id);
+    if (!$can_work['allowed']) {
+        jsonRes([
+            'success' => true,
+            'has_request' => false,
+            'reason' => $can_work['reason'],
+            'available_orders' => [],
+            'total_available' => 0
+        ]);
+    }
     // Only online riders can receive requests (not offline or busy)
     if ($rider['duty_status'] !== 'online') {
         jsonRes(['success' => true, 'has_request' => false, 'reason' => 'Rider is ' . $rider['duty_status']]);
@@ -283,6 +306,11 @@ if ($action === 'poll_requests') {
 // 4. ACCEPT DELIVERY REQUEST
 // -------------------------------------------------------------
 if ($action === 'accept_delivery') {
+    // Attendance enforcement: Rider must be Timed In and not Timed Out
+    $can_accept = AttendanceService::canRiderAcceptOrders($conn, (int)$rider['id'], $user_id);
+    if (!$can_accept['allowed']) {
+        jsonRes(['success' => false, 'message' => $can_accept['reason']], 403);
+    }
     $order_id = intval($_POST['order_id'] ?? 0);
     $tracking_id = intval($_POST['tracking_id'] ?? 0);
 

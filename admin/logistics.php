@@ -35,69 +35,16 @@ if ($seller_scope_id !== null) {
 $driver_scope_sql = hrEmployeeScopeSql($conn, 'e', 'user_id');
 $driver_role_sql = hrLogisticsEmployeeSqlCondition('e', 'd', $conn);
 
-// Detect if logged-in account is an employee / driver
-$current_driver = null;
-$driver_chk_stmt = mysqli_prepare($conn, "SELECT id, first_name, last_name, phone, vehicle_details FROM employees WHERE user_id = ? AND status = 'active' LIMIT 1");
-if ($driver_chk_stmt) {
-    mysqli_stmt_bind_param($driver_chk_stmt, "i", $current_user_id);
-    mysqli_stmt_execute($driver_chk_stmt);
-    $driver_res = mysqli_stmt_get_result($driver_chk_stmt);
-    if ($driver_res && mysqli_num_rows($driver_res) > 0) {
-        $current_driver = mysqli_fetch_assoc($driver_res);
-    }
-    mysqli_stmt_close($driver_chk_stmt);
-}
-
-$rider_display_name = $current_driver ? trim($current_driver['first_name'] . ' ' . $current_driver['last_name']) : ($admin_info['full_name'] ?? 'Rider');
-$current_driver_id = (int)($current_driver['id'] ?? 0);
-
-// Fetch Rider's Current Active Mission (if any)
-$active_mission = null;
-if ($current_driver_id > 0) {
-    $act_stmt = mysqli_prepare($conn, "
-        SELECT lt.id as tracking_id, lt.order_id, lt.current_status, lt.estimated_delivery,
-               lt.current_latitude as driver_lat, lt.current_longitude as driver_lng,
-               o.order_number, o.customer_name, o.customer_phone, o.delivery_address,
-               o.latitude as customer_latitude, o.longitude as customer_longitude,
-               o.total_amount, o.delivery_fee, o.special_instructions
-        FROM logistics_tracking lt
-        JOIN orders o ON lt.order_id = o.id AND o.delivery_option = 'delivery'
-        WHERE lt.driver_id = ? 
-          AND o.status NOT IN ('cancelled', 'completed')
-          AND lt.current_status IN ('assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving')
-          {$partner_order_scope_sql}
-        ORDER BY lt.updated_at DESC
-        LIMIT 1
-    ");
-    if ($act_stmt) {
-        mysqli_stmt_bind_param($act_stmt, "i", $current_driver_id);
-        mysqli_stmt_execute($act_stmt);
-        $act_res = mysqli_stmt_get_result($act_stmt);
-        if ($act_res && mysqli_num_rows($act_res) > 0) {
-            $active_mission = mysqli_fetch_assoc($act_res);
-        }
-        mysqli_stmt_close($act_stmt);
-    }
-}
-
-// Fallback for admin: if admin testing, fetch the most recent active order as active mission
-if (!$active_mission) {
-    $act_admin_res = mysqli_query($conn, "
-        SELECT lt.id as tracking_id, lt.order_id, lt.current_status, lt.estimated_delivery,
-               lt.current_latitude as driver_lat, lt.current_longitude as driver_lng,
-               o.order_number, o.customer_name, o.customer_phone, o.delivery_address,
-               o.latitude as customer_latitude, o.longitude as customer_longitude,
-               o.total_amount, o.delivery_fee, o.special_instructions
-        FROM logistics_tracking lt
-        JOIN orders o ON lt.order_id = o.id AND o.delivery_option = 'delivery'
-        WHERE o.status NOT IN ('cancelled', 'completed')
-          AND lt.current_status IN ('assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving')
-          {$partner_order_scope_sql}
-        ORDER BY lt.updated_at DESC
-        LIMIT 1
-    ");
-    if ($act_admin_res && mysqli_num_rows($act_admin_res) > 0) {
-        $active_mission = mysqli_fetch_assoc($act_admin_res);
+// Determine shop and store assignment
+$shop_store_id = null;
+$shop_store_name = $admin_info['full_name'] ?? 'My Shop';
+$shop_store_address = '';
+if ($seller_scope_id !== null) {
+    $st_res = mysqli_query($conn, "SELECT store_id, store_name, address, city FROM store_locations WHERE owner_user_id = " . (int)$seller_scope_id . " LIMIT 1");
+    if ($st_res && ($st_row = mysqli_fetch_assoc($st_res))) {
+        $shop_store_id = (int)$st_row['store_id'];
+        $shop_store_name = $st_row['store_name'];
+        $shop_store_address = $st_row['address'] . ', ' . $st_row['city'];
     }
 }
 
@@ -158,50 +105,99 @@ if ($avail_res) {
     while ($r = mysqli_fetch_assoc($avail_res)) $available_delivery_orders[] = $r;
 }
 
-// 2. Active Deliveries: in-transit missions assigned to rider or active
+// Fallback store resolution
+if (!$shop_store_id && !empty($default_store)) {
+    $shop_store_id = (int)($default_store['store_id'] ?? 0);
+    $shop_store_name = $default_store['store_name'] ?? 'Main Branch';
+    $shop_store_address = ($default_store['address'] ?? '') . ', ' . ($default_store['city'] ?? '');
+}
+
+// 2. Active Deliveries: all in-transit missions for this shop with assigned driver details
 $my_active_delivery_orders = [];
-if ($current_driver_id > 0) {
-    $my_act_stmt = mysqli_prepare($conn, "
-        SELECT lt.id as tracking_id, o.id as order_id, lt.current_status, lt.pickup_time, lt.estimated_delivery,
-               o.order_number, o.customer_name, o.customer_phone, o.delivery_address, o.delivery_pin,
-               o.latitude as customer_latitude, o.longitude as customer_longitude,
-               o.total_amount, o.delivery_fee, o.special_instructions
-        FROM orders o
-        JOIN logistics_tracking lt ON o.id = lt.order_id
-        WHERE o.delivery_option = 'delivery'
-          AND o.status NOT IN ('cancelled', 'completed', 'delivered')
-          AND lt.driver_id = ?
-          AND lt.current_status IN ('assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving')
-          {$partner_order_scope_sql}
-        ORDER BY lt.updated_at DESC
-    ");
-    if ($my_act_stmt) {
-        mysqli_stmt_bind_param($my_act_stmt, "i", $current_driver_id);
-        mysqli_stmt_execute($my_act_stmt);
-        $my_act_res = mysqli_stmt_get_result($my_act_stmt);
-        while ($r = mysqli_fetch_assoc($my_act_res)) $my_active_delivery_orders[] = $r;
-        mysqli_stmt_close($my_act_stmt);
-    }
-} else {
-    // If admin, show all active in transit
-    $my_act_res = mysqli_query($conn, "
-        SELECT lt.id as tracking_id, o.id as order_id, lt.current_status, lt.pickup_time, lt.estimated_delivery,
-               o.order_number, o.customer_name, o.customer_phone, o.delivery_address, o.delivery_pin,
-               o.latitude as customer_latitude, o.longitude as customer_longitude,
-               o.total_amount, o.delivery_fee, o.special_instructions
-        FROM orders o
-        JOIN logistics_tracking lt ON o.id = lt.order_id
-        WHERE o.delivery_option = 'delivery'
-          AND o.status NOT IN ('cancelled', 'completed', 'delivered')
-          AND lt.current_status IN ('assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving')
-          {$partner_order_scope_sql}
-        ORDER BY lt.updated_at DESC
-        LIMIT 18
-    ");
-    if ($my_act_res) {
-        while ($r = mysqli_fetch_assoc($my_act_res)) $my_active_delivery_orders[] = $r;
+$my_act_res = mysqli_query($conn, "
+    SELECT lt.id as tracking_id, o.id as order_id, lt.current_status, lt.pickup_time, lt.estimated_delivery,
+           lt.driver_id, lt.driver_name, lt.driver_phone, lt.driver_vehicle,
+           lt.current_latitude as driver_lat, lt.current_longitude as driver_lng,
+           o.order_number, o.customer_name, o.customer_phone, o.delivery_address, o.delivery_pin,
+           o.latitude as customer_latitude, o.longitude as customer_longitude,
+           o.total_amount, o.delivery_fee, o.special_instructions,
+           o.pickup_location,
+           sl.store_name, sl.address as store_address, sl.latitude as store_latitude, sl.longitude as store_longitude,
+           u_rdr.full_name as assigned_rider_name, u_rdr.phone as assigned_rider_phone,
+           r.vehicle_type as assigned_rider_vehicle, r.vehicle_plate as assigned_rider_plate,
+           r.rider_code as assigned_rider_code
+    FROM orders o
+    JOIN logistics_tracking lt ON o.id = lt.order_id
+    LEFT JOIN store_locations sl ON sl.store_id = o.pickup_location
+    LEFT JOIN riders r ON lt.driver_id = r.id
+    LEFT JOIN users u_rdr ON r.user_id = u_rdr.id
+    WHERE o.delivery_option = 'delivery'
+      AND o.status NOT IN ('cancelled', 'completed', 'delivered')
+      AND lt.current_status IN ('assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving')
+      {$partner_order_scope_sql}
+    ORDER BY lt.updated_at DESC
+    LIMIT 25
+");
+if ($my_act_res) {
+    while ($r = mysqli_fetch_assoc($my_act_res)) $my_active_delivery_orders[] = $r;
+}
+
+$active_mission = !empty($my_active_delivery_orders) ? $my_active_delivery_orders[0] : null;
+
+// Query drivers for this shop
+$shop_drivers_list = [];
+$online_drivers_count = 0;
+$drivers_sql = "
+    SELECT r.id AS rider_id, r.user_id, r.employee_id, r.rider_code, r.rider_type, r.store_id,
+           r.vehicle_type, r.vehicle_plate, r.license_number, r.duty_status, r.rating,
+           r.total_completed_deliveries, r.last_location_update, r.current_latitude, r.current_longitude,
+           u.full_name AS driver_name, u.phone AS driver_phone, u.email AS driver_email,
+           sl.store_name,
+           (SELECT COUNT(*) FROM logistics_tracking lt_c 
+            WHERE lt_c.driver_id = r.id 
+              AND lt_c.current_status IN ('assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving')
+           ) AS active_orders_count,
+           (SELECT o_sub.order_number FROM logistics_tracking lt_sub
+            JOIN orders o_sub ON lt_sub.order_id = o_sub.id
+            WHERE lt_sub.driver_id = r.id 
+              AND lt_sub.current_status IN ('assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving')
+            ORDER BY lt_sub.updated_at DESC LIMIT 1
+           ) AS current_order_number,
+           (SELECT o_sub2.customer_name FROM logistics_tracking lt_sub2
+            JOIN orders o_sub2 ON lt_sub2.order_id = o_sub2.id
+            WHERE lt_sub2.driver_id = r.id 
+              AND lt_sub2.current_status IN ('assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving')
+            ORDER BY lt_sub2.updated_at DESC LIMIT 1
+           ) AS current_customer_name
+    FROM riders r
+    JOIN users u ON r.user_id = u.id
+    LEFT JOIN store_locations sl ON r.store_id = sl.store_id
+    WHERE (r.store_id = " . (int)($shop_store_id ?: 0) . " OR r.rider_type = 'platform_rider' OR " . ($shop_store_id ? "r.store_id IS NULL" : "1=1") . ")
+    ORDER BY 
+        CASE WHEN r.store_id = " . (int)($shop_store_id ?: 0) . " THEN 0 ELSE 1 END,
+        FIELD(r.duty_status, 'online', 'busy', 'offline'),
+        r.rating DESC
+";
+$drivers_res = mysqli_query($conn, $drivers_sql);
+if ($drivers_res) {
+    while ($dr = mysqli_fetch_assoc($drivers_res)) {
+        if ($dr['duty_status'] === 'online' || $dr['duty_status'] === 'available') {
+            $online_drivers_count++;
+        }
+        $shop_drivers_list[] = $dr;
     }
 }
+
+// Completed deliveries count for shop
+$comp_res = mysqli_query($conn, "
+    SELECT COUNT(*) as cnt 
+    FROM orders o 
+    JOIN logistics_tracking lt ON o.id = lt.order_id 
+    WHERE o.delivery_option = 'delivery' 
+      AND (lt.current_status = 'delivered' OR o.status = 'completed')
+      {$partner_order_scope_sql}
+");
+$completed_deliveries_count = ($comp_res && ($c_row = mysqli_fetch_assoc($comp_res))) ? (int)$c_row['cnt'] : 0;
 
 // 3. Cancelled Deliveries: strictly separated from available and active
 $cancelled_delivery_orders = [];
@@ -239,6 +235,7 @@ $available_drivers_query = "
         AND a.attendance_date = CURDATE()
         AND a.status IN ('present', 'late', 'half_day')
         AND (a.hr_status IS NULL OR a.hr_status <> 'rejected')
+        AND (a.check_out_time IS NULL OR a.check_out_time = '')
     WHERE e.status = 'active' 
     AND {$driver_role_sql}
     AND {$driver_scope_sql}
@@ -762,7 +759,7 @@ if ($current_page_number < 1) {
             <div class="admin-topbar">
                 <div class="topbar-content">
                     <button class="sidebar-toggler" id="sidebarToggler" title="Toggle Navigation"><i class="fas fa-bars"></i></button>
-                    <h1><i class="fas fa-motorcycle text-danger me-2"></i>Rider Delivery Portal</h1>
+                    <h1><i class="fas fa-truck text-danger me-2"></i>Logistics & Deliveries</h1>
                     <button class="theme-toggler" id="themeToggler" title="Toggle Theme" style="margin-left: auto;">
                         <i class="fas fa-moon"></i>
                     </button>
@@ -775,132 +772,96 @@ if ($current_page_number < 1) {
             
             <div class="admin-main">
 
-                <!-- Rider Profile Hero Banner -->
-                <div class="rider-profile-hero p-3 p-md-4 mb-4">
+                <!-- Shop Logistics Overview Hero Banner -->
+                <div class="p-3 p-md-4 mb-4" style="background:#ffffff; border:1px solid #eaecf0; border-radius:16px; box-shadow:0 1px 3px rgba(16,24,40,0.04);">
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
                         <div class="d-flex align-items-center gap-3">
-                            <div class="rider-avatar-bubble">
-                                <i class="fas fa-motorcycle"></i>
-                                <span class="rider-online-status-dot" title="Online & Active"></span>
+                            <div style="width:52px; height:52px; border-radius:14px; background:#fff1f0; border:1px solid #fee4e2; display:flex; align-items:center; justify-content:center; color:#b3261e; font-size:1.4rem;">
+                                <i class="fas fa-store"></i>
                             </div>
                             <div>
                                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                                    <h3 class="mb-0 fw-bold" style="color: #101828; font-size: 1.25rem;"><?php echo htmlspecialchars($rider_display_name); ?></h3>
+                                    <h3 class="mb-0 fw-bold" style="color: #101828; font-size: 1.25rem;"><?php echo htmlspecialchars($shop_store_name); ?></h3>
                                     <span class="badge" style="background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-size: 11px;">
-                                        <i class="fas fa-shield-alt me-1"></i> Delivery Driver
+                                        <i class="fas fa-map-marker-alt me-1"></i> Store Logistics Hub
                                     </span>
                                     <span class="badge" style="background:#ecfdf3; color:#027a48; border:1px solid #abefc6; font-size: 11px;">
-                                        <i class="fas fa-circle me-1" style="font-size: 8px;"></i> On Duty
+                                        <i class="fas fa-circle me-1" style="font-size: 8px;"></i> Active Deliveries
                                     </span>
                                 </div>
                                 <div class="text-muted small mt-1">
-                                    <i class="fas fa-id-badge me-1"></i> <?php echo $current_driver_id ? 'Driver ID #' . $current_driver_id : 'Fleet Associate'; ?> &bull; 
-                                    <i class="fas fa-biking me-1 ms-1"></i> <?php echo htmlspecialchars($current_driver['vehicle_details'] ?? 'Motorcycle Delivery Fleet'); ?>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="d-flex align-items-center gap-2 ms-auto flex-wrap">
-                            <button type="button" class="btn btn-sm" id="quickGpsToggleBtn" onclick="toggleGpsBroadcast()" style="background:#b3261e; color:#ffffff; font-weight:600; border-radius:8px; padding: 7px 14px;">
-                                <i class="fas fa-location-arrow me-1"></i> <span id="quickGpsText">Live GPS Streaming</span>
-                            </button>
-                            <a href="#mapView" data-bs-toggle="tab" class="btn btn-sm btn-outline-secondary" style="border-radius:8px; padding: 7px 14px;">
-                                <i class="fas fa-map-marked-alt me-1"></i> View Route Map
-                            </a>
-                            <a href="../rider/index.php" target="_blank" class="btn btn-sm btn-dark" style="border-radius:8px; padding: 7px 14px; font-weight:600;">
-                                <i class="fas fa-mobile-alt me-1 text-danger"></i> Rider Portal
-                            </a>
-                        </div>
-                    </div>
-                </div>
-
-                <?php if ($active_mission): ?>
-                <script>
-                window.deliveryOrdersMap = window.deliveryOrdersMap || {};
-                window.deliveryOrdersMap[<?= (int)$active_mission['order_id']; ?>] = <?= json_encode([
-                    'order_id' => (int)$active_mission['order_id'],
-                    'tracking_id' => (int)($active_mission['tracking_id'] ?? 0),
-                    'order_number' => $active_mission['order_number'] ?? '',
-                    'customer_name' => $active_mission['customer_name'] ?? 'Customer',
-                    'customer_phone' => $active_mission['customer_phone'] ?? '',
-                    'address' => $active_mission['delivery_address'] ?? '',
-                    'lat' => $active_mission['customer_latitude'] ?? null,
-                    'lng' => $active_mission['customer_longitude'] ?? null,
-                    'status' => $active_mission['current_status'] ?? ''
-                ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
-                </script>
-                <!-- Pinned Active Mission Card (Grab/Shopee Style) -->
-                <div class="active-mission-card p-3 p-md-4 mb-4">
-                    <div class="d-flex flex-wrap align-items-center justify-content-between pb-3 mb-3 border-bottom border-danger-subtle gap-2">
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="badge" style="background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-size: 12px; font-weight: 700; padding: 6px 12px;">
-                                <i class="fas fa-bolt me-1 text-danger"></i> ACTIVE DELIVERY IN PROGRESS
-                            </span>
-                            <span class="text-muted small">Assigned Mission</span>
-                        </div>
-                        <div class="fw-bold fs-5 text-danger">
-                            Order #<?php echo htmlspecialchars($active_mission['order_number']); ?>
-                        </div>
-                    </div>
-
-                    <div class="row g-3 align-items-center">
-                        <div class="col-lg-5">
-                            <div class="d-flex align-items-start gap-3">
-                                <div class="active-mission-icon">
-                                    <i class="fas fa-user-circle text-danger"></i>
-                                </div>
-                                <div>
-                                    <h5 class="mb-1 fw-bold"><?php echo htmlspecialchars($active_mission['customer_name'] ?? 'Customer'); ?></h5>
-                                    <?php if (!empty($active_mission['customer_phone'])): ?>
-                                        <a href="tel:<?php echo htmlspecialchars($active_mission['customer_phone']); ?>" class="btn btn-sm btn-success mt-1" style="font-size: 12px; padding: 3px 10px; border-radius: 8px;">
-                                            <i class="fas fa-phone-alt me-1"></i> Call <?php echo htmlspecialchars($active_mission['customer_phone']); ?>
-                                        </a>
+                                    <i class="fas fa-user-shield me-1"></i> Managed by <?php echo htmlspecialchars($admin_info['full_name']); ?> &bull; 
+                                    <i class="fas fa-users me-1 ms-1"></i> <?php echo count($shop_drivers_list); ?> Drivers Serving This Shop
+                                    <?php if (!empty($shop_store_address)): ?>
+                                        &bull; <i class="fas fa-location-dot me-1 ms-1"></i> <?php echo htmlspecialchars($shop_store_address); ?>
                                     <?php endif; ?>
                                 </div>
                             </div>
                         </div>
-
-                        <div class="col-lg-4">
-                            <div class="small text-muted mb-1"><i class="fas fa-map-marker-alt text-danger me-1"></i> <strong>Drop-off Destination:</strong></div>
-                            <div class="fw-semibold text-dark text-truncate" style="max-width: 100%; font-size: 13.5px;" title="<?php echo htmlspecialchars($active_mission['delivery_address']); ?>">
-                                <?php echo htmlspecialchars($active_mission['delivery_address']); ?>
-                            </div>
-                            <?php if (!empty($active_mission['special_instructions'])): ?>
-                                <div class="small text-muted fst-italic mt-1">Note: <?php echo htmlspecialchars($active_mission['special_instructions']); ?></div>
-                            <?php endif; ?>
+                        <div class="d-flex align-items-center gap-2 ms-auto flex-wrap">
+                            <a href="#mapView" data-bs-toggle="tab" class="btn btn-sm btn-outline-secondary" style="border-radius:8px; padding: 7px 14px; font-weight:600;">
+                                <i class="fas fa-map-marked-alt me-1 text-danger"></i> View Live Route Map
+                            </a>
+                            <a href="#driversTab" data-bs-toggle="tab" class="btn btn-sm" style="background:#b3261e; color:#ffffff; font-weight:600; border-radius:8px; padding: 7px 14px;">
+                                <i class="fas fa-motorcycle me-1"></i> Shop Drivers (<?php echo count($shop_drivers_list); ?>)
+                            </a>
                         </div>
+                    </div>
 
-                        <div class="col-lg-3 text-lg-end">
-                            <div class="d-flex flex-column gap-2">
-                                <button type="button" class="btn btn-danger w-100" style="background:#b3261e; border-color:#b3261e; font-weight:600;" onclick="triggerFollowRoute(<?= (int)$active_mission['order_id']; ?>)">
-                                    <i class="fas fa-route me-1"></i> Follow Route on Map
-                                </button>
-                                <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" onclick="openRiderChat(<?= (int)$active_mission['order_id']; ?>, '<?= htmlspecialchars(addslashes($active_mission['order_number'])); ?>', '<?= htmlspecialchars(addslashes($active_mission['customer_name'] ?? 'Customer')); ?>', '<?= htmlspecialchars(addslashes($active_mission['customer_phone'] ?? '')); ?>')">
-                                        <i class="fas fa-comments me-1"></i> Chat
-                                    </button>
-                                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" onclick="openDeliveryStatusModal(<?= (int)$active_mission['tracking_id']; ?>, '<?= htmlspecialchars($active_mission['current_status']); ?>', <?= (int)$active_mission['order_id']; ?>)">
-                                        <i class="fas fa-edit me-1"></i> Status
-                                    </button>
+                    <!-- Quick Metric Cards Row -->
+                    <div class="row g-3 mt-2">
+                        <div class="col-6 col-md-3">
+                            <div class="p-3 rounded-3" style="background:#f8f9fa; border:1px solid #eaecf0;">
+                                <div class="text-muted small fw-semibold">Shop Drivers</div>
+                                <div class="d-flex align-items-baseline gap-2 mt-1">
+                                    <span class="fs-4 fw-bold text-dark"><?php echo count($shop_drivers_list); ?></span>
+                                    <span class="small" style="color:#027a48; font-weight:600;"><?php echo $online_drivers_count; ?> Available</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="p-3 rounded-3" style="background:#f8f9fa; border:1px solid #eaecf0;">
+                                <div class="text-muted small fw-semibold">Ready for Delivery</div>
+                                <div class="d-flex align-items-baseline gap-2 mt-1">
+                                    <span class="fs-4 fw-bold" style="color:#b3261e;"><?php echo count($available_delivery_orders); ?></span>
+                                    <span class="small text-muted">Awaiting Driver</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="p-3 rounded-3" style="background:#f8f9fa; border:1px solid #eaecf0;">
+                                <div class="text-muted small fw-semibold">On-Going Deliveries</div>
+                                <div class="d-flex align-items-baseline gap-2 mt-1">
+                                    <span class="fs-4 fw-bold" style="color:#175cd3;"><?php echo count($my_active_delivery_orders); ?></span>
+                                    <span class="small text-muted">In Transit</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="p-3 rounded-3" style="background:#f8f9fa; border:1px solid #eaecf0;">
+                                <div class="text-muted small fw-semibold">Completed Today</div>
+                                <div class="d-flex align-items-baseline gap-2 mt-1">
+                                    <span class="fs-4 fw-bold" style="color:#027a48;"><?php echo $completed_deliveries_count; ?></span>
+                                    <span class="small text-muted">Delivered</span>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                <?php endif; ?>
 
-                <!-- Rider Navigation Pills -->
+                <!-- Navigation Pills -->
                 <div class="rider-nav-pills" role="tablist">
-                    <a class="nav-link active" id="tabLinkAvailable" data-bs-toggle="tab" data-bs-target="#availableTab" href="#availableTab">
-                        <i class="fas fa-box-open me-2 text-danger"></i>Available Deliveries 
-                        <span class="badge rounded-pill bg-danger ms-1"><?php echo count($available_delivery_orders); ?></span>
+                    <a class="nav-link active" id="tabLinkDrivers" data-bs-toggle="tab" data-bs-target="#driversTab" href="#driversTab">
+                        <i class="fas fa-motorcycle me-2 text-danger"></i>Shop Drivers 
+                        <span class="badge rounded-pill bg-danger ms-1"><?php echo count($shop_drivers_list); ?></span>
+                    </a>
+                    <a class="nav-link" id="tabLinkAvailable" data-bs-toggle="tab" data-bs-target="#availableTab" href="#availableTab">
+                        <i class="fas fa-box-open me-2 text-warning"></i>Ready for Delivery 
+                        <span class="badge rounded-pill bg-warning text-dark ms-1"><?php echo count($available_delivery_orders); ?></span>
                     </a>
                     <a class="nav-link" id="tabLinkActive" data-bs-toggle="tab" data-bs-target="#activeTab" href="#activeTab">
-                        <i class="fas fa-motorcycle me-2 text-primary"></i>On-Going Deliveries 
-                        <span class="badge rounded-pill bg-secondary ms-1"><?php echo count($my_active_delivery_orders); ?></span>
-                    </a>
-                    <a class="nav-link" id="tabLinkCancelled" data-bs-toggle="tab" data-bs-target="#cancelledTab" href="#cancelledTab">
-                        <i class="fas fa-ban me-2 text-danger"></i>Cancelled Deliveries 
-                        <span class="badge rounded-pill bg-danger ms-1" style="background:#fee4e2 !important; color:#b3261e !important;"><?php echo count($cancelled_delivery_orders); ?></span>
+                        <i class="fas fa-shipping-fast me-2 text-primary"></i>On-Going Deliveries 
+                        <span class="badge rounded-pill bg-primary ms-1"><?php echo count($my_active_delivery_orders); ?></span>
                     </a>
                     <a class="nav-link" id="tabLinkMap" data-bs-toggle="tab" data-bs-target="#mapView" href="#mapView">
                         <i class="fas fa-map-marked-alt me-2 text-success"></i>Live Route Map & GPS
@@ -908,15 +869,139 @@ if ($current_page_number < 1) {
                     <a class="nav-link" id="tabLinkTable" data-bs-toggle="tab" data-bs-target="#tableView" href="#tableView">
                         <i class="fas fa-history me-2 text-muted"></i>All Deliveries History
                     </a>
-                    <a class="nav-link" id="tabLinkFleet" data-bs-toggle="tab" data-bs-target="#fleetView" href="#fleetView">
-                        <i class="fas fa-users-cog me-2 text-info"></i>Fleet Riders & COD 
-                        <span class="badge rounded-pill bg-dark ms-1"><?php echo count($fleet_riders); ?></span>
+                    <a class="nav-link" id="tabLinkCancelled" data-bs-toggle="tab" data-bs-target="#cancelledTab" href="#cancelledTab">
+                        <i class="fas fa-ban me-2 text-muted"></i>Cancelled Deliveries 
+                        <span class="badge rounded-pill bg-danger ms-1" style="background:#fee4e2 !important; color:#b3261e !important;"><?php echo count($cancelled_delivery_orders); ?></span>
                     </a>
                 </div>
 
                 <div class="tab-content">
-                    <!-- Tab 1: Available Orders -->
-                    <div class="tab-pane fade show active" id="availableTab">
+                    <!-- Tab: Shop Drivers (Who are the drivers for this shop) -->
+                    <div class="tab-pane fade show active" id="driversTab">
+                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                            <div>
+                                <h4 class="fw-bold mb-1" style="color:#101828; font-size:1.15rem;">
+                                    <i class="fas fa-motorcycle text-danger me-2"></i>Drivers for <?php echo htmlspecialchars($shop_store_name); ?>
+                                </h4>
+                                <span class="text-muted small">Active delivery drivers assigned to this shop and available fleet couriers</span>
+                            </div>
+                            <span class="badge" style="background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-size:12px; padding:6px 12px; font-weight:700;">
+                                <?php echo count($shop_drivers_list); ?> Drivers Registered
+                            </span>
+                        </div>
+
+                        <?php if (empty($shop_drivers_list)): ?>
+                            <div class="card p-5 text-center border-0 shadow-sm rounded-4 mb-4" style="border: 1px solid #eaecf0 !important;">
+                                <div class="mb-3">
+                                    <i class="fas fa-users-slash text-muted" style="font-size: 3rem;"></i>
+                                </div>
+                                <h5 class="fw-bold text-dark">No Drivers Registered Yet</h5>
+                                <p class="text-muted small mb-0">No dedicated drivers or platform riders are currently linked to this store location.</p>
+                            </div>
+                        <?php else: ?>
+                            <div class="row g-3 mb-4">
+                                <?php foreach ($shop_drivers_list as $driver): 
+                                    $is_shop_driver = ((int)($driver['store_id'] ?? 0) === (int)$shop_store_id);
+                                    $d_status = strtolower($driver['duty_status'] ?? 'offline');
+                                    $d_status_label = 'Offline';
+                                    $d_badge_style = 'background:#f8f9fa; color:#475467; border:1px solid #eaecf0;';
+                                    if ($d_status === 'online' || $d_status === 'available') {
+                                        $d_status_label = 'Available / On Duty';
+                                        $d_badge_style = 'background:#ecfdf3; color:#027a48; border:1px solid #abefc6;';
+                                    } elseif ($d_status === 'busy' || !empty($driver['active_orders_count'])) {
+                                        $d_status_label = 'On Delivery';
+                                        $d_badge_style = 'background:#eff8ff; color:#175cd3; border:1px solid #b2ddff;';
+                                    }
+                                ?>
+                                    <div class="col-md-6 col-lg-4">
+                                        <div class="driver-card p-3 rounded-3" style="background:#ffffff; border:1px solid #eaecf0; box-shadow:0 1px 3px rgba(16,24,40,0.04); display:flex; flex-direction:column; justify-content:space-between; height:100%;">
+                                            <div>
+                                                <!-- Header: Driver Name, Badge & Status -->
+                                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <div style="width:40px; height:40px; border-radius:10px; background:#fff1f0; border:1px solid #fee4e2; display:flex; align-items:center; justify-content:center; color:#b3261e; font-size:1.1rem;">
+                                                            <i class="fas fa-motorcycle"></i>
+                                                        </div>
+                                                        <div>
+                                                            <div class="fw-bold text-dark" style="font-size:0.95rem;"><?php echo htmlspecialchars($driver['driver_name']); ?></div>
+                                                            <div class="text-muted small" style="font-size:11px;"><?php echo htmlspecialchars($driver['rider_code']); ?></div>
+                                                        </div>
+                                                    </div>
+                                                    <span class="badge" style="<?php echo $d_badge_style; ?> font-size:10.5px; font-weight:700;">
+                                                        <?php echo $d_status_label; ?>
+                                                    </span>
+                                                </div>
+
+                                                <!-- Fleet Type & Rating -->
+                                                <div class="d-flex justify-content-between align-items-center mb-2 p-2 rounded" style="background:#f8f9fa; border:1px solid #eaecf0; font-size:12px;">
+                                                    <div>
+                                                        <span class="badge" style="background:<?php echo $is_shop_driver ? '#fff1f0' : '#eff8ff'; ?>; color:<?php echo $is_shop_driver ? '#b3261e' : '#175cd3'; ?>; border:1px solid <?php echo $is_shop_driver ? '#fee4e2' : '#b2ddff'; ?>; font-size:10.5px;">
+                                                            <?php echo $is_shop_driver ? 'Store Driver' : 'Platform Courier'; ?>
+                                                        </span>
+                                                    </div>
+                                                    <div>
+                                                        <i class="fas fa-star text-warning me-1"></i><strong><?php echo number_format((float)($driver['rating'] ?? 5.0), 1); ?></strong>
+                                                        <span class="text-muted ms-1">(<?php echo (int)($driver['total_completed_deliveries'] ?? 0); ?> delivered)</span>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Contact & Vehicle Details -->
+                                                <div class="mb-3" style="font-size:12.5px;">
+                                                    <div class="mb-1 text-dark">
+                                                        <i class="fas fa-phone-alt text-muted me-2" style="width:14px;"></i>
+                                                        <?php if (!empty($driver['driver_phone'])): ?>
+                                                            <a href="tel:<?php echo htmlspecialchars($driver['driver_phone']); ?>" class="text-dark fw-semibold text-decoration-none">
+                                                                <?php echo htmlspecialchars($driver['driver_phone']); ?>
+                                                            </a>
+                                                        <?php else: ?>
+                                                            <span class="text-muted">No phone registered</span>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                    <div class="text-muted">
+                                                        <i class="fas fa-biking text-muted me-2" style="width:14px;"></i>
+                                                        <span><?php echo htmlspecialchars($driver['vehicle_type'] ?? 'Motorcycle'); ?></span>
+                                                        <?php if (!empty($driver['vehicle_plate'])): ?>
+                                                            <strong class="text-dark ms-1">(<?php echo htmlspecialchars($driver['vehicle_plate']); ?>)</strong>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Current Delivery Mission (if any) -->
+                                                <?php if (!empty($driver['current_order_number'])): ?>
+                                                    <div class="p-2 rounded mb-3" style="background:#fff1f0; border:1px solid #fee4e2; font-size:12px;">
+                                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                                            <span class="fw-bold" style="color:#b3261e;">
+                                                                <i class="fas fa-box me-1"></i> Delivering #<?php echo htmlspecialchars($driver['current_order_number']); ?>
+                                                            </span>
+                                                            <span class="badge" style="background:#fee4e2; color:#b3261e; font-size:10px;">In Transit</span>
+                                                        </div>
+                                                        <div class="text-truncate text-muted small">
+                                                            Customer: <?php echo htmlspecialchars($driver['current_customer_name'] ?? 'Customer'); ?>
+                                                        </div>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+
+                                            <!-- Card Action -->
+                                            <div class="pt-2 border-top d-flex gap-2">
+                                                <?php if (!empty($driver['driver_phone'])): ?>
+                                                    <a href="tel:<?php echo htmlspecialchars($driver['driver_phone']); ?>" class="btn btn-outline-secondary btn-sm flex-fill" style="font-size:12px; font-weight:600; border-radius:8px;">
+                                                        <i class="fas fa-phone-alt me-1"></i> Call Driver
+                                                    </a>
+                                                <?php endif; ?>
+                                                <a href="#activeTab" data-bs-toggle="tab" class="btn btn-sm flex-fill" style="background:#b3261e; color:#ffffff; font-size:12px; font-weight:600; border-radius:8px;">
+                                                    <i class="fas fa-list me-1"></i> Deliveries
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Tab 1: Available Orders (Ready for Delivery) -->
+                    <div class="tab-pane fade" id="availableTab">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h4 class="fw-bold mb-0" style="color:#101828; font-size:1.15rem;">
                                 <i class="fas fa-boxes text-danger me-2"></i>Orders Ready for Delivery
@@ -1065,10 +1150,10 @@ if ($current_page_number < 1) {
 
                                             <!-- Action Buttons -->
                                             <div class="pt-2 border-top d-flex gap-2 mt-2">
-                                                <button type="button" class="btn btn-primary flex-fill accept-delivery-btn" style="background:#b3261e; border-color:#b3261e; font-weight:700; padding:9px 12px; border-radius:8px;" onclick="triggerAcceptDelivery(<?= (int)$ord['order_id']; ?>)">
-                                                    <i class="fas fa-motorcycle me-1"></i> Accept Delivery
+                                                <button type="button" class="btn btn-primary flex-fill" style="background:#b3261e; border-color:#b3261e; font-weight:700; padding:9px 12px; border-radius:8px;" onclick="openAssignDriverModal(<?= (int)($ord['tracking_id'] ?? 0); ?>, <?= (int)$ord['order_id']; ?>)">
+                                                    <i class="fas fa-user-plus me-1"></i> Assign Driver
                                                 </button>
-                                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="triggerFollowRoute(<?= (int)$ord['order_id']; ?>)" title="Preview Delivery Location">
+                                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="triggerFollowRoute(<?= (int)$ord['order_id']; ?>)" title="Preview Delivery Location on Map">
                                                     <i class="fas fa-map-marker-alt"></i>
                                                 </button>
                                             </div>
@@ -1114,52 +1199,98 @@ if ($current_page_number < 1) {
                                     ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
                                     </script>
                                     <div class="col-md-6 col-lg-4">
-                                        <div class="rider-order-card">
+                                        <div class="rider-order-card" style="border: 1px solid #eaecf0; border-radius: 14px; padding: 18px; background: #ffffff; box-shadow: 0 1px 3px rgba(16,24,40,0.04); display:flex; flex-direction:column; justify-content:space-between;">
                                             <div>
-                                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <!-- Order Header Badge & Total -->
+                                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                                    <span class="badge" style="background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-size:11.5px; font-weight:700;">
+                                                        #<?php echo htmlspecialchars($myOrd['order_number']); ?>
+                                                    </span>
+                                                    <span class="badge" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; font-size:10.5px; font-weight:700; text-transform:capitalize;">
+                                                        <?php echo htmlspecialchars(str_replace('_', ' ', $myOrd['current_status'])); ?>
+                                                    </span>
+                                                </div>
+
+                                                <!-- Pricing Summary: Order Amount + Delivery Fee -->
+                                                <div class="d-flex justify-content-between align-items-center p-2 rounded mb-3" style="background:#f8f9fa; border:1px solid #eaecf0;">
                                                     <div>
-                                                        <span class="badge" style="background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-size:11px;">
-                                                            #<?php echo htmlspecialchars($myOrd['order_number']); ?>
-                                                        </span>
-                                                        <span class="badge" style="background:#ecfdf3; color:#027a48; border:1px solid #abefc6; font-size:10px; text-transform:capitalize;">
-                                                            <?php echo htmlspecialchars(str_replace('_', ' ', $myOrd['current_status'])); ?>
-                                                        </span>
+                                                        <span class="text-muted d-block" style="font-size:10.5px; text-transform:uppercase; font-weight:700; letter-spacing:0.04em;">Order Amount</span>
+                                                        <strong class="text-dark" style="font-size:1.05rem;">₱<?php echo number_format($myOrd['total_amount'] ?? 0, 2); ?></strong>
                                                     </div>
                                                     <div class="text-end">
-                                                        <div class="fw-bold text-dark">₱<?php echo number_format($myOrd['total_amount'] ?? 0, 2); ?></div>
+                                                        <span class="text-muted d-block" style="font-size:10.5px; text-transform:uppercase; font-weight:700; letter-spacing:0.04em;">Delivery Fee</span>
+                                                        <strong style="color:#027a48; font-size:1.05rem;">₱<?php echo number_format($myOrd['delivery_fee'] ?? 0, 2); ?></strong>
                                                     </div>
                                                 </div>
 
-                                                <div class="mb-3">
-                                                    <div class="fw-semibold text-dark mb-1">
-                                                        <i class="fas fa-user me-1 text-muted"></i> <?php echo htmlspecialchars($myOrd['customer_name'] ?? 'Customer'); ?>
+                                                <!-- Assigned Driver Information -->
+                                                <div class="p-2 rounded mb-2" style="background:#fff1f0; border:1px solid #fee4e2;">
+                                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                                        <span class="small fw-bold" style="color:#b3261e;">
+                                                            <i class="fas fa-motorcycle me-1"></i> Assigned Driver
+                                                        </span>
+                                                        <?php if (!empty($myOrd['assigned_rider_code'])): ?>
+                                                            <span class="badge" style="background:#fee4e2; color:#b3261e; font-size:10px;">
+                                                                <?php echo htmlspecialchars($myOrd['assigned_rider_code']); ?>
+                                                            </span>
+                                                        <?php endif; ?>
                                                     </div>
-                                                    <?php if (!empty($myOrd['customer_phone'])): ?>
-                                                        <div class="small mb-1">
-                                                            <a href="tel:<?php echo htmlspecialchars($myOrd['customer_phone']); ?>" class="text-success text-decoration-none">
-                                                                <i class="fas fa-phone-alt me-1"></i> <?php echo htmlspecialchars($myOrd['customer_phone']); ?>
+                                                    <?php 
+                                                        $driver_display = $myOrd['assigned_rider_name'] ?? ($myOrd['driver_name'] ?? '');
+                                                        if (empty($driver_display) || strtolower($driver_display) === 'unassigned') {
+                                                            $driver_display = 'Unassigned';
+                                                        }
+                                                    ?>
+                                                    <div class="small fw-bold text-dark"><?php echo htmlspecialchars($driver_display); ?></div>
+                                                    <?php if (!empty($myOrd['assigned_rider_phone']) || !empty($myOrd['driver_phone'])): ?>
+                                                        <div class="small text-muted mt-1" style="font-size:11.5px;">
+                                                            <i class="fas fa-phone-alt me-1 text-danger"></i>
+                                                            <a href="tel:<?php echo htmlspecialchars($myOrd['assigned_rider_phone'] ?? $myOrd['driver_phone']); ?>" class="text-dark text-decoration-none fw-semibold">
+                                                                <?php echo htmlspecialchars($myOrd['assigned_rider_phone'] ?? $myOrd['driver_phone']); ?>
                                                             </a>
                                                         </div>
                                                     <?php endif; ?>
-                                                    <div class="text-muted small text-truncate" style="max-width: 100%;" title="<?php echo htmlspecialchars($myOrd['delivery_address'] ?? 'No address'); ?>">
-                                                        <i class="fas fa-map-marker-alt text-danger me-1"></i> <?php echo htmlspecialchars($myOrd['delivery_address'] ?? 'Destination'); ?>
+                                                    <?php if (!empty($myOrd['assigned_rider_vehicle']) || !empty($myOrd['driver_vehicle'])): ?>
+                                                        <div class="small text-muted" style="font-size:11px;">
+                                                            <i class="fas fa-biking me-1"></i> <?php echo htmlspecialchars($myOrd['assigned_rider_vehicle'] ?? $myOrd['driver_vehicle']); ?>
+                                                            <?php if (!empty($myOrd['assigned_rider_plate'])): ?>
+                                                                (<?php echo htmlspecialchars($myOrd['assigned_rider_plate']); ?>)
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                </div>
+
+                                                <!-- Customer & Drop-off Location -->
+                                                <div class="p-2 rounded mb-3" style="background:#ffffff; border:1px solid #eaecf0;">
+                                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                                        <span class="small fw-bold text-dark">
+                                                            <i class="fas fa-user text-muted me-1"></i> Customer Drop-off
+                                                        </span>
+                                                        <?php if (!empty($myOrd['delivery_pin'])): ?>
+                                                            <span class="badge" style="background:#fffaeb; color:#b54708; border:1px solid #fedf89; font-size:10px;">
+                                                                PIN: <?php echo htmlspecialchars($myOrd['delivery_pin']); ?>
+                                                            </span>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                    <div class="small fw-semibold text-dark"><?php echo htmlspecialchars($myOrd['customer_name'] ?? 'Customer'); ?></div>
+                                                    <?php if (!empty($myOrd['customer_phone'])): ?>
+                                                        <div class="small mb-1" style="font-size:11.5px;">
+                                                            <a href="tel:<?php echo htmlspecialchars($myOrd['customer_phone']); ?>" class="text-success text-decoration-none">
+                                                                <i class="fas fa-phone-alt me-1"></i> Call <?php echo htmlspecialchars($myOrd['customer_phone']); ?>
+                                                            </a>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                    <div class="text-muted small text-truncate" style="font-size:11.5px;" title="<?php echo htmlspecialchars($myOrd['delivery_address'] ?? ''); ?>">
+                                                        <i class="fas fa-map-marker-alt text-danger me-1"></i> <?php echo htmlspecialchars($myOrd['delivery_address'] ?? 'No destination address'); ?>
                                                     </div>
                                                 </div>
                                             </div>
 
+                                            <!-- Action Buttons for Shop Owner -->
                                             <div class="pt-2 border-top d-flex gap-2">
-                                                <?php if ($myOrd['current_status'] === 'arrived_at_restaurant'): ?>
-                                                    <button type="button" class="btn btn-success btn-sm fw-bold" onclick="approveRiderHandover(<?= (int)$myOrd['order_id']; ?>)" title="Rider arrived at store! Approve handover">
-                                                        <i class="fas fa-check me-1"></i> Approve
-                                                    </button>
-                                                    <button type="button" class="btn btn-outline-danger btn-sm fw-bold" onclick="rejectRiderHandover(<?= (int)$myOrd['order_id']; ?>)" title="Reject / Pause Handover">
-                                                        <i class="fas fa-times me-1"></i> Reject
-                                                    </button>
-                                                <?php elseif ($myOrd['current_status'] === 'assigned'): ?>
-                                                    <button type="button" class="btn btn-outline-success btn-sm" onclick="openHandoverModal(<?= (int)$myOrd['order_id']; ?>, '<?= htmlspecialchars(addslashes($myOrd['order_number'])); ?>', '<?= htmlspecialchars(addslashes($myOrd['delivery_pin'] ?? '')); ?>', '<?= htmlspecialchars(addslashes($myOrd['customer_name'])); ?>', '')" title="Confirm Rider Pickup Handover">
-                                                        <i class="fas fa-handshake me-1"></i> Handover
-                                                    </button>
-                                                <?php endif; ?>
+                                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="openAssignDriverModal(<?= (int)$myOrd['tracking_id']; ?>, <?= (int)$myOrd['order_id']; ?>)" title="Re-assign Driver">
+                                                    <i class="fas fa-user-edit me-1"></i> Driver
+                                                </button>
                                                 <button type="button" class="btn btn-danger btn-sm flex-fill" style="background:#b3261e; border-color:#b3261e; font-weight:600;" onclick="triggerFollowRoute(<?= (int)$myOrd['order_id']; ?>)">
                                                     <i class="fas fa-route me-1"></i> Route
                                                 </button>
@@ -1598,11 +1729,8 @@ if ($current_page_number < 1) {
                                         <td class="actions-cell">
                                             <?php if ($row['source'] === 'logistics'): ?>
                                                 <?php if ($row['status'] === 'pending' || $row['driver_name'] === 'Unassigned'): ?>
-                                                    <button type="button" class="btn btn-sm btn-success accept-delivery-btn me-1" onclick='acceptDelivery(<?php echo (int)$row['id']; ?>, <?php echo htmlspecialchars(json_encode($customer_payload), ENT_QUOTES, "UTF-8"); ?>)' title="Accept Delivery">
-                                                        <i class="fas fa-motorcycle me-1"></i>Accept
-                                                    </button>
-                                                    <button class="btn-icon" title="Assign Driver" onclick="openAssignDriverModal(<?php echo (int)$row['id']; ?>, <?php echo (int)($row['order_id'] ?? 0); ?>)">
-                                                        <i class="fas fa-user-plus"></i>
+                                                    <button type="button" class="btn btn-sm btn-danger me-1" style="background:#b3261e; border-color:#b3261e; font-weight:600;" onclick="openAssignDriverModal(<?php echo (int)$row['id']; ?>, <?php echo (int)($row['order_id'] ?? 0); ?>)" title="Assign Driver">
+                                                        <i class="fas fa-user-plus me-1"></i>Assign Driver
                                                     </button>
                                                 <?php elseif (in_array($row['status'], ['assigned', 'picked_up', 'on_the_way', 'arriving'], true)): ?>
                                                     <button type="button" class="btn btn-sm btn-outline-danger me-1" onclick='focusCustomerOnMap(<?php echo htmlspecialchars(json_encode($customer_payload), ENT_QUOTES, "UTF-8"); ?>)' title="View Customer Location on Map">
@@ -1746,9 +1874,7 @@ if ($current_page_number < 1) {
                             <h4 class="fw-bold mb-0" style="color:#101828; font-size:1.15rem;">
                                 <i class="fas fa-users-cog text-primary me-2"></i>Delivery Fleet & Cash Management
                             </h4>
-                            <a href="../rider/login.php" target="_blank" class="btn btn-sm btn-outline-danger">
-                                <i class="fas fa-external-link-alt me-1"></i> Open Rider App View
-                            </a>
+
                         </div>
 
                         <!-- 1. Active Fleet Riders -->

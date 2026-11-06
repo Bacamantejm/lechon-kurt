@@ -301,6 +301,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt = mysqli_prepare($conn, $ins);
                 mysqli_stmt_bind_param($stmt, "issddsiss", $eid, $today, $now, $lat, $long, $ip, $late_mins, $auto_hr_status, $geo_note);
                 if(mysqli_stmt_execute($stmt)) {
+                    if (!empty($employee['user_id'])) {
+                        $e_uid = (int)$employee['user_id'];
+                        mysqli_query($conn, "UPDATE riders SET duty_status = 'online', last_location_update = NOW() WHERE user_id = $e_uid");
+                    }
                     if ($auto_hr_status === 'approved') {
                         $_SESSION['success'] = "Clocked IN: {$employee['first_name']} (location verified and auto-approved).";
                     } else {
@@ -335,7 +339,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $upd = "UPDATE attendance SET check_out_time = ?, overtime_hours = ? WHERE id = ?";
                 $stmt = mysqli_prepare($conn, $upd);
                 mysqli_stmt_bind_param($stmt, "sdi", $now, $ot_hours, $attendance['id']);
-                if(mysqli_stmt_execute($stmt)) $_SESSION['success'] = "Clocked OUT: {$employee['first_name']}";
+                if(mysqli_stmt_execute($stmt)) {
+                    if (!empty($employee['user_id'])) {
+                        $e_uid = (int)$employee['user_id'];
+                        mysqli_query($conn, "UPDATE riders SET duty_status = 'offline', last_location_update = NOW() WHERE user_id = $e_uid");
+                    }
+                    $_SESSION['success'] = "Clocked OUT: {$employee['first_name']}";
+                }
             }
         }
     } else {
@@ -613,9 +623,9 @@ if ($emp_res) {
                                         "<span class='text-muted'>-</span>";
 
                                     $geo_notes_text = (string)($att['notes'] ?? '');
-                                    if (stripos($geo_notes_text, 'Geo-check passed:') !== false) {
+                                    if (stripos($geo_notes_text, 'Geo-check passed:') !== false || stripos($geo_notes_text, 'Within work location') !== false || stripos($geo_notes_text, 'within') !== false) {
                                         $location_link .= "<div class='small text-success mt-1'>Within work location</div>";
-                                    } elseif (stripos($geo_notes_text, 'Geo-check outside radius:') !== false) {
+                                    } elseif (stripos($geo_notes_text, 'Geo-check outside radius:') !== false || stripos($geo_notes_text, 'outside') !== false || stripos($geo_notes_text, 'Outside work location') !== false) {
                                         $location_link .= "<div class='small text-danger mt-1'>Outside work location</div>";
                                     } elseif (stripos($geo_notes_text, 'Geo-check:') !== false) {
                                         $location_link .= "<div class='small text-warning mt-1'>Location review needed</div>";
