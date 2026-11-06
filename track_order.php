@@ -55,20 +55,77 @@ if ($items_stmt) {
 
 // Fetch store / fulfillment branch details
 $store_details = null;
-if (!empty($order['pickup_location'])) {
-    $store_stmt = $conn->prepare("SELECT * FROM store_locations WHERE store_id = ? OR id = ? LIMIT 1");
+$order_store_id = (int)($order['store_id'] ?? 0);
+$legacy_store_id = (int)($order['pickup_location'] ?? 0);
+$order_seller_id = (int)($order['seller_id'] ?? 0);
+
+// Older orders may not have seller_id populated. Resolve the seller from the
+// ordered product so tracking remains tied to the shop that supplied the item.
+if ($order_seller_id <= 0) {
+    $seller_from_item_stmt = $conn->prepare(
+        "SELECT p.seller_id
+         FROM order_items oi
+         INNER JOIN products p ON (p.product_id = oi.product_id OR p.id = oi.product_id)
+         WHERE oi.order_id = ? AND p.seller_id IS NOT NULL AND p.seller_id > 0
+         ORDER BY oi.id ASC
+         LIMIT 1"
+    );
+    if ($seller_from_item_stmt) {
+        $seller_from_item_stmt->bind_param("i", $order_id);
+        $seller_from_item_stmt->execute();
+        $seller_from_item = $seller_from_item_stmt->get_result()->fetch_assoc();
+        $order_seller_id = (int)($seller_from_item['seller_id'] ?? 0);
+        $seller_from_item_stmt->close();
+    }
+}
+
+// Prefer the persisted branch only when it belongs to the order's seller.
+if ($order_store_id > 0 && $order_seller_id > 0) {
+    $store_stmt = $conn->prepare(
+        "SELECT * FROM store_locations
+         WHERE store_id = ? AND owner_user_id = ?
+         LIMIT 1"
+    );
     if ($store_stmt) {
-        $store_stmt->bind_param("ii", $order['pickup_location'], $order['pickup_location']);
+        $store_stmt->bind_param("ii", $order_store_id, $order_seller_id);
         $store_stmt->execute();
         $store_details = $store_stmt->get_result()->fetch_assoc();
         $store_stmt->close();
     }
 }
-if (!$store_details) {
-    $def_store_res = $conn->query("SELECT * FROM store_locations WHERE is_active = 1 LIMIT 1");
-    if ($def_store_res) {
-        $store_details = $def_store_res->fetch_assoc();
+
+if (!$store_details && $order_seller_id > 0) {
+    $seller_store_stmt = $conn->prepare(
+        "SELECT * FROM store_locations
+         WHERE owner_user_id = ?
+         ORDER BY is_active DESC, store_id ASC
+         LIMIT 1"
+    );
+    if ($seller_store_stmt) {
+        $seller_store_stmt->bind_param("i", $order_seller_id);
+        $seller_store_stmt->execute();
+        $store_details = $seller_store_stmt->get_result()->fetch_assoc();
+        $seller_store_stmt->close();
     }
+}
+
+if (!$store_details && $legacy_store_id > 0) {
+    $store_stmt = $conn->prepare("SELECT * FROM store_locations WHERE store_id = ? LIMIT 1");
+    if ($store_stmt) {
+        $store_stmt->bind_param("i", $legacy_store_id);
+        $store_stmt->execute();
+        $store_details = $store_stmt->get_result()->fetch_assoc();
+        $store_stmt->close();
+    }
+}
+
+if (!$store_details) {
+    $store_details = [
+        'store_name' => 'Store location unavailable',
+        'address' => 'Store address unavailable',
+        'latitude' => null,
+        'longitude' => null
+    ];
 }
 
 // Get logistics tracking info (for delivery orders)

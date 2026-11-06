@@ -1549,7 +1549,25 @@ if (!empty($_SESSION['user_id'])) {
                 <p class="storefront-categories"><?php echo htmlspecialchars($store_category_line); ?></p>
                 <h1><?php echo htmlspecialchars($store_display_name); ?></h1>
                 <p class="storefront-subtitle"><?php echo htmlspecialchars($store_display_subtitle); ?></p>
-                <?php if ($has_selected_store && isset($is_curr_store_open) && !$is_curr_store_open): ?>
+                <?php
+                $curr_store_avail = null;
+                if ($has_selected_store) {
+                    if (!empty($selected_pickup_branch['availability'])) {
+                        $curr_store_avail = $selected_pickup_branch['availability'];
+                    } else {
+                        foreach ($store_locations as $sl_item) {
+                            if ($lookup_seller_id > 0 && (int)($sl_item['owner_user_id'] ?? 0) === $lookup_seller_id) {
+                                $curr_store_avail = $sl_item['availability'] ?? null;
+                                break;
+                            }
+                        }
+                    }
+                }
+                $is_curr_store_open = $curr_store_avail ? !empty($curr_store_avail['is_open']) : true;
+                $curr_store_status_label = $curr_store_avail ? ($curr_store_avail['label'] ?? ($is_curr_store_open ? 'Open Now' : 'Closed')) : 'Open Now';
+                $curr_store_status_note = $curr_store_avail ? ($curr_store_avail['note'] ?? '') : '';
+                ?>
+                <?php if ($has_selected_store && !$is_curr_store_open): ?>
                     <div style="background:#fff8eb; border:1px solid #fedf89; color:#b54708; border-radius:12px; padding:10px 14px; margin-top:10px; margin-bottom:12px; font-size:0.85rem; display:flex; align-items:center; gap:8px;">
                         <i class="fas fa-clock fa-lg"></i>
                         <div><strong>Store Currently Closed:</strong> <?php echo htmlspecialchars($curr_store_status_note ?: 'This store is not accepting live orders right now.'); ?> You can still explore the menu or schedule a pre-order.</div>

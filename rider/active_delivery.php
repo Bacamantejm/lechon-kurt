@@ -1092,6 +1092,31 @@ function initActiveMap(retryCount = 0) {
 
 function recenterDeliveryMap() {
     if (!activeDeliveryMap) return;
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+                const acc = Math.round(pos.coords.accuracy || 0);
+                currentRiderLat = lat;
+                currentRiderLng = lng;
+                if (riderMarker) riderMarker.setLatLng([lat, lng]);
+                if (typeof sendRiderLocationPing === 'function') {
+                    sendRiderLocationPing(lat, lng, acc);
+                }
+                const pts2 = [[currentRiderLat, currentRiderLng]];
+                if (storeLat && storeLng) pts2.push([storeLat, storeLng]);
+                if (custLat && custLng) pts2.push([custLat, custLng]);
+                if (pts2.length > 1) {
+                    activeDeliveryMap.fitBounds(L.latLngBounds(pts2).pad(0.25), { padding: [40, 40], maxZoom: 16 });
+                } else {
+                    activeDeliveryMap.setView([currentRiderLat, currentRiderLng], 16);
+                }
+            },
+            () => {},
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    }
     const pts = [[currentRiderLat, currentRiderLng]];
     if (storeLat && storeLng) pts.push([storeLat, storeLng]);
     if (custLat && custLng) pts.push([custLat, custLng]);
