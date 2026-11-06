@@ -30,7 +30,7 @@ $order_source = '';
 if ($source === 'order') {
     $ord_query = "SELECT o.*, sl.store_name, sl.address AS store_address, sl.city AS store_city, sl.province AS store_province, sl.phone AS store_phone
                   FROM orders o
-                  LEFT JOIN store_locations sl ON (sl.store_id = o.pickup_location OR sl.owner_user_id = o.seller_id)
+                  LEFT JOIN store_locations sl ON (sl.store_id = o.pickup_location OR sl.store_name = o.pickup_location OR sl.owner_user_id = o.seller_id" . ($seller_scope_id !== null ? " OR sl.owner_user_id = {$seller_scope_id}" : "") . ")
                   WHERE o.id = ?" . ($seller_scope_id !== null ? " AND (o.seller_id = {$seller_scope_id} OR sl.owner_user_id = {$seller_scope_id} OR {$seller_scoped_orders_exists})" : "") . "
                   LIMIT 1";
     $stmt = mysqli_prepare($conn, $ord_query);
@@ -89,7 +89,7 @@ if (!$order_data) {
 if (!$order_data && $source === '') {
     $ord_query = "SELECT o.*, sl.store_name, sl.address AS store_address, sl.city AS store_city, sl.province AS store_province, sl.phone AS store_phone
                   FROM orders o
-                  LEFT JOIN store_locations sl ON (sl.store_id = o.pickup_location OR sl.owner_user_id = o.seller_id)
+                  LEFT JOIN store_locations sl ON (sl.store_id = o.pickup_location OR sl.store_name = o.pickup_location OR sl.owner_user_id = o.seller_id" . ($seller_scope_id !== null ? " OR sl.owner_user_id = {$seller_scope_id}" : "") . ")
                   WHERE o.id = ?" . ($seller_scope_id !== null ? " AND (o.seller_id = {$seller_scope_id} OR sl.owner_user_id = {$seller_scope_id} OR {$seller_scoped_orders_exists})" : "") . "
                   LIMIT 1";
     $stmt = mysqli_prepare($conn, $ord_query);
@@ -149,9 +149,26 @@ if ($order_source === 'order') {
     $payment_status = ucfirst($order_data['payment_status'] ?? 'pending');
     $downpayment_amount = floatval($order_data['downpayment_amount'] ?? 0);
     $remaining_balance = floatval($order_data['remaining_balance'] ?? 0);
+    $remaining_amount = $remaining_balance;
     $special_instructions = trim((string)($order_data['special_instructions'] ?? ''));
     $admin_notes = '';
-    $store_name = htmlspecialchars($order_data['store_name'] ?: 'Main Store');
+    $store_name = htmlspecialchars($order_data['store_name'] ?? '');
+    if (!$store_name && $seller_scope_id !== null) {
+        $sl_res = mysqli_query($conn, "SELECT store_name, address, city, phone FROM store_locations WHERE owner_user_id = {$seller_scope_id} ORDER BY is_active DESC LIMIT 1");
+        if ($sl_res && ($sl_row = mysqli_fetch_assoc($sl_res))) {
+            $store_name = htmlspecialchars($sl_row['store_name'] ?? 'Robin\'s lechon');
+            if (empty($order_data['store_address'])) {
+                $order_data['store_address'] = $sl_row['address'] ?? '';
+                $order_data['store_city'] = $sl_row['city'] ?? '';
+            }
+            if (empty($order_data['store_phone'])) {
+                $order_data['store_phone'] = $sl_row['phone'] ?? '';
+            }
+        }
+    }
+    if (!$store_name) {
+        $store_name = 'Main Store';
+    }
     $store_address = htmlspecialchars(trim(($order_data['store_address'] ?? '') . ' ' . ($order_data['store_city'] ?? '')));
     $store_phone = htmlspecialchars($order_data['store_phone'] ?? '');
     $print_url = "print_order_receipt.php?id={$order_id}&print=1";

@@ -1580,9 +1580,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
             container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-danger" role="status"></div><p class="mt-2 text-muted small">Loading pick-up order summary...</p></div>';
             preorderModal.show();
             
-            fetch('get_preorder_details.php?id=' + id + '&source=' + encodeURIComponent(source))
-                .then(response => response.text())
+            fetch('get_preorder_details.php?id=' + id + '&source=' + encodeURIComponent(source), {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('HTTP ' + response.status);
+                    }
+                    return response.text();
+                })
                 .then(html => {
+                    if (html.includes('<title>Dashboard') || html.includes('class="admin-wrapper"') || html.includes('sidebar-menu')) {
+                        throw new Error('Unexpected redirect response');
+                    }
                     container.innerHTML = html;
                 })
                 .catch(err => {

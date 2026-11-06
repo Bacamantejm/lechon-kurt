@@ -9,6 +9,11 @@ requirePermission('preorders.view');
 
 $preOrderId = (int)($_GET['id'] ?? 0);
 $autoPrint = isset($_GET['print']) && $_GET['print'] === '1';
+$orderSource = strtolower(trim((string)($_GET['source'] ?? '')));
+if ($orderSource === 'order') {
+    header("Location: print_order_receipt.php?id={$preOrderId}" . ($autoPrint ? '&print=1' : ''));
+    exit;
+}
 $currentUserId = (int)($_SESSION['user_id'] ?? 0);
 $sellerScopeId = null;
 if (function_exists('isApprovedFranchiseSellerAccount') && isApprovedFranchiseSellerAccount($conn, $currentUserId)) {
