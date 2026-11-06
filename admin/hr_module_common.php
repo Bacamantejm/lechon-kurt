@@ -586,6 +586,44 @@ if (!function_exists('hrPartnerScopeContext')) {
             }
         }
 
+        if (hrTableExists($conn, 'riders')) {
+            $rider_sql = "SELECT DISTINCT r.user_id FROM riders r 
+                          LEFT JOIN store_locations sl ON r.store_id = sl.store_id 
+                          WHERE (r.store_owner_id = ? OR sl.owner_user_id = ?) AND r.user_id IS NOT NULL";
+            $r_stmt = mysqli_prepare($conn, $rider_sql);
+            if ($r_stmt) {
+                mysqli_stmt_bind_param($r_stmt, "ii", $owner_user_id, $owner_user_id);
+                mysqli_stmt_execute($r_stmt);
+                $r_res = mysqli_stmt_get_result($r_stmt);
+                while ($r_res && ($r_row = mysqli_fetch_assoc($r_res))) {
+                    $r_uid = intval($r_row['user_id'] ?? 0);
+                    if ($r_uid > 0) {
+                        $scoped_user_ids[$r_uid] = true;
+                    }
+                }
+                mysqli_stmt_close($r_stmt);
+            }
+        }
+
+        if (hrTableExists($conn, 'employees') && hrTableExists($conn, 'store_locations')) {
+            $emp_store_sql = "SELECT DISTINCT e.user_id FROM employees e 
+                              JOIN store_locations sl ON e.store_id = sl.store_id 
+                              WHERE sl.owner_user_id = ? AND e.user_id IS NOT NULL";
+            $es_stmt = mysqli_prepare($conn, $emp_store_sql);
+            if ($es_stmt) {
+                mysqli_stmt_bind_param($es_stmt, "i", $owner_user_id);
+                mysqli_stmt_execute($es_stmt);
+                $es_res = mysqli_stmt_get_result($es_stmt);
+                while ($es_res && ($es_row = mysqli_fetch_assoc($es_res))) {
+                    $e_uid = intval($es_row['user_id'] ?? 0);
+                    if ($e_uid > 0) {
+                        $scoped_user_ids[$e_uid] = true;
+                    }
+                }
+                mysqli_stmt_close($es_stmt);
+            }
+        }
+
         $cached = [
             'enabled' => true,
             'owner_user_id' => $owner_user_id,

@@ -13,9 +13,96 @@ $allowed_preorder_statuses = ['pending', 'confirmed', 'in_preparation', 'ready_f
 $current_user_id = (int)($_SESSION['user_id'] ?? 0);
 $is_partner_scoped_admin = isApprovedFranchiseSellerAccount($conn, $current_user_id);
 $seller_scope_id = $is_partner_scoped_admin ? getFranchiseSellerScopeOwnerId($conn, $current_user_id) : null;
+
 $partner_product_scope_sql = '';
+$partner_preorder_scope_sql = '';
+$partner_orders_scope_sql = '';
+
 if ($seller_scope_id !== null) {
     $partner_product_scope_sql = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', (int)$seller_scope_id);
+    $partner_preorder_scope_sql = " AND EXISTS (SELECT 1 FROM products p_scope WHERE p_scope.id = po.product_id AND " . getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', (int)$seller_scope_id) . ")";
+    $partner_orders_scope_sql = " AND (o.seller_id = {$seller_scope_id} OR sl.owner_user_id = {$seller_scope_id} OR " . getFranchiseScopedOrderExistsSql($conn, (int)$seller_scope_id, 'o.id') . ")";
+}
+
+// Check if orders table has delivery_option column
+$has_delivery_option_col = true;
+if (function_exists('adminAuthColumnExists')) {
+    $has_delivery_option_col = adminAuthColumnExists($conn, 'orders', 'delivery_option');
+}
+
+// Subquery for pre_orders
+$preorders_base = "
+    SELECT 
+        'pre_order' AS order_source,
+        po.id AS order_id,
+        CONCAT('#PO-', po.id) AS order_number,
+        po.user_id,
+        u.full_name AS customer_name,
+        COALESCE(u.email, '') AS customer_email,
+        COALESCE(u.phone, '') AS customer_phone,
+        po.product_name AS items_summary,
+        po.quantity AS total_items,
+        po.total_price AS total_amount,
+        po.preferred_pickup_date AS pickup_date,
+        po.preferred_pickup_time AS pickup_time,
+        po.reservation_status AS status,
+        po.payment_type AS payment_method,
+        po.final_payment_status AS payment_status,
+        COALESCE(po.downpayment_amount, 0) AS downpayment_amount,
+        COALESCE(po.remaining_amount, 0) AS remaining_amount,
+        COALESCE(po.special_instructions, '') AS special_instructions,
+        COALESCE(po.admin_notes, '') AS admin_notes,
+        COALESCE(po.pickup_location, 'Main Store') AS pickup_location_name,
+        po.created_at
+    FROM pre_orders po
+    JOIN users u ON po.user_id = u.id
+    WHERE 1=1 {$partner_preorder_scope_sql}
+";
+
+// Subquery for regular orders placed with pickup
+if ($has_delivery_option_col) {
+    $orders_base = "
+        SELECT 
+            'order' AS order_source,
+            o.id AS order_id,
+            o.order_number,
+            o.user_id,
+            o.customer_name,
+            COALESCE(o.customer_email, '') AS customer_email,
+            COALESCE(o.customer_phone, '') AS customer_phone,
+            COALESCE((
+                SELECT GROUP_CONCAT(CONCAT(oi.product_name, ' (x', oi.quantity, ')') SEPARATOR ', ')
+                FROM order_items oi
+                WHERE oi.order_id = o.id
+            ), 'Pick-up Order Items') AS items_summary,
+            COALESCE((
+                SELECT SUM(oi.quantity)
+                FROM order_items oi
+                WHERE oi.order_id = o.id
+            ), 1) AS total_items,
+            o.total_amount,
+            o.delivery_date AS pickup_date,
+            COALESCE(o.delivery_time, '') AS pickup_time,
+            CASE 
+                WHEN o.status = 'preparing' THEN 'in_preparation'
+                WHEN o.status = 'delivered' THEN 'completed'
+                ELSE o.status
+            END AS status,
+            o.payment_method,
+            o.payment_status,
+            COALESCE(o.downpayment_amount, 0) AS downpayment_amount,
+            COALESCE(o.remaining_balance, 0) AS remaining_amount,
+            COALESCE(o.special_instructions, '') AS special_instructions,
+            '' AS admin_notes,
+            COALESCE(sl.store_name, 'Main Store') AS pickup_location_name,
+            o.created_at
+        FROM orders o
+        LEFT JOIN store_locations sl ON (sl.store_id = o.pickup_location OR sl.owner_user_id = o.seller_id)
+        WHERE o.delivery_option = 'pickup' {$partner_orders_scope_sql}
+    ";
+    $unified_from = "({$preorders_base} UNION ALL {$orders_base}) AS uo";
+} else {
+    $unified_from = "({$preorders_base}) AS uo";
 }
 
 // Handle AJAX Calendar Data Request
@@ -27,22 +114,20 @@ if (isset($_GET['ajax_calendar'])) {
     $start_date = $req_month . '-01';
     $end_date = date('Y-m-t', strtotime($start_date));
     
-    $cal_where = ["po.preferred_pickup_date BETWEEN '{$start_date}' AND '{$end_date}'"];
+    $cal_where = ["uo.pickup_date BETWEEN '{$start_date}' AND '{$end_date}'"];
     if ($cal_status !== 'all' && in_array($cal_status, $allowed_preorder_statuses, true)) {
         $escaped_status = mysqli_real_escape_string($conn, $cal_status);
-        $cal_where[] = "po.reservation_status = '{$escaped_status}'";
+        $cal_where[] = "uo.status = '{$escaped_status}'";
     }
     
     $cal_where_sql = "WHERE " . implode(' AND ', $cal_where);
     
-    $cal_query = "SELECT po.id, po.product_name, po.quantity, po.total_price, po.reservation_status, 
-                         po.preferred_pickup_date, po.preferred_pickup_time, po.payment_type,
-                         u.full_name, u.phone, u.email
-                  FROM pre_orders po
-                  JOIN users u ON po.user_id = u.id" .
-                  ($seller_scope_id !== null ? " JOIN products p_scope ON p_scope.id = po.product_id AND {$partner_product_scope_sql}" : "") . "
+    $cal_query = "SELECT uo.order_id, uo.order_source, uo.order_number, uo.items_summary, uo.total_items, uo.total_amount, uo.status, 
+                         uo.pickup_date, uo.pickup_time, uo.payment_method,
+                         uo.customer_name, uo.customer_phone, uo.customer_email
+                  FROM {$unified_from}
                   $cal_where_sql
-                  ORDER BY po.preferred_pickup_date ASC, po.preferred_pickup_time ASC, po.id ASC";
+                  ORDER BY uo.pickup_date ASC, uo.pickup_time ASC, uo.order_id ASC";
                   
     $cal_res = mysqli_query($conn, $cal_query);
     $events = [];
@@ -50,7 +135,7 @@ if (isset($_GET['ajax_calendar'])) {
     
     if ($cal_res) {
         while ($row = mysqli_fetch_assoc($cal_res)) {
-            $date_key = $row['preferred_pickup_date'];
+            $date_key = $row['pickup_date'];
             if (!$date_key || $date_key === '0000-00-00') {
                 continue;
             }
@@ -58,23 +143,25 @@ if (isset($_GET['ajax_calendar'])) {
                 $events[$date_key] = [];
             }
             
-            $formatted_time = !empty($row['preferred_pickup_time']) ? date('g:i A', strtotime($row['preferred_pickup_time'])) : 'Anytime';
+            $formatted_time = !empty($row['pickup_time']) ? date('g:i A', strtotime($row['pickup_time'])) : 'Anytime';
             
             $events[$date_key][] = [
-                'id' => (int)$row['id'],
-                'customer_name' => $row['full_name'],
-                'customer_phone' => $row['phone'] ?? '',
-                'customer_email' => $row['email'] ?? '',
-                'product_name' => $row['product_name'],
-                'quantity' => (int)$row['quantity'],
-                'total_price' => (float)$row['total_price'],
-                'total_formatted' => '₱' . number_format((float)$row['total_price'], 2),
-                'status' => $row['reservation_status'],
-                'status_label' => ucwords(str_replace('_', ' ', $row['reservation_status'])),
-                'status_class' => 'badge-' . str_replace('_', '-', $row['reservation_status']),
-                'pickup_date' => $row['preferred_pickup_date'],
+                'id' => (int)$row['order_id'],
+                'source' => $row['order_source'],
+                'order_number' => $row['order_number'],
+                'customer_name' => $row['customer_name'],
+                'customer_phone' => $row['customer_phone'] ?? '',
+                'customer_email' => $row['customer_email'] ?? '',
+                'product_name' => $row['items_summary'],
+                'quantity' => (int)$row['total_items'],
+                'total_price' => (float)$row['total_amount'],
+                'total_formatted' => '₱' . number_format((float)$row['total_amount'], 2),
+                'status' => $row['status'],
+                'status_label' => ucwords(str_replace('_', ' ', $row['status'])),
+                'status_class' => 'badge-' . str_replace('_', '-', $row['status']),
+                'pickup_date' => $row['pickup_date'],
                 'pickup_time' => $formatted_time,
-                'payment_type' => ucwords(str_replace('_', ' ', $row['payment_type'] ?? 'N/A'))
+                'payment_type' => ucwords(str_replace('_', ' ', $row['payment_method'] ?? 'N/A'))
             ];
             $total_count++;
         }
@@ -91,67 +178,68 @@ if (isset($_GET['ajax_calendar'])) {
 }
 
 $preorder_service = new PreOrderService($conn);
-$current_page = 'preorders'; // for sidebar active state
+$current_page = 'preorders.php'; // for sidebar active state
 
 // Pagination settings
-$records_per_page = 15;
+$records_per_page = 12;
 $current_page_number = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 if ($current_page_number < 1) {
     $current_page_number = 1;
 }
 $offset = ($current_page_number - 1) * $records_per_page;
 
-// Get pre-order statistics
+// Get pick-up order statistics
 $preorder_stats_query = "SELECT 
     COUNT(*) as total,
-    SUM(CASE WHEN reservation_status = 'pending' THEN 1 ELSE 0 END) as pending,
-    SUM(CASE WHEN reservation_status = 'confirmed' THEN 1 ELSE 0 END) as confirmed,
-    SUM(CASE WHEN reservation_status = 'completed' THEN 1 ELSE 0 END) as completed
-    FROM pre_orders po" . ($seller_scope_id !== null ? " INNER JOIN products p_scope ON p_scope.id = po.product_id AND {$partner_product_scope_sql}" : "");
+    SUM(CASE WHEN uo.status = 'pending' THEN 1 ELSE 0 END) as pending,
+    SUM(CASE WHEN uo.status = 'confirmed' THEN 1 ELSE 0 END) as confirmed,
+    SUM(CASE WHEN uo.status IN ('completed', 'delivered') THEN 1 ELSE 0 END) as completed
+    FROM {$unified_from}";
 $preorder_stats_result = mysqli_query($conn, $preorder_stats_query);
 $preorder_stats = ($preorder_stats_result instanceof mysqli_result) ? (mysqli_fetch_assoc($preorder_stats_result) ?: []) : [];
 
 // Get status filter
-$status_filter = isset($_GET['status']) ? trim($_GET['status']) : 'pending';
+$status_filter = isset($_GET['status']) ? trim($_GET['status']) : 'all';
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 $pickup_date = isset($_GET['pickup_date']) ? $_GET['pickup_date'] : '';
 if ($status_filter !== 'all' && !in_array($status_filter, $allowed_preorder_statuses, true)) {
-    $status_filter = 'pending';
+    $status_filter = 'all';
 }
  
-// Build WHERE clause for both queries
+// Build WHERE clause
 $where_clauses = [];
 if ($status_filter && $status_filter !== 'all') {
-    $where_clauses[] = "po.reservation_status = '" . mysqli_real_escape_string($conn, $status_filter) . "'";
+    $where_clauses[] = "uo.status = '" . mysqli_real_escape_string($conn, $status_filter) . "'";
 }
 if (!empty($search)) {
     $search_term = mysqli_real_escape_string($conn, $search);
     $search_int = intval($search);
-    $where_clauses[] = "(po.product_name LIKE '%$search_term%' OR u.full_name LIKE '%$search_term%' OR po.id = $search_int)";
+    $where_clauses[] = "(uo.order_number LIKE '%$search_term%' OR uo.items_summary LIKE '%$search_term%' OR uo.customer_name LIKE '%$search_term%' OR uo.customer_phone LIKE '%$search_term%' OR uo.order_id = $search_int)";
 }
 if ($pickup_date) {
-    $where_clauses[] = "po.preferred_pickup_date = '" . mysqli_real_escape_string($conn, $pickup_date) . "'";
+    $where_clauses[] = "uo.pickup_date = '" . mysqli_real_escape_string($conn, $pickup_date) . "'";
 }
 $where_sql = !empty($where_clauses) ? 'WHERE ' . implode(' AND ', $where_clauses) : '';
 
 // Count total records for pagination
-$count_query = "SELECT COUNT(*) as total
-                FROM pre_orders po
-                JOIN users u ON po.user_id = u.id" .
-                ($seller_scope_id !== null ? " JOIN products p_scope ON p_scope.id = po.product_id AND {$partner_product_scope_sql}" : "") .
-                " $where_sql";
+$count_query = "SELECT COUNT(*) as total FROM {$unified_from} {$where_sql}";
 $count_result = mysqli_query($conn, $count_query);
 $total_records = ($count_result instanceof mysqli_result) ? ((int)(mysqli_fetch_assoc($count_result)['total'] ?? 0)) : 0;
 $total_pages = max(1, ceil($total_records / $records_per_page));
 
-// Get pre-orders for the current page
-$query = "SELECT po.*, u.email, u.full_name FROM pre_orders po 
-          JOIN users u ON po.user_id = u.id" .
-          ($seller_scope_id !== null ? " JOIN products p_scope ON p_scope.id = po.product_id AND {$partner_product_scope_sql}" : "") . "
+// Get pick-up orders for the current page
+$query = "SELECT * FROM {$unified_from} 
           $where_sql
-          ORDER BY po.preferred_pickup_time ASC, po.created_at ASC
+          ORDER BY (CASE WHEN uo.pickup_date = CURDATE() THEN 0 ELSE 1 END), uo.pickup_date DESC, uo.created_at DESC
           LIMIT $records_per_page OFFSET $offset";
 $result = mysqli_query($conn, $query);
+
+$pickup_orders = [];
+if ($result instanceof mysqli_result) {
+    while ($row = mysqli_fetch_assoc($result)) {
+        $pickup_orders[] = $row;
+    }
+}
 
 // Handle status updates
 $message = '';
@@ -164,46 +252,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
         exit();
     }
 
-    $pre_order_id = intval($_POST['pre_order_id']);
-    $new_status = trim($_POST['new_status']);
+    $order_id = intval($_POST['pre_order_id'] ?? 0);
+    $order_source = trim($_POST['order_source'] ?? 'pre_order');
+    $new_status = trim($_POST['new_status'] ?? '');
     $admin_notes = trim($_POST['admin_notes'] ?? '');
 
-    if ($pre_order_id <= 0 || !in_array($new_status, $allowed_preorder_statuses, true)) {
-        $update_result = ['success' => false, 'message' => 'Invalid pre-order status update request.'];
-    } elseif ($seller_scope_id !== null) {
-        $scope_check_query = "SELECT po.id
-                              FROM pre_orders po
-                              INNER JOIN products p_scope ON p_scope.id = po.product_id
-                              WHERE po.id = ? AND {$partner_product_scope_sql}
-                              LIMIT 1";
-        $scope_check_stmt = mysqli_prepare($conn, $scope_check_query);
-        mysqli_stmt_bind_param($scope_check_stmt, "i", $pre_order_id);
-        mysqli_stmt_execute($scope_check_stmt);
-        $scope_check_result = mysqli_stmt_get_result($scope_check_stmt);
-        $scoped_preorder = $scope_check_result ? mysqli_fetch_assoc($scope_check_result) : null;
-        mysqli_stmt_close($scope_check_stmt);
+    if ($order_id <= 0 || !in_array($new_status, $allowed_preorder_statuses, true)) {
+        $update_result = ['success' => false, 'message' => 'Invalid pick-up order status update request.'];
+    } elseif ($order_source === 'order') {
+        // Scoping check for orders table
+        $scope_ok = true;
+        if ($seller_scope_id !== null) {
+            $scope_check_query = "SELECT o.id FROM orders o 
+                                  LEFT JOIN store_locations sl ON (sl.store_id = o.pickup_location OR sl.owner_user_id = o.seller_id)
+                                  WHERE o.id = ? AND (o.seller_id = {$seller_scope_id} OR sl.owner_user_id = {$seller_scope_id} OR " . getFranchiseScopedOrderExistsSql($conn, (int)$seller_scope_id, 'o.id') . ")
+                                  LIMIT 1";
+            $scope_check_stmt = mysqli_prepare($conn, $scope_check_query);
+            mysqli_stmt_bind_param($scope_check_stmt, "i", $order_id);
+            mysqli_stmt_execute($scope_check_stmt);
+            $scope_check_result = mysqli_stmt_get_result($scope_check_stmt);
+            $scope_ok = ($scope_check_result && mysqli_fetch_assoc($scope_check_result));
+            mysqli_stmt_close($scope_check_stmt);
+        }
 
-        if (!$scoped_preorder) {
-            $update_result = ['success' => false, 'message' => 'You can only update pre-orders for your own store.'];
+        if (!$scope_ok) {
+            $update_result = ['success' => false, 'message' => 'You can only update orders belonging to your store.'];
         } else {
-            $update_result = $preorder_service->updatePreOrderStatus($pre_order_id, $new_status, $admin_notes);
+            // Map status for orders table
+            $mapped_status = $new_status;
+            if ($new_status === 'in_preparation' || $new_status === 'ready_for_pickup') {
+                $mapped_status = 'preparing';
+            } elseif ($new_status === 'completed') {
+                $mapped_status = 'delivered';
+            }
+            $upd_stmt = mysqli_prepare($conn, "UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?");
+            if ($upd_stmt) {
+                mysqli_stmt_bind_param($upd_stmt, "si", $mapped_status, $order_id);
+                mysqli_stmt_execute($upd_stmt);
+                mysqli_stmt_close($upd_stmt);
+                $update_result = ['success' => true, 'message' => 'Pick-up order status updated successfully!'];
+            } else {
+                $update_result = ['success' => false, 'message' => 'Failed to update order in database.'];
+            }
         }
     } else {
-        $update_result = $preorder_service->updatePreOrderStatus($pre_order_id, $new_status, $admin_notes);
+        // Pre-orders table
+        if ($seller_scope_id !== null) {
+            $scope_check_query = "SELECT po.id
+                                  FROM pre_orders po
+                                  INNER JOIN products p_scope ON p_scope.id = po.product_id
+                                  WHERE po.id = ? AND {$partner_product_scope_sql}
+                                  LIMIT 1";
+            $scope_check_stmt = mysqli_prepare($conn, $scope_check_query);
+            mysqli_stmt_bind_param($scope_check_stmt, "i", $order_id);
+            mysqli_stmt_execute($scope_check_stmt);
+            $scope_check_result = mysqli_stmt_get_result($scope_check_stmt);
+            $scoped_preorder = $scope_check_result ? mysqli_fetch_assoc($scope_check_result) : null;
+            mysqli_stmt_close($scope_check_stmt);
+
+            if (!$scoped_preorder) {
+                $update_result = ['success' => false, 'message' => 'You can only update pre-orders for your own store.'];
+            } else {
+                $update_result = $preorder_service->updatePreOrderStatus($order_id, $new_status, $admin_notes);
+            }
+        } else {
+            $update_result = $preorder_service->updatePreOrderStatus($order_id, $new_status, $admin_notes);
+        }
     }
     
-    if ($update_result['success']) {
-        $message = "<div class='alert alert-success'>" . htmlspecialchars((string)($update_result['message'] ?? 'Status updated successfully!')) . "</div>";
-    } else {
-        $message = "<div class='alert alert-danger'>" . htmlspecialchars($update_result['message']) . "</div>";
-    }
-    // To show the message with SweetAlert2
     if ($update_result['success']) {
         $_SESSION['success'] = (string)($update_result['message'] ?? 'Status updated successfully!');
     } else {
         $_SESSION['error'] = htmlspecialchars($update_result['message']);
     }
-    // Redirect to clear POST data
+    
     header("Location: preorders.php?status=" . urlencode($status_filter) . "&search=" . urlencode($search) . "&pickup_date=" . urlencode($pickup_date));
     exit();
 }
@@ -279,13 +401,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
         .pagination-container {
             display: flex;
             justify-content: center;
-            margin-top: 20px;
+            margin-top: 25px;
+            margin-bottom: 25px;
         }
         .pagination {
-            --bs-pagination-color: #c62828;
-            --bs-pagination-hover-color: #a71c1c;
-            --bs-pagination-active-bg: #c62828;
-            --bs-pagination-active-border-color: #c62828;
+            --bs-pagination-color: #b3261e;
+            --bs-pagination-hover-color: #981b15;
+            --bs-pagination-active-bg: #b3261e;
+            --bs-pagination-active-border-color: #b3261e;
         }
         body.dark-mode .pagination {
             --bs-pagination-bg: var(--card-bg-dark);
@@ -307,7 +430,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
             color: #ffc107;
         }
 
-        /* Pre-Order Calendar System Styles */
+        /* View Mode Switcher */
         .view-switch-btn {
             border: 1px solid #d0d5dd;
             background-color: #ffffff;
@@ -338,6 +461,285 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
             color: #ffffff !important;
         }
 
+        /* ==================================================== */
+        /* MODERN PICK-UP ORDER CARDS DESIGN SYSTEM (GEMINI.md) */
+        /* ==================================================== */
+        .pickup-card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+
+        .pickup-order-card {
+            background: #ffffff;
+            border: 1px solid #eaecf0;
+            border-radius: 14px;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .pickup-order-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(16, 24, 40, 0.08);
+            border-color: #d0d5dd;
+        }
+
+        .pickup-card-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid #f2f4f7;
+            margin-bottom: 0.75rem;
+        }
+
+        .pickup-order-num {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #101828;
+            letter-spacing: -0.2px;
+        }
+
+        .pickup-type-tag {
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 12px;
+            background: #fef3f2;
+            color: #b3261e;
+            border: 1px solid #fee4e2;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .pickup-customer-block {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .pickup-customer-name {
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: #1d2939;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pickup-customer-phone {
+            font-size: 0.78rem;
+            color: #475467;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 7px;
+            border-radius: 6px;
+            background: #f8f9fa;
+            border: 1px solid #eaecf0;
+            transition: all 0.15s ease;
+        }
+
+        .pickup-customer-phone:hover {
+            color: #b3261e;
+            border-color: #fecdca;
+            background: #fffbfa;
+        }
+
+        .pickup-timing-box {
+            background: #fcfcfd;
+            border: 1px solid #eaecf0;
+            border-radius: 10px;
+            padding: 0.65rem 0.85rem;
+            margin-bottom: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pickup-timing-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .pickup-timing-label {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: #667085;
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+
+        .pickup-timing-value {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #101828;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .pickup-store-location {
+            font-size: 0.78rem;
+            color: #475467;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pickup-product-summary {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 0.6rem 0.75rem;
+            margin-bottom: 0.85rem;
+            font-size: 0.82rem;
+            color: #344054;
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            line-height: 1.35;
+        }
+
+        .pickup-footer-row {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            padding-top: 0.75rem;
+            border-top: 1px solid #f2f4f7;
+            margin-bottom: 0.75rem;
+        }
+
+        .pickup-total-label {
+            font-size: 0.68rem;
+            color: #667085;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .pickup-total-amount {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #b3261e;
+            line-height: 1.2;
+        }
+
+        .pickup-payment-badge {
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: #ecfdf3;
+            color: #027a48;
+            border: 1px solid #abefc6;
+        }
+
+        .pickup-payment-badge.pending {
+            background: #fffaeb;
+            color: #b54708;
+            border-color: #fedf89;
+        }
+
+        .pickup-actions-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-pickup-summary {
+            flex: 1;
+            background: #ffffff;
+            border: 1px solid #d0d5dd;
+            color: #344054;
+            font-size: 0.82rem;
+            font-weight: 600;
+            padding: 0.45rem 0.75rem;
+            border-radius: 8px;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            text-decoration: none;
+        }
+
+        .btn-pickup-summary:hover {
+            background: #b3261e;
+            border-color: #b3261e;
+            color: #ffffff;
+        }
+
+        .btn-pickup-icon {
+            width: 34px;
+            height: 34px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #f8f9fa;
+            border: 1px solid #eaecf0;
+            border-radius: 8px;
+            color: #475467;
+            font-size: 0.85rem;
+            transition: all 0.15s ease;
+            cursor: pointer;
+        }
+
+        .btn-pickup-icon:hover {
+            background: #ffffff;
+            color: #b3261e;
+            border-color: #b3261e;
+        }
+
+        /* Dark mode overrides for cards */
+        body.dark-mode .pickup-order-card {
+            background: #2d2d2d;
+            border-color: #404040;
+        }
+        body.dark-mode .pickup-card-head,
+        body.dark-mode .pickup-footer-row {
+            border-color: #404040;
+        }
+        body.dark-mode .pickup-order-num,
+        body.dark-mode .pickup-customer-name,
+        body.dark-mode .pickup-timing-value {
+            color: #f2f4f7;
+        }
+        body.dark-mode .pickup-timing-box,
+        body.dark-mode .pickup-product-summary {
+            background: #232323;
+            border-color: #404040;
+            color: #e0e0e0;
+        }
+        body.dark-mode .pickup-customer-phone,
+        body.dark-mode .btn-pickup-icon {
+            background: #232323;
+            border-color: #404040;
+            color: #d0d5dd;
+        }
+        body.dark-mode .btn-pickup-summary {
+            background: #232323;
+            border-color: #444;
+            color: #e0e0e0;
+        }
+        body.dark-mode .btn-pickup-summary:hover {
+            background: #b3261e;
+            border-color: #b3261e;
+            color: #ffffff;
+        }
+
+        /* Calendar System Styles */
         .calendar-card {
             background: #ffffff;
             border: 1px solid #eaecf0;
@@ -559,50 +961,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
             flex-shrink: 0;
         }
 
-        /* Status-specific chip colors */
-        .cal-chip-pending {
-            background: #fff8eb;
-            color: #b54708;
-            border-color: #fedf89;
-        }
+        .cal-chip-pending { background: #fff8eb; color: #b54708; border-color: #fedf89; }
         .cal-chip-pending .cal-chip-dot { background: #b54708; }
-
-        .cal-chip-confirmed {
-            background: #eff8ff;
-            color: #175cd3;
-            border-color: #b2ddff;
-        }
+        .cal-chip-confirmed { background: #eff8ff; color: #175cd3; border-color: #b2ddff; }
         .cal-chip-confirmed .cal-chip-dot { background: #175cd3; }
-
-        .cal-chip-in_preparation {
-            background: #fdf2fa;
-            color: #c11574;
-            border-color: #fce7f6;
-        }
+        .cal-chip-in_preparation { background: #fdf2fa; color: #c11574; border-color: #fce7f6; }
         .cal-chip-in_preparation .cal-chip-dot { background: #c11574; }
-
-        .cal-chip-ready_for_pickup {
-            background: #f0fdf9;
-            color: #0e9384;
-            border-color: #ccfbe7;
-        }
+        .cal-chip-ready_for_pickup { background: #f0fdf9; color: #0e9384; border-color: #ccfbe7; }
         .cal-chip-ready_for_pickup .cal-chip-dot { background: #0e9384; }
-
-        .cal-chip-completed {
-            background: #ecfdf3;
-            color: #027a48;
-            border-color: #abefc6;
-        }
+        .cal-chip-completed { background: #ecfdf3; color: #027a48; border-color: #abefc6; }
         .cal-chip-completed .cal-chip-dot { background: #027a48; }
-
-        .cal-chip-cancelled {
-            background: #fef3f2;
-            color: #b42318;
-            border-color: #fee4e2;
-        }
+        .cal-chip-cancelled { background: #fef3f2; color: #b42318; border-color: #fee4e2; }
         .cal-chip-cancelled .cal-chip-dot { background: #b42318; }
 
-        /* Dark mode chip variations */
         body.dark-mode .cal-chip-pending { background: #3b2811; color: #fedf89; border-color: #634316; }
         body.dark-mode .cal-chip-confirmed { background: #102a45; color: #b2ddff; border-color: #19416e; }
         body.dark-mode .cal-chip-in_preparation { background: #3c142b; color: #fce7f6; border-color: #68224b; }
@@ -655,10 +1026,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
             <div class="admin-topbar">
                 <div class="topbar-content">
                     <button class="sidebar-toggler" id="sidebarToggler"><i class="fas fa-bars"></i></button>
-                    <h1>Pre-Order Management</h1>
-                        <button class="theme-toggler" id="themeToggler" title="Toggle Theme">
-                            <i class="fas fa-moon"></i>
-                        </button>
+                    <h1>Pick-up Orders</h1>
+                    <button class="theme-toggler" id="themeToggler" title="Toggle Theme">
+                        <i class="fas fa-moon"></i>
+                    </button>
                     <div class="topbar-right">
                         <div class="date-display" id="currentDate"></div>
                         <div class="admin-profile">
@@ -716,7 +1087,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
                     <div class="d-flex align-items-center gap-3">
                         <h2 class="m-0">Pick-up Orders</h2>
                         <div class="btn-group" role="group" aria-label="Preorder View Selection">
-                            <button type="button" class="btn btn-sm view-switch-btn active" id="btnTableView" onclick="switchPreorderView('table')">
+                            <button type="button" class="btn btn-sm view-switch-btn active" id="btnCardView" onclick="switchPreorderView('card')">
+                                <i class="fas fa-th-large me-1"></i> Card View
+                            </button>
+                            <button type="button" class="btn btn-sm view-switch-btn" id="btnTableView" onclick="switchPreorderView('table')">
                                 <i class="fas fa-list me-1"></i> Table View
                             </button>
                             <button type="button" class="btn btn-sm view-switch-btn" id="btnCalendarView" onclick="switchPreorderView('calendar')">
@@ -743,92 +1117,226 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
                     </div>
                 </div>
 
-                <!-- TABLE VIEW CONTAINER -->
-                <div id="tableViewContainer">
-                
-                <!-- Pre-Orders List -->
-                <div class="table-responsive fade-in-up">
-                    <table class="admin-table">
-                        <thead>
-                            <tr>
-                                <th>Order #</th>
-                                <th>Customer</th>
-                                <th>Product</th>
-                                <th>Pickup Date</th>
-                                <th>Total Price</th>
-                                <th>Payment</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                    <?php
-                    if ($result instanceof mysqli_result && mysqli_num_rows($result) > 0) {
-                        while ($preorder = mysqli_fetch_assoc($result)) {
-                            $status_class = 'badge-' . str_replace('_', '-', $preorder['reservation_status']);
+                <!-- ============================================== -->
+                <!-- CARD VIEW CONTAINER (Default Primary UI View) -->
+                <!-- ============================================== -->
+                <div id="cardViewContainer">
+                    <?php if (!empty($pickup_orders)): ?>
+                        <div class="pickup-card-grid fade-in-up">
+                            <?php foreach ($pickup_orders as $item): 
+                                $status_key = $item['status'] ?? 'pending';
+                                $status_class = 'badge-' . str_replace('_', '-', $status_key);
+                                $date_str = $item['pickup_date'];
+                                $time_str = $item['pickup_time'];
+                                $formatted_date = ($date_str && $date_str !== '0000-00-00') ? date('M d, Y', strtotime($date_str)) : 'Date TBD';
+                                $formatted_time = !empty($time_str) ? htmlspecialchars($time_str) : 'Store Hours';
+                                $phone_clean = preg_replace('/[^0-9+]/', '', (string)$item['customer_phone']);
+                                $is_paid = in_array(strtolower((string)$item['payment_status']), ['paid', 'completed']);
                             ?>
-                            <tr>
-                                <td><strong>#<?php echo $preorder['id']; ?></strong></td>
-                                <td><?php echo htmlspecialchars($preorder['full_name']); ?></td>
-                                <td><?php echo htmlspecialchars($preorder['product_name']); ?></td>
-                                <td>
-                                    <?php 
-                                    $date_str = $preorder['preferred_pickup_date'];
-                                    $time_str = $preorder['preferred_pickup_time'];
-                                    echo ($date_str && $date_str != '0000-00-00') ? date('M d, Y', strtotime($date_str)) . ' @ ' . htmlspecialchars($time_str) : 'N/A'; 
-                                    ?>
-                                </td>
-                                <td>₱<?php echo number_format($preorder['total_price'], 2); ?></td>
-                                <td><?php echo ucwords(str_replace('_', ' ', $preorder['payment_type'])); ?></td>
-                                <td><span class="status-badge <?php echo $status_class; ?>"><?php echo ucwords(str_replace('_', ' ', $preorder['reservation_status'])); ?></span></td>
-                                <td>
-                                    <button class="btn-icon" onclick="showUpdateStatus(<?php echo $preorder['id']; ?>)" title="Update Status">
+                            <div class="pickup-order-card" onclick="loadPreOrderDetails(<?php echo (int)$item['order_id']; ?>, '<?php echo $item['order_source']; ?>')">
+                                <div class="pickup-card-head">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="pickup-order-num"><?php echo htmlspecialchars($item['order_number']); ?></span>
+                                        <span class="pickup-type-tag"><i class="fas fa-store"></i> Pick-up</span>
+                                    </div>
+                                    <span class="status-badge <?php echo $status_class; ?>">
+                                        <?php echo ucwords(str_replace('_', ' ', $status_key)); ?>
+                                    </span>
+                                </div>
+
+                                <div class="pickup-customer-block">
+                                    <div class="pickup-customer-name">
+                                        <i class="fas fa-user-circle text-muted"></i>
+                                        <span><?php echo htmlspecialchars($item['customer_name']); ?></span>
+                                    </div>
+                                    <?php if (!empty($item['customer_phone']) && $item['customer_phone'] !== 'N/A'): ?>
+                                        <a href="tel:<?php echo $phone_clean; ?>" class="pickup-customer-phone" onclick="event.stopPropagation();" title="Call customer">
+                                            <i class="fas fa-phone-alt"></i> <?php echo htmlspecialchars($item['customer_phone']); ?>
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+
+                                <div class="pickup-timing-box">
+                                    <div class="pickup-timing-item">
+                                        <span class="pickup-timing-label"><i class="far fa-calendar-alt text-danger me-1"></i> Pickup Date</span>
+                                        <span class="pickup-timing-value"><?php echo $formatted_date; ?></span>
+                                    </div>
+                                    <div class="pickup-timing-item text-end">
+                                        <span class="pickup-timing-label"><i class="far fa-clock text-danger me-1"></i> Preferred Time</span>
+                                        <span class="pickup-timing-value"><?php echo $formatted_time; ?></span>
+                                    </div>
+                                </div>
+
+                                <div class="pickup-store-location">
+                                    <i class="fas fa-map-marker-alt text-danger"></i>
+                                    <span class="text-truncate" title="<?php echo htmlspecialchars($item['pickup_location_name']); ?>">
+                                        <?php echo htmlspecialchars($item['pickup_location_name']); ?>
+                                    </span>
+                                </div>
+
+                                <div class="pickup-product-summary">
+                                    <i class="fas fa-utensils text-muted mt-1 me-1"></i>
+                                    <div class="text-truncate" title="<?php echo htmlspecialchars($item['items_summary']); ?>">
+                                        <?php echo htmlspecialchars($item['items_summary']); ?>
+                                    </div>
+                                </div>
+
+                                <div class="pickup-footer-row">
+                                    <div>
+                                        <span class="pickup-total-label">Total Amount</span>
+                                        <div class="pickup-total-amount">₱<?php echo number_format((float)$item['total_amount'], 2); ?></div>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="pickup-payment-badge <?php echo $is_paid ? 'paid' : 'pending'; ?>">
+                                            <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $item['payment_method'] ?? 'COD'))); ?> · <?php echo $is_paid ? 'Paid' : 'To Collect'; ?>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div class="pickup-actions-row" onclick="event.stopPropagation();">
+                                    <button type="button" class="btn-pickup-summary" onclick="loadPreOrderDetails(<?php echo (int)$item['order_id']; ?>, '<?php echo $item['order_source']; ?>')">
+                                        <i class="fas fa-receipt"></i> View Order Summary
+                                    </button>
+                                    <button type="button" class="btn-pickup-icon" onclick="showUpdateStatus(<?php echo (int)$item['order_id']; ?>, '<?php echo $item['order_source']; ?>', '<?php echo $status_key; ?>')" title="Update Status">
                                         <i class="fas fa-edit"></i>
                                     </button>
-                                    <button class="btn-icon" data-bs-toggle="modal" data-bs-target="#preorderDetailsModal" onclick="loadPreOrderDetails(<?php echo $preorder['id']; ?>)" title="View Details">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="btn-icon" type="button" onclick="window.open('print_preorder_receipt.php?id=<?php echo (int)$preorder['id']; ?>&print=1', '_blank')" title="Print Receipt">
+                                    <button type="button" class="btn-pickup-icon" onclick="printPickupReceipt(<?php echo (int)$item['order_id']; ?>, '<?php echo $item['order_source']; ?>')" title="Print Receipt">
                                         <i class="fas fa-print"></i>
                                     </button>
-                                </td>
-                            </tr>
-                            <?php
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <!-- Pagination -->
+                        <div class="pagination-container">
+                            <nav aria-label="Page navigation">
+                                <ul class="pagination">
+                                    <?php if ($current_page_number > 1): ?>
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page=<?php echo $current_page_number - 1; ?>&status=<?php echo urlencode($status_filter); ?>&search=<?php echo urlencode($search); ?>&pickup_date=<?php echo urlencode($pickup_date); ?>">Previous</a>
+                                        </li>
+                                    <?php endif; ?>
+
+                                    <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                                        <li class="page-item <?php echo ($i == $current_page_number) ? 'active' : ''; ?>">
+                                            <a class="page-link" href="?page=<?php echo $i; ?>&status=<?php echo urlencode($status_filter); ?>&search=<?php echo urlencode($search); ?>&pickup_date=<?php echo urlencode($pickup_date); ?>"><?php echo $i; ?></a>
+                                        </li>
+                                    <?php endfor; ?>
+
+                                    <?php if ($current_page_number < $total_pages): ?>
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page=<?php echo $current_page_number + 1; ?>&status=<?php echo urlencode($status_filter); ?>&search=<?php echo urlencode($search); ?>&pickup_date=<?php echo urlencode($pickup_date); ?>">Next</a>
+                                        </li>
+                                    <?php endif; ?>
+                                </ul>
+                            </nav>
+                        </div>
+                    <?php else: ?>
+                        <div class="card p-5 text-center fade-in-up border-0" style="background: #ffffff; border: 1px solid #eaecf0 !important; border-radius: 14px;">
+                            <div class="mb-3">
+                                <div class="d-inline-flex align-items-center justify-content-center" style="width: 64px; height: 64px; border-radius: 50%; background: #fff1f0; color: #b3261e; font-size: 1.6rem;">
+                                    <i class="fas fa-shopping-bag"></i>
+                                </div>
+                            </div>
+                            <h5 class="fw-bold text-dark mb-1">No Pick-up Orders Found</h5>
+                            <p class="text-muted small mb-0">There are no customer pick-up orders matching your current filter criteria.</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <!-- ============================================== -->
+                <!-- TABLE VIEW CONTAINER                           -->
+                <!-- ============================================== -->
+                <div id="tableViewContainer" style="display: none;">
+                    <div class="table-responsive fade-in-up">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>Order #</th>
+                                    <th>Customer</th>
+                                    <th>Product</th>
+                                    <th>Pickup Date</th>
+                                    <th>Total Price</th>
+                                    <th>Payment</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                        <?php
+                        if (!empty($pickup_orders)) {
+                            foreach ($pickup_orders as $preorder) {
+                                $status_class = 'badge-' . str_replace('_', '-', $preorder['status']);
+                                ?>
+                                <tr>
+                                    <td><strong><?php echo htmlspecialchars($preorder['order_number']); ?></strong></td>
+                                    <td>
+                                        <div><?php echo htmlspecialchars($preorder['customer_name']); ?></div>
+                                        <small class="text-muted"><?php echo htmlspecialchars($preorder['customer_phone']); ?></small>
+                                    </td>
+                                    <td><?php echo htmlspecialchars($preorder['items_summary']); ?></td>
+                                    <td>
+                                        <?php 
+                                        $date_str = $preorder['pickup_date'];
+                                        $time_str = $preorder['pickup_time'];
+                                        echo ($date_str && $date_str != '0000-00-00') ? date('M d, Y', strtotime($date_str)) . ' @ ' . htmlspecialchars($time_str) : 'N/A'; 
+                                        ?>
+                                    </td>
+                                    <td>₱<?php echo number_format((float)$preorder['total_amount'], 2); ?></td>
+                                    <td><?php echo ucwords(str_replace('_', ' ', $preorder['payment_method'])); ?></td>
+                                    <td><span class="status-badge <?php echo $status_class; ?>"><?php echo ucwords(str_replace('_', ' ', $preorder['status'])); ?></span></td>
+                                    <td>
+                                        <button class="btn-icon" onclick="showUpdateStatus(<?php echo (int)$preorder['order_id']; ?>, '<?php echo $preorder['order_source']; ?>', '<?php echo $preorder['status']; ?>')" title="Update Status">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn-icon" onclick="loadPreOrderDetails(<?php echo (int)$preorder['order_id']; ?>, '<?php echo $preorder['order_source']; ?>')" title="View Summary">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn-icon" type="button" onclick="printPickupReceipt(<?php echo (int)$preorder['order_id']; ?>, '<?php echo $preorder['order_source']; ?>')" title="Print Receipt">
+                                            <i class="fas fa-print"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <?php
+                            }
+                        } else {
+                            echo "<tr><td colspan='8' class='text-center text-muted py-4'>No pick-up orders found.</td></tr>";
                         }
-                    } else {
-                        echo "<tr><td colspan='8' class='text-center text-muted'>No pre-orders found.</td></tr>";
-                    }
-                    ?>
-                        </tbody>
-                    </table>
+                        ?>
+                            </tbody>
+                        </table>
 
-                    <!-- Pagination -->
-                    <div class="pagination-container">
-                        <nav aria-label="Page navigation">
-                            <ul class="pagination">
-                                <?php if ($current_page_number > 1): ?>
-                                    <li class="page-item">
-                                        <a class="page-link" href="?page=<?php echo $current_page_number - 1; ?>&status=<?php echo urlencode($status_filter); ?>&search=<?php echo urlencode($search); ?>&pickup_date=<?php echo urlencode($pickup_date); ?>">Previous</a>
-                                    </li>
-                                <?php endif; ?>
+                        <!-- Pagination -->
+                        <div class="pagination-container">
+                            <nav aria-label="Page navigation">
+                                <ul class="pagination">
+                                    <?php if ($current_page_number > 1): ?>
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page=<?php echo $current_page_number - 1; ?>&status=<?php echo urlencode($status_filter); ?>&search=<?php echo urlencode($search); ?>&pickup_date=<?php echo urlencode($pickup_date); ?>">Previous</a>
+                                        </li>
+                                    <?php endif; ?>
 
-                                <?php for ($i = 1; $i <= $total_pages; $i++): ?>
-                                    <li class="page-item <?php echo ($i == $current_page_number) ? 'active' : ''; ?>">
-                                        <a class="page-link" href="?page=<?php echo $i; ?>&status=<?php echo urlencode($status_filter); ?>&search=<?php echo urlencode($search); ?>&pickup_date=<?php echo urlencode($pickup_date); ?>"><?php echo $i; ?></a>
-                                    </li>
-                                <?php endfor; ?>
+                                    <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                                        <li class="page-item <?php echo ($i == $current_page_number) ? 'active' : ''; ?>">
+                                            <a class="page-link" href="?page=<?php echo $i; ?>&status=<?php echo urlencode($status_filter); ?>&search=<?php echo urlencode($search); ?>&pickup_date=<?php echo urlencode($pickup_date); ?>"><?php echo $i; ?></a>
+                                        </li>
+                                    <?php endfor; ?>
 
-                                <?php if ($current_page_number < $total_pages): ?>
-                                    <li class="page-item">
-                                        <a class="page-link" href="?page=<?php echo $current_page_number + 1; ?>&status=<?php echo urlencode($status_filter); ?>&search=<?php echo urlencode($search); ?>&pickup_date=<?php echo urlencode($pickup_date); ?>">Next</a>
-                                    </li>
-                                <?php endif; ?>
-                            </ul>
-                        </nav>
+                                    <?php if ($current_page_number < $total_pages): ?>
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page=<?php echo $current_page_number + 1; ?>&status=<?php echo urlencode($status_filter); ?>&search=<?php echo urlencode($search); ?>&pickup_date=<?php echo urlencode($pickup_date); ?>">Next</a>
+                                        </li>
+                                    <?php endif; ?>
+                                </ul>
+                            </nav>
+                        </div>
                     </div>
                 </div><!-- /#tableViewContainer -->
 
-                <!-- CALENDAR VIEW CONTAINER -->
+                <!-- ============================================== -->
+                <!-- CALENDAR VIEW CONTAINER                        -->
+                <!-- ============================================== -->
                 <div id="calendarViewContainer" style="display: none;">
                     <div class="calendar-card fade-in-up">
                         <div class="calendar-header-toolbar">
@@ -901,7 +1409,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
                         <i class="fas fa-tasks"></i>
                     </div>
                     <div>
-                        <h5 class="modal-title">Update Pre-Order Status</h5>
+                        <h5 class="modal-title">Update Pick-up Order Status</h5>
                         <p class="modal-subtitle">Update fulfillment progress and log internal operational notes.</p>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -909,6 +1417,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
                 <div class="modal-body">
                     <form method="POST" id="updateStatusForm">
                         <input type="hidden" id="preOrderId" name="pre_order_id">
+                        <input type="hidden" id="orderSource" name="order_source" value="pre_order">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                         
                         <div class="form-section-card">
@@ -925,7 +1434,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
                                         <option value="confirmed">Confirmed</option>
                                         <option value="in_preparation">In Preparation</option>
                                         <option value="ready_for_pickup">Ready for Pickup</option>
-                                        <option value="completed">Completed</option>
+                                        <option value="completed">Completed / Picked Up</option>
                                         <option value="cancelled">Cancelled</option>
                                     </select>
                                 </div>
@@ -934,12 +1443,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
 
                         <div class="form-section-card">
                             <div class="form-section-head">
-                                <span class="form-section-title"><i class="fas fa-sticky-note"></i> Admin Remarks</span>
+                                <span class="form-section-title"><i class="fas fa-sticky-note"></i> Internal Notes</span>
                                 <span class="form-opt-pill">Optional</span>
                             </div>
                             <div class="form-group-modern">
                                 <label class="form-label-modern">Internal Processing Notes</label>
-                                <textarea name="admin_notes" class="form-control" rows="3" placeholder="Add any details about preparation, delivery coordination, or customer updates..."></textarea>
+                                <textarea name="admin_notes" class="form-control" rows="3" placeholder="Add any details about preparation, counter pickup coordination, or customer updates..."></textarea>
                             </div>
                         </div>
                     </form>
@@ -952,22 +1461,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
         </div>
     </div>
     
-    <!-- Pre-Order Details Modal -->
+    <!-- Pick-up Order Summary Modal -->
     <div class="modal fade modern-form-modal" id="preorderDetailsModal" tabindex="-1">
-        <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
                     <div class="modal-header-icon">
                         <i class="fas fa-receipt"></i>
                     </div>
                     <div>
-                        <h5 class="modal-title">Pre-Order Details</h5>
-                        <p class="modal-subtitle">Review customer information, menu items, payment details, and dispatch status.</p>
+                        <h5 class="modal-title">Pick-up Order Summary</h5>
+                        <p class="modal-subtitle">Review scheduled pick-up time, branch location, ordered items, and payment details.</p>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" id="preOrderDetails">
-                    <!-- Loaded via JS -->
+                    <!-- Loaded dynamically via AJAX -->
                 </div>
             </div>
         </div>
@@ -979,7 +1488,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
             <div class="modal-content">
                 <div class="modal-header">
                     <div>
-                        <h5 class="modal-title" id="dayOrdersModalTitle">Pre-Orders Scheduled</h5>
+                        <h5 class="modal-title" id="dayOrdersModalTitle">Pick-up Orders Scheduled</h5>
                         <div class="text-muted small" id="dayOrdersModalSubtitle">Viewing bookings for selected date</div>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -1021,7 +1530,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
         const body = document.body;
         const icon = themeToggler.querySelector('i');
 
-        // Check local storage
         if (localStorage.getItem('theme') === 'dark') {
             body.classList.add('dark-mode');
             icon.classList.remove('fa-moon');
@@ -1048,20 +1556,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
         const dayOrdersModal = new bootstrap.Modal(document.getElementById('dayOrdersModal'));
         const preorderModal = new bootstrap.Modal(document.getElementById('preorderDetailsModal'));
 
-        function showUpdateStatus(preOrderId) {
-            document.getElementById('preOrderId').value = preOrderId;
+        function showUpdateStatus(orderId, source = 'pre_order', currentStatus = '') {
+            document.getElementById('preOrderId').value = orderId;
+            const sourceInput = document.getElementById('orderSource');
+            if (sourceInput) sourceInput.value = source;
+            if (currentStatus) {
+                const select = document.querySelector('#updateStatusForm select[name="new_status"]');
+                if (select) select.value = currentStatus;
+            }
             statusModal.show();
         }
 
-        function loadPreOrderDetails(id) {
+        function printPickupReceipt(orderId, source = 'pre_order') {
+            if (source === 'order') {
+                window.open('print_order_receipt.php?id=' + orderId + '&print=1', '_blank');
+            } else {
+                window.open('print_preorder_receipt.php?id=' + orderId + '&print=1', '_blank');
+            }
+        }
+
+        function loadPreOrderDetails(id, source = 'pre_order') {
             const container = document.getElementById('preOrderDetails');
-            container.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Loading details...</p></div>';
+            container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-danger" role="status"></div><p class="mt-2 text-muted small">Loading pick-up order summary...</p></div>';
+            preorderModal.show();
             
-            fetch('get_preorder_details.php?id=' + id)
+            fetch('get_preorder_details.php?id=' + id + '&source=' + encodeURIComponent(source))
                 .then(response => response.text())
                 .then(html => {
                     container.innerHTML = html;
+                })
+                .catch(err => {
+                    console.error('Error loading summary:', err);
+                    container.innerHTML = '<div class="alert alert-danger m-3">Failed to load order summary. Please try again.</div>';
                 });
+        }
+
+        // ==========================================
+        // View Mode Switcher: Card, Table, Calendar
+        // ==========================================
+        function switchPreorderView(viewMode) {
+            const cardView = document.getElementById('cardViewContainer');
+            const tableView = document.getElementById('tableViewContainer');
+            const calView = document.getElementById('calendarViewContainer');
+            const tableFilters = document.getElementById('tableFiltersWrapper');
+            const btnCard = document.getElementById('btnCardView');
+            const btnTable = document.getElementById('btnTableView');
+            const btnCal = document.getElementById('btnCalendarView');
+
+            if (viewMode === 'calendar') {
+                if (cardView) cardView.style.display = 'none';
+                if (tableView) tableView.style.display = 'none';
+                if (tableFilters) tableFilters.style.display = 'none';
+                if (calView) calView.style.display = 'block';
+                if (btnCard) btnCard.classList.remove('active');
+                if (btnTable) btnTable.classList.remove('active');
+                if (btnCal) btnCal.classList.add('active');
+                localStorage.setItem('preorders_active_view', 'calendar');
+                loadCalendarPreorders();
+            } else if (viewMode === 'table') {
+                if (cardView) cardView.style.display = 'none';
+                if (calView) calView.style.display = 'none';
+                if (tableView) tableView.style.display = 'block';
+                if (tableFilters) tableFilters.style.display = 'block';
+                if (btnCard) btnCard.classList.remove('active');
+                if (btnTable) btnTable.classList.add('active');
+                if (btnCal) btnCal.classList.remove('active');
+                localStorage.setItem('preorders_active_view', 'table');
+            } else {
+                // Card View (Default Primary View)
+                if (calView) calView.style.display = 'none';
+                if (tableView) tableView.style.display = 'none';
+                if (cardView) cardView.style.display = 'block';
+                if (tableFilters) tableFilters.style.display = 'block';
+                if (btnCard) btnCard.classList.add('active');
+                if (btnTable) btnTable.classList.remove('active');
+                if (btnCal) btnCal.classList.remove('active');
+                localStorage.setItem('preorders_active_view', 'card');
+            }
         }
 
         // ==========================================
@@ -1069,33 +1640,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
         // ==========================================
         const initialDate = new Date();
         let calCurrentYear = initialDate.getFullYear();
-        let calCurrentMonth = initialDate.getMonth() + 1; // 1 to 12
+        let calCurrentMonth = initialDate.getMonth() + 1;
         let calendarEventsData = {};
-
-        function switchPreorderView(viewMode) {
-            const tableView = document.getElementById('tableViewContainer');
-            const calView = document.getElementById('calendarViewContainer');
-            const tableFilters = document.getElementById('tableFiltersWrapper');
-            const btnTable = document.getElementById('btnTableView');
-            const btnCal = document.getElementById('btnCalendarView');
-
-            if (viewMode === 'calendar') {
-                tableView.style.display = 'none';
-                tableFilters.style.display = 'none';
-                calView.style.display = 'block';
-                btnTable.classList.remove('active');
-                btnCal.classList.add('active');
-                localStorage.setItem('preorders_active_view', 'calendar');
-                loadCalendarPreorders();
-            } else {
-                calView.style.display = 'none';
-                tableView.style.display = 'block';
-                tableFilters.style.display = 'block';
-                btnCal.classList.remove('active');
-                btnTable.classList.add('active');
-                localStorage.setItem('preorders_active_view', 'table');
-            }
-        }
 
         function navigateCalendarMonth(delta) {
             calCurrentMonth += delta;
@@ -1121,7 +1667,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
             const statusFilter = document.getElementById('calStatusSelect') ? document.getElementById('calStatusSelect').value : 'all';
             const container = document.getElementById('calGridDaysContainer');
             
-            container.innerHTML = '<div style="grid-column: 1 / -1; padding: 40px; text-align: center;"><div class="spinner-border text-danger" role="status"></div><div class="mt-2 text-muted small">Loading pre-orders calendar...</div></div>';
+            container.innerHTML = '<div style="grid-column: 1 / -1; padding: 40px; text-align: center;"><div class="spinner-border text-danger" role="status"></div><div class="mt-2 text-muted small">Loading pick-up calendar...</div></div>';
 
             fetch(`preorders.php?ajax_calendar=1&month=${encodeURIComponent(monthStr)}&cal_status=${encodeURIComponent(statusFilter)}`)
                 .then(res => res.json())
@@ -1145,7 +1691,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
             const container = document.getElementById('calGridDaysContainer');
             container.innerHTML = '';
 
-            const firstDayIndex = new Date(year, month - 1, 1).getDay(); // 0 (Sun) to 6 (Sat)
+            const firstDayIndex = new Date(year, month - 1, 1).getDay();
             const daysInMonth = new Date(year, month, 0).getDate();
             const daysInPrevMonth = new Date(year, month - 1, 0).getDate();
 
@@ -1178,7 +1724,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
                 displayOrders.forEach(order => {
                     const statusClass = 'cal-chip-' + order.status;
                     ordersHtml += `
-                        <div class="cal-chip ${statusClass}" title="${escapeHtml(order.customer_name)} - ${escapeHtml(order.product_name)} (${order.pickup_time})" onclick="handleChipClick(event, ${order.id})">
+                        <div class="cal-chip ${statusClass}" title="${escapeHtml(order.customer_name)} - ${escapeHtml(order.product_name)} (${order.pickup_time})" onclick="handleChipClick(event, ${order.id}, '${order.source}')">
                             <span class="cal-chip-dot"></span>
                             <span class="fw-semibold">${escapeHtml(order.pickup_time)}</span>
                             <span class="text-truncate">${escapeHtml(order.product_name)}</span>
@@ -1224,10 +1770,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
             }
         }
 
-        function handleChipClick(e, orderId) {
+        function handleChipClick(e, orderId, orderSource) {
             e.stopPropagation();
-            loadPreOrderDetails(orderId);
-            preorderModal.show();
+            loadPreOrderDetails(orderId, orderSource);
         }
 
         function handleMoreClick(e, dateKey) {
@@ -1243,7 +1788,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
             const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
             const formattedDate = dateObj.toLocaleDateString('en-US', options);
 
-            document.getElementById('dayOrdersModalTitle').textContent = `Pre-Orders for ${formattedDate}`;
+            document.getElementById('dayOrdersModalTitle').textContent = `Pick-up Orders for ${formattedDate}`;
             document.getElementById('dayOrdersModalSubtitle').textContent = `${dayOrders.length} booked order${dayOrders.length > 1 ? 's' : ''} scheduled`;
 
             const tbody = document.getElementById('dayOrdersModalBody');
@@ -1252,7 +1797,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
             dayOrders.forEach(order => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td><strong>#${order.id}</strong></td>
+                    <td><strong>${escapeHtml(order.order_number)}</strong></td>
                     <td>
                         <span class="text-nowrap"><i class="far fa-clock me-1 text-muted"></i>${escapeHtml(order.pickup_time)}</span>
                     </td>
@@ -1269,13 +1814,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
                         <span class="status-badge ${order.status_class}">${order.status_label}</span>
                     </td>
                     <td class="text-end text-nowrap">
-                        <button type="button" class="btn-icon" onclick="openDetailsFromDayModal(${order.id})" title="View Details">
+                        <button type="button" class="btn-icon" onclick="openDetailsFromDayModal(${order.id}, '${order.source}')" title="View Summary">
                             <i class="fas fa-eye"></i>
                         </button>
-                        <button type="button" class="btn-icon" onclick="openStatusFromDayModal(${order.id})" title="Update Status">
+                        <button type="button" class="btn-icon" onclick="openStatusFromDayModal(${order.id}, '${order.source}')" title="Update Status">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button type="button" class="btn-icon" onclick="window.open('print_preorder_receipt.php?id=${order.id}&print=1', '_blank')" title="Print Receipt">
+                        <button type="button" class="btn-icon" onclick="printPickupReceipt(${order.id}, '${order.source}')" title="Print Receipt">
                             <i class="fas fa-print"></i>
                         </button>
                     </td>
@@ -1286,18 +1831,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
             dayOrdersModal.show();
         }
 
-        function openDetailsFromDayModal(id) {
+        function openDetailsFromDayModal(id, source) {
             dayOrdersModal.hide();
             setTimeout(() => {
-                loadPreOrderDetails(id);
-                preorderModal.show();
+                loadPreOrderDetails(id, source);
             }, 300);
         }
 
-        function openStatusFromDayModal(id) {
+        function openStatusFromDayModal(id, source) {
             dayOrdersModal.hide();
             setTimeout(() => {
-                showUpdateStatus(id);
+                showUpdateStatus(id, source);
             }, 300);
         }
 
@@ -1311,13 +1855,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
                 .replace(/'/g, '&#039;');
         }
 
-        // Initialize active view preference
+        // Initialize active view preference (Card View default!)
         document.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
-            const viewPref = urlParams.get('view') || localStorage.getItem('preorders_active_view');
-            if (viewPref === 'calendar') {
-                switchPreorderView('calendar');
-            }
+            const viewPref = urlParams.get('view') || localStorage.getItem('preorders_active_view') || 'card';
+            switchPreorderView(viewPref);
         });
     </script>
 </body>

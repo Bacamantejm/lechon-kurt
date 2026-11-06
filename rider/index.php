@@ -3,7 +3,16 @@ $page_title = 'Rider Dashboard';
 require_once __DIR__ . '/auth.php';
 
 $rider = checkRiderAccess();
+require_once __DIR__ . '/../includes/attendance_service.php';
 require_once __DIR__ . '/header.php';
+
+$rider_pk = (int)$rider['id'];
+$emp_id = (int)($rider['employee_id'] ?? 0);
+$rider_user_id = (int)($_SESSION['user_id'] ?? $rider['user_id'] ?? 0);
+$today_attendance = AttendanceService::getTodayAttendance($conn, $rider_user_id, $emp_id);
+$shift_status = $today_attendance['status']; // 'not_timed_in', 'timed_in', 'timed_out'
+$assigned_store = $today_attendance['store'];
+$store_display_name = $assigned_store['store_name'] ?? ($rider['store_name'] ?? 'Store Branch');
 
 $rider_pk = (int)$rider['id'];
 $emp_id = (int)($rider['employee_id'] ?? 0);
@@ -100,6 +109,105 @@ if ($init_avail_res) {
     <div class="row g-3 g-lg-4">
         <!-- Left Column: Profile, Duty Switch, Today Stats, Active Mission, Shortcuts -->
         <div class="col-12 col-lg-5 col-xl-4">
+            <!-- Shift Attendance Time Clock Card -->
+            <?php if ($shift_status === 'not_timed_in'): ?>
+                <div class="rider-card mb-3" style="border-color: #fedf89; background: #fffcf5;">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <div style="width: 32px; height: 32px; border-radius: 8px; background: #fffaeb; color: #b54708; display: flex; align-items: center; justify-content: center; font-size: 15px;">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-0 fw-bold" style="font-size: 13.5px; color: var(--primary-ink);">
+                                    Shift Attendance Required
+                                </h6>
+                                <span class="text-muted" style="font-size: 11px;">
+                                    Time In required before accepting orders
+                                </span>
+                            </div>
+                        </div>
+                        <span class="badge" style="background:#fffaeb; color:#b54708; border:1px solid #fedf89; font-size:10.5px; font-weight:700;">
+                            Not Timed In
+                        </span>
+                    </div>
+                    <div class="p-2 rounded mb-3" style="background:#ffffff; border: 1px solid #eaecf0; font-size: 11.5px;">
+                        <div class="text-muted mb-1">
+                            <i class="fas fa-store text-danger me-1"></i> Store: <strong><?php echo htmlspecialchars($store_display_name); ?></strong>
+                        </div>
+                        <div class="text-muted">
+                            <i class="fas fa-location-crosshairs text-primary me-1"></i> Proximity: <strong>Within 350m auto-accepts shift</strong>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-primary w-100 py-2 fw-bold d-flex align-items-center justify-content-center gap-2" id="riderClockBtn" onclick="riderTimeClock('clock_in')" style="background: #b3261e; border: none; border-radius: 10px; font-size: 13px;">
+                        <i class="fas fa-sign-in-alt"></i> Time In (Verify Store GPS)
+                    </button>
+                </div>
+            <?php elseif ($shift_status === 'timed_in'): ?>
+                <div class="rider-card mb-3" style="border-color: #abefc6; background: #f6fef9;">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <div style="width: 32px; height: 32px; border-radius: 8px; background: #ecfdf3; color: #027a48; display: flex; align-items: center; justify-content: center; font-size: 15px;">
+                                <i class="fas fa-business-time"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-0 fw-bold" style="font-size: 13.5px; color: var(--primary-ink);">
+                                    Active Shift &bull; On Duty
+                                </h6>
+                                <span class="text-muted" style="font-size: 11px;">
+                                    Clocked in at <?php echo htmlspecialchars($today_attendance['check_in_formatted']); ?>
+                                </span>
+                            </div>
+                        </div>
+                        <?php if (($today_attendance['hr_status'] ?? '') === 'approved'): ?>
+                            <span class="badge" style="background:#ecfdf3; color:#027a48; border:1px solid #abefc6; font-size:10.5px; font-weight:700;">
+                                <i class="fas fa-check-circle me-1"></i> Verified
+                            </span>
+                        <?php else: ?>
+                            <span class="badge" style="background:#fffaeb; color:#b54708; border:1px solid #fedf89; font-size:10.5px; font-weight:700;">
+                                <i class="fas fa-hourglass-half me-1"></i> Pending HR
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                    <div class="p-2 rounded mb-2" style="background:#ffffff; border: 1px solid #eaecf0; font-size: 11.5px;">
+                        <div class="d-flex justify-content-between text-muted mb-1">
+                            <span><i class="fas fa-store text-danger me-1"></i> Store:</span>
+                            <strong class="text-dark"><?php echo htmlspecialchars($store_display_name); ?></strong>
+                        </div>
+                        <div class="d-flex justify-content-between text-muted">
+                            <span><i class="fas fa-clock text-primary me-1"></i> Time In:</span>
+                            <strong class="text-success"><?php echo htmlspecialchars($today_attendance['check_in_formatted']); ?></strong>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-outline-danger w-100 py-2 fw-bold d-flex align-items-center justify-content-center gap-2" id="riderClockBtn" onclick="riderTimeClock('clock_out')" style="border-radius: 10px; font-size: 13px;">
+                        <i class="fas fa-sign-out-alt"></i> Time Out (End Shift)
+                    </button>
+                </div>
+            <?php else: ?>
+                <div class="rider-card mb-3" style="border-color: #b2ddff; background: #f8fbff;">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <div style="width: 32px; height: 32px; border-radius: 8px; background: #eff8ff; color: #175cd3; display: flex; align-items: center; justify-content: center; font-size: 15px;">
+                                <i class="fas fa-check-double"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-0 fw-bold" style="font-size: 13.5px; color: var(--primary-ink);">
+                                    Shift Completed Today
+                                </h6>
+                                <span class="text-muted" style="font-size: 11px;">
+                                    In: <?php echo htmlspecialchars($today_attendance['check_in_formatted'] ?? '-'); ?> &bull; Out: <?php echo htmlspecialchars($today_attendance['check_out_formatted'] ?? '-'); ?>
+                                </span>
+                            </div>
+                        </div>
+                        <span class="badge" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; font-size:10.5px; font-weight:700;">
+                            Timed Out
+                        </span>
+                    </div>
+                    <div class="p-2 rounded" style="background:#ffffff; border: 1px solid #eaecf0; font-size: 11.5px; color: #475467;">
+                        <i class="fas fa-info-circle text-primary me-1"></i> Shift finished. Order acceptance is locked while off duty.
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <!-- Rider Profile Hero Card -->
             <div class="rider-card mb-3">
                 <div class="d-flex align-items-center justify-content-between mb-3">
@@ -481,6 +589,92 @@ if ($init_avail_res) {
 </div>
 
 <script>
+let currentShiftStatus = <?php echo json_encode($shift_status); ?>;
+
+function riderTimeClock(action) {
+    if (action === 'clock_out') {
+        Swal.fire({
+            title: 'End Shift / Time Out?',
+            text: 'Are you sure you want to clock out? Once timed out, you cannot accept new delivery orders for the rest of today.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#b3261e',
+            cancelButtonColor: '#667085',
+            confirmButtonText: 'Yes, Time Out',
+            cancelButtonText: 'Cancel'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                executeTimeClock('clock_out', null, null);
+            }
+        });
+        return;
+    }
+
+    // action === 'clock_in'
+    Swal.fire({
+        title: 'Verifying Location...',
+        text: 'Acquiring GPS coordinates to verify store proximity...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+
+    if (!navigator.geolocation) {
+        executeTimeClock('clock_in', null, null);
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+        (pos) => {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            executeTimeClock('clock_in', lat, lon);
+        },
+        (err) => {
+            console.warn('Geolocation error:', err);
+            executeTimeClock('clock_in', null, null);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+}
+
+function executeTimeClock(action, lat, lon) {
+    const fd = new FormData();
+    fd.append('action', action);
+    if (lat !== null && lat !== undefined) fd.append('latitude', lat);
+    if (lon !== null && lon !== undefined) fd.append('longitude', lon);
+
+    fetch('../ajax_time_clock.php', {
+        method: 'POST',
+        body: fd
+    })
+    .then(r => r.json())
+    .then(data => {
+        Swal.close();
+        if (data.success) {
+            Swal.fire({
+                icon: data.is_near_shop ? 'success' : 'info',
+                title: action === 'clock_in' ? 'Time In Recorded' : 'Time Out Recorded',
+                text: data.message,
+                confirmButtonColor: '#b3261e'
+            }).then(() => {
+                window.location.reload();
+            });
+        } else {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Notice',
+                text: data.message || 'Action could not be completed.',
+                confirmButtonColor: '#b3261e'
+            });
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        Swal.fire('Error', 'Failed to communicate with time clock service.', 'error');
+    });
+}
 let homeMap = null;
 let riderMarker = null;
 let currentRiderLat = <?php echo json_encode($rider['current_latitude'] ? (float)$rider['current_latitude'] : 14.3294); ?>;
@@ -556,6 +750,26 @@ function updateRiderPositionOnMap(lat, lng) {
 }
 
 function setDutyStatus(targetStatus) {
+    if (targetStatus === 'online' || targetStatus === 'busy') {
+        if (currentShiftStatus === 'not_timed_in') {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Time In Required',
+                text: 'Please click "Time In (Verify Store GPS)" above before switching to Online.',
+                confirmButtonColor: '#b3261e'
+            });
+            return;
+        }
+        if (currentShiftStatus === 'timed_out') {
+            Swal.fire({
+                icon: 'info',
+                title: 'Shift Completed',
+                text: 'You have timed out for today. You cannot switch to Online while off duty.',
+                confirmButtonColor: '#b3261e'
+            });
+            return;
+        }
+    }
     <?php if ($active_delivery): ?>
     if (targetStatus === 'offline') {
         Swal.fire({
@@ -742,6 +956,24 @@ function openOrderReview(orderIndex) {
 }
 
 function acceptOrderDirectly(orderId, trackingId, btn) {
+    if (currentShiftStatus === 'not_timed_in') {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Time In Required',
+            text: 'You must Time In before you can accept delivery orders.',
+            confirmButtonColor: '#b3261e'
+        });
+        return;
+    }
+    if (currentShiftStatus === 'timed_out') {
+        Swal.fire({
+            icon: 'info',
+            title: 'Off Duty',
+            text: 'You have timed out for today and cannot accept delivery orders.',
+            confirmButtonColor: '#b3261e'
+        });
+        return;
+    }
     if (activeCountdownTimer) clearInterval(activeCountdownTimer);
     if (requestModal) requestModal.hide();
     currentRequestData = null;
@@ -820,6 +1052,24 @@ function showDeliveryRequest(req) {
 }
 
 function acceptCurrentRequest() {
+    if (currentShiftStatus === 'not_timed_in') {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Time In Required',
+            text: 'You must Time In before you can accept delivery orders.',
+            confirmButtonColor: '#b3261e'
+        });
+        return;
+    }
+    if (currentShiftStatus === 'timed_out') {
+        Swal.fire({
+            icon: 'info',
+            title: 'Off Duty',
+            text: 'You have timed out for today and cannot accept delivery orders.',
+            confirmButtonColor: '#b3261e'
+        });
+        return;
+    }
     if (!currentRequestData) return;
     if (activeCountdownTimer) clearInterval(activeCountdownTimer);
 

@@ -17,6 +17,12 @@ $stmt_emp->execute();
 $result_emp = $stmt_emp->get_result();
 $employee_id = ($row_emp = $result_emp->fetch_assoc()) ? $row_emp['id'] : 0;
 $stmt_emp->close();
+
+require_once __DIR__ . '/../includes/attendance_service.php';
+$today_attendance = AttendanceService::getTodayAttendance($conn, $user_id, $employee_id);
+$shift_status = $today_attendance['status']; // 'not_timed_in', 'timed_in', 'timed_out'
+$assigned_store = $today_attendance['store'];
+$store_display_name = $assigned_store['store_name'] ?? 'Store Branch';
 ?>
 
 <!-- Top Navigation Bar -->
@@ -56,6 +62,75 @@ $stmt_emp->close();
 </div>
 
 <div class="admin-main">
+
+    <!-- Attendance Shift Time Clock & Geofencing Card -->
+    <div class="card mb-4" style="border-radius: 12px; border: 1px solid <?php echo $shift_status === 'timed_in' ? '#abefc6' : ($shift_status === 'timed_out' ? '#b2ddff' : '#fedf89'); ?>; background: <?php echo $shift_status === 'timed_in' ? '#f6fef9' : ($shift_status === 'timed_out' ? '#f8fbff' : '#fffcf5'); ?>; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+        <div class="card-body p-3 p-md-4">
+            <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div style="width: 46px; height: 46px; border-radius: 12px; background: <?php echo $shift_status === 'timed_in' ? '#ecfdf3' : ($shift_status === 'timed_out' ? '#eff8ff' : '#fffaeb'); ?>; color: <?php echo $shift_status === 'timed_in' ? '#027a48' : ($shift_status === 'timed_out' ? '#175cd3' : '#b54708'); ?>; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">
+                        <i class="<?php echo $shift_status === 'timed_in' ? 'fas fa-business-time' : ($shift_status === 'timed_out' ? 'fas fa-check-double' : 'fas fa-clock'); ?>"></i>
+                    </div>
+                    <div>
+                        <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                            <h5 class="mb-0 fw-bold" style="color: #101828; font-size: 1.1rem;">
+                                <?php if ($shift_status === 'not_timed_in'): ?>
+                                    Shift Attendance Required
+                                <?php elseif ($shift_status === 'timed_in'): ?>
+                                    Active Shift &bull; On Duty
+                                <?php else: ?>
+                                    Shift Completed for Today
+                                <?php endif; ?>
+                            </h5>
+                            <?php if ($shift_status === 'not_timed_in'): ?>
+                                <span class="badge" style="background:#fffaeb; color:#b54708; border:1px solid #fedf89; font-size:11px; font-weight:700;">
+                                    Not Timed In
+                                </span>
+                            <?php elseif ($shift_status === 'timed_in'): ?>
+                                <?php if (($today_attendance['hr_status'] ?? '') === 'approved'): ?>
+                                    <span class="badge" style="background:#ecfdf3; color:#027a48; border:1px solid #abefc6; font-size:11px; font-weight:700;">
+                                        <i class="fas fa-check-circle me-1"></i> Verified Location
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge" style="background:#fffaeb; color:#b54708; border:1px solid #fedf89; font-size:11px; font-weight:700;">
+                                        <i class="fas fa-hourglass-half me-1"></i> Pending HR Review
+                                    </span>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <span class="badge" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; font-size:11px; font-weight:700;">
+                                    Timed Out
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                        <p class="text-muted mb-0" style="font-size: 13px;">
+                            <?php if ($shift_status === 'not_timed_in'): ?>
+                                Clock in using store geofencing. Your GPS proximity to <strong><?php echo htmlspecialchars($store_display_name); ?></strong> will automatically verify your attendance.
+                            <?php elseif ($shift_status === 'timed_in'): ?>
+                                Clocked in at <strong><?php echo htmlspecialchars($today_attendance['check_in_formatted']); ?></strong> &bull; Work Store: <strong><?php echo htmlspecialchars($store_display_name); ?></strong>. Remember to clock out when ending your shift.
+                            <?php else: ?>
+                                Shift completed! In: <strong><?php echo htmlspecialchars($today_attendance['check_in_formatted'] ?? '-'); ?></strong> &bull; Out: <strong><?php echo htmlspecialchars($today_attendance['check_out_formatted'] ?? '-'); ?></strong>.
+                            <?php endif; ?>
+                        </p>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                    <?php if ($shift_status === 'not_timed_in'): ?>
+                        <button type="button" class="btn text-white px-4 py-2 fw-bold d-inline-flex align-items-center gap-2" onclick="employeeTimeClock('clock_in')" style="background: #b3261e; border: none; border-radius: 10px; font-size: 13.5px; box-shadow: 0 1px 3px rgba(179,38,30,0.3);">
+                            <i class="fas fa-sign-in-alt"></i> Time In (Verify Store GPS)
+                        </button>
+                    <?php elseif ($shift_status === 'timed_in'): ?>
+                        <button type="button" class="btn btn-outline-danger px-4 py-2 fw-bold d-inline-flex align-items-center gap-2" onclick="employeeTimeClock('clock_out')" style="border-radius: 10px; font-size: 13.5px;">
+                            <i class="fas fa-sign-out-alt"></i> Time Out (End Shift)
+                        </button>
+                    <?php else: ?>
+                        <span class="badge py-2 px-3" style="background: #eaecf0; color: #475467; font-size: 12px; border-radius: 8px;">
+                            <i class="fas fa-lock me-1"></i> Shift Closed
+                        </span>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div class="recent-section">
         <div class="d-flex justify-content-between align-items-center mb-3">    
@@ -195,6 +270,91 @@ $stmt_emp->close();
         localStorage.setItem('theme', isDark ? 'dark' : 'light');
         icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
     });
+
+    let currentShiftStatus = <?php echo json_encode($shift_status); ?>;
+
+    function employeeTimeClock(action) {
+        if (action === 'clock_out') {
+            Swal.fire({
+                title: 'End Shift / Time Out?',
+                text: 'Are you sure you want to clock out for today?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#b3261e',
+                cancelButtonColor: '#667085',
+                confirmButtonText: 'Yes, Time Out',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    executeEmployeeTimeClock('clock_out', null, null);
+                }
+            });
+            return;
+        }
+
+        // action === 'clock_in'
+        Swal.fire({
+            title: 'Verifying Store Location...',
+            text: 'Acquiring GPS coordinates to verify store proximity...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        if (!navigator.geolocation) {
+            executeEmployeeTimeClock('clock_in', null, null);
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                executeEmployeeTimeClock('clock_in', pos.coords.latitude, pos.coords.longitude);
+            },
+            (err) => {
+                console.warn('Geolocation error:', err);
+                executeEmployeeTimeClock('clock_in', null, null);
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    }
+
+    function executeEmployeeTimeClock(action, lat, lon) {
+        const fd = new FormData();
+        fd.append('action', action);
+        if (lat !== null && lat !== undefined) fd.append('latitude', lat);
+        if (lon !== null && lon !== undefined) fd.append('longitude', lon);
+
+        fetch('../ajax_time_clock.php', {
+            method: 'POST',
+            body: fd
+        })
+        .then(r => r.json())
+        .then(data => {
+            Swal.close();
+            if (data.success) {
+                Swal.fire({
+                    icon: data.is_near_shop ? 'success' : 'info',
+                    title: action === 'clock_in' ? 'Time In Recorded' : 'Time Out Recorded',
+                    text: data.message,
+                    confirmButtonColor: '#b3261e'
+                }).then(() => {
+                    window.location.reload();
+                });
+            } else {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Notice',
+                    text: data.message || 'Action could not be completed.',
+                    confirmButtonColor: '#b3261e'
+                });
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            Swal.fire('Error', 'Failed to communicate with time clock service.', 'error');
+        });
+    }
 
     const attendanceLatInput = document.getElementById('attendance_latitude');
     const attendanceLngInput = document.getElementById('attendance_longitude');
