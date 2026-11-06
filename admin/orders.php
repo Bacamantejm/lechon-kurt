@@ -770,6 +770,389 @@ $orders_result = mysqli_query($conn, $orders_query);
         body.dark-mode .filter-tag-clear-all {
             color: #98a2b3;
         }
+    
+        /* Orders Management - Compact Cards View */
+        .orders-view-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding: 0 2px;
+        }
+        .orders-count-indicator {
+            font-size: 13px;
+            color: #475467;
+        }
+        body.dark-mode .orders-count-indicator {
+            color: #98a2b3;
+        }
+        .orders-view-switcher {
+            display: inline-flex;
+            align-items: center;
+            background: #f2f4f7;
+            border: 1px solid #eaecf0;
+            border-radius: 10px;
+            padding: 3px;
+            gap: 2px;
+        }
+        body.dark-mode .orders-view-switcher {
+            background: #252525;
+            border-color: var(--border-color-dark);
+        }
+        .btn-view-toggle {
+            border: none;
+            background: transparent;
+            color: #667085;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 5px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+        .btn-view-toggle:hover {
+            color: #101828;
+        }
+        .btn-view-toggle.active {
+            background: #ffffff;
+            color: #101828;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
+        }
+        body.dark-mode .btn-view-toggle.active {
+            background: var(--card-bg-dark);
+            color: #f8fafc;
+        }
+
+        /* Orders Cards Grid */
+        .orders-card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        @media (max-width: 576px) {
+            .orders-card-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+        }
+
+        .order-item-card {
+            background: #ffffff;
+            border: 1px solid #eaecf0;
+            border-radius: 14px;
+            padding: 16px;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease, border-color 0.18s ease;
+            position: relative;
+        }
+        .order-item-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(16, 24, 40, 0.08);
+            border-color: #d0d5dd;
+        }
+        body.dark-mode .order-item-card {
+            background: var(--card-bg-dark);
+            border-color: var(--border-color-dark);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        body.dark-mode .order-item-card:hover {
+            border-color: #475569;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Card Head */
+        .order-card-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #f2f4f7;
+            margin-bottom: 12px;
+        }
+        body.dark-mode .order-card-head {
+            border-bottom-color: var(--border-color-dark);
+        }
+
+        .order-card-num {
+            font-size: 14px;
+            font-weight: 800;
+            color: #101828;
+            letter-spacing: -0.2px;
+        }
+        body.dark-mode .order-card-num {
+            color: #f8fafc;
+        }
+
+        .order-type-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10.5px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 20px;
+            letter-spacing: 0.02em;
+        }
+        .order-type-badge.delivery {
+            background: #fff1f0;
+            color: #b3261e;
+            border: 1px solid #fee4e2;
+        }
+        .order-type-badge.pickup {
+            background: #eff8ff;
+            color: #175cd3;
+            border: 1px solid #b2ddff;
+        }
+        body.dark-mode .order-type-badge.delivery {
+            background: rgba(179, 38, 30, 0.2);
+            border-color: rgba(179, 38, 30, 0.4);
+            color: #ff8a80;
+        }
+        body.dark-mode .order-type-badge.pickup {
+            background: rgba(23, 92, 211, 0.2);
+            border-color: rgba(23, 92, 211, 0.4);
+            color: #82b1ff;
+        }
+
+        /* Card Body */
+        .order-card-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .order-customer-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .order-customer-name {
+            font-size: 13.5px;
+            font-weight: 700;
+            color: #1d2939;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+        }
+        .order-customer-name i {
+            color: #667085;
+            font-size: 14px;
+        }
+        body.dark-mode .order-customer-name {
+            color: #f1f5f9;
+        }
+
+        .order-customer-phone {
+            font-size: 11px;
+            font-weight: 600;
+            color: #475467;
+            background: #f8f9fa;
+            border: 1px solid #eaecf0;
+            padding: 2px 7px;
+            border-radius: 6px;
+            text-decoration: none !important;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s ease;
+            flex-shrink: 0;
+        }
+        .order-customer-phone:hover {
+            color: #b3261e;
+            background: #fffbfa;
+            border-color: #fecdca;
+        }
+        body.dark-mode .order-customer-phone {
+            background: #262626;
+            border-color: var(--border-color-dark);
+            color: #cbd5e1;
+        }
+
+        .order-meta-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 12px;
+            color: #475467;
+        }
+        body.dark-mode .order-meta-info {
+            color: #94a3b8;
+        }
+        .order-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .order-meta-item i {
+            width: 14px;
+            text-align: center;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+
+        /* Card Summary Block */
+        .order-card-summary {
+            background: #f8fafc;
+            border: 1px solid #eaecf0;
+            border-radius: 10px;
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        body.dark-mode .order-card-summary {
+            background: #182234;
+            border-color: var(--border-color-dark);
+        }
+
+        .order-summary-label {
+            display: block;
+            font-size: 10.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: #667085;
+        }
+        body.dark-mode .order-summary-label {
+            color: #94a3b8;
+        }
+        .order-summary-amount {
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: #101828;
+            line-height: 1.2;
+        }
+        body.dark-mode .order-summary-amount {
+            color: #f8fafc;
+        }
+
+        .order-summary-date {
+            font-size: 11px;
+            color: #667085;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            justify-content: flex-end;
+            margin-bottom: 3px;
+        }
+        body.dark-mode .order-summary-date {
+            color: #94a3b8;
+        }
+
+        .order-pay-pill {
+            font-size: 10.5px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 6px;
+            background: #ffffff;
+            border: 1px solid #d0d5dd;
+            color: #344054;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        body.dark-mode .order-pay-pill {
+            background: #252525;
+            border-color: var(--border-color-dark);
+            color: #e2e8f0;
+        }
+
+        /* Card Actions Footer */
+        .order-card-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding-top: 10px;
+            border-top: 1px solid #f2f4f7;
+        }
+        body.dark-mode .order-card-actions {
+            border-top-color: var(--border-color-dark);
+        }
+
+        .order-action-buttons {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+
+        .btn-card-action {
+            height: 32px;
+            padding: 0 10px;
+            border-radius: 8px;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: #344054;
+            background: #ffffff;
+            border: 1px solid #d0d5dd;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-decoration: none !important;
+        }
+        .btn-card-action:hover {
+            color: #101828;
+            background: #f8f9fa;
+            border-color: #98a2b3;
+            transform: translateY(-1px);
+        }
+        body.dark-mode .btn-card-action {
+            background: #252525;
+            border-color: var(--border-color-dark);
+            color: #e0e0e0;
+        }
+        body.dark-mode .btn-card-action:hover {
+            background: #333333;
+            color: #ffffff;
+        }
+
+        .order-status-wrap {
+            min-width: 130px;
+            flex: 1 1 auto;
+            max-width: 160px;
+        }
+        .order-card-status-select {
+            width: 100%;
+            height: 32px;
+            font-size: 11.5px;
+            font-weight: 600;
+            border-radius: 8px;
+            border: 1px solid #d0d5dd;
+            padding: 2px 8px;
+            cursor: pointer;
+            background: #ffffff;
+            color: #344054;
+            transition: border-color 0.15s ease;
+        }
+        .order-card-status-select:focus {
+            border-color: #b3261e;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(179, 38, 30, 0.1);
+        }
+        body.dark-mode .order-card-status-select {
+            background: var(--card-bg-dark);
+            border-color: var(--border-color-dark);
+            color: var(--text-color-dark);
+        }
     </style>
 </head>
 <body class="admin-polish orders-page">
@@ -966,7 +1349,204 @@ $orders_result = mysqli_query($conn, $orders_query);
                     </form>
                 </div>
                 
-                <div class="table-responsive fade-in-up">
+                                <?php
+                // Fetch all orders into array for dual Card and Table views
+                $orders_list = [];
+                if ($orders_result instanceof mysqli_result && mysqli_num_rows($orders_result) > 0) {
+                    while ($order_row = mysqli_fetch_assoc($orders_result)) {
+                        $orders_list[] = $order_row;
+                    }
+                }
+                ?>
+
+                <!-- View Switcher Toolbar -->
+                <div class="orders-view-toolbar">
+                    <div class="orders-count-indicator">
+                        Showing <strong><?php echo count($orders_list); ?></strong> of <strong><?php echo (int)$total_records; ?></strong> orders
+                    </div>
+                    <div class="orders-view-switcher">
+                        <button type="button" class="btn-view-toggle active" id="viewToggleCard" onclick="switchOrdersView('card')" title="Card View">
+                            <i class="fas fa-th-large"></i> <span>Cards</span>
+                        </button>
+                        <button type="button" class="btn-view-toggle" id="viewToggleTable" onclick="switchOrdersView('table')" title="Table View">
+                            <i class="fas fa-table-list"></i> <span>Table</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 1. COMPACT CARD VIEW (Default) -->
+                <div id="ordersCardViewContainer" class="orders-card-grid fade-in-up">
+                    <?php if (!empty($orders_list)): ?>
+                        <?php foreach ($orders_list as $order): 
+                            $status_class = match($order['status']) {
+                                'pending' => 'badge-warning',
+                                'confirmed' => 'badge-info',
+                                'preparing' => 'badge-primary',
+                                'delivered' => 'badge-success',
+                                'cancelled', 'failed' => 'badge-danger',
+                                'cancellation_requested' => 'badge-danger',
+                                default => 'badge-secondary'
+                            };
+                            $next_statuses = $allowed_order_transitions[$order['status']] ?? [];
+                            $status_select_disabled = empty($next_statuses) ? "disabled" : "";
+                            $status_options_html = "<option value=''>Change Status</option>";
+                            foreach ($next_statuses as $next_status) {
+                                $status_options_html .= "<option value='{$next_status}'>" . ucwords(str_replace('_', ' ', $next_status)) . "</option>";
+                            }
+
+                            $scoped_amt = ($seller_scope_id !== null) ? (float)($order['scoped_total_amount'] ?? 0) : 0;
+                            $display_amount = ($scoped_amt > 0) ? $scoped_amt : (float)($order['total_amount'] ?? 0);
+                            $is_delivery = ($order['delivery_option'] === 'delivery');
+                            $tracking_status = $order['tracking_status'] ?? '';
+                            $phone_clean = preg_replace('/[^0-9+]/', '', (string)($order['customer_phone'] ?? ''));
+
+                            $handover_btn = '';
+                            if ($is_delivery) {
+                                if (in_array($tracking_status, ['picked_up', 'on_the_way', 'arriving', 'delivered'])) {
+                                    $handover_btn = "<span class='badge' style='background:#ecfdf3; color:#027a48; border:1px solid #abefc6; font-size:11px;' title='Food handed over to rider'><i class='fas fa-check'></i> Handed Over</span>";
+                                } elseif ($tracking_status === 'arrived_at_restaurant') {
+                                    $handover_btn = "<button class='btn btn-sm btn-success fw-bold' type='button' style='font-size:11.5px; padding:3px 8px; border-radius:6px;' onclick=\"approveRiderHandover({$order['id']})\" title='Rider is at store! Approve handover now'>
+                                        <i class='fas fa-check'></i> Approve
+                                    </button>
+                                    <button class='btn btn-sm btn-outline-danger fw-bold' type='button' style='font-size:11.5px; padding:3px 8px; border-radius:6px;' onclick=\"rejectRiderHandover({$order['id']})\" title='Reject or pause handover'>
+                                        <i class='fas fa-times'></i> Reject
+                                    </button>";
+                                } elseif (!in_array($order['status'], ['delivered', 'cancelled', 'failed'])) {
+                                    $safe_ord_num = htmlspecialchars(addslashes($order['order_number']));
+                                    $safe_pin = htmlspecialchars(addslashes($order['delivery_pin'] ?? ''));
+                                    $safe_driver = htmlspecialchars(addslashes(!empty($order['driver_name']) ? $order['driver_name'] : 'Assigned Rider'));
+                                    $safe_rider_code = htmlspecialchars(addslashes($order['rider_code'] ?? ''));
+                                    $handover_btn = "<button class='btn btn-sm btn-outline-success' type='button' style='font-size:11.5px; padding:3px 8px; border-radius:6px; font-weight:600;' onclick=\"openHandoverModal({$order['id']}, '{$safe_ord_num}', '{$safe_pin}', '{$safe_driver}', '{$safe_rider_code}')\" title='Enter Handover Confirmation Code'>
+                                        <i class='fas fa-handshake'></i> Handover
+                                    </button>";
+                                }
+                            }
+
+                            $proof_btn = '';
+                            if (!empty($order['proof_photo'])) {
+                                $safe_proof = htmlspecialchars(addslashes($order['proof_photo']));
+                                $proof_btn = "<button class='btn-card-action text-success' type='button' onclick=\"viewProofModal('{$safe_proof}')\" title='View Proof of Delivery Photo'>
+                                    <i class='fas fa-camera'></i> Proof
+                                </button>";
+                            }
+                        ?>
+                            <div class="order-item-card" data-order-id="<?php echo $order['id']; ?>">
+                                <!-- Card Header -->
+                                <div class="order-card-head">
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <span class="order-card-num">#<?php echo htmlspecialchars($order['order_number']); ?></span>
+                                        <span class="order-type-badge <?php echo $is_delivery ? 'delivery' : 'pickup'; ?>">
+                                            <i class="fas <?php echo $is_delivery ? 'fa-motorcycle' : 'fa-store'; ?>"></i>
+                                            <?php echo ucfirst($order['delivery_option']); ?>
+                                        </span>
+                                    </div>
+                                    <span class="status-badge <?php echo $status_class; ?>">
+                                        <?php echo ucwords(str_replace('_', ' ', $order['status'])); ?>
+                                    </span>
+                                </div>
+
+                                <!-- Card Body: Customer & Routing -->
+                                <div class="order-card-body">
+                                    <div class="order-customer-row">
+                                        <div class="order-customer-name" title="<?php echo htmlspecialchars($order['customer_name']); ?>">
+                                            <i class="fas fa-user-circle"></i>
+                                            <span class="text-truncate"><?php echo htmlspecialchars($order['customer_name']); ?></span>
+                                        </div>
+                                        <?php if (!empty($order['customer_phone']) && $order['customer_phone'] !== 'N/A'): ?>
+                                            <a href="tel:<?php echo htmlspecialchars($phone_clean); ?>" class="order-customer-phone" title="Call Customer">
+                                                <i class="fas fa-phone-alt"></i> <?php echo htmlspecialchars($order['customer_phone']); ?>
+                                            </a>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <div class="order-meta-info">
+                                        <?php if (!empty($order['customer_email'])): ?>
+                                            <div class="order-meta-item text-truncate" title="<?php echo htmlspecialchars($order['customer_email']); ?>">
+                                                <i class="far fa-envelope text-muted"></i>
+                                                <span class="text-truncate"><?php echo htmlspecialchars($order['customer_email']); ?></span>
+                                            </div>
+                                        <?php endif; ?>
+
+                                        <?php if ($is_delivery && !empty($order['delivery_address'])): ?>
+                                            <div class="order-meta-item text-truncate" title="<?php echo htmlspecialchars($order['delivery_address']); ?>">
+                                                <i class="fas fa-map-marker-alt text-danger"></i>
+                                                <span class="text-truncate"><?php echo htmlspecialchars($order['delivery_address']); ?></span>
+                                            </div>
+                                        <?php endif; ?>
+
+                                        <?php if ($is_delivery && !empty($order['driver_name'])): ?>
+                                            <div class="order-meta-item text-truncate" style="color: #175cd3;">
+                                                <i class="fas fa-biking"></i>
+                                                <span class="text-truncate">Rider: <strong><?php echo htmlspecialchars($order['driver_name']); ?></strong><?php echo !empty($order['rider_code']) ? ' (' . htmlspecialchars($order['rider_code']) . ')' : ''; ?></span>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+
+                                <!-- Card Summary (Amount + Date + Payment) -->
+                                <div class="order-card-summary">
+                                    <div>
+                                        <span class="order-summary-label">Total Amount</span>
+                                        <div class="order-summary-amount">&#8369;<?php echo number_format($display_amount, 2); ?></div>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="order-summary-date">
+                                            <i class="far fa-clock"></i>
+                                            <span><?php echo date('M d, Y • h:i A', strtotime($order['created_at'])); ?></span>
+                                        </div>
+                                        <div class="d-flex align-items-center justify-content-end gap-1 mt-1">
+                                            <span class="order-pay-pill">
+                                                <?php echo strtoupper(htmlspecialchars($order['payment_method'] ?? 'COD')); ?>
+                                                <?php if (!empty($order['payment_status']) && in_array(strtolower($order['payment_status']), ['paid', 'completed'], true)): ?>
+                                                    <span class="text-success"><i class="fas fa-check-circle"></i> Paid</span>
+                                                <?php endif; ?>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Card Actions -->
+                                <div class="order-card-actions">
+                                    <div class="order-action-buttons">
+                                        <?php echo $handover_btn; ?>
+                                        <?php echo $proof_btn; ?>
+                                        <button type="button" class="btn-card-action" data-bs-toggle="modal" data-bs-target="#orderModal" onclick="loadOrderDetails(<?php echo $order['id']; ?>)" title="View Details">
+                                            <i class="fas fa-eye"></i> Details
+                                        </button>
+                                        <button type="button" class="btn-card-action" onclick="window.open('print_order_receipt.php?id=<?php echo $order['id']; ?>&print=1', '_blank')" title="Print Receipt">
+                                            <i class="fas fa-print"></i> Print
+                                        </button>
+                                    </div>
+
+                                    <?php if (!empty($next_statuses)): ?>
+                                        <div class="order-status-wrap">
+                                            <form method="POST" id="statusFormCard<?php echo $order['id']; ?>" class="m-0">
+                                                <input type="hidden" name="order_id" value="<?php echo $order['id']; ?>">
+                                                <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
+                                                <input type="hidden" name="return_query" value="<?php echo htmlspecialchars($current_query_string, ENT_QUOTES); ?>">
+                                                <select name="new_status" class="order-card-status-select" onchange="confirmStatusChange(this, <?php echo $order['id']; ?>)">
+                                                    <?php echo $status_options_html; ?>
+                                                </select>
+                                                <input type="hidden" name="update_status" value="1">
+                                            </form>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="text-center py-5 w-100" style="grid-column: 1 / -1; background: #ffffff; border: 1px dashed #eaecf0; border-radius: 14px;">
+                            <div style="width: 48px; height: 48px; border-radius: 50%; background: #f8f9fa; color: #98a2b3; display: inline-flex; align-items: center; justify-content: center; font-size: 20px; margin-bottom: 10px;">
+                                <i class="fas fa-inbox"></i>
+                            </div>
+                            <h6 class="fw-bold mb-1" style="color: #101828;">No orders found</h6>
+                            <p class="text-muted small mb-0">Try adjusting your filters, date range, or search keywords.</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <!-- 2. TRADITIONAL TABLE VIEW (Optional Toggle) -->
+                <div id="ordersTableViewContainer" class="table-responsive fade-in-up" style="display: none;">
                     <table class="admin-table">
                         <thead>
                             <tr>
@@ -982,8 +1562,8 @@ $orders_result = mysqli_query($conn, $orders_query);
                         </thead>
                         <tbody>
                             <?php
-                            if ($orders_result instanceof mysqli_result && mysqli_num_rows($orders_result) > 0) {
-                                while ($order = mysqli_fetch_assoc($orders_result)) { 
+                            if (!empty($orders_list)) {
+                                foreach ($orders_list as $order) { 
                                     $status_class = match($order['status']) {
                                         'pending' => 'badge-warning',
                                         'confirmed' => 'badge-info',
@@ -993,17 +1573,18 @@ $orders_result = mysqli_query($conn, $orders_query);
                                         'cancellation_requested' => 'badge-danger',
                                         default => 'badge-secondary'
                                     };
-                                    $status_options_html = "<option value=''>Change Status</option>";
                                     $next_statuses = $allowed_order_transitions[$order['status']] ?? [];
                                     $status_select_disabled = empty($next_statuses) ? "disabled" : "";
-                                    $scoped_amt = ($seller_scope_id !== null) ? (float)($order['scoped_total_amount'] ?? 0) : 0;
-                                    $display_amount = ($scoped_amt > 0) ? $scoped_amt : (float)($order['total_amount'] ?? 0);
+                                    $status_options_html = "<option value=''>Change Status</option>";
                                     foreach ($next_statuses as $next_status) {
                                         $status_options_html .= "<option value='{$next_status}'>" . ucwords(str_replace('_', ' ', $next_status)) . "</option>";
                                     }
 
+                                    $scoped_amt = ($seller_scope_id !== null) ? (float)($order['scoped_total_amount'] ?? 0) : 0;
+                                    $display_amount = ($scoped_amt > 0) ? $scoped_amt : (float)($order['total_amount'] ?? 0);
                                     $is_delivery = ($order['delivery_option'] === 'delivery');
                                     $tracking_status = $order['tracking_status'] ?? '';
+
                                     $handover_btn = '';
                                     if ($is_delivery) {
                                         if (in_array($tracking_status, ['picked_up', 'on_the_way', 'arriving', 'delivered'])) {
@@ -1071,8 +1652,8 @@ $orders_result = mysqli_query($conn, $orders_query);
                             ?>
                         </tbody>
                     </table>
-
-                    <!-- Pagination -->
+                </div>
+<!-- Pagination -->
                     <?php if ($total_pages > 1): ?>
                     <div class="pagination-container">
                         <nav aria-label="Page navigation">
@@ -1098,7 +1679,6 @@ $orders_result = mysqli_query($conn, $orders_query);
                         </nav>
                     </div>
                     <?php endif; ?>
-                </div>
             </div>
         </div>
     </div>
@@ -1369,6 +1949,35 @@ $orders_result = mysqli_query($conn, $orders_query);
                 });
         }
 
+                function switchOrdersView(view) {
+            const cardContainer = document.getElementById('ordersCardViewContainer');
+            const tableContainer = document.getElementById('ordersTableViewContainer');
+            const btnCard = document.getElementById('viewToggleCard');
+            const btnTable = document.getElementById('viewToggleTable');
+
+            if (view === 'table') {
+                if (cardContainer) cardContainer.style.display = 'none';
+                if (tableContainer) tableContainer.style.display = 'block';
+                if (btnCard) btnCard.classList.remove('active');
+                if (btnTable) btnTable.classList.add('active');
+                try { localStorage.setItem('admin_orders_view', 'table'); } catch(e){}
+            } else {
+                if (cardContainer) cardContainer.style.display = 'grid';
+                if (tableContainer) tableContainer.style.display = 'none';
+                if (btnCard) btnCard.classList.add('active');
+                if (btnTable) btnTable.classList.remove('active');
+                try { localStorage.setItem('admin_orders_view', 'card'); } catch(e){}
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            let savedView = 'card';
+            try {
+                savedView = localStorage.getItem('admin_orders_view') || 'card';
+            } catch(e){}
+            switchOrdersView(savedView);
+        });
+
         function confirmStatusChange(selectElement, orderId) {
             if (!selectElement.value) return;
             
@@ -1382,7 +1991,7 @@ $orders_result = mysqli_query($conn, $orders_query);
                 confirmButtonText: 'Yes, update it!'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    document.getElementById('statusForm' + orderId).submit();
+                    if (selectElement.form) { selectElement.form.submit(); } else if (document.getElementById('statusForm' + orderId)) { document.getElementById('statusForm' + orderId).submit(); }
                 } else {
                     selectElement.value = ''; // Reset selection
                 }
