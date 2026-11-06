@@ -71,7 +71,7 @@ function shopsGetCityDefaultCoords(string $city_or_address): array {
 $shops = [];
 
 $shops_banner_join = function_exists('userAccountControlColumnExists') && userAccountControlColumnExists($conn, 'business_banner') ? 'u.business_banner, ' : '';
-$branch_sql = "SELECT sl.store_id, sl.owner_user_id, sl.store_name, sl.address, sl.city, sl.province, sl.phone, sl.email, sl.opening_hours, sl.latitude, sl.longitude, sl.is_active,
+$branch_sql = "SELECT sl.store_id, sl.owner_user_id, sl.store_name, sl.address, sl.city, sl.province, sl.phone, sl.email, sl.opening_hours, sl.opening_time, sl.closing_time, sl.operating_days, sl.availability_mode, sl.manual_status, sl.latitude, sl.longitude, sl.is_active,
                       {$shops_banner_join}u.business_logo, u.profile_image
                FROM store_locations sl
                LEFT JOIN users u ON u.id = sl.owner_user_id
@@ -81,6 +81,7 @@ $branch_res = @mysqli_query($conn, $branch_sql);
 if ($branch_res) {
     while ($row = mysqli_fetch_assoc($branch_res)) {
         $store_id = (int)$row['store_id'];
+        $availability = sahResolveStoreAvailability($row);
         
         $min_price_sql = "SELECT MIN(price) AS min_price FROM products WHERE is_archived = 0 AND is_active = 1" . ($row['owner_user_id'] > 0 ? " AND seller_id = " . (int)$row['owner_user_id'] : "");
         $min_res = @mysqli_query($conn, $min_price_sql);
@@ -93,7 +94,17 @@ if ($branch_res) {
         $lat = isset($row['latitude']) && $row['latitude'] !== null && (float)$row['latitude'] != 0 ? (float)$row['latitude'] : null;
         $lng = isset($row['longitude']) && $row['longitude'] !== null && (float)$row['longitude'] != 0 ? (float)$row['longitude'] : null;
         if ($lat === null || $lng === null) {
-            $fallback = shopsGetCityDefaultCoords($location_display . ' ' . $city_label);
+            $partner_avail = sahResolveStoreAvailability([
+            'is_active' => (int)($row['sl_is_active'] ?? 1),
+            'availability_mode' => (string)($row['availability_mode'] ?? 'schedule'),
+            'manual_status' => (string)($row['manual_status'] ?? 'closed'),
+            'opening_time' => (string)($row['opening_time'] ?? '08:00:00'),
+            'closing_time' => (string)($row['closing_time'] ?? '20:00:00'),
+            'operating_days' => (string)($row['operating_days'] ?? '1,2,3,4,5,6,7'),
+            'opening_hours' => (string)($row['opening_hours'] ?? 'Daily | 8:00 AM - 8:00 PM')
+        ]);
+
+        $fallback = shopsGetCityDefaultCoords($location_display . ' ' . $city_label);
             $lat = $fallback['lat'];
             $lng = $fallback['lng'];
         }
@@ -111,7 +122,9 @@ if ($branch_res) {
             'start_price' => $start_price,
             'rating' => 4.9,
             'reviews' => 12,
-            'is_open' => true,
+            'is_open' => !empty($availability['is_open']),
+            'status_label' => (string)($availability['label'] ?? 'Closed'),
+            'availability' => $availability,
             'has_vouchers' => true,
             'latitude' => $lat,
             'longitude' => $lng,
@@ -126,7 +139,7 @@ if ($branch_res) {
 // Fetch approved organization partner sellers from users & franchise_applications
 $latest_approved_partner_sql = "SELECT fa1.* FROM franchise_applications fa1 INNER JOIN (SELECT user_id, MAX(id) AS latest_id FROM franchise_applications WHERE status = 'approved' GROUP BY user_id) latest ON latest.latest_id = fa1.id";
 $shops_banner_col = function_exists('userAccountControlColumnExists') && userAccountControlColumnExists($conn, 'business_banner') ? 'u.business_banner, ' : '';
-$seller_sql = "SELECT u.id, u.full_name, u.email, u.phone, u.address, u.business_name, u.business_type, u.business_logo, {$shops_banner_col}u.profile_image, fa.business_address, fa.city_name, sl.latitude, sl.longitude
+$seller_sql = "SELECT u.id, u.full_name, u.email, u.phone, u.address, u.business_name, u.business_type, u.business_logo, {$shops_banner_col}u.profile_image, fa.business_address, fa.city_name, sl.latitude, sl.longitude, sl.opening_time, sl.closing_time, sl.operating_days, sl.availability_mode, sl.manual_status, sl.opening_hours, sl.is_active AS sl_is_active
               FROM users u
               INNER JOIN ({$latest_approved_partner_sql}) fa ON fa.user_id = u.id
               LEFT JOIN store_locations sl ON sl.owner_user_id = u.id AND sl.is_active = 1
@@ -147,7 +160,17 @@ if ($seller_res) {
         $lat = isset($row['latitude']) && $row['latitude'] !== null && (float)$row['latitude'] != 0 ? (float)$row['latitude'] : null;
         $lng = isset($row['longitude']) && $row['longitude'] !== null && (float)$row['longitude'] != 0 ? (float)$row['longitude'] : null;
         if ($lat === null || $lng === null) {
-            $fallback = shopsGetCityDefaultCoords($city . ' ' . ($row['business_address'] ?? '') . ' ' . ($row['address'] ?? ''));
+            $partner_avail = sahResolveStoreAvailability([
+            'is_active' => (int)($row['sl_is_active'] ?? 1),
+            'availability_mode' => (string)($row['availability_mode'] ?? 'schedule'),
+            'manual_status' => (string)($row['manual_status'] ?? 'closed'),
+            'opening_time' => (string)($row['opening_time'] ?? '08:00:00'),
+            'closing_time' => (string)($row['closing_time'] ?? '20:00:00'),
+            'operating_days' => (string)($row['operating_days'] ?? '1,2,3,4,5,6,7'),
+            'opening_hours' => (string)($row['opening_hours'] ?? 'Daily | 8:00 AM - 8:00 PM')
+        ]);
+
+        $fallback = shopsGetCityDefaultCoords($city . ' ' . ($row['business_address'] ?? '') . ' ' . ($row['address'] ?? ''));
             $lat = $fallback['lat'];
             $lng = $fallback['lng'];
         }
@@ -163,7 +186,9 @@ if ($seller_res) {
             'start_price' => $start_price,
             'rating' => 4.8,
             'reviews' => 15,
-            'is_open' => true,
+            'is_open' => !empty($partner_avail['is_open']),
+            'status_label' => (string)($partner_avail['label'] ?? 'Closed'),
+            'availability' => $partner_avail,
             'has_vouchers' => true,
             'latitude' => $lat,
             'longitude' => $lng,
@@ -1032,7 +1057,7 @@ body.dark-mode .leaflet-popup-content span {
                                     <div class="store-card-image-wrap">
                                         <div class="market-store-row-thumb" style="background-image:url('<?php echo htmlspecialchars($shop['image']); ?>');"></div>
                                         <span class="market-type-pill"><?php echo htmlspecialchars($shop['type']); ?></span>
-                                        <span class="market-ad-pill"><?php echo htmlspecialchars($city_label); ?></span>
+                                        <span class="market-ad-pill" style="<?php echo !empty($shop['is_open']) ? 'background:#ecfdf3; color:#027a48; border:1px solid #abefc6;' : 'background:#fee4e2; color:#b3261e; border:1px solid #fecdca;'; ?>"><i class="fas fa-circle" style="font-size:5px; margin-right:3px;"></i> <?php echo !empty($shop['is_open']) ? 'Open' : 'Closed'; ?></span>
                                         <button
                                             type="button"
                                             class="market-store-favorite-btn<?php echo $is_shop_favorite ? ' is-active' : ''; ?>"

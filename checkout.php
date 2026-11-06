@@ -229,7 +229,7 @@ if (!window.L) {
 
 // Always fetch active store locations so newly accepted franchise branches reflect immediately
 if (isset($conn) && $conn instanceof mysqli) {
-    $store_query = "SELECT store_id AS id, store_id, owner_user_id, store_name AS name, store_name, address, city, province, phone, opening_hours AS hours, opening_hours, latitude, longitude FROM store_locations WHERE is_active = 1 ORDER BY store_name ASC";
+    $store_query = "SELECT store_id AS id, store_id, owner_user_id, store_name AS name, store_name, address, city, province, phone, opening_hours AS hours, opening_hours, opening_time, closing_time, operating_days, availability_mode, manual_status, is_active, latitude, longitude FROM store_locations WHERE is_active = 1 ORDER BY store_name ASC";
     $store_res = mysqli_query($conn, $store_query);
     if ($store_res) {
         $stores = mysqli_fetch_all($store_res, MYSQLI_ASSOC);
@@ -239,6 +239,12 @@ if (isset($conn) && $conn instanceof mysqli) {
             $st['address'] = fixMojibakeText((string)($st['address'] ?? ''));
             $st['city'] = fixMojibakeText((string)($st['city'] ?? ''));
             $st['province'] = fixMojibakeText((string)($st['province'] ?? ''));
+            if (function_exists('sahResolveStoreAvailability')) {
+                $st_avail = sahResolveStoreAvailability($st);
+                $st['is_open'] = !empty($st_avail['is_open']);
+                $st['status_label'] = (string)($st_avail['label'] ?? 'Closed');
+                $st['availability'] = $st_avail;
+            }
         }
         unset($st);
         $_SESSION['store_locations'] = $stores;
