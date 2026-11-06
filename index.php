@@ -514,7 +514,7 @@ if ($product_result) {
             $stores[$key]['reviews'] += (int)$row['review_count'];
             if ($rating > 0) { $stores[$key]['rating_sum'] += $rating; $stores[$key]['rating_count']++; $global_rating_sum += $rating; $global_rating_count++; }
             if ($stores[$key]['image'] === '') $stores[$key]['image'] = $image;
-            add_unique_limited($stores[$key]['tags'], $category, 3);
+            add_unique_limited($stores[$key]['tags'], $category, 30);
             add_unique_limited($stores[$key]['items'], $row['name'], 3);
             $stores[$key]['search_terms'][] = strtolower(trim((string)$row['name']));
             $stores[$key]['search_terms'][] = strtolower(trim((string)$category));
@@ -4899,6 +4899,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
 
                         <!-- Unified Foodpanda 3-Column Card Grid Layout -->
+                        <!-- Active Filter Pills Bar -->
+                        <div id="marketActiveFilterPills" style="display:none; flex-wrap:wrap; align-items:center; gap:8px; margin: 10px 0 16px; padding: 10px 14px; background: #ffffff; border: 1px solid #eaecf0; border-radius: 12px;"></div>
+
                         <div class="market-store-list store-list-grid" id="marketStoreGrid">
                             <?php foreach ($stores as $index => $store): ?>
                                 <?php
@@ -4968,6 +4971,18 @@ document.addEventListener('DOMContentLoaded', function() {
                                     </div>
                                 </a>
                             <?php endforeach; ?>
+                        </div>
+
+                        <!-- Empty State Notice for No Filter Matches -->
+                        <div id="marketNoResults" style="display:none; text-align:center; padding: 48px 24px; background: #ffffff; border: 1px dashed #d0d5dd; border-radius: 16px; margin: 16px 0;">
+                            <div style="width: 56px; height: 56px; line-height: 56px; border-radius: 50%; background: #fff1f0; color: #b3261e; margin: 0 auto 14px; font-size: 1.5rem; display: inline-flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-store-slash"></i>
+                            </div>
+                            <h3 style="font-size: 1.1rem; font-weight: 800; color: #101828; margin: 0 0 6px;">No stores match your selected filters</h3>
+                            <p style="font-size: 0.88rem; color: #475467; margin: 0 0 16px; max-width: 440px; margin-inline: auto;">Try unchecking some filter options or reset all filters to view available stores.</p>
+                            <button type="button" id="marketClearAllFiltersBtn" class="btn-outline btn-sm" style="border-radius: 8px; font-weight: 700; padding: 8px 18px; border: 1px solid #d0d5dd; color: #344054; background: #ffffff; cursor: pointer;">
+                                <i class="fas fa-rotate-left" style="margin-right: 6px;"></i> Reset all filters
+                            </button>
                         </div>
                         <div class="market-pagination">
                             <div class="market-pagination-note" id="marketPaginationNote">Showing all stores.</div>
@@ -5040,7 +5055,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const gridSearch = document.getElementById('gridStoreSearch');
     const headerSearch = document.getElementById('marketHeaderSearch');
     const storeGrid = document.getElementById('marketStoreGrid');
-    const rows = Array.from(document.querySelectorAll('.market-store-row'));
+    // Scope rows specifically to storeGrid to prevent polluting other carousel/swipe sections
+    const rows = storeGrid ? Array.from(storeGrid.querySelectorAll('.market-store-row')) : [];
     const visibleCount = document.getElementById('visibleStoreCount');
     const paginationNote = document.getElementById('marketPaginationNote');
     const loadMoreButton = document.getElementById('marketLoadMoreBtn');
@@ -5053,33 +5069,23 @@ document.addEventListener('DOMContentLoaded', function () {
     const filterPartnerOnly = document.getElementById('filterPartnerOnly');
     const filterBranchOnly = document.getElementById('filterBranchOnly');
     const filterNearbyOnly = document.getElementById('filterNearbyOnly');
-    const MARKET_SEARCH_ENDPOINT = 'api/search_marketplace.php';
+    const activeFilterPills = document.getElementById('marketActiveFilterPills');
+    const noResultsBlock = document.getElementById('marketNoResults');
+    const clearAllFiltersBtn = document.getElementById('marketClearAllFiltersBtn');
+
     const CLIENT_PAGE_SIZE = 24;
-    const SERVER_PAGE_SIZE = 120;
     let currentSort = 'relevance';
     let locationReady = false;
     let displayLimit = CLIENT_PAGE_SIZE;
-    let paginationSignature = '';
-    let serverMatchedKeys = null;
-    let serverCriteriaSignature = '';
-    let pendingServerCriteriaSignature = '';
-    let serverTotalMatches = 0;
-    let serverNextOffset = 0;
-    let serverHasMore = false;
-    let serverIsLoading = false;
-    let serverSearchTimer = null;
-    let serverSearchController = null;
     let canRevealMoreRows = false;
-    let canFetchMoreServerRows = false;
     let lastFilterSource = null;
-    let lastAppliedState = null;
 
     function normalizeSearch(value) {
         let text = (value || '').toString().toLowerCase().trim();
         try {
             text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         } catch (error) {
-            // Keep original text when normalize is unavailable.
+            // Keep original text when normalize is unavailable
         }
         return text.replace(/\s+/g, ' ');
     }
@@ -5090,184 +5096,22 @@ document.addEventListener('DOMContentLoaded', function () {
         if (headerSearch && source !== headerSearch) headerSearch.value = value;
     }
 
-    function shouldSearchServer(state) {
-        return state.query !== '' || state.rating4 || state.live || state.partner || state.branch;
-    }
-
     function getCurrentSearchState(source) {
-        const rawQuery = ((source && source.value) || (headerSearch && headerSearch.value) || (heroSearch && heroSearch.value) || '').trim();
+        const rawQuery = ((source && source.value) || (headerSearch && headerSearch.value) || (heroSearch && heroSearch.value) || (gridSearch && gridSearch.value) || '').trim();
         return {
             rawQuery,
             query: normalizeSearch(rawQuery),
             rating4: !!(filterRatings4 && filterRatings4.checked),
             live: !!(filterLiveOnly && filterLiveOnly.checked),
             partner: !!(filterPartnerOnly && filterPartnerOnly.checked),
-            branch: !!(filterBranchOnly && filterBranchOnly.checked)
+            branch: !!(filterBranchOnly && filterBranchOnly.checked),
+            nearby: !!(filterNearbyOnly && filterNearbyOnly.checked)
         };
-    }
-
-    function buildServerCriteriaSignature(state) {
-        return JSON.stringify({
-            q: state.query || '',
-            r4: state.rating4 ? 1 : 0,
-            l: state.live ? 1 : 0,
-            p: state.partner ? 1 : 0,
-            b: state.branch ? 1 : 0
-        });
-    }
-
-    function buildPaginationSignature(state) {
-        return JSON.stringify({
-            criteria: buildServerCriteriaSignature(state),
-            nearby: !!(filterNearbyOnly && filterNearbyOnly.checked),
-            nearby_ready: !!(filterNearbyOnly && filterNearbyOnly.checked && locationReady)
-        });
     }
 
     function formatCount(value) {
         const parsed = parseInt(value, 10);
         return Number.isFinite(parsed) ? parsed.toLocaleString() : '0';
-    }
-
-    function abortPendingServerSearch() {
-        if (serverSearchTimer) {
-            clearTimeout(serverSearchTimer);
-            serverSearchTimer = null;
-        }
-        if (serverSearchController) {
-            serverSearchController.abort();
-            serverSearchController = null;
-        }
-        serverIsLoading = false;
-    }
-
-    function resetServerMatches() {
-        serverMatchedKeys = null;
-        serverCriteriaSignature = '';
-        pendingServerCriteriaSignature = '';
-        serverTotalMatches = 0;
-        serverNextOffset = 0;
-        serverHasMore = false;
-        abortPendingServerSearch();
-    }
-
-    async function fetchServerResults(state, source, criteriaSignature, append) {
-        if (serverIsLoading) return;
-        if (append && !serverHasMore) return;
-
-        serverIsLoading = true;
-        if (!append) {
-            serverMatchedKeys = null;
-            serverCriteriaSignature = '';
-            serverTotalMatches = 0;
-            serverNextOffset = 0;
-            serverHasMore = false;
-        }
-
-        const params = new URLSearchParams();
-        if (state.query !== '') params.set('search', state.rawQuery);
-        if (state.rating4) params.set('rating4', '1');
-        if (state.live) params.set('live', '1');
-        if (state.partner) params.set('partner', '1');
-        if (state.branch) params.set('branch', '1');
-        params.set('offset', append ? String(serverNextOffset) : '0');
-        params.set('limit', String(SERVER_PAGE_SIZE));
-
-        const controller = new AbortController();
-        serverSearchController = controller;
-
-        try {
-            const response = await fetch(MARKET_SEARCH_ENDPOINT + '?' + params.toString(), {
-                method: 'GET',
-                headers: { 'Accept': 'application/json' },
-                signal: controller.signal
-            });
-
-            if (!response.ok) {
-                throw new Error('Search endpoint request failed');
-            }
-
-            const payload = await response.json();
-            if (!append && pendingServerCriteriaSignature !== criteriaSignature) {
-                return;
-            }
-            if (append && serverCriteriaSignature !== criteriaSignature) {
-                return;
-            }
-
-            const keys = Array.isArray(payload.store_keys) ? payload.store_keys : [];
-            if (!append || !(serverMatchedKeys instanceof Set)) {
-                serverMatchedKeys = new Set();
-            }
-
-            keys.forEach(function (value) {
-                const key = String(value || '');
-                if (key !== '') serverMatchedKeys.add(key);
-            });
-
-            const payloadTotal = parseInt(payload.total_matches, 10);
-            serverTotalMatches = Number.isFinite(payloadTotal) ? Math.max(0, payloadTotal) : serverMatchedKeys.size;
-
-            const payloadNextOffset = payload.next_offset;
-            if (payloadNextOffset === null || payloadNextOffset === undefined || payloadNextOffset === '') {
-                serverNextOffset = serverMatchedKeys.size;
-            } else {
-                const nextValue = parseInt(payloadNextOffset, 10);
-                serverNextOffset = Number.isFinite(nextValue) ? Math.max(0, nextValue) : serverMatchedKeys.size;
-            }
-            serverHasMore = !!payload.has_more;
-            serverCriteriaSignature = criteriaSignature;
-            pendingServerCriteriaSignature = criteriaSignature;
-        } catch (error) {
-            if (!error || error.name !== 'AbortError') {
-                if (!append) {
-                    serverMatchedKeys = null;
-                    serverCriteriaSignature = '';
-                    serverTotalMatches = 0;
-                    serverNextOffset = 0;
-                    serverHasMore = false;
-                }
-            }
-        } finally {
-            if (serverSearchController === controller) {
-                serverSearchController = null;
-            }
-            serverIsLoading = false;
-            applyFilters(source || lastFilterSource || heroSearch || gridSearch || headerSearch, {
-                skipServerRequest: true,
-                preservePagination: true
-            });
-        }
-    }
-
-    function queueServerSearch(state, source) {
-        if (!shouldSearchServer(state)) {
-            resetServerMatches();
-            return;
-        }
-
-        const criteriaSignature = buildServerCriteriaSignature(state);
-        if (criteriaSignature === serverCriteriaSignature && serverMatchedKeys instanceof Set) {
-            return;
-        }
-        if (criteriaSignature === pendingServerCriteriaSignature && (serverSearchTimer !== null || serverIsLoading)) {
-            return;
-        }
-        pendingServerCriteriaSignature = criteriaSignature;
-
-        if (criteriaSignature !== serverCriteriaSignature) {
-            serverMatchedKeys = null;
-            serverCriteriaSignature = '';
-            serverTotalMatches = 0;
-            serverNextOffset = 0;
-            serverHasMore = false;
-        }
-        abortPendingServerSearch();
-
-        serverSearchTimer = window.setTimeout(async function () {
-            serverSearchTimer = null;
-            await fetchServerResults(state, source, criteriaSignature, false);
-        }, 220);
     }
 
     function toRadians(value) {
@@ -5317,13 +5161,9 @@ document.addEventListener('DOMContentLoaded', function () {
         sorted.forEach(function (row) { storeGrid.appendChild(row); });
     }
 
-    function updatePaginationUi(shownCount, matchedCount, shouldUseServerResults, useServerMatches) {
-        const pendingServerLookup = shouldUseServerResults && !useServerMatches && (serverSearchTimer !== null || serverIsLoading);
-
+    function updatePaginationUi(shownCount, matchedCount) {
         if (paginationNote) {
-            if (pendingServerLookup) {
-                paginationNote.textContent = 'Finding matching stores...';
-            } else if (matchedCount <= 0) {
+            if (matchedCount <= 0) {
                 paginationNote.textContent = 'No stores matched your current filters.';
             } else if (shownCount < matchedCount) {
                 paginationNote.textContent = 'Showing ' + formatCount(shownCount) + ' of ' + formatCount(matchedCount) + ' matching stores.';
@@ -5333,16 +5173,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         if (!loadMoreButton) return;
-        const hasMoreActions = canRevealMoreRows || canFetchMoreServerRows;
-        loadMoreButton.hidden = !hasMoreActions && !serverIsLoading;
-        loadMoreButton.disabled = serverIsLoading || (!canRevealMoreRows && !canFetchMoreServerRows);
-        if (serverIsLoading) {
-            loadMoreButton.textContent = 'Loading stores...';
-        } else if (canFetchMoreServerRows) {
-            loadMoreButton.textContent = 'Load more results';
-        } else {
-            loadMoreButton.textContent = 'Show more stores';
-        }
+        loadMoreButton.hidden = !canRevealMoreRows;
+        loadMoreButton.disabled = !canRevealMoreRows;
+        loadMoreButton.textContent = 'Show more stores';
     }
 
     let pageFoodSearchTimer = null;
@@ -5436,72 +5269,213 @@ document.addEventListener('DOMContentLoaded', function () {
         }, 220);
     }
 
+    function renderActiveFilterPills(state, selectedCats) {
+        if (!activeFilterPills) return;
+        const tags = [];
+
+        if (state.query) {
+            tags.push({
+                label: 'Search: "' + state.rawQuery + '"',
+                clear: function () {
+                    syncInputs(null, '');
+                    applyFilters();
+                }
+            });
+        }
+        if (state.rating4) {
+            tags.push({
+                label: 'Ratings 4+',
+                clear: function () {
+                    if (filterRatings4) filterRatings4.checked = false;
+                    applyFilters();
+                }
+            });
+        }
+        if (state.live) {
+            tags.push({
+                label: 'Open now only',
+                clear: function () {
+                    if (filterLiveOnly) filterLiveOnly.checked = false;
+                    applyFilters();
+                }
+            });
+        }
+        if (state.partner) {
+            tags.push({
+                label: 'Partner stores',
+                clear: function () {
+                    if (filterPartnerOnly) filterPartnerOnly.checked = false;
+                    applyFilters();
+                }
+            });
+        }
+        if (state.branch) {
+            tags.push({
+                label: 'Pickup branches',
+                clear: function () {
+                    if (filterBranchOnly) filterBranchOnly.checked = false;
+                    applyFilters();
+                }
+            });
+        }
+        if (state.nearby) {
+            tags.push({
+                label: 'Nearby radius (<= 15 km)',
+                clear: function () {
+                    if (filterNearbyOnly) filterNearbyOnly.checked = false;
+                    applyFilters();
+                }
+            });
+        }
+        selectedCats.forEach(function (cat) {
+            tags.push({
+                label: 'Category: ' + cat,
+                clear: function () {
+                    document.querySelectorAll('.market-cat-filter').forEach(function (chk) {
+                        if (normalizeSearch(chk.value) === cat) chk.checked = false;
+                    });
+                    applyFilters();
+                }
+            });
+        });
+
+        if (tags.length === 0) {
+            activeFilterPills.style.display = 'none';
+            activeFilterPills.innerHTML = '';
+            return;
+        }
+
+        activeFilterPills.style.display = 'flex';
+        activeFilterPills.innerHTML = '<span style="font-size: 11.5px; font-weight: 700; color: #475467; display: flex; align-items: center; gap: 4px; margin-right: 4px;"><i class="fas fa-sliders" style="color: #b3261e;"></i> Active:</span>';
+
+        tags.forEach(function (item) {
+            const pill = document.createElement('span');
+            pill.className = 'market-active-pill';
+            pill.style.cssText = 'display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: #fff1f0; color: #b3261e; border: 1px solid #fee4e2; border-radius: 999px; font-size: 11.5px; font-weight: 700; cursor: default;';
+            pill.innerHTML = escapeSearchHtml(item.label) + ' <i class="fas fa-times" style="cursor: pointer; opacity: 0.7; font-size: 10px; margin-left: 2px;" title="Remove filter"></i>';
+            pill.querySelector('i').addEventListener('click', function (e) {
+                e.stopPropagation();
+                item.clear();
+            });
+            activeFilterPills.appendChild(pill);
+        });
+
+        const resetBtn = document.createElement('button');
+        resetBtn.type = 'button';
+        resetBtn.style.cssText = 'margin-left: auto; border: none; background: transparent; color: #b3261e; font-size: 11.5px; font-weight: 700; cursor: pointer; text-decoration: underline;';
+        resetBtn.textContent = 'Clear all';
+        resetBtn.addEventListener('click', resetAllFilters);
+        activeFilterPills.appendChild(resetBtn);
+    }
+
+    function resetAllFilters() {
+        syncInputs(null, '');
+        if (filterRatings4) filterRatings4.checked = false;
+        if (filterLiveOnly) filterLiveOnly.checked = false;
+        if (filterPartnerOnly) filterPartnerOnly.checked = false;
+        if (filterBranchOnly) filterBranchOnly.checked = false;
+        if (filterNearbyOnly) filterNearbyOnly.checked = false;
+        document.querySelectorAll('.market-cat-filter').forEach(function (chk) {
+            chk.checked = false;
+        });
+        applyFilters();
+    }
+
+    if (clearAllFiltersBtn) {
+        clearAllFiltersBtn.addEventListener('click', resetAllFilters);
+    }
+
     function applyFilters(source, options) {
         const config = options || {};
         const state = getCurrentSearchState(source);
         lastFilterSource = source || heroSearch || gridSearch || headerSearch;
-        lastAppliedState = state;
         const rawQuery = state.rawQuery;
         const query = state.query;
-        const criteriaSignature = buildServerCriteriaSignature(state);
-        const shouldUseServerResults = shouldSearchServer(state);
-        const nextPaginationSignature = buildPaginationSignature(state);
-
-        if (paginationSignature === '') {
-            paginationSignature = nextPaginationSignature;
-        } else if (!config.preservePagination && paginationSignature !== nextPaginationSignature) {
-            displayLimit = CLIENT_PAGE_SIZE;
-            paginationSignature = nextPaginationSignature;
-        }
-
-        if (!config.skipServerRequest) {
-            queueServerSearch(state, lastFilterSource);
-        }
 
         syncInputs(source, rawQuery);
         updateFoodSearchResults(rawQuery);
-        const useServerMatches = shouldUseServerResults && serverMatchedKeys instanceof Set && serverCriteriaSignature === criteriaSignature;
-        const orderedRows = storeGrid ? Array.from(storeGrid.querySelectorAll('.market-store-row')) : rows;
+
+        const storeCards = storeGrid ? Array.from(storeGrid.querySelectorAll('.market-store-row')) : [];
         const matchedRows = [];
 
         const selectedCats = Array.from(document.querySelectorAll('.market-cat-filter:checked')).map(function(chk) {
-            return chk.value.toLowerCase().trim();
+            return normalizeSearch(chk.value);
         });
 
-        orderedRows.forEach(function (row) {
+        const wantRating4 = state.rating4;
+        const wantLiveOnly = state.live;
+        const wantPartner = state.partner;
+        const wantBranch = state.branch;
+        const wantNearby = state.nearby;
+
+        storeCards.forEach(function (row) {
             const search = normalizeSearch(row.dataset.search || '');
             const tags = normalizeSearch(row.dataset.tags || '');
             const rating = parseFloat(row.dataset.rating || '0');
             const isOpen = row.dataset.open === '1';
             const isBranch = row.dataset.type === 'branch';
             const isPartner = row.dataset.type !== 'branch';
-            const distance = parseFloat(row.dataset.distance || '');
-            const rowKey = String(row.dataset.storeKey || '');
-            const matchQuery = useServerMatches ? serverMatchedKeys.has(rowKey) : (query === '' || search.indexOf(query) !== -1);
+            const distance = parseFloat(row.dataset.distance || '999');
+
+            // 1. Text Query Search
+            const matchQuery = (query === '' || search.indexOf(query) !== -1);
+
+            // 2. Category Checkboxes: store matches if its tags or search contain ANY selected category
             const matchCategory = selectedCats.length === 0 || selectedCats.some(function(cat) {
                 return tags.indexOf(cat) !== -1 || search.indexOf(cat) !== -1;
             });
-            const matchRatings = useServerMatches ? true : (!filterRatings4 || !filterRatings4.checked || rating >= 4);
-            const matchLive = useServerMatches ? true : (!filterLiveOnly || !filterLiveOnly.checked || isOpen);
-            const matchPartner = useServerMatches ? true : (!filterPartnerOnly || !filterPartnerOnly.checked || isPartner);
-            const matchBranch = useServerMatches ? true : (!filterBranchOnly || !filterBranchOnly.checked || isBranch);
-            const matchNearby = !filterNearbyOnly || !filterNearbyOnly.checked || (Number.isFinite(distance) && distance <= 15);
-            if (matchQuery && matchCategory && matchRatings && matchLive && matchPartner && matchBranch && matchNearby) {
+
+            // 3. Ratings 4+
+            const matchRatings = !wantRating4 || rating >= 4.0;
+
+            // 4. Open Now Only
+            const matchLive = !wantLiveOnly || isOpen;
+
+            // 5. Store Type (Partner vs Branch):
+            // If both checked -> match either. If one checked -> match that one. If neither checked -> match all.
+            let matchType = true;
+            if (wantPartner && wantBranch) {
+                matchType = isPartner || isBranch;
+            } else if (wantPartner) {
+                matchType = isPartner;
+            } else if (wantBranch) {
+                matchType = isBranch;
+            }
+
+            // 6. Nearby Radius (<= 15 km):
+            let matchNearby = true;
+            if (wantNearby) {
+                if (locationReady && Number.isFinite(distance)) {
+                    matchNearby = distance <= 15;
+                } else {
+                    if (detectNearestButton && !locationReady) {
+                        detectNearestButton.click();
+                    }
+                    matchNearby = true;
+                }
+            }
+
+            if (matchQuery && matchCategory && matchRatings && matchLive && matchType && matchNearby) {
                 matchedRows.push(row);
             }
         });
 
-        rows.forEach(function (row) { row.classList.add('is-hidden'); });
+        // Hide all cards in grid, then reveal matched rows up to displayLimit
+        storeCards.forEach(function (row) { row.classList.add('is-hidden'); });
         const shownRows = matchedRows.slice(0, displayLimit);
         shownRows.forEach(function (row) { row.classList.remove('is-hidden'); });
 
         const shownCount = shownRows.length;
-        const matchedCount = useServerMatches && serverTotalMatches > 0 ? serverTotalMatches : matchedRows.length;
+        const matchedCount = matchedRows.length;
         canRevealMoreRows = matchedRows.length > shownCount;
-        canFetchMoreServerRows = useServerMatches && !canRevealMoreRows && serverHasMore;
 
         if (visibleCount) visibleCount.textContent = formatCount(shownCount);
-        updatePaginationUi(shownCount, matchedCount, shouldUseServerResults, useServerMatches);
+        updatePaginationUi(shownCount, matchedCount);
+        renderActiveFilterPills(state, selectedCats);
+
+        if (noResultsBlock) {
+            noResultsBlock.style.display = (matchedCount === 0) ? 'block' : 'none';
+        }
     }
 
     function updateNearest(lat, lng, isUserGps) {
@@ -5527,7 +5501,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const distanceKm = haversineKm(lat, lng, storeLat, storeLng);
             const minTime = Math.max(15, Math.round((distanceKm * 3.5) + 15));
             const maxTime = minTime + 10;
-            
+
             row.dataset.distance = distanceKm.toFixed(2);
             row.dataset.minutes = minTime.toString();
 
@@ -5585,14 +5559,13 @@ document.addEventListener('DOMContentLoaded', function () {
     const clearFoodSearchBtn = document.getElementById('clearFoodSearchBtn');
     if (clearFoodSearchBtn) {
         clearFoodSearchBtn.addEventListener('click', function () {
-            if (headerSearch) headerSearch.value = '';
-            if (heroSearch) heroSearch.value = '';
-            if (gridSearch) gridSearch.value = '';
+            syncInputs(null, '');
             const newUrl = window.location.pathname;
             window.history.replaceState({}, '', newUrl);
             applyFilters();
         });
     }
+
     sortInputs.forEach(function (input) {
         input.addEventListener('change', function () {
             currentSort = input.value;
@@ -5600,38 +5573,25 @@ document.addEventListener('DOMContentLoaded', function () {
             applyFilters(heroSearch || gridSearch, { preservePagination: true });
         });
     });
+
     [filterRatings4, filterLiveOnly, filterPartnerOnly, filterBranchOnly, filterNearbyOnly].forEach(function (control) {
         if (!control) return;
         control.addEventListener('change', function () {
-            applyFilters(heroSearch || gridSearch);
+            applyFilters();
         });
     });
+
     document.querySelectorAll('.market-cat-filter').forEach(function (chk) {
         chk.addEventListener('change', function () {
-            applyFilters(heroSearch || gridSearch);
+            applyFilters();
         });
     });
+
     if (loadMoreButton) {
         loadMoreButton.addEventListener('click', function () {
-            if (serverIsLoading) return;
-
             if (canRevealMoreRows) {
                 displayLimit += CLIENT_PAGE_SIZE;
-                applyFilters(lastFilterSource || heroSearch || gridSearch || headerSearch, {
-                    skipServerRequest: true,
-                    preservePagination: true
-                });
-                return;
-            }
-
-            if (canFetchMoreServerRows && lastAppliedState) {
-                displayLimit += CLIENT_PAGE_SIZE;
-                fetchServerResults(
-                    lastAppliedState,
-                    lastFilterSource || heroSearch || gridSearch || headerSearch,
-                    buildServerCriteriaSignature(lastAppliedState),
-                    true
-                );
+                applyFilters();
             }
         });
     }

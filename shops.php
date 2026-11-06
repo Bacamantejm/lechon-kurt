@@ -909,6 +909,17 @@ body.dark-mode .leaflet-popup-content span {
                         </div>
                     </div>
 
+                    <!-- Quick Filters -->
+                    <div class="market-sidebar-section">
+                        <h4>Quick filters</h4>
+                        <div class="market-check-list">
+                            <label class="market-check"><input type="checkbox" id="filterLiveOnly"> <span>Open now only</span></label>
+                            <label class="market-check"><input type="checkbox" id="filterRatings4"> <span>Ratings 4+</span></label>
+                            <label class="market-check"><input type="checkbox" id="filterPartnerOnly"> <span>Partner stores</span></label>
+                            <label class="market-check"><input type="checkbox" id="filterBranchOnly"> <span>Pickup branches</span></label>
+                        </div>
+                    </div>
+
                     <!-- Location & City Scope -->
                     <div class="market-sidebar-section" id="shopsLocationSection">
                         <h4>Location &amp; City Scope</h4>
@@ -1040,6 +1051,7 @@ body.dark-mode .leaflet-popup-content span {
                                 ?>
                                 <a href="<?php echo htmlspecialchars($shop['menu_link']); ?>"
                                    class="market-store-row panda-card-link shop-card-item"
+                                   data-type="<?php echo htmlspecialchars(strtolower($shop['type'])); ?>"
                                    data-shop-key="<?php echo htmlspecialchars($shop_key_value); ?>"
                                    data-city="<?php echo htmlspecialchars(strtolower($city_label)); ?>"
                                    data-location="<?php echo htmlspecialchars(strtolower($shop['location'] ?? '')); ?>"
@@ -1130,6 +1142,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const filterCityLabel = document.getElementById('filterCityLabel');
     const filterNearbyOnly = document.getElementById('filterNearbyOnly');
     const filterVouchers = document.getElementById('filterVouchers');
+    const filterLiveOnly = document.getElementById('filterLiveOnly');
+    const filterRatings4 = document.getElementById('filterRatings4');
+    const filterPartnerOnly = document.getElementById('filterPartnerOnly');
+    const filterBranchOnly = document.getElementById('filterBranchOnly');
     const shopTypeChecks = document.querySelectorAll('.shop-type-check');
     const sortRadios = document.querySelectorAll('input[name="shopSort"]');
     const priceRadios = document.querySelectorAll('input[name="priceRange"]');
@@ -1772,6 +1788,10 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
     if (filterVouchers) filterVouchers.addEventListener('change', applyShopFilters);
+    if (filterLiveOnly) filterLiveOnly.addEventListener('change', applyShopFilters);
+    if (filterRatings4) filterRatings4.addEventListener('change', applyShopFilters);
+    if (filterPartnerOnly) filterPartnerOnly.addEventListener('change', applyShopFilters);
+    if (filterBranchOnly) filterBranchOnly.addEventListener('change', applyShopFilters);
     shopTypeChecks.forEach(chk => chk.addEventListener('change', applyShopFilters));
     sortRadios.forEach(r => r.addEventListener('change', applyShopFilters));
     priceRadios.forEach(r => r.addEventListener('change', applyShopFilters));
