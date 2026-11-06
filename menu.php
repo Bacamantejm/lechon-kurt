@@ -291,7 +291,7 @@ if (isset($_SESSION['user_id'])) {
 // Store locations for pickup (database-driven, with static fallback)
 $store_locations = [];
 $store_scope_filter = ($scoped_partner_seller_id > 0) ? " AND owner_user_id = " . (int)$scoped_partner_seller_id : "";
-$store_query = "SELECT store_id, owner_user_id, store_name, address, city, province, phone, opening_hours, latitude, longitude
+$store_query = "SELECT store_id, owner_user_id, store_name, address, city, province, phone, opening_hours, opening_time, closing_time, operating_days, availability_mode, manual_status, is_active, latitude, longitude
                 FROM store_locations
                 WHERE is_active = 1 {$store_scope_filter}
                 ORDER BY store_name";
@@ -302,6 +302,7 @@ if ($store_result && mysqli_num_rows($store_result) > 0) {
         $street_address = fixMojibakeText(trim((string)($store['address'] ?? '')));
         $city_name = fixMojibakeText(trim((string)($store['city'] ?? '')));
         $province_name = fixMojibakeText(trim((string)($store['province'] ?? '')));
+        $store_avail = function_exists('sahResolveStoreAvailability') ? sahResolveStoreAvailability($store) : ['is_open' => true, 'label' => 'Open'];
         $store_locations[] = [
             'id' => (int)$store['store_id'],
             'owner_user_id' => (int)($store['owner_user_id'] ?? 0),
@@ -311,7 +312,10 @@ if ($store_result && mysqli_num_rows($store_result) > 0) {
             'city' => $city_name,
             'province' => $province_name,
             'phone' => (string)($store['phone'] ?? ''),
-            'hours' => (string)($store['opening_hours'] ?? ''),
+            'hours' => (string)($store_avail['schedule'] ?? $store['opening_hours'] ?? ''),
+            'availability' => $store_avail,
+            'is_open' => !empty($store_avail['is_open']),
+            'status_label' => (string)($store_avail['label'] ?? 'Closed'),
             'latitude' => is_null($store['latitude']) ? null : (float)$store['latitude'],
             'longitude' => is_null($store['longitude']) ? null : (float)$store['longitude']
         ];
@@ -509,6 +513,8 @@ foreach ($store_locations as $loc) {
         'address' => (string)($loc['address'] ?? ''),
         'city' => (string)($loc['city'] ?? 'Cavite'),
         'category' => $is_partner ? 'partner' : 'branch',
+        'is_open' => !empty($loc['is_open']),
+        'status_label' => (string)($loc['status_label'] ?? 'Closed'),
         'type_label' => $is_partner ? 'Partner Store' : 'Official Branch',
         'image' => resolveDistinctStoreImage($b_id, (string)$loc['name'], $b_owner_custom_img),
         'link' => $is_partner ? ('menu.php?seller_id=' . $b_owner) : ('menu.php?branch_id=' . $b_id),
@@ -1594,8 +1600,37 @@ if (!empty($_SESSION['user_id'])) {
                 <p class="storefront-categories"><?php echo htmlspecialchars($store_category_line); ?></p>
                 <h1><?php echo htmlspecialchars($store_display_name); ?></h1>
                 <p class="storefront-subtitle"><?php echo htmlspecialchars($store_display_subtitle); ?></p>
+                <?php if ($has_selected_store && isset($is_curr_store_open) && !$is_curr_store_open): ?>
+                    <div style="background:#fff8eb; border:1px solid #fedf89; color:#b54708; border-radius:12px; padding:10px 14px; margin-top:10px; margin-bottom:12px; font-size:0.85rem; display:flex; align-items:center; gap:8px;">
+                        <i class="fas fa-clock fa-lg"></i>
+                        <div><strong>Store Currently Closed:</strong> <?php echo htmlspecialchars($curr_store_status_note ?: 'This store is not accepting live orders right now.'); ?> You can still explore the menu or schedule a pre-order.</div>
+                    </div>
+                <?php endif; ?>
                 <div class="storefront-meta-row">
-                    <span><i class="fas fa-motorcycle"></i> Delivery and pickup available</span>
+                    <?php
+$curr_store_avail = null;
+if ($has_selected_store) {
+    if (!empty($selected_pickup_branch['availability'])) {
+        $curr_store_avail = $selected_pickup_branch['availability'];
+    } else {
+        foreach ($store_locations as $sl_item) {
+            if ($lookup_seller_id > 0 && (int)($sl_item['owner_user_id'] ?? 0) === $lookup_seller_id) {
+                $curr_store_avail = $sl_item['availability'] ?? null;
+                break;
+            }
+        }
+    }
+}
+$is_curr_store_open = $curr_store_avail ? !empty($curr_store_avail['is_open']) : true;
+$curr_store_status_label = $curr_store_avail ? ($curr_store_avail['label'] ?? ($is_curr_store_open ? 'Open Now' : 'Closed')) : 'Open Now';
+$curr_store_status_note = $curr_store_avail ? ($curr_store_avail['note'] ?? '') : '';
+?>
+<?php if ($has_selected_store): ?>
+    <span class="badge" style="<?php echo $is_curr_store_open ? 'background:#ecfdf3; color:#027a48; border:1px solid #abefc6;' : 'background:#fee4e2; color:#b3261e; border:1px solid #fecdca;'; ?> font-size:0.8rem; padding:4px 10px; border-radius:999px; font-weight:700;">
+        <i class="fas fa-circle" style="font-size:0.55rem; margin-right:4px;"></i> <?php echo $is_curr_store_open ? 'Open Now' : 'Closed Right Now'; ?>
+    </span>
+<?php endif; ?>
+<span><i class="fas fa-motorcycle"></i> Delivery and pickup available</span>
                     <span><i class="fas fa-receipt"></i> <?php echo htmlspecialchars($store_price_label); ?></span>
                     <span><i class="fas fa-utensils"></i> <?php echo $has_selected_store ? (number_format($store_item_count) . ' items') : (count($all_menu_shops) . ' shops available'); ?></span>
                 </div>
@@ -1649,6 +1684,9 @@ if (!empty($_SESSION['user_id'])) {
                                     <img src="<?php echo htmlspecialchars($shop['image']); ?>" alt="<?php echo htmlspecialchars($shop['name']); ?>" style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.25s ease;" onerror="this.src='images/store-bg.jpg'">
                                     <span style="position: absolute; top: 12px; left: 12px; font-size: 0.72rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; background: rgba(16, 24, 40, 0.82); color: #ffffff; backdrop-filter: blur(4px);">
                                         <i class="<?php echo $shop['category'] === 'branch' ? 'fas fa-location-dot' : 'fas fa-shop'; ?>" style="margin-right: 3px;"></i> <?php echo htmlspecialchars($shop['type_label']); ?>
+                                    </span>
+                                    <span style="position: absolute; top: 12px; right: 12px; font-size: 0.72rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; <?php echo !empty($shop['is_open']) ? 'background: #ecfdf3; color: #027a48; border: 1px solid #abefc6;' : 'background: #fee4e2; color: #b3261e; border: 1px solid #fecdca;'; ?> backdrop-filter: blur(4px);">
+                                        <i class="fas fa-circle" style="font-size: 0.5rem; margin-right: 3px;"></i> <?php echo !empty($shop['is_open']) ? 'Open' : 'Closed'; ?>
                                     </span>
                                     <?php if ($can_edit_this_shop_card && $shop_card_uid > 0): ?>
                                         <button type="button" class="menu-card-edit-banner-btn js-open-banner-modal" data-target-user-id="<?php echo $shop_card_uid; ?>" onclick="event.preventDefault(); event.stopPropagation();" title="Change store cover picture">
