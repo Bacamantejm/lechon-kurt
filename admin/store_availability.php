@@ -25,25 +25,150 @@ if (!$can_manage_store_availability) {
 
 sahEnsureStoreLocationAvailabilitySchema($conn);
 
-$bootstrap_stmt = mysqli_prepare(
-    $conn,
-    "SELECT *
-     FROM franchise_applications
-     WHERE user_id = ? AND status = 'approved'
-     ORDER BY reviewed_at DESC, id DESC
-     LIMIT 1"
-);
-if ($bootstrap_stmt) {
-    mysqli_stmt_bind_param($bootstrap_stmt, "i", $seller_scope_id);
-    mysqli_stmt_execute($bootstrap_stmt);
-    $bootstrap_result = mysqli_stmt_get_result($bootstrap_stmt);
-    $approved_application = $bootstrap_result ? mysqli_fetch_assoc($bootstrap_result) : null;
-    mysqli_stmt_close($bootstrap_stmt);
-    if ($approved_application) {
-        sahUpsertPartnerStoreLocation($conn, $approved_application);
+/**
+ * Resolves the single canonical store belonging to this business partner,
+ * repairing missing owner associations and cleaning duplicate records.
+ */
+function sahResolveSinglePartnerStore($conn, int $seller_scope_id, ?array $partner_info = null): ?array
+{
+    if (!($conn instanceof mysqli) || $seller_scope_id <= 0) {
+        return null;
     }
+
+    $email = trim((string)($partner_info['email'] ?? ''));
+    $business_name = trim((string)($partner_info['business_name'] ?? ''));
+
+    // 1. Direct owner match in store_locations
+    $stores = [];
+    $owner_res = @mysqli_query($conn, "SELECT * FROM store_locations WHERE owner_user_id = {$seller_scope_id} ORDER BY is_active DESC, store_id ASC");
+    if ($owner_res) {
+        while ($row = mysqli_fetch_assoc($owner_res)) {
+            $stores[] = $row;
+        }
+    }
+
+    // 2. Fallback search by email or business name if not yet linked
+    if (empty($stores)) {
+        $conditions = [];
+        if ($email !== '') {
+            $esc_email = mysqli_real_escape_string($conn, $email);
+            $conditions[] = "email = '{$esc_email}'";
+        }
+        if ($business_name !== '') {
+            $esc_bn = mysqli_real_escape_string($conn, $business_name);
+            $conditions[] = "LOWER(TRIM(store_name)) = LOWER('{$esc_bn}')";
+        }
+        if (!empty($conditions)) {
+            $cond_sql = implode(' OR ', $conditions);
+            $alt_res = @mysqli_query($conn, "SELECT * FROM store_locations WHERE ({$cond_sql}) ORDER BY is_active DESC, store_id ASC");
+            if ($alt_res) {
+                while ($row = mysqli_fetch_assoc($alt_res)) {
+                    $stores[] = $row;
+                }
+            }
+        }
+    }
+
+    // 3. Deduplicate and ensure canonical store
+    if (!empty($stores)) {
+        $primary = $stores[0];
+        $primary_id = (int)$primary['store_id'];
+
+        if ((int)($primary['owner_user_id'] ?? 0) !== $seller_scope_id) {
+            @mysqli_query($conn, "UPDATE store_locations SET owner_user_id = {$seller_scope_id} WHERE store_id = {$primary_id}");
+            $primary['owner_user_id'] = $seller_scope_id;
+        }
+
+        // Clean duplicates: keep primary store and re-assign any dependent data
+        if (count($stores) > 1) {
+            for ($i = 1; $i < count($stores); $i++) {
+                $dup_id = (int)$stores[$i]['store_id'];
+                if ($dup_id !== $primary_id) {
+                    if (sahTableExists($conn, 'orders')) {
+                        if (sahColumnExists($conn, 'orders', 'store_id')) {
+                            @mysqli_query($conn, "UPDATE orders SET store_id = {$primary_id} WHERE store_id = {$dup_id}");
+                        }
+                        if (sahColumnExists($conn, 'orders', 'pickup_location')) {
+                            @mysqli_query($conn, "UPDATE orders SET pickup_location = {$primary_id} WHERE pickup_location = {$dup_id}");
+                        }
+                    }
+                    if (sahTableExists($conn, 'riders') && sahColumnExists($conn, 'riders', 'store_id')) {
+                        @mysqli_query($conn, "UPDATE riders SET store_id = {$primary_id} WHERE store_id = {$dup_id}");
+                    }
+                    if (sahTableExists($conn, 'employees') && sahColumnExists($conn, 'employees', 'store_id')) {
+                        @mysqli_query($conn, "UPDATE employees SET store_id = {$primary_id} WHERE store_id = {$dup_id}");
+                    }
+                    @mysqli_query($conn, "DELETE FROM store_locations WHERE store_id = {$dup_id}");
+                }
+            }
+        }
+
+        if (function_exists('fixMojibakeText')) {
+            $primary['store_name'] = fixMojibakeText((string)($primary['store_name'] ?? ''));
+            $primary['address'] = fixMojibakeText((string)($primary['address'] ?? ''));
+            $primary['city'] = fixMojibakeText((string)($primary['city'] ?? ''));
+            $primary['province'] = fixMojibakeText((string)($primary['province'] ?? ''));
+        }
+        $primary['availability'] = sahResolveStoreAvailability($primary);
+        return $primary;
+    }
+
+    // 4. Fallback: bootstrap from approved franchise application if available
+    $bootstrap_stmt = mysqli_prepare(
+        $conn,
+        "SELECT * FROM franchise_applications WHERE user_id = ? AND status = 'approved' ORDER BY reviewed_at DESC, id DESC LIMIT 1"
+    );
+    if ($bootstrap_stmt) {
+        mysqli_stmt_bind_param($bootstrap_stmt, "i", $seller_scope_id);
+        mysqli_stmt_execute($bootstrap_stmt);
+        $bootstrap_res = mysqli_stmt_get_result($bootstrap_stmt);
+        $approved_app = $bootstrap_res ? mysqli_fetch_assoc($bootstrap_res) : null;
+        mysqli_stmt_close($bootstrap_stmt);
+        if ($approved_app) {
+            sahUpsertPartnerStoreLocation($conn, $approved_app);
+            $q_new = @mysqli_query($conn, "SELECT * FROM store_locations WHERE owner_user_id = {$seller_scope_id} ORDER BY store_id DESC LIMIT 1");
+            if ($q_new && ($new_row = mysqli_fetch_assoc($q_new))) {
+                if (function_exists('fixMojibakeText')) {
+                    $new_row['store_name'] = fixMojibakeText((string)($new_row['store_name'] ?? ''));
+                    $new_row['address'] = fixMojibakeText((string)($new_row['address'] ?? ''));
+                    $new_row['city'] = fixMojibakeText((string)($new_row['city'] ?? ''));
+                    $new_row['province'] = fixMojibakeText((string)($new_row['province'] ?? ''));
+                }
+                $new_row['availability'] = sahResolveStoreAvailability($new_row);
+                return $new_row;
+            }
+        }
+    }
+
+    // 5. Final fallback: create new store location for this partner
+    $store_name = $business_name !== '' ? $business_name : trim((string)($partner_info['full_name'] ?? "Partner's Lechon"));
+    $contact_phone = trim((string)($partner_info['phone'] ?? '09123456789'));
+    $address = trim((string)($partner_info['address'] ?? 'City of Dasmariñas, Cavite'));
+    $contact_email = $email !== '' ? $email : ('partner+' . $seller_scope_id . '@lechondelights.local');
+
+    $esc_sname = mysqli_real_escape_string($conn, $store_name);
+    $esc_addr = mysqli_real_escape_string($conn, $address);
+    $esc_email = mysqli_real_escape_string($conn, $contact_email);
+    $esc_phone = mysqli_real_escape_string($conn, $contact_phone);
+
+    @mysqli_query(
+        $conn,
+        "INSERT INTO store_locations (owner_user_id, store_name, address, city, province, phone, email, opening_hours, opening_time, closing_time, operating_days, availability_mode, manual_status, is_active)
+         VALUES ({$seller_scope_id}, '{$esc_sname}', '{$esc_addr}', 'City of Dasmariñas', 'Cavite', '{$esc_phone}', '{$esc_email}', 'Daily | 8:00 AM - 8:00 PM', '08:00:00', '20:00:00', '1,2,3,4,5,6,7', 'schedule', 'open', 1)"
+    );
+    $new_id = (int)mysqli_insert_id($conn);
+    $q_created = @mysqli_query($conn, "SELECT * FROM store_locations WHERE store_id = {$new_id} LIMIT 1");
+    if ($q_created && ($row = mysqli_fetch_assoc($q_created))) {
+        $row['availability'] = sahResolveStoreAvailability($row);
+        return $row;
+    }
+
+    return null;
 }
 
+$partner_info = function_exists('getUserInfo') ? getUserInfo($conn, (int)$seller_scope_id) : null;
+
+// Handle Store Availability Form Save & Toggles
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
         $_SESSION['error'] = 'Invalid request token. Please refresh and try again.';
@@ -51,7 +176,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    $store_id = (int)($_POST['store_id'] ?? 0);
+    $selected_store = sahResolveSinglePartnerStore($conn, (int)$seller_scope_id, $partner_info);
+    if (!$selected_store) {
+        $_SESSION['error'] = 'Unable to resolve store location for this business partner.';
+        header('Location: store_availability.php');
+        exit;
+    }
+
+    $store_id = (int)$selected_store['store_id'];
     $availability_mode = in_array($_POST['availability_mode'] ?? '', ['schedule', 'manual'], true) ? (string)$_POST['availability_mode'] : 'schedule';
     $manual_status = in_array($_POST['manual_status'] ?? '', ['open', 'away', 'closed'], true) ? (string)$_POST['manual_status'] : 'closed';
     $is_active = !empty($_POST['is_active']) ? 1 : 0;
@@ -63,25 +195,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $availability_mode = 'manual';
         $manual_status = $immediate_toggle;
         $is_active = 1;
-    }
-
-    $owned_stores = sahFetchPartnerStoreLocations($conn, (int)$seller_scope_id);
-    $owned_store_ids = array_map(static function ($row) {
-        return (int)($row['store_id'] ?? 0);
-    }, $owned_stores);
-
-    if ($store_id <= 0 || !in_array($store_id, $owned_store_ids, true)) {
-        $_SESSION['error'] = 'Selected store could not be found for this business partner.';
-        header('Location: store_availability.php');
-        exit;
-    }
-
-    $selected_store = null;
-    foreach ($owned_stores as $owned_store) {
-        if ((int)($owned_store['store_id'] ?? 0) === $store_id) {
-            $selected_store = $owned_store;
-            break;
-        }
     }
 
     $fallback_opening_time = substr((string)($selected_store['opening_time'] ?? '08:00:00'), 0, 5);
@@ -103,50 +216,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $closing_time = $fallback_closing_time;
     }
 
-    $posted_operating_days = $_POST['operating_days'] ?? null;
-    if (is_array($posted_operating_days) && !empty($posted_operating_days)) {
-        $operating_days = sahNormalizeOperatingDays($posted_operating_days);
-    } else {
-        if ($availability_mode === 'schedule') {
-            $_SESSION['error'] = 'Please select at least one operating day for schedule mode.';
-            header('Location: store_availability.php');
-            exit;
+    // Process operating days selected by shop owner (1 = Mon, 7 = Sun)
+    $posted_days = $_POST['operating_days'] ?? null;
+    $operating_days_arr = [];
+    if (is_array($posted_days)) {
+        foreach ($posted_days as $day_val) {
+            $day_int = (int)$day_val;
+            if ($day_int >= 1 && $day_int <= 7 && !in_array($day_int, $operating_days_arr, true)) {
+                $operating_days_arr[] = $day_int;
+            }
         }
-        $operating_days = sahNormalizeOperatingDays($fallback_operating_days);
     }
+    sort($operating_days_arr);
+    $operating_days = !empty($operating_days_arr) ? implode(',', $operating_days_arr) : '';
 
-    $opening_hours = sahBuildOpeningHours($opening_time . ':00', $closing_time . ':00', $operating_days);
+    $opening_hours = ($operating_days !== '')
+        ? sahBuildOpeningHours($opening_time . ':00', $closing_time . ':00', $operating_days)
+        : 'Closed on all days';
 
     $stmt = mysqli_prepare(
         $conn,
         "UPDATE store_locations
-         SET is_active = ?, availability_mode = ?, manual_status = ?, opening_time = ?, closing_time = ?,
-             operating_days = ?, opening_hours = ?
-         WHERE store_id = ?
-         LIMIT 1"
+         SET availability_mode = ?,
+             manual_status = ?,
+             opening_time = ?,
+             closing_time = ?,
+             operating_days = ?,
+             opening_hours = ?,
+             is_active = ?,
+             updated_at = NOW()
+         WHERE store_id = ?"
     );
+
     if (!$stmt) {
-        $_SESSION['error'] = 'Unable to prepare the store availability update.';
+        $_SESSION['error'] = 'Database update preparation failed.';
         header('Location: store_availability.php');
         exit;
     }
 
-    $opening_time_sql = $opening_time . ':00';
-    $closing_time_sql = $closing_time . ':00';
+    $opening_time_db = $opening_time . ':00';
+    $closing_time_db = $closing_time . ':00';
+
     mysqli_stmt_bind_param(
         $stmt,
-        "issssssi",
-        $is_active,
+        'ssssssii',
         $availability_mode,
         $manual_status,
-        $opening_time_sql,
-        $closing_time_sql,
+        $opening_time_db,
+        $closing_time_db,
         $operating_days,
         $opening_hours,
+        $is_active,
         $store_id
     );
+
     $ok = mysqli_stmt_execute($stmt);
-    $error = trim((string)mysqli_stmt_error($stmt));
+    $error = mysqli_stmt_error($stmt);
     mysqli_stmt_close($stmt);
 
     if ($ok) {
@@ -155,7 +280,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($immediate_toggle === 'closed') {
             $_SESSION['success'] = 'Store closed immediately. Manual mode is now active.';
         } else {
-            $_SESSION['success'] = 'Store availability saved successfully. Customers will now see the updated badge in the directory.';
+            $_SESSION['success'] = 'Store availability and operating schedule saved successfully.';
         }
     } else {
         $_SESSION['error'] = $error !== '' ? $error : 'Unable to save store availability right now.';
@@ -165,10 +290,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-$stores = sahFetchPartnerStoreLocations($conn, (int)$seller_scope_id);
-$partner_info = function_exists('getUserInfo') ? getUserInfo($conn, (int)$seller_scope_id) : null;
-$shop_name = trim((string)($partner_info['business_name'] ?? $partner_info['full_name'] ?? 'Your shop'));
-$day_labels = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 'Sat', 7 => 'Sun'];
+// Resolve the single store for display
+$store = sahResolveSinglePartnerStore($conn, (int)$seller_scope_id, $partner_info);
+$shop_name = trim((string)($store['store_name'] ?? $partner_info['business_name'] ?? $partner_info['full_name'] ?? 'Your shop'));
+
+$availability = $store['availability'] ?? ($store ? sahResolveStoreAvailability($store) : ['is_open' => false, 'schedule' => 'Daily | 8:00 AM - 8:00 PM', 'note' => '']);
+$is_open_now = !empty($availability['is_open']);
+$current_mode = $store['availability_mode'] ?? 'schedule';
+$current_manual = $store['manual_status'] ?? 'closed';
+$selected_days = ($store && !empty($store['operating_days']))
+    ? array_map('intval', array_filter(explode(',', (string)$store['operating_days'])))
+    : [1, 2, 3, 4, 5, 6, 7];
+$store_id = (int)($store['store_id'] ?? 0);
+$opening_time_raw = substr((string)($store['opening_time'] ?? '08:00:00'), 0, 5);
+$closing_time_raw = substr((string)($store['closing_time'] ?? '20:00:00'), 0, 5);
+
+$day_labels = [
+    1 => ['short' => 'Mon', 'full' => 'Monday'],
+    2 => ['short' => 'Tue', 'full' => 'Tuesday'],
+    3 => ['short' => 'Wed', 'full' => 'Wednesday'],
+    4 => ['short' => 'Thu', 'full' => 'Thursday'],
+    5 => ['short' => 'Fri', 'full' => 'Friday'],
+    6 => ['short' => 'Sat', 'full' => 'Saturday'],
+    7 => ['short' => 'Sun', 'full' => 'Sunday']
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -182,7 +327,6 @@ $day_labels = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 
     <link rel="stylesheet" href="ui-refresh.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <style>
-        /* Store Availability Modern UI Styles */
         .store-avail-page-wrap {
             padding-bottom: 140px;
         }
@@ -269,7 +413,7 @@ $day_labels = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 
         }
 
         .store-name-text {
-            font-size: 16px;
+            font-size: 17px;
             font-weight: 700;
             color: #101828;
         }
@@ -286,11 +430,10 @@ $day_labels = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 3px 12px;
+            padding: 4px 12px;
             border-radius: 999px;
             font-size: 12px;
             font-weight: 700;
-            letter-spacing: 0.02em;
         }
 
         .store-status-pill.open {
@@ -299,36 +442,36 @@ $day_labels = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 
             border: 1px solid #abefc6;
         }
 
+        .store-status-pill.closed {
+            background: #fff1f0;
+            color: #b3261e;
+            border: 1px solid #fee4e2;
+        }
+
         .store-status-pill.away {
             background: #fffaeb;
             color: #b54708;
             border: 1px solid #fedf89;
         }
 
-        .store-status-pill.closed {
-            background: #fee4e2;
-            color: #b3261e;
-            border: 1px solid #fecdca;
-        }
-
         .store-instant-actions {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
             flex-wrap: wrap;
         }
 
         .btn-power-switch {
+            border: none;
             border-radius: 8px;
+            padding: 8px 16px;
             font-size: 12.5px;
             font-weight: 600;
-            padding: 7px 14px;
             display: inline-flex;
             align-items: center;
             gap: 6px;
             cursor: pointer;
             transition: all 0.15s ease;
-            border: none;
         }
 
         .btn-power-switch.open {
@@ -351,10 +494,10 @@ $day_labels = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 
 
         .btn-view-directory {
             background: #ffffff;
-            color: #344054;
             border: 1px solid #d0d5dd;
+            color: #344054;
             border-radius: 8px;
-            padding: 7px 14px;
+            padding: 8px 14px;
             font-size: 12.5px;
             font-weight: 600;
             text-decoration: none;
@@ -367,15 +510,16 @@ $day_labels = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 
         .btn-view-directory:hover {
             background: #f8f9fa;
             color: #101828;
+            border-color: #98a2b3;
         }
 
         .store-config-body {
             padding: 24px;
         }
 
-        /* Fieldset Groups */
+        /* Fieldsets */
         .config-fieldset {
-            background: #fbfcfd;
+            background: #ffffff;
             border: 1px solid #eaecf0;
             border-radius: 12px;
             padding: 18px 20px;
@@ -386,51 +530,49 @@ $day_labels = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 14px;
-            padding-bottom: 8px;
+            margin-bottom: 16px;
             border-bottom: 1px solid #f2f4f7;
+            padding-bottom: 10px;
         }
 
         .fieldset-title {
-            font-size: 13.5px;
+            font-size: 14px;
             font-weight: 700;
-            color: #1d2939;
+            color: #101828;
             display: flex;
             align-items: center;
             gap: 8px;
         }
 
         .fieldset-badge {
-            background: #fff1f0;
-            color: #b3261e;
-            border: 1px solid #fee4e2;
             font-size: 11px;
-            font-weight: 700;
+            font-weight: 600;
             padding: 2px 8px;
-            border-radius: 999px;
+            border-radius: 6px;
+            background: #f2f4f7;
+            color: #475467;
         }
 
         /* Segmented Mode Selector */
         .segmented-mode-selector {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            background: #f2f4f7;
-            padding: 4px;
+            gap: 12px;
+            background: #f8f9fa;
+            padding: 6px;
             border-radius: 10px;
+            border: 1px solid #eaecf0;
         }
 
         .mode-segment-opt {
-            padding: 10px 14px;
+            padding: 12px 14px;
             border-radius: 8px;
             cursor: pointer;
             display: flex;
             align-items: center;
             gap: 12px;
-            background: transparent;
-            color: #475467;
             transition: all 0.15s ease;
-            user-select: none;
+            color: #475467;
         }
 
         .mode-segment-opt i {
@@ -439,51 +581,57 @@ $day_labels = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 
 
         .mode-segment-opt strong {
             display: block;
-            font-size: 13px;
-            font-weight: 700;
-            line-height: 1.2;
+            font-size: 13.5px;
+            color: #101828;
         }
 
         .mode-segment-opt small {
             display: block;
-            font-size: 11px;
+            font-size: 11.5px;
             color: #667085;
-            margin-top: 2px;
+            margin-top: 1px;
         }
 
         .mode-segment-opt.active {
             background: #ffffff;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
+            border: 1px solid #eaecf0;
             color: #b3261e;
-            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.1);
         }
 
-        .mode-segment-opt.active small {
-            color: #475467;
+        .mode-segment-opt.active strong {
+            color: #b3261e;
         }
 
-        /* Manual Status Grid */
+        /* Manual Status Buttons */
+        .manual-status-selector {
+            transition: opacity 0.2s ease;
+        }
+
         .manual-status-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
+            gap: 10px;
         }
 
         .manual-opt {
+            background: #ffffff;
             border: 1px solid #d0d5dd;
             border-radius: 8px;
-            padding: 9px 12px;
-            text-align: center;
-            cursor: pointer;
-            background: #ffffff;
-            color: #344054;
-            font-size: 12.5px;
-            font-weight: 600;
-            transition: all 0.15s ease;
+            padding: 10px 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
-            user-select: none;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 12.5px;
+            font-weight: 600;
+            color: #475467;
+            transition: all 0.15s ease;
+        }
+
+        .manual-opt:hover {
+            border-color: #98a2b3;
         }
 
         .manual-opt.open.active {
@@ -499,12 +647,12 @@ $day_labels = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 
         }
 
         .manual-opt.closed.active {
-            background: #fee4e2;
-            border-color: #fecdca;
+            background: #fff1f0;
+            border-color: #fee4e2;
             color: #b3261e;
         }
 
-        /* Operating Days Pills */
+        /* Operating Days Interactive Cards */
         .quick-days-presets {
             display: flex;
             gap: 6px;
@@ -514,13 +662,16 @@ $day_labels = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 
         .btn-day-preset {
             background: #ffffff;
             border: 1px solid #d0d5dd;
-            color: #475467;
-            font-size: 11px;
+            color: #344054;
+            font-size: 11.5px;
             font-weight: 600;
-            padding: 2px 8px;
+            padding: 4px 10px;
             border-radius: 6px;
             cursor: pointer;
             transition: all 0.12s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
         }
 
         .btn-day-preset:hover {
@@ -532,273 +683,153 @@ $day_labels = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 
         .day-pills-row {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
-            gap: 6px;
+            gap: 8px;
         }
 
-        .day-pill-label {
-            border: 1px solid #d0d5dd;
-            border-radius: 8px;
-            padding: 8px 4px;
+        @media (max-width: 991px) {
+            .day-pills-row {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        @media (max-width: 576px) {
+            .day-pills-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .day-card-toggle {
+            border-radius: 10px;
+            padding: 12px 6px;
             text-align: center;
             cursor: pointer;
-            background: #ffffff;
-            color: #475467;
-            font-size: 12.5px;
-            font-weight: 700;
             transition: all 0.15s ease;
             user-select: none;
             display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0;
-        }
-
-        .day-pill-label input {
-            display: none;
-        }
-
-        .day-pill-label.active {
-            background: #b3261e;
-            border-color: #b3261e;
-            color: #ffffff;
-        }
-
-        /* Schedule Summary Box */
-        .schedule-summary-box {
-            background: #ffffff;
-            border: 1px solid #eaecf0;
-            border-radius: 8px;
-            padding: 10px 14px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 8px;
-            font-size: 12.5px;
-        }
-
-        .summary-label {
-            color: #667085;
-            font-weight: 500;
-        }
-
-        .summary-value {
-            color: #101828;
-            font-weight: 700;
-            font-size: 13px;
-        }
-
-        /* Customer Live Preview Box */
-        .customer-preview-box {
-            background: #ffffff;
-            border: 1px solid #eaecf0;
-            border-radius: 14px;
-            padding: 20px;
-            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
-            position: sticky;
-            top: 90px;
-        }
-
-        .preview-box-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 16px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #f2f4f7;
-        }
-
-        .preview-box-title {
-            font-size: 12.5px;
-            font-weight: 700;
-            color: #344054;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            display: flex;
+            flex-direction: column;
             align-items: center;
             gap: 6px;
-        }
-
-        .store-preview-mockup {
-            border: 1px solid #eaecf0;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);
             background: #ffffff;
-            margin-bottom: 16px;
+            border: 1px solid #eaecf0;
         }
 
-        .mockup-header-banner {
+        .day-card-toggle:hover {
+            transform: translateY(-1px);
+        }
+
+        .day-card-toggle.is-open {
+            background: #ffffff;
+            border: 2px solid #12b76a;
+            box-shadow: 0 1px 4px rgba(18, 183, 106, 0.15);
+        }
+
+        .day-card-toggle.is-closed {
             background: #f8f9fa;
-            border-bottom: 1px solid #eaecf0;
-            padding: 14px 16px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+            border: 1px solid #eaecf0;
+            opacity: 0.9;
         }
 
-        .mockup-store-avatar {
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
-            background: #fff1f0;
-            color: #b3261e;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
+        .day-card-name {
+            font-size: 13.5px;
+            font-weight: 700;
+            color: #101828;
         }
 
-        .mockup-status-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
+        .day-card-toggle.is-closed .day-card-name {
+            color: #667085;
+        }
+
+        .day-status-pill {
             font-size: 11px;
             font-weight: 700;
-            padding: 3px 9px;
+            padding: 2px 8px;
             border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
         }
 
-        .mockup-status-pill.open {
+        .day-status-pill.pill-open {
             background: #ecfdf3;
             color: #027a48;
             border: 1px solid #abefc6;
         }
 
-        .mockup-status-pill.away {
-            background: #fffaeb;
-            color: #b54708;
-            border: 1px solid #fedf89;
+        .day-status-pill.pill-open .status-closed-text {
+            display: none;
         }
 
-        .mockup-status-pill.closed {
-            background: #fee4e2;
+        .day-status-pill.pill-closed {
+            background: #fff1f0;
             color: #b3261e;
-            border: 1px solid #fecdca;
+            border: 1px solid #fee4e2;
         }
 
-        .mockup-body {
-            padding: 16px;
+        .day-status-pill.pill-closed .status-open-text {
+            display: none;
         }
 
-        .mockup-store-name {
-            font-size: 14px;
-            font-weight: 700;
-            color: #101828;
-            margin: 0 0 4px 0;
-        }
-
-        .mockup-address {
-            font-size: 11.5px;
-            color: #667085;
-            margin: 0 0 10px 0;
-            line-height: 1.4;
-        }
-
-        .mockup-schedule-row {
-            font-size: 11.5px;
-            color: #344054;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            margin-bottom: 10px;
-        }
-
-        .mockup-note-box {
+        /* Schedule Summary Box */
+        .schedule-summary-box {
             background: #f8f9fa;
             border: 1px solid #eaecf0;
             border-radius: 8px;
-            padding: 8px 10px;
-            font-size: 11px;
-            color: #475467;
-            line-height: 1.4;
-        }
-
-        .preview-tips-box {
-            background: #f8f9fa;
-            border: 1px solid #eaecf0;
-            border-radius: 10px;
-            padding: 14px 16px;
-            font-size: 11.5px;
-        }
-
-        .tips-title {
-            font-weight: 700;
-            color: #101828;
-            margin-bottom: 8px;
+            padding: 12px 16px;
             display: flex;
             align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
         }
 
-        .tips-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            display: grid;
-            gap: 6px;
-            color: #667085;
+        .summary-label {
+            font-size: 12px;
+            color: #475467;
+            font-weight: 600;
         }
 
-        .tips-list li {
-            position: relative;
-            padding-left: 14px;
+        .summary-value {
+            font-size: 13px;
+            color: #101828;
+            font-weight: 700;
         }
 
-        .tips-list li::before {
-            content: "•";
-            position: absolute;
-            left: 0;
-            color: #b3261e;
-            font-weight: bold;
-        }
-
-        /* Form Controls Compact */
+        /* Compact Inputs */
         .compact-label {
-            font-size: 12.5px;
+            font-size: 12px;
             font-weight: 600;
             color: #344054;
-            margin-bottom: 5px;
             display: block;
+            margin-bottom: 5px;
         }
 
         .compact-input-group {
             display: flex;
             align-items: center;
-            width: 100%;
-        }
-
-        .compact-input-group .input-addon {
-            background: #f2f4f7;
             border: 1px solid #d0d5dd;
-            border-right: none;
-            color: #475467;
-            font-size: 13px;
-            padding: 8px 12px;
-            border-top-left-radius: 8px;
-            border-bottom-left-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 40px;
-            height: 38px;
-        }
-
-        .compact-input-group .form-control {
             border-radius: 8px;
-            border: 1px solid #d0d5dd;
-            border-top-left-radius: 0;
-            border-bottom-left-radius: 0;
-            height: 38px;
-            font-size: 13px;
-            padding: 8px 12px;
-            color: #101828;
+            overflow: hidden;
             background: #ffffff;
         }
 
-        .compact-input-group .form-control:focus {
+        .compact-input-group:focus-within {
             border-color: #b3261e;
             box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.12);
+        }
+
+        .compact-input-group .input-addon {
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-right: 1px solid #eaecf0;
+            font-size: 13px;
+        }
+
+        .compact-input-group .form-control {
+            border: none;
+            padding: 8px 12px;
+            font-size: 13px;
             outline: none;
+            box-shadow: none;
         }
 
         .form-check-modern {
@@ -829,8 +860,8 @@ $day_labels = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 
             color: #ffffff;
             border: 1px solid #b3261e;
             border-radius: 8px;
-            padding: 10px 22px;
-            font-size: 13px;
+            padding: 10px 24px;
+            font-size: 13.5px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.15s ease;
@@ -844,77 +875,148 @@ $day_labels = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 
             border-color: #981b15;
         }
 
-        /* Dark Mode Overrides */
-        body.dark-mode .store-hero-card,
-        body.dark-mode .store-config-card,
-        body.dark-mode .store-card-header,
-        body.dark-mode .customer-preview-box,
-        body.dark-mode .store-preview-mockup {
-            background: #1e293b !important;
-            border-color: #334155 !important;
-            color: #f8fafc !important;
+        /* Customer Live Preview */
+        .customer-preview-box {
+            background: #ffffff;
+            border: 1px solid #eaecf0;
+            border-radius: 12px;
+            padding: 20px;
         }
 
-        body.dark-mode .store-hero-info h2,
-        body.dark-mode .store-name-text,
-        body.dark-mode .fieldset-title,
-        body.dark-mode .mockup-store-name,
-        body.dark-mode .tips-title,
-        body.dark-mode .compact-label,
-        body.dark-mode .summary-value {
-            color: #f8fafc !important;
+        .preview-box-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #f2f4f7;
+            padding-bottom: 10px;
         }
 
-        body.dark-mode .config-fieldset,
-        body.dark-mode .mockup-header-banner,
-        body.dark-mode .mockup-note-box,
-        body.dark-mode .preview-tips-box,
-        body.dark-mode .schedule-summary-box {
-            background: #0f172a !important;
-            border-color: #334155 !important;
+        .preview-box-title {
+            font-size: 13.5px;
+            font-weight: 700;
+            color: #101828;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
-        body.dark-mode .segmented-mode-selector {
-            background: #334155 !important;
+        .store-preview-mockup {
+            border: 1px solid #eaecf0;
+            border-radius: 12px;
+            background: #ffffff;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05);
+            margin-bottom: 16px;
         }
 
-        body.dark-mode .mode-segment-opt {
-            color: #cbd5e1 !important;
+        .mockup-header-banner {
+            padding: 14px 16px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #eaecf0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
 
-        body.dark-mode .mode-segment-opt.active {
-            background: #1e293b !important;
-            color: #f87171 !important;
+        .mockup-store-avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 8px;
+            background: #fff1f0;
+            color: #b3261e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 17px;
+            border: 1px solid #fee4e2;
         }
 
-        body.dark-mode .manual-opt,
-        body.dark-mode .day-pill-label,
-        body.dark-mode .btn-view-directory,
-        body.dark-mode .btn-day-preset {
-            background: #1e293b !important;
-            border-color: #475569 !important;
-            color: #cbd5e1 !important;
+        .mockup-status-pill {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
         }
 
-        body.dark-mode .compact-input-group .form-control {
-            background: #1e293b !important;
-            border-color: #475569 !important;
-            color: #f8fafc !important;
+        .mockup-status-pill.open {
+            background: #ecfdf3;
+            color: #027a48;
+            border: 1px solid #abefc6;
         }
 
-        body.dark-mode .compact-input-group .input-addon {
-            background: #334155 !important;
-            border-color: #475569 !important;
-            color: #cbd5e1 !important;
+        .mockup-status-pill.closed {
+            background: #fff1f0;
+            color: #b3261e;
+            border: 1px solid #fee4e2;
         }
 
-        @media (max-width: 768px) {
-            .day-pills-row {
-                grid-template-columns: repeat(4, 1fr);
-            }
-            .segmented-mode-selector {
-                grid-template-columns: 1fr;
-            }
+        .mockup-status-pill.away {
+            background: #fffaeb;
+            color: #b54708;
+            border: 1px solid #fedf89;
+        }
+
+        .mockup-body {
+            padding: 16px;
+        }
+
+        .mockup-store-name {
+            font-size: 15px;
+            font-weight: 700;
+            color: #101828;
+            margin: 0 0 4px 0;
+        }
+
+        .mockup-address {
+            font-size: 12px;
+            color: #667085;
+            margin: 0 0 12px 0;
+            line-height: 1.4;
+        }
+
+        .mockup-schedule-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #344054;
+            margin-bottom: 10px;
+        }
+
+        .mockup-note-box {
+            background: #eff8ff;
+            border: 1px solid #b2ddff;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 11.5px;
+            color: #175cd3;
+            line-height: 1.4;
+        }
+
+        .preview-tips-box {
+            background: #f8f9fa;
+            border: 1px solid #eaecf0;
+            border-radius: 10px;
+            padding: 14px;
+        }
+
+        .tips-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #101828;
+            margin-bottom: 8px;
+        }
+
+        .tips-list {
+            margin: 0;
+            padding-left: 18px;
+            font-size: 11.5px;
+            color: #475467;
+            line-height: 1.5;
         }
     </style>
 </head>
@@ -961,242 +1063,235 @@ $day_labels = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 
                 </div>
             </div>
 
-            <!-- Stores Configuration Grid -->
-            <div class="stores-config-grid">
-                <?php foreach ($stores as $store): ?>
-                    <?php
-                        $availability = $store['availability'] ?? sahResolveStoreAvailability($store);
-                        $is_open_now = !empty($availability['is_open']);
-                        $current_mode = $store['availability_mode'] ?? 'schedule';
-                        $current_manual = $store['manual_status'] ?? 'closed';
-                        $selected_days = array_map('intval', array_filter(explode(',', (string)($store['operating_days'] ?? '1,2,3,4,5,6,7'))));
-                        $store_id = (int)($store['store_id'] ?? 0);
-                        $opening_time_raw = substr((string)($store['opening_time'] ?? '08:00:00'), 0, 5);
-                        $closing_time_raw = substr((string)($store['closing_time'] ?? '20:00:00'), 0, 5);
-                    ?>
-                    <div class="store-config-card" id="storeCard<?php echo $store_id; ?>">
-                        <!-- Store Top Header -->
-                        <div class="store-card-header">
-                            <div class="store-identity">
-                                <div class="store-title-row">
-                                    <span class="store-name-text"><?php echo htmlspecialchars((string)($store['store_name'] ?? 'Store')); ?></span>
-                                    <?php if ($is_open_now): ?>
-                                        <span class="store-status-pill open" id="topPill<?php echo $store_id; ?>"><i class="fas fa-circle-dot"></i> Open for Orders</span>
-                                    <?php elseif ($current_manual === 'away'): ?>
-                                        <span class="store-status-pill away" id="topPill<?php echo $store_id; ?>"><i class="fas fa-circle-pause"></i> Away / Paused</span>
-                                    <?php else: ?>
-                                        <span class="store-status-pill closed" id="topPill<?php echo $store_id; ?>"><i class="fas fa-circle-xmark"></i> Closed</span>
-                                    <?php endif; ?>
+            <!-- Single Canonical Store Configuration Card (No Loops!) -->
+            <div class="store-config-card" id="storeCard<?php echo $store_id; ?>">
+                <!-- Store Top Header -->
+                <div class="store-card-header">
+                    <div class="store-identity">
+                        <div class="store-title-row">
+                            <span class="store-name-text"><?php echo htmlspecialchars((string)($store['store_name'] ?? 'Store')); ?></span>
+                            <?php if ($is_open_now): ?>
+                                <span class="store-status-pill open" id="topPill"><i class="fas fa-circle-dot"></i> Open for Orders</span>
+                            <?php elseif ($current_manual === 'away'): ?>
+                                <span class="store-status-pill away" id="topPill"><i class="fas fa-circle-pause"></i> Away / Paused</span>
+                            <?php else: ?>
+                                <span class="store-status-pill closed" id="topPill"><i class="fas fa-circle-xmark"></i> Closed</span>
+                            <?php endif; ?>
+                        </div>
+                        <div class="store-address-text">
+                            <i class="fas fa-location-dot text-danger me-1"></i>
+                            <?php echo htmlspecialchars((string)($store['address'] ?? 'Store address not set')); ?>
+                            <?php if (!empty($store['city'])): ?>
+                                • <?php echo htmlspecialchars((string)$store['city']); ?>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <!-- Instant Power Switch Button -->
+                    <div class="store-instant-actions">
+                        <form method="post" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                            <input type="hidden" name="store_id" value="<?php echo $store_id; ?>">
+                            <?php if ($is_open_now): ?>
+                                <button type="submit" name="immediate_toggle" value="closed" class="btn-power-switch close" title="Instantly close store to customer orders">
+                                    <i class="fas fa-power-off"></i> Close Store Now
+                                </button>
+                            <?php else: ?>
+                                <button type="submit" name="immediate_toggle" value="open" class="btn-power-switch open" title="Instantly open store to customer orders">
+                                    <i class="fas fa-bolt"></i> Open Store Now
+                                </button>
+                            <?php endif; ?>
+                        </form>
+                        <a href="../locations.php?search=<?php echo urlencode((string)($store['store_name'] ?? '')); ?>" target="_blank" class="btn-view-directory" title="View store in customer directory">
+                            <i class="fas fa-arrow-up-right-from-square"></i> Directory
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Main Form Configuration -->
+                <form method="post" class="store-config-body" id="storeConfigForm">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                    <input type="hidden" name="store_id" value="<?php echo $store_id; ?>">
+                    <input type="hidden" name="availability_mode" id="availMode" value="<?php echo htmlspecialchars($current_mode); ?>">
+                    <input type="hidden" name="manual_status" id="manualStatus" value="<?php echo htmlspecialchars($current_manual); ?>">
+
+                    <div class="row g-4">
+                        <!-- Left Column: Settings -->
+                        <div class="col-lg-7 col-xl-8">
+                            <!-- Block 1: Operating Mode & Override -->
+                            <div class="config-fieldset">
+                                <div class="config-fieldset-head">
+                                    <span class="fieldset-title"><i class="fas fa-sliders text-danger"></i> 1. Operating Mode &amp; Override</span>
+                                    <span class="fieldset-badge">Mode</span>
                                 </div>
-                                <div class="store-address-text">
-                                    <i class="fas fa-location-dot text-danger me-1"></i>
-                                    <?php echo htmlspecialchars((string)($store['address'] ?? 'Store address not set')); ?>
-                                    <?php if (!empty($store['city'])): ?>
-                                        • <?php echo htmlspecialchars((string)$store['city']); ?>
-                                    <?php endif; ?>
+
+                                <!-- Segmented Mode Selector -->
+                                <div class="segmented-mode-selector mb-3">
+                                    <div class="mode-segment-opt <?php echo $current_mode === 'schedule' ? 'active' : ''; ?>" id="optModeSchedule" onclick="setStoreMode('schedule')">
+                                        <i class="fas fa-calendar-check"></i>
+                                        <div>
+                                            <strong>Automatic Schedule Mode</strong>
+                                            <small>Opens &amp; closes automatically on regular hours</small>
+                                        </div>
+                                    </div>
+                                    <div class="mode-segment-opt <?php echo $current_mode === 'manual' ? 'active' : ''; ?>" id="optModeManual" onclick="setStoreMode('manual')">
+                                        <i class="fas fa-hand-pointer"></i>
+                                        <div>
+                                            <strong>Manual Override Mode</strong>
+                                            <small>Keep store Open, Away, or Closed manually</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Manual Status Buttons -->
+                                <div class="manual-status-selector mb-3" id="manualStatusRow" style="<?php echo $current_mode === 'manual' ? '' : 'opacity: 0.45; pointer-events: none;'; ?>">
+                                    <label class="compact-label mb-2">Manual Override State:</label>
+                                    <div class="manual-status-grid">
+                                        <div class="manual-opt open <?php echo $current_manual === 'open' ? 'active' : ''; ?>" id="manOptOpen" onclick="setManualStatus('open')">
+                                            <i class="fas fa-circle-check"></i>
+                                            <span>Open for Orders</span>
+                                        </div>
+                                        <div class="manual-opt away <?php echo $current_manual === 'away' ? 'active' : ''; ?>" id="manOptAway" onclick="setManualStatus('away')">
+                                            <i class="fas fa-coffee"></i>
+                                            <span>Away / Paused</span>
+                                        </div>
+                                        <div class="manual-opt closed <?php echo $current_manual === 'closed' ? 'active' : ''; ?>" id="manOptClosed" onclick="setManualStatus('closed')">
+                                            <i class="fas fa-circle-xmark"></i>
+                                            <span>Store Closed</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Directory Visibility Switch -->
+                                <div class="pt-2 border-top">
+                                    <div class="form-check form-switch form-check-modern">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="isActive" name="is_active" value="1" <?php echo (int)($store['is_active'] ?? 1) === 1 ? 'checked' : ''; ?> onchange="updateStorePreview()">
+                                        <label class="form-check-label ms-2 fw-semibold text-dark" for="isActive">
+                                            Show this branch in customer marketplace directory &amp; search
+                                        </label>
+                                    </div>
+                                    <small class="text-muted d-block mt-1 ps-4" style="font-size: 11.5px;">Leave enabled so customers can discover this shop and browse products.</small>
                                 </div>
                             </div>
 
-                            <!-- Instant Power Switch Buttons -->
-                            <div class="store-instant-actions">
-                                <form method="post" class="d-inline">
-                                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                                    <input type="hidden" name="store_id" value="<?php echo $store_id; ?>">
-                                    <?php if ($is_open_now): ?>
-                                        <button type="submit" name="immediate_toggle" value="closed" class="btn-power-switch close" title="Instantly close store to customer orders">
-                                            <i class="fas fa-power-off"></i> Close Store Now
-                                        </button>
-                                    <?php else: ?>
-                                        <button type="submit" name="immediate_toggle" value="open" class="btn-power-switch open" title="Instantly open store to customer orders">
-                                            <i class="fas fa-bolt"></i> Open Store Now
-                                        </button>
-                                    <?php endif; ?>
-                                </form>
-                                <a href="../locations.php?search=<?php echo urlencode((string)($store['store_name'] ?? '')); ?>" target="_blank" class="btn-view-directory" title="View store in customer directory">
-                                    <i class="fas fa-arrow-up-right-from-square"></i> Directory
-                                </a>
+                            <!-- Block 2: Operating Hours & Schedule -->
+                            <div class="config-fieldset">
+                                <div class="config-fieldset-head">
+                                    <span class="fieldset-title"><i class="fas fa-business-time text-danger"></i> 2. Operating Hours &amp; Schedule</span>
+                                    <span class="fieldset-badge">Schedule</span>
+                                </div>
+
+                                <div class="row g-3 mb-3">
+                                    <div class="col-sm-6">
+                                        <label class="compact-label" for="openTime">Daily Opening Time</label>
+                                        <div class="compact-input-group">
+                                            <span class="input-addon"><i class="fas fa-sun text-warning"></i></span>
+                                            <input type="time" name="opening_time" id="openTime" class="form-control" value="<?php echo htmlspecialchars($opening_time_raw); ?>" onchange="updateStorePreview()">
+                                        </div>
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <label class="compact-label" for="closeTime">Daily Closing Time</label>
+                                        <div class="compact-input-group">
+                                            <span class="input-addon"><i class="fas fa-moon text-primary"></i></span>
+                                            <input type="time" name="closing_time" id="closeTime" class="form-control" value="<?php echo htmlspecialchars($closing_time_raw); ?>" onchange="updateStorePreview()">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Operating Days: Clear Closed vs Open Toggle -->
+                                <div class="mb-3">
+                                    <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+                                        <div>
+                                            <label class="compact-label mb-0 fw-bold">Operating Days (Choose Open or Closed per day):</label>
+                                            <small class="text-muted d-block" style="font-size: 11.5px;">Click any day to toggle between <strong class="text-success">Open</strong> and <strong class="text-danger">Closed</strong>.</small>
+                                        </div>
+                                        <div class="quick-days-presets">
+                                            <button type="button" class="btn-day-preset" onclick="setDayPreset('daily')"><i class="fas fa-calendar-days"></i> Open Daily (7 Days)</button>
+                                            <button type="button" class="btn-day-preset" onclick="setDayPreset('weekdays')"><i class="fas fa-briefcase"></i> Weekdays Only (Mon-Fri)</button>
+                                            <button type="button" class="btn-day-preset" onclick="setDayPreset('weekends')"><i class="fas fa-champagne-glasses"></i> Weekends Only (Sat-Sun)</button>
+                                        </div>
+                                    </div>
+
+                                    <div class="day-pills-row" id="dayPillsRow">
+                                        <?php foreach ($day_labels as $day_number => $d_info): ?>
+                                            <?php $is_day_selected = in_array($day_number, $selected_days, true); ?>
+                                            <div class="day-card-toggle <?php echo $is_day_selected ? 'is-open' : 'is-closed'; ?>" id="dayCard_<?php echo $day_number; ?>" onclick="toggleDayCard(<?php echo $day_number; ?>)">
+                                                <input type="checkbox" name="operating_days[]" id="dayInput_<?php echo $day_number; ?>" value="<?php echo $day_number; ?>" <?php echo $is_day_selected ? 'checked' : ''; ?> style="display:none;">
+                                                <div class="day-card-name"><?php echo $d_info['short']; ?></div>
+                                                <div class="day-status-pill <?php echo $is_day_selected ? 'pill-open' : 'pill-closed'; ?>" id="dayPillStatus_<?php echo $day_number; ?>">
+                                                    <span class="status-open-text"><i class="fas fa-check"></i> Open</span>
+                                                    <span class="status-closed-text"><i class="fas fa-times"></i> Closed</span>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+
+                                <!-- Schedule Summary -->
+                                <div class="schedule-summary-box">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="fas fa-calendar-check text-primary"></i>
+                                        <span class="summary-label">Public Directory Display:</span>
+                                    </div>
+                                    <strong class="summary-value" id="scheduleDisplay">
+                                        <?php echo htmlspecialchars((string)($store['opening_hours'] ?? 'Daily | 8:00 AM - 8:00 PM')); ?>
+                                    </strong>
+                                </div>
+                            </div>
+
+                            <!-- Save CTA Button -->
+                            <div class="d-flex justify-content-end">
+                                <button type="submit" class="btn-builder-primary">
+                                    <i class="fas fa-save me-1"></i> Save Availability Settings
+                                </button>
                             </div>
                         </div>
 
-                        <!-- Form Configuration -->
-                        <form method="post" class="store-config-body" id="storeConfigForm<?php echo $store_id; ?>">
-                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                            <input type="hidden" name="store_id" value="<?php echo $store_id; ?>">
-                            <input type="hidden" name="availability_mode" id="availMode<?php echo $store_id; ?>" value="<?php echo htmlspecialchars($current_mode); ?>">
-                            <input type="hidden" name="manual_status" id="manualStatus<?php echo $store_id; ?>" value="<?php echo htmlspecialchars($current_manual); ?>">
+                        <!-- Right Column: Customer Live Preview -->
+                        <div class="col-lg-5 col-xl-4">
+                            <div class="customer-preview-box">
+                                <div class="preview-box-head">
+                                    <span class="preview-box-title"><i class="fas fa-eye text-danger"></i> Customer Live Preview</span>
+                                    <span class="badge text-bg-light border" id="previewBadgeMode"><?php echo ucfirst($current_mode); ?> Mode</span>
+                                </div>
 
-                            <div class="row g-4">
-                                <!-- Left Column: Form Controls -->
-                                <div class="col-lg-7 col-xl-8">
-                                    <!-- Block 1: Operating Mode & Override -->
-                                    <div class="config-fieldset">
-                                        <div class="config-fieldset-head">
-                                            <span class="fieldset-title"><i class="fas fa-sliders text-danger"></i> 1. Operating Mode &amp; Override</span>
-                                            <span class="fieldset-badge">Mode</span>
-                                        </div>
-
-                                        <!-- Segmented Mode Selector -->
-                                        <div class="segmented-mode-selector mb-3">
-                                            <div class="mode-segment-opt <?php echo $current_mode === 'schedule' ? 'active' : ''; ?>" id="optModeSchedule<?php echo $store_id; ?>" onclick="setStoreMode(<?php echo $store_id; ?>, 'schedule')">
-                                                <i class="fas fa-calendar-check"></i>
-                                                <div>
-                                                    <strong>Automatic Schedule Mode</strong>
-                                                    <small>Opens &amp; closes automatically on regular hours</small>
-                                                </div>
-                                            </div>
-                                            <div class="mode-segment-opt <?php echo $current_mode === 'manual' ? 'active' : ''; ?>" id="optModeManual<?php echo $store_id; ?>" onclick="setStoreMode(<?php echo $store_id; ?>, 'manual')">
-                                                <i class="fas fa-hand-pointer"></i>
-                                                <div>
-                                                    <strong>Manual Override Mode</strong>
-                                                    <small>Keep store Open, Away, or Closed manually</small>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Manual Status Buttons -->
-                                        <div class="manual-status-selector mb-3" id="manualStatusRow<?php echo $store_id; ?>" style="<?php echo $current_mode === 'manual' ? '' : 'opacity: 0.45; pointer-events: none;'; ?>">
-                                            <label class="compact-label mb-2">Manual Override State:</label>
-                                            <div class="manual-status-grid">
-                                                <div class="manual-opt open <?php echo $current_manual === 'open' ? 'active' : ''; ?>" id="manOptOpen<?php echo $store_id; ?>" onclick="setManualStatus(<?php echo $store_id; ?>, 'open')">
-                                                    <i class="fas fa-circle-check"></i>
-                                                    <span>Open for Orders</span>
-                                                </div>
-                                                <div class="manual-opt away <?php echo $current_manual === 'away' ? 'active' : ''; ?>" id="manOptAway<?php echo $store_id; ?>" onclick="setManualStatus(<?php echo $store_id; ?>, 'away')">
-                                                    <i class="fas fa-coffee"></i>
-                                                    <span>Away / Paused</span>
-                                                </div>
-                                                <div class="manual-opt closed <?php echo $current_manual === 'closed' ? 'active' : ''; ?>" id="manOptClosed<?php echo $store_id; ?>" onclick="setManualStatus(<?php echo $store_id; ?>, 'closed')">
-                                                    <i class="fas fa-circle-xmark"></i>
-                                                    <span>Store Closed</span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Directory Visibility Switch -->
-                                        <div class="pt-2 border-top">
-                                            <div class="form-check form-switch form-check-modern">
-                                                <input class="form-check-input" type="checkbox" role="switch" id="isActive<?php echo $store_id; ?>" name="is_active" value="1" <?php echo (int)($store['is_active'] ?? 1) === 1 ? 'checked' : ''; ?> onchange="updateStorePreview(<?php echo $store_id; ?>)">
-                                                <label class="form-check-label ms-2 fw-semibold text-dark" for="isActive<?php echo $store_id; ?>">
-                                                    Show this branch in customer marketplace directory &amp; search
-                                                </label>
-                                            </div>
-                                            <small class="text-muted d-block mt-1 ps-4" style="font-size: 11.5px;">Leave enabled so customers can discover this shop and browse products.</small>
-                                        </div>
+                                <!-- Mockup Card -->
+                                <div class="store-preview-mockup">
+                                    <div class="mockup-header-banner">
+                                        <div class="mockup-store-avatar"><i class="fas fa-shop"></i></div>
+                                        <span class="mockup-status-pill <?php echo $is_open_now ? 'open' : ($current_manual === 'away' ? 'away' : 'closed'); ?>" id="mockupStatusPill">
+                                            <i class="fas fa-circle-dot me-1"></i> <span id="mockupStatusText"><?php echo $is_open_now ? 'Open now' : ($current_manual === 'away' ? 'Away' : 'Closed now'); ?></span>
+                                        </span>
                                     </div>
-
-                                    <!-- Block 2: Hours & Schedule -->
-                                    <div class="config-fieldset">
-                                        <div class="config-fieldset-head">
-                                            <span class="fieldset-title"><i class="fas fa-business-time text-danger"></i> 2. Operating Hours &amp; Schedule</span>
-                                            <span class="fieldset-badge">Schedule</span>
+                                    <div class="mockup-body">
+                                        <h4 class="mockup-store-name"><?php echo htmlspecialchars((string)($store['store_name'] ?? 'Store')); ?></h4>
+                                        <p class="mockup-address"><?php echo htmlspecialchars((string)($store['address'] ?? 'Store address not set')); ?></p>
+                                        
+                                        <div class="mockup-schedule-row">
+                                            <i class="fas fa-clock text-muted"></i>
+                                            <span id="mockupScheduleText"><?php echo htmlspecialchars((string)($availability['schedule'] ?? 'Daily | 8:00 AM - 8:00 PM')); ?></span>
                                         </div>
 
-                                        <div class="row g-3 mb-3">
-                                            <div class="col-sm-6">
-                                                <label class="compact-label" for="openTime<?php echo $store_id; ?>">Daily Opening Time</label>
-                                                <div class="compact-input-group">
-                                                    <span class="input-addon"><i class="fas fa-sun text-warning"></i></span>
-                                                    <input type="time" name="opening_time" id="openTime<?php echo $store_id; ?>" class="form-control" value="<?php echo htmlspecialchars($opening_time_raw); ?>" onchange="updateStorePreview(<?php echo $store_id; ?>)">
-                                                </div>
-                                            </div>
-                                            <div class="col-sm-6">
-                                                <label class="compact-label" for="closeTime<?php echo $store_id; ?>">Daily Closing Time</label>
-                                                <div class="compact-input-group">
-                                                    <span class="input-addon"><i class="fas fa-moon text-primary"></i></span>
-                                                    <input type="time" name="closing_time" id="closeTime<?php echo $store_id; ?>" class="form-control" value="<?php echo htmlspecialchars($closing_time_raw); ?>" onchange="updateStorePreview(<?php echo $store_id; ?>)">
-                                                </div>
-                                            </div>
+                                        <div class="mockup-note-box" id="mockupNoteBox">
+                                            <i class="fas fa-circle-info me-1 text-primary"></i>
+                                            <span id="mockupNoteText"><?php echo htmlspecialchars((string)($availability['note'] ?? '')); ?></span>
                                         </div>
-
-                                        <!-- Operating Days -->
-                                        <div class="mb-3">
-                                            <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
-                                                <label class="compact-label mb-0">Operating Days</label>
-                                                <div class="quick-days-presets">
-                                                    <button type="button" class="btn-day-preset" onclick="setDayPreset(<?php echo $store_id; ?>, 'daily')">Daily (7 Days)</button>
-                                                    <button type="button" class="btn-day-preset" onclick="setDayPreset(<?php echo $store_id; ?>, 'weekdays')">Weekdays (Mon-Fri)</button>
-                                                    <button type="button" class="btn-day-preset" onclick="setDayPreset(<?php echo $store_id; ?>, 'weekends')">Weekends (Sat-Sun)</button>
-                                                </div>
-                                            </div>
-
-                                            <div class="day-pills-row" id="dayPillsRow<?php echo $store_id; ?>">
-                                                <?php foreach ($day_labels as $day_number => $day_label): ?>
-                                                    <?php $is_day_selected = in_array($day_number, $selected_days, true); ?>
-                                                    <label class="day-pill-label <?php echo $is_day_selected ? 'active' : ''; ?>" id="dayPill<?php echo $store_id; ?>_<?php echo $day_number; ?>">
-                                                        <input type="checkbox" name="operating_days[]" value="<?php echo $day_number; ?>" <?php echo $is_day_selected ? 'checked' : ''; ?> onchange="toggleDayPill(<?php echo $store_id; ?>, <?php echo $day_number; ?>)">
-                                                        <span><?php echo $day_label; ?></span>
-                                                    </label>
-                                                <?php endforeach; ?>
-                                            </div>
-                                        </div>
-
-                                        <!-- Schedule Summary -->
-                                        <div class="schedule-summary-box">
-                                            <div class="d-flex align-items-center gap-2">
-                                                <i class="fas fa-clock text-primary"></i>
-                                                <span class="summary-label">Public Directory Display:</span>
-                                            </div>
-                                            <strong class="summary-value" id="scheduleDisplay<?php echo $store_id; ?>">
-                                                <?php echo htmlspecialchars((string)($store['opening_hours'] ?? 'Daily | 8:00 AM - 8:00 PM')); ?>
-                                            </strong>
-                                        </div>
-                                    </div>
-
-                                    <!-- Save Actions -->
-                                    <div class="d-flex justify-content-end">
-                                        <button type="submit" class="btn-builder-primary">
-                                            <i class="fas fa-save me-1"></i> Save Availability Settings
-                                        </button>
                                     </div>
                                 </div>
 
-                                <!-- Right Column: Customer Live Preview -->
-                                <div class="col-lg-5 col-xl-4">
-                                    <div class="customer-preview-box">
-                                        <div class="preview-box-head">
-                                            <span class="preview-box-title"><i class="fas fa-eye text-danger"></i> Customer Live Preview</span>
-                                            <span class="badge text-bg-light border" id="previewBadgeMode<?php echo $store_id; ?>"><?php echo ucfirst($current_mode); ?> Mode</span>
-                                        </div>
-
-                                        <!-- Mockup Card -->
-                                        <div class="store-preview-mockup">
-                                            <div class="mockup-header-banner">
-                                                <div class="mockup-store-avatar"><i class="fas fa-shop"></i></div>
-                                                <span class="mockup-status-pill <?php echo $is_open_now ? 'open' : ($current_manual === 'away' ? 'away' : 'closed'); ?>" id="mockupStatusPill<?php echo $store_id; ?>">
-                                                    <i class="fas fa-circle-dot me-1"></i> <span id="mockupStatusText<?php echo $store_id; ?>"><?php echo $is_open_now ? 'Open now' : ($current_manual === 'away' ? 'Away' : 'Closed now'); ?></span>
-                                                </span>
-                                            </div>
-                                            <div class="mockup-body">
-                                                <h4 class="mockup-store-name"><?php echo htmlspecialchars((string)($store['store_name'] ?? 'Store')); ?></h4>
-                                                <p class="mockup-address"><?php echo htmlspecialchars((string)($store['address'] ?? 'Store address not set')); ?></p>
-                                                
-                                                <div class="mockup-schedule-row">
-                                                    <i class="fas fa-clock text-muted"></i>
-                                                    <span id="mockupScheduleText<?php echo $store_id; ?>"><?php echo htmlspecialchars((string)($availability['schedule'] ?? 'Daily | 8:00 AM - 8:00 PM')); ?></span>
-                                                </div>
-
-                                                <div class="mockup-note-box" id="mockupNoteBox<?php echo $store_id; ?>">
-                                                    <i class="fas fa-circle-info me-1 text-primary"></i>
-                                                    <span id="mockupNoteText<?php echo $store_id; ?>"><?php echo htmlspecialchars((string)($availability['note'] ?? '')); ?></span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Pro Tips -->
-                                        <div class="preview-tips-box">
-                                            <div class="tips-title"><i class="fas fa-lightbulb text-warning me-1"></i> Operations Guide</div>
-                                            <ul class="tips-list">
-                                                <li><strong>Schedule Mode:</strong> Automatically marks store Open and Closed based on your local Philippine business hours.</li>
-                                                <li><strong>Manual Override:</strong> Use this during inventory counts, restocks, or events to control ordering instantly.</li>
-                                                <li><strong>Customer Experience:</strong> When Closed, customers can browse menu items and place advance scheduled pre-orders.</li>
-                                            </ul>
-                                        </div>
-                                    </div>
+                                <!-- Operations Guide -->
+                                <div class="preview-tips-box">
+                                    <div class="tips-title"><i class="fas fa-lightbulb text-warning me-1"></i> Operations Guide</div>
+                                    <ul class="tips-list">
+                                        <li><strong>Schedule Mode:</strong> Automatically marks store Open and Closed based on your local business hours and selected days.</li>
+                                        <li><strong>Operating Days:</strong> Mark any day as Closed (Rest Day). On closed days, customers see the closed notice and can place advance pre-orders.</li>
+                                        <li><strong>Manual Override:</strong> Use this during inventory counts, restocks, or emergencies to open or close instantly.</li>
+                                    </ul>
                                 </div>
                             </div>
-                        </form>
+                        </div>
                     </div>
-                <?php endforeach; ?>
+                </form>
             </div>
         </div>
     </div>
@@ -1219,12 +1314,12 @@ function formatTime12h(timeStr) {
 
 const dayNames = {1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun'};
 
-function setStoreMode(storeId, mode) {
-    document.getElementById('availMode' + storeId).value = mode;
-    const optSchedule = document.getElementById('optModeSchedule' + storeId);
-    const optManual = document.getElementById('optModeManual' + storeId);
-    const manualRow = document.getElementById('manualStatusRow' + storeId);
-    const badgeMode = document.getElementById('previewBadgeMode' + storeId);
+function setStoreMode(mode) {
+    document.getElementById('availMode').value = mode;
+    const optSchedule = document.getElementById('optModeSchedule');
+    const optManual = document.getElementById('optModeManual');
+    const manualRow = document.getElementById('manualStatusRow');
+    const badgeMode = document.getElementById('previewBadgeMode');
 
     if (mode === 'schedule') {
         optSchedule.classList.add('active');
@@ -1239,77 +1334,129 @@ function setStoreMode(storeId, mode) {
         manualRow.style.pointerEvents = 'auto';
         badgeMode.textContent = 'Manual Mode';
     }
-    updateStorePreview(storeId);
+    updateStorePreview();
 }
 
-function setManualStatus(storeId, status) {
-    document.getElementById('manualStatus' + storeId).value = status;
+function setManualStatus(status) {
+    document.getElementById('manualStatus').value = status;
     const opts = ['open', 'away', 'closed'];
     opts.forEach(opt => {
-        const el = document.getElementById('manOpt' + opt.charAt(0).toUpperCase() + opt.slice(1) + storeId);
+        const el = document.getElementById('manOpt' + opt.charAt(0).toUpperCase() + opt.slice(1));
         if (el) {
             el.classList.toggle('active', opt === status);
         }
     });
-    updateStorePreview(storeId);
+    updateStorePreview();
 }
 
-function toggleDayPill(storeId, dayNum) {
-    const pill = document.getElementById('dayPill' + storeId + '_' + dayNum);
-    const input = pill.querySelector('input');
-    pill.classList.toggle('active', input.checked);
-    updateStorePreview(storeId);
-}
+function toggleDayCard(dayNum) {
+    const input = document.getElementById('dayInput_' + dayNum);
+    const card = document.getElementById('dayCard_' + dayNum);
+    const pill = document.getElementById('dayPillStatus_' + dayNum);
 
-function setDayPreset(storeId, preset) {
-    const row = document.getElementById('dayPillsRow' + storeId);
-    const checkboxes = row.querySelectorAll('input[type="checkbox"]');
-    
-    checkboxes.forEach(cb => {
-        const day = parseInt(cb.value, 10);
-        let check = false;
-        if (preset === 'daily') {
-            check = true;
-        } else if (preset === 'weekdays') {
-            check = (day >= 1 && day <= 5);
-        } else if (preset === 'weekends') {
-            check = (day === 6 || day === 7);
-        }
-        cb.checked = check;
-        const pill = document.getElementById('dayPill' + storeId + '_' + day);
-        if (pill) pill.classList.toggle('active', check);
-    });
-    updateStorePreview(storeId);
-}
+    input.checked = !input.checked;
 
-function updateStorePreview(storeId) {
-    const mode = document.getElementById('availMode' + storeId).value;
-    const manualStatus = document.getElementById('manualStatus' + storeId).value;
-    const isActive = document.getElementById('isActive' + storeId).checked;
-    const openTime = document.getElementById('openTime' + storeId).value || '08:00';
-    const closeTime = document.getElementById('closeTime' + storeId).value || '20:00';
-
-    // Collect days
-    const row = document.getElementById('dayPillsRow' + storeId);
-    const checkedDays = Array.from(row.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value, 10)).sort();
-
-    // Days summary
-    let daysLabel = 'Daily';
-    if (checkedDays.length === 7) {
-        daysLabel = 'Daily';
-    } else if (checkedDays.length === 5 && checkedDays.join(',') === '1,2,3,4,5') {
-        daysLabel = 'Mon - Fri';
-    } else if (checkedDays.length === 2 && checkedDays.join(',') === '6,7') {
-        daysLabel = 'Sat - Sun';
-    } else if (checkedDays.length > 0) {
-        daysLabel = checkedDays.map(d => dayNames[d]).join(', ');
+    if (input.checked) {
+        card.classList.remove('is-closed');
+        card.classList.add('is-open');
+        pill.classList.remove('pill-closed');
+        pill.classList.add('pill-open');
     } else {
-        daysLabel = 'No operating days';
+        card.classList.remove('is-open');
+        card.classList.add('is-closed');
+        pill.classList.remove('pill-open');
+        pill.classList.add('pill-closed');
+    }
+    updateStorePreview();
+}
+
+function setDayPreset(preset) {
+    for (let day = 1; day <= 7; day++) {
+        let isOpen = false;
+        if (preset === 'daily') {
+            isOpen = true;
+        } else if (preset === 'weekdays') {
+            isOpen = (day >= 1 && day <= 5);
+        } else if (preset === 'weekends') {
+            isOpen = (day === 6 || day === 7);
+        }
+
+        const input = document.getElementById('dayInput_' + day);
+        const card = document.getElementById('dayCard_' + day);
+        const pill = document.getElementById('dayPillStatus_' + day);
+
+        if (input && card && pill) {
+            input.checked = isOpen;
+            if (isOpen) {
+                card.classList.remove('is-closed');
+                card.classList.add('is-open');
+                pill.classList.remove('pill-closed');
+                pill.classList.add('pill-open');
+            } else {
+                card.classList.remove('is-open');
+                card.classList.add('is-closed');
+                pill.classList.remove('pill-open');
+                pill.classList.add('pill-closed');
+            }
+        }
+    }
+    updateStorePreview();
+}
+
+function updateStorePreview() {
+    const modeEl = document.getElementById('availMode');
+    const manualStatusEl = document.getElementById('manualStatus');
+    const isActiveEl = document.getElementById('isActive');
+    const openTimeEl = document.getElementById('openTime');
+    const closeTimeEl = document.getElementById('closeTime');
+
+    if (!modeEl) return;
+
+    const mode = modeEl.value;
+    const manualStatus = manualStatusEl.value;
+    const isActive = isActiveEl ? isActiveEl.checked : true;
+    const openTime = openTimeEl.value || '08:00';
+    const closeTime = closeTimeEl.value || '20:00';
+
+    // Collect open and closed days
+    const openDays = [];
+    const closedDays = [];
+    for (let day = 1; day <= 7; day++) {
+        const input = document.getElementById('dayInput_' + day);
+        if (input && input.checked) {
+            openDays.push(day);
+        } else {
+            closedDays.push(day);
+        }
     }
 
-    const scheduleFormatted = `${daysLabel} | ${formatTime12h(openTime)} - ${formatTime12h(closeTime)}`;
-    document.getElementById('scheduleDisplay' + storeId).textContent = scheduleFormatted;
-    document.getElementById('mockupScheduleText' + storeId).textContent = scheduleFormatted;
+    // Days summary text
+    let daysLabel = 'Daily';
+    if (openDays.length === 7) {
+        daysLabel = 'Daily';
+    } else if (openDays.length === 5 && openDays.join(',') === '1,2,3,4,5') {
+        daysLabel = 'Mon - Fri';
+    } else if (openDays.length === 2 && openDays.join(',') === '6,7') {
+        daysLabel = 'Sat - Sun';
+    } else if (openDays.length > 0) {
+        daysLabel = openDays.map(d => dayNames[d]).join(', ');
+    } else {
+        daysLabel = 'Closed All Week';
+    }
+
+    let closedSummary = '';
+    if (closedDays.length > 0 && openDays.length > 0) {
+        closedSummary = ' • Closed: ' + closedDays.map(d => dayNames[d]).join(', ');
+    }
+
+    const scheduleFormatted = (openDays.length > 0)
+        ? `${daysLabel} | ${formatTime12h(openTime)} - ${formatTime12h(closeTime)}${closedSummary}`
+        : 'Closed on all days (No operating days selected)';
+
+    const schedDisp = document.getElementById('scheduleDisplay');
+    const mockSched = document.getElementById('mockupScheduleText');
+    if (schedDisp) schedDisp.textContent = scheduleFormatted;
+    if (mockSched) mockSched.textContent = scheduleFormatted;
 
     // Resolve preview status
     let statusClass = 'closed';
@@ -1335,7 +1482,7 @@ function updateStorePreview(storeId) {
             noteText = 'Store is manually marked as closed for now.';
         }
     } else {
-        // Schedule mode check against current local time
+        // Schedule mode check against current local time in Philippines
         const now = new Date();
         const currentIsoDay = now.getDay() === 0 ? 7 : now.getDay();
         const currentMinutes = now.getHours() * 60 + now.getMinutes();
@@ -1345,7 +1492,7 @@ function updateStorePreview(storeId) {
         const openMin = oH * 60 + oM;
         const closeMin = cH * 60 + cM;
 
-        const isDayAllowed = checkedDays.includes(currentIsoDay);
+        const isDayAllowed = openDays.includes(currentIsoDay);
         const isTimeWithin = (closeMin > openMin)
             ? (currentMinutes >= openMin && currentMinutes <= closeMin)
             : (currentMinutes >= openMin || currentMinutes <= closeMin);
@@ -1354,29 +1501,55 @@ function updateStorePreview(storeId) {
             statusClass = 'open';
             statusLabel = 'Open now';
             noteText = 'Open now based on store business schedule.';
+        } else if (!isDayAllowed) {
+            statusClass = 'closed';
+            statusLabel = 'Closed today';
+            noteText = 'Store is closed today (' + dayNames[currentIsoDay] + '). Scheduled rest day.';
         } else {
             statusClass = 'closed';
             statusLabel = 'Closed now';
-            noteText = isDayAllowed ? 'Closed right now based on store hours.' : 'Store is closed today (not a scheduled operating day).';
+            noteText = 'Closed right now based on operating hours (' + formatTime12h(openTime) + ' - ' + formatTime12h(closeTime) + ').';
         }
     }
 
-    // Update Mockup Pill
-    const mockupPill = document.getElementById('mockupStatusPill' + storeId);
-    mockupPill.className = 'mockup-status-pill ' + statusClass;
-    document.getElementById('mockupStatusText' + storeId).textContent = statusLabel;
-    document.getElementById('mockupNoteText' + storeId).textContent = noteText;
+    const mockupPill = document.getElementById('mockupStatusPill');
+    const mockupText = document.getElementById('mockupStatusText');
+    const mockupNote = document.getElementById('mockupNoteText');
+    const topPill = document.getElementById('topPill');
+
+    if (mockupPill) mockupPill.className = 'mockup-status-pill ' + statusClass;
+    if (mockupText) mockupText.textContent = statusLabel;
+    if (mockupNote) mockupNote.textContent = noteText;
+    if (topPill) {
+        topPill.className = 'store-status-pill ' + statusClass;
+        topPill.innerHTML = (statusClass === 'open')
+            ? '<i class="fas fa-circle-dot"></i> Open for Orders'
+            : (statusClass === 'away' ? '<i class="fas fa-circle-pause"></i> Away / Paused' : '<i class="fas fa-circle-xmark"></i> Closed');
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize preview for all stores
-    document.querySelectorAll('.store-config-card').forEach(card => {
-        const idMatch = card.id.match(/\d+/);
-        if (idMatch) {
-            updateStorePreview(parseInt(idMatch[0], 10));
-        }
-    });
+    updateStorePreview();
 });
+
+// SweetAlert2 Session Messages
+<?php if (isset($_SESSION['success'])): ?>
+    Swal.fire({
+        icon: 'success',
+        title: 'Success',
+        text: <?php echo json_encode((string)$_SESSION['success']); ?>,
+        timer: 2500,
+        showConfirmButton: false
+    });
+<?php unset($_SESSION['success']); endif; ?>
+
+<?php if (isset($_SESSION['error'])): ?>
+    Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: <?php echo json_encode((string)$_SESSION['error']); ?>
+    });
+<?php unset($_SESSION['error']); endif; ?>
 </script>
 </body>
 </html>

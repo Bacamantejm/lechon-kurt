@@ -467,18 +467,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $department_id = isset($_POST['department_id']) && $_POST['department_id'] !== '' ? intval($_POST['department_id']) : 0;
         $store_id = isset($_POST['store_id']) && $_POST['store_id'] !== '' ? intval($_POST['store_id']) : 0;
         if ($store_id <= 0) {
-            if ($is_partner_scoped_hr && $partner_scope_owner_id > 0) {
-                $sl_find = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE owner_user_id = $partner_scope_owner_id LIMIT 1");
+            $scope_target_user_id = ($is_partner_scoped_hr && $partner_scope_owner_id > 0) ? (int)$partner_scope_owner_id : (int)($_SESSION['user_id'] ?? 0);
+            if ($scope_target_user_id > 0) {
+                // 1. Direct owner match in store_locations
+                $sl_find = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE owner_user_id = {$scope_target_user_id} AND is_active = 1 LIMIT 1");
                 if ($sl_find && ($sl_row = mysqli_fetch_assoc($sl_find))) {
                     $store_id = (int)$sl_row['store_id'];
                 }
-            } else {
-                $curr_adm_id = (int)($_SESSION['user_id'] ?? 0);
-                $sl_find = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE owner_user_id = $curr_adm_id LIMIT 1");
-                if ($sl_find && ($sl_row = mysqli_fetch_assoc($sl_find))) {
+                // 2. Email match in store_locations
+                if ($store_id <= 0) {
+                    $sl_email = mysqli_query($conn, "SELECT sl.store_id FROM store_locations sl INNER JOIN users u ON sl.email = u.email WHERE u.id = {$scope_target_user_id} AND sl.is_active = 1 LIMIT 1");
+                    if ($sl_email && ($sl_row = mysqli_fetch_assoc($sl_email))) {
+                        $store_id = (int)$sl_row['store_id'];
+                    }
+                }
+                // 3. Business name match in store_locations
+                if ($store_id <= 0) {
+                    $sl_bn = mysqli_query($conn, "SELECT sl.store_id FROM store_locations sl INNER JOIN users u ON LOWER(sl.store_name) = LOWER(u.business_name) WHERE u.id = {$scope_target_user_id} AND sl.is_active = 1 LIMIT 1");
+                    if ($sl_bn && ($sl_row = mysqli_fetch_assoc($sl_bn))) {
+                        $store_id = (int)$sl_row['store_id'];
+                    }
+                }
+                // 4. Auto-create store location for this business owner if missing
+                if ($store_id <= 0) {
+                    $user_q = mysqli_query($conn, "SELECT business_name, email, phone, address FROM users WHERE id = {$scope_target_user_id} LIMIT 1");
+                    if ($user_q && ($u_data = mysqli_fetch_assoc($user_q))) {
+                        $b_name = trim((string)($u_data['business_name'] ?? ''));
+                        if ($b_name !== '') {
+                            $b_email = trim((string)($u_data['email'] ?? ''));
+                            $b_phone = trim((string)($u_data['phone'] ?? ''));
+                            $b_addr = trim((string)($u_data['address'] ?? 'Cavite'));
+                            $ins_store = mysqli_prepare($conn, "INSERT INTO store_locations (owner_user_id, store_name, address, city, province, phone, email, opening_hours, opening_time, closing_time, operating_days, availability_mode, manual_status, is_active) VALUES (?, ?, ?, 'City of Dasmariñas', 'Cavite', ?, ?, 'Daily | 8:00 AM - 8:00 PM', '08:00:00', '20:00:00', '1,2,3,4,5,6,7', 'schedule', 'open', 1)");
+                            if ($ins_store) {
+                                mysqli_stmt_bind_param($ins_store, "issss", $scope_target_user_id, $b_name, $b_addr, $b_phone, $b_email);
+                                mysqli_stmt_execute($ins_store);
+                                $store_id = (int)mysqli_insert_id($conn);
+                                mysqli_stmt_close($ins_store);
+                            }
+                        }
+                    }
+                }
+            }
+            // 5. Fallback to any active store in store_locations
+            if ($store_id <= 0) {
+                $sl_any = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE is_active = 1 ORDER BY (store_id = 7) DESC, store_id ASC LIMIT 1");
+                if ($sl_any && ($sl_row = mysqli_fetch_assoc($sl_any))) {
                     $store_id = (int)$sl_row['store_id'];
-                } else {
-                    $store_id = 1;
                 }
             }
         }
@@ -572,7 +606,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $position = (string)$position_catalog['all'][0]['title'];
             }
             if ($position === '') {
-                $position = 'Staff';
+                $position = 'Service Crew';
             }
             if ($hire_date === '') {
                 $hire_date = date('Y-m-d');
@@ -804,19 +838,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $phone = trim($_POST['phone'] ?? '');
         $department_id = isset($_POST['department_id']) && $_POST['department_id'] !== '' ? intval($_POST['department_id']) : 0;
         $store_id = isset($_POST['store_id']) && $_POST['store_id'] !== '' ? intval($_POST['store_id']) : 0;
+        if ($store_id <= 0 && $id > 0) {
+            $curr_store_q = mysqli_query($conn, "SELECT store_id FROM employees WHERE id = {$id} LIMIT 1");
+            if ($curr_store_q && ($curr_store_r = mysqli_fetch_assoc($curr_store_q)) && !empty($curr_store_r['store_id'])) {
+                $store_id = (int)$curr_store_r['store_id'];
+            }
+        }
         if ($store_id <= 0) {
-            if ($is_partner_scoped_hr && $partner_scope_owner_id > 0) {
-                $sl_find = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE owner_user_id = $partner_scope_owner_id LIMIT 1");
+            $scope_target_user_id = ($is_partner_scoped_hr && $partner_scope_owner_id > 0) ? (int)$partner_scope_owner_id : (int)($_SESSION['user_id'] ?? 0);
+            if ($scope_target_user_id > 0) {
+                $sl_find = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE owner_user_id = {$scope_target_user_id} AND is_active = 1 LIMIT 1");
                 if ($sl_find && ($sl_row = mysqli_fetch_assoc($sl_find))) {
                     $store_id = (int)$sl_row['store_id'];
                 }
-            } else {
-                $curr_adm_id = (int)($_SESSION['user_id'] ?? 0);
-                $sl_find = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE owner_user_id = $curr_adm_id LIMIT 1");
-                if ($sl_find && ($sl_row = mysqli_fetch_assoc($sl_find))) {
+                if ($store_id <= 0) {
+                    $sl_email = mysqli_query($conn, "SELECT sl.store_id FROM store_locations sl INNER JOIN users u ON sl.email = u.email WHERE u.id = {$scope_target_user_id} AND sl.is_active = 1 LIMIT 1");
+                    if ($sl_email && ($sl_row = mysqli_fetch_assoc($sl_email))) {
+                        $store_id = (int)$sl_row['store_id'];
+                    }
+                }
+                if ($store_id <= 0) {
+                    $sl_bn = mysqli_query($conn, "SELECT sl.store_id FROM store_locations sl INNER JOIN users u ON LOWER(sl.store_name) = LOWER(u.business_name) WHERE u.id = {$scope_target_user_id} AND sl.is_active = 1 LIMIT 1");
+                    if ($sl_bn && ($sl_row = mysqli_fetch_assoc($sl_bn))) {
+                        $store_id = (int)$sl_row['store_id'];
+                    }
+                }
+            }
+            if ($store_id <= 0) {
+                $sl_any = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE is_active = 1 ORDER BY (store_id = 7) DESC, store_id ASC LIMIT 1");
+                if ($sl_any && ($sl_row = mysqli_fetch_assoc($sl_any))) {
                     $store_id = (int)$sl_row['store_id'];
-                } else {
-                    $store_id = 1;
                 }
             }
         }
@@ -865,7 +916,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($position === '') {
-            $position = 'Staff';
+            $position = 'Service Crew';
         }
         if ($hire_date === '') {
             $hire_date = date('Y-m-d');
@@ -1147,7 +1198,7 @@ $has_pos_col = hrColumnExists($conn, 'employees', 'position_id');
 
 $dept_col = $has_dept ? "d.department_name" : "'' AS department_name";
 $dept_join = $has_dept ? "LEFT JOIN departments d ON e.department_id = d.id" : "";
-$jp_col = ($has_jp && $has_pos_col) ? "COALESCE(jp.position_title, e.position) AS position_label" : "COALESCE(e.position, 'Staff') AS position_label";
+$jp_col = ($has_jp && $has_pos_col) ? "COALESCE(jp.position_title, e.position) AS position_label" : "COALESCE(e.position, 'Service Crew') AS position_label";
 $jp_join = ($has_jp && $has_pos_col) ? "LEFT JOIN job_positions jp ON jp.id = e.position_id" : "";
 
 $employees_query = "SELECT e.*, {$dept_col}, u.user_type, u.email as user_email, u.profile_image as user_profile_image,
@@ -2301,7 +2352,7 @@ if ($roles_query instanceof mysqli_result) {
                                 // Name & Position
                                 $full_name = formatEmployeeFullName($emp['first_name'] ?? '', $emp['middle_initial'] ?? '', $emp['last_name'] ?? '', $emp['suffix'] ?? '');
                                 $full_name_safe = htmlspecialchars($full_name);
-                                $position_title = !empty($emp['position_label']) ? $emp['position_label'] : (!empty($emp['position']) ? $emp['position'] : 'Staff');
+                                $position_title = !empty($emp['position_label']) ? $emp['position_label'] : (!empty($emp['position']) ? $emp['position'] : 'Service Crew');
                                 $department_title = !empty($emp['department_name']) ? $emp['department_name'] : 'Unassigned';
 
                                 // Hire Date formatting (d/m/Y like reference screenshot)
@@ -2500,7 +2551,7 @@ if ($roles_query instanceof mysqli_result) {
                                         $status_class = 'badge-' . str_replace('_', '-', $emp_status);
                                         $full_name = formatEmployeeFullName($emp['first_name'] ?? '', $emp['middle_initial'] ?? '', $emp['last_name'] ?? '', $emp['suffix'] ?? '');
                                         $full_name_safe = htmlspecialchars($full_name);
-                                        $position_title = !empty($emp['position_label']) ? $emp['position_label'] : (!empty($emp['position']) ? $emp['position'] : 'Staff');
+                                        $position_title = !empty($emp['position_label']) ? $emp['position_label'] : (!empty($emp['position']) ? $emp['position'] : 'Service Crew');
                                         $dept_name = !empty($emp['department_name']) ? $emp['department_name'] : 'Unassigned';
                                         
                                         $raw_photo = !empty($emp['photo']) ? preg_replace('#^(\.\./+|/+)#', '', (string)$emp['photo']) : (!empty($emp['user_profile_image']) ? preg_replace('#^(\.\./+|/+)#', '', (string)$emp['user_profile_image']) : '');
@@ -2804,28 +2855,7 @@ if ($roles_query instanceof mysqli_result) {
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="emp-form-group">
-                                        <label class="emp-label">Store / Branch <span class="emp-req-star">*</span></label>
-                                        <div class="emp-input-wrap">
-                                            <i class="fas fa-store emp-input-icon"></i>
-                                            <select name="store_id" id="add_store_id" class="form-select" required>
-                                                <?php foreach ($all_stores as $st): ?>
-                                                    <option value="<?php echo (int)$st['store_id']; ?>">
-                                                        <?php
-                                                        $store_name = trim((string)($st['store_name'] ?? ''));
-                                                        $store_city = trim((string)($st['city'] ?? ''));
-                                                        echo htmlspecialchars($store_city !== '' ? $store_name . ' (' . $store_city . ')' : $store_name);
-                                                        ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                        <div class="emp-helper-text">
-                                            <i class="fas fa-info-circle"></i> Delivery orders will be strictly bound to this shop branch.
-                                        </div>
-                                    </div>
-                                </div>
+
                             </div>
                         </div>
 
@@ -3116,28 +3146,7 @@ if ($roles_query instanceof mysqli_result) {
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="emp-form-group">
-                                        <label class="emp-label">Store / Branch <span class="emp-req-star">*</span></label>
-                                        <div class="emp-input-wrap">
-                                            <i class="fas fa-store emp-input-icon"></i>
-                                            <select name="store_id" id="edit_store_id" class="form-select" required>
-                                                <?php foreach ($all_stores as $st): ?>
-                                                    <option value="<?php echo (int)$st['store_id']; ?>">
-                                                        <?php
-                                                        $store_name = trim((string)($st['store_name'] ?? ''));
-                                                        $store_city = trim((string)($st['city'] ?? ''));
-                                                        echo htmlspecialchars($store_city !== '' ? $store_name . ' (' . $store_city . ')' : $store_name);
-                                                        ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                        <div class="emp-helper-text">
-                                            <i class="fas fa-info-circle"></i> Delivery orders will be strictly bound to this shop branch.
-                                        </div>
-                                    </div>
-                                </div>
+
                             </div>
                         </div>
                     </div>
@@ -3503,7 +3512,7 @@ if ($roles_query instanceof mysqli_result) {
                     
                     let rate = data.employment_basis === 'monthly' ? data.salary : data.daily_rate;
                     $('#edit_base_salary').val(rate);
-                    $('#edit_store_id').val(data.store_id || '1');
+                    // store_id handled automatically
 
                     // Photo preview
                     if (data.photo) {

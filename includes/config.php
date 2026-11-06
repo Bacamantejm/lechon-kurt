@@ -636,6 +636,201 @@ if (!function_exists('ensureMojibakeEncodingRepaired')) {
     }
 }
 
+
+
+if (!function_exists('ensureLechonShopJobPositions')) {
+    /**
+     * Ensures all default job titles reflect authentic lechon shop operations:
+     * 1. Lechon Roaster / Litsonero (Kitchen & Roasting)
+     * 2. Service Crew (Store Operations & Service)
+     * 3. Kitchen Helper (Kitchen & Roasting)
+     * 4. Delivery Rider (Logistics & Delivery)
+     * 
+     * Replaces and clears obsolete generic mock titles (Software Developer, Project Manager, Hourly Staff, Staff).
+     * Automatically syncs existing employees and candidates, while preserving any custom positions created by the shop owner.
+     */
+    function ensureLechonShopJobPositions($conn): void {
+        static $executed = false;
+        if ($executed || !$conn || !($conn instanceof mysqli)) {
+            return;
+        }
+        $executed = true;
+
+        try {
+            if (!appTableExists($conn, 'job_positions') || !appTableExists($conn, 'departments')) {
+                return;
+            }
+
+            // 1. Ensure primary authentic departments exist
+            $target_departments = [
+                'Kitchen & Roasting' => 'Lechon roasting pit, charcoal fire management, and kitchen cooking operations',
+                'Store Operations & Service' => 'Front-of-house customer service, dining counter, POS cashiering, and pack-out',
+                'Logistics & Delivery' => 'Order fulfillment, packing, vehicle dispatch, and delivery riders',
+                'Administration & Finance' => 'Store bookkeeping, inventory management, and business administration'
+            ];
+
+            $dept_map = [];
+            foreach ($target_departments as $d_name => $d_desc) {
+                $esc_name = mysqli_real_escape_string($conn, $d_name);
+                $esc_desc = mysqli_real_escape_string($conn, $d_desc);
+                $q = @mysqli_query($conn, "SELECT id FROM departments WHERE LOWER(TRIM(department_name)) = LOWER('{$esc_name}') LIMIT 1");
+                if ($q && ($row = mysqli_fetch_assoc($q))) {
+                    $dept_map[$d_name] = (int)$row['id'];
+                } else {
+                    @mysqli_query($conn, "INSERT INTO departments (department_name, description) VALUES ('{$esc_name}', '{$esc_desc}')");
+                    $dept_map[$d_name] = (int)mysqli_insert_id($conn);
+                }
+            }
+
+            // Also check for legacy department names to map IDs if needed
+            $all_depts_res = @mysqli_query($conn, "SELECT id, department_name FROM departments");
+            $legacy_map = [];
+            if ($all_depts_res) {
+                while ($d_row = mysqli_fetch_assoc($all_depts_res)) {
+                    $dn = strtolower(trim($d_row['department_name']));
+                    if (strpos($dn, 'roast') !== false || strpos($dn, 'cook') !== false || strpos($dn, 'lechonero') !== false) {
+                        $legacy_map['roasting'] = (int)$d_row['id'];
+                    }
+                    if (strpos($dn, 'service') !== false || strpos($dn, 'reception') !== false || strpos($dn, 'staff') !== false) {
+                        $legacy_map['service'] = (int)$d_row['id'];
+                    }
+                    if (strpos($dn, 'delivery') !== false || strpos($dn, 'logistics') !== false || strpos($dn, 'rider') !== false) {
+                        $legacy_map['logistics'] = (int)$d_row['id'];
+                    }
+                }
+            }
+
+            $roast_dept_id = $dept_map['Kitchen & Roasting'] ?? ($legacy_map['roasting'] ?? null);
+            $service_dept_id = $dept_map['Store Operations & Service'] ?? ($legacy_map['service'] ?? null);
+            $logistics_dept_id = $dept_map['Logistics & Delivery'] ?? ($legacy_map['logistics'] ?? null);
+
+            // 2. Define the authentic lechon roles
+            $target_positions = [
+                [
+                    'title' => 'Lechon Roaster / Litsonero',
+                    'dept_id' => $roast_dept_id,
+                    'type' => 'full_time',
+                    'min' => 15000.00,
+                    'max' => 28000.00,
+                    'desc' => 'Master pitmaster responsible for whole pig preparation, seasoning, skewer balancing, charcoal fire management, and ensuring signature crispy golden skin.',
+                    'req' => 'Knowledge in traditional charcoal roasting, butchery, food sanitation standards, physical endurance in pit temperature.'
+                ],
+                [
+                    'title' => 'Service Crew',
+                    'dept_id' => $service_dept_id,
+                    'type' => 'full_time',
+                    'min' => 12000.00,
+                    'max' => 18000.00,
+                    'desc' => 'Front-of-house store staff responsible for welcoming customers, taking counter orders, handling cashier POS transactions, order packaging, and store hygiene.',
+                    'req' => 'Customer service passion, pleasant demeanor, punctuality, basic arithmetic and POS operating experience.'
+                ],
+                [
+                    'title' => 'Kitchen Helper',
+                    'dept_id' => $roast_dept_id,
+                    'type' => 'full_time',
+                    'min' => 12000.00,
+                    'max' => 17000.00,
+                    'desc' => 'Assists the roasting pitmaster and kitchen cook in food prep, chopping, vegetable trimming, skewer cleaning, charcoal handling, and kitchen sanitation.',
+                    'req' => 'Basic knife skills, willingness to learn roasting and kitchen prep, strong hygiene habits, team player.'
+                ],
+                [
+                    'title' => 'Delivery Rider',
+                    'dept_id' => $logistics_dept_id,
+                    'type' => 'full_time',
+                    'min' => 14000.00,
+                    'max' => 22000.00,
+                    'desc' => 'Dedicated delivery specialist ensuring hot, freshly-roasted whole lechons and catering food trays reach customers safely and punctually across Cavite.',
+                    'req' => 'Valid driver license with motorcycle/vehicle restriction code, clean driving record, familiar with Cavite routes, GPS smartphone.'
+                ]
+            ];
+
+            $pos_id_map = [];
+            foreach ($target_positions as $tp) {
+                $t_title = mysqli_real_escape_string($conn, $tp['title']);
+                $t_desc = mysqli_real_escape_string($conn, $tp['desc']);
+                $t_req = mysqli_real_escape_string($conn, $tp['req']);
+                $t_dept = $tp['dept_id'] ? (int)$tp['dept_id'] : "NULL";
+
+                $check = @mysqli_query($conn, "SELECT id FROM job_positions WHERE LOWER(TRIM(position_title)) = LOWER('{$t_title}') LIMIT 1");
+                if ($check && ($r = mysqli_fetch_assoc($check))) {
+                    $pos_id = (int)$r['id'];
+                    $pos_id_map[$tp['title']] = $pos_id;
+                    @mysqli_query($conn, "UPDATE job_positions 
+                        SET department_id = COALESCE(department_id, {$t_dept}),
+                            description = COALESCE(NULLIF(description, ''), '{$t_desc}'),
+                            requirements = COALESCE(NULLIF(requirements, ''), '{$t_req}'),
+                            salary_range_min = COALESCE(salary_range_min, {$tp['min']}),
+                            salary_range_max = COALESCE(salary_range_max, {$tp['max']}),
+                            status = 'open'
+                        WHERE id = {$pos_id}");
+                } else {
+                    @mysqli_query($conn, "INSERT INTO job_positions 
+                        (position_title, department_id, description, requirements, salary_range_min, salary_range_max, employment_type, status, posted_date)
+                        VALUES 
+                        ('{$t_title}', {$t_dept}, '{$t_desc}', '{$t_req}', {$tp['min']}, {$tp['max']}, '{$tp['type']}', 'open', CURDATE())");
+                    $pos_id_map[$tp['title']] = (int)mysqli_insert_id($conn);
+                }
+            }
+
+            $crew_pos_id = $pos_id_map['Service Crew'] ?? 1;
+            $roaster_pos_id = $pos_id_map['Lechon Roaster / Litsonero'] ?? 2;
+            $helper_pos_id = $pos_id_map['Kitchen Helper'] ?? 3;
+            $rider_pos_id = $pos_id_map['Delivery Rider'] ?? 4;
+
+            // 3. Remap existing employees who may reference old mock titles
+            if (appTableExists($conn, 'employees')) {
+                $service_dept_val = $service_dept_id ? (int)$service_dept_id : "NULL";
+                $roast_dept_val = $roast_dept_id ? (int)$roast_dept_id : "NULL";
+                $logistics_dept_val = $logistics_dept_id ? (int)$logistics_dept_id : "NULL";
+
+                // Reassign generic office/dummy roles to Service Crew
+                @mysqli_query($conn, "UPDATE employees 
+                    SET position = 'Service Crew', position_id = {$crew_pos_id}, department_id = COALESCE(department_id, {$service_dept_val})
+                    WHERE LOWER(TRIM(position)) IN ('software developer', 'project manager', 'staff', 'hourly staff', 'receptionist', 'cashier', 'asd', 'employee', 'receipt')
+                       OR position_id IN (
+                           SELECT id FROM job_positions 
+                           WHERE LOWER(TRIM(position_title)) IN ('software developer', 'project manager', 'staff', 'hourly staff', 'receptionist', 'cashier', 'asd', 'employee', 'receipt')
+                       )");
+
+                // Reassign driver/delivery roles to Delivery Rider
+                @mysqli_query($conn, "UPDATE employees 
+                    SET position = 'Delivery Rider', position_id = {$rider_pos_id}, department_id = COALESCE(department_id, {$logistics_dept_val})
+                    WHERE LOWER(TRIM(position)) IN ('driver', 'delivery driver', 'rider', 'delivery rider / driver')
+                       OR position_id IN (
+                           SELECT id FROM job_positions 
+                           WHERE LOWER(TRIM(position_title)) IN ('driver', 'delivery driver', 'rider', 'delivery rider / driver')
+                       )");
+
+                // Reassign kitchen/cooking roles
+                @mysqli_query($conn, "UPDATE employees 
+                    SET position = 'Lechon Roaster / Litsonero', position_id = {$roaster_pos_id}, department_id = COALESCE(department_id, {$roast_dept_val})
+                    WHERE LOWER(TRIM(position)) IN ('chef / lechonero', 'lechonero', 'roaster')");
+
+                @mysqli_query($conn, "UPDATE employees 
+                    SET position = 'Kitchen Helper', position_id = {$helper_pos_id}, department_id = COALESCE(department_id, {$roast_dept_val})
+                    WHERE LOWER(TRIM(position)) IN ('assistant cook', 'helper')");
+            }
+
+            // 4. Update candidates table if candidates exist
+            if (appTableExists($conn, 'candidates')) {
+                @mysqli_query($conn, "UPDATE candidates 
+                    SET position_id = {$crew_pos_id}
+                    WHERE position_id IN (
+                        SELECT id FROM job_positions 
+                        WHERE LOWER(TRIM(position_title)) IN ('software developer', 'project manager', 'staff', 'hourly staff', 'asd', 'employee', 'receipt')
+                    )");
+            }
+
+            // 5. Delete obsolete generic mock positions (leaves genuine roles and shop owner's custom positions intact)
+            @mysqli_query($conn, "DELETE FROM job_positions 
+                WHERE LOWER(TRIM(position_title)) IN ('software developer', 'project manager', 'staff', 'hourly staff', 'asd', 'employee', 'receipt', 'driver')");
+
+        } catch (Throwable $e) {
+            // Guard clause to avoid breaking page requests
+        }
+    }
+}
+
 if (!function_exists('resolveDistinctStoreImage')) {
     function resolveDistinctStoreImage($store_id, $store_name = '', $custom_image = ''): string {
         $custom = trim((string)$custom_image);
@@ -2186,6 +2381,7 @@ function authenticateRememberMeUser($conn) {
 if (isset($conn) && $conn instanceof mysqli) {
     ensureMojibakeEncodingRepaired($conn);
     ensureOnlyJmLechonStoreAndMenu($conn);
+    ensureLechonShopJobPositions($conn);
     authenticateRememberMeUser($conn);
 }
 ?>
