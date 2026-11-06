@@ -1,8 +1,8 @@
 <?php
 /**
  * Attendance & Geofenced Time Clock Service
- * Handles Time In / Time Out, Geofencing validation against shop location,
- * and enforcement of duty state for riders and employees.
+ * Handles Time In / Break Time / Continue Shift / Time Out, Geofencing validation,
+ * Schedule-based Late / Absent calculation, and Second Check-in approval workflows.
  */
 
 if (!function_exists('attTableExists')) {
@@ -13,6 +13,16 @@ if (!function_exists('attTableExists')) {
         if (isset($cache[$table])) return $cache[$table];
         $res = mysqli_query($conn, "SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $table) . "'");
         return $cache[$table] = ($res && mysqli_num_rows($res) > 0);
+    }
+}
+
+if (!function_exists('attColumnExists')) {
+    function attColumnExists($conn, $table, $column) {
+        static $cache = [];
+        $key = $table . '.' . $column;
+        if (isset($cache[$key])) return $cache[$key];
+        $res = mysqli_query($conn, "SHOW COLUMNS FROM `" . mysqli_real_escape_string($conn, $table) . "` LIKE '" . mysqli_real_escape_string($conn, $column) . "'");
+        return $cache[$key] = ($res && mysqli_num_rows($res) > 0);
     }
 }
 
@@ -32,6 +42,21 @@ if (!function_exists('attDistanceMeters')) {
 class AttendanceService {
 
     /**
+     * Ensures necessary schema columns exist on attendance table
+     */
+    public static function ensureSchema($conn) {
+        static $done = false;
+        if ($done || !$conn) return;
+        $done = true;
+
+        if (attTableExists($conn, 'attendance')) {
+            if (!attColumnExists($conn, 'attendance', 'check_in_count')) {
+                @mysqli_query($conn, "ALTER TABLE attendance ADD COLUMN check_in_count INT NOT NULL DEFAULT 1 AFTER overtime_hours");
+            }
+        }
+    }
+
+    /**
      * Resolves or auto-creates an employee record for a user (including riders)
      */
     public static function resolveEmployeeId($conn, $user_id, $role_title = 'Staff', $store_id = 0) {
@@ -47,7 +72,6 @@ class AttendanceService {
             $emp = mysqli_fetch_assoc($res);
             mysqli_stmt_close($stmt);
             if ($emp) {
-                // Update store_id if missing and store_id provided
                 if ($store_id > 0 && empty($emp['store_id'])) {
                     mysqli_query($conn, "UPDATE employees SET store_id = $store_id WHERE id = " . (int)$emp['id'] . " LIMIT 1");
                 }
@@ -211,15 +235,40 @@ class AttendanceService {
     }
 
     /**
-     * Gets today's attendance record for an employee / user
+     * Gets today's attendance record and schedule for an employee / user
      */
     public static function getTodayAttendance($conn, $user_id, $employee_id = 0) {
+        self::ensureSchema($conn);
         $user_id = (int)$user_id;
         $employee_id = (int)$employee_id;
         $today = date('Y-m-d');
 
         if ($employee_id <= 0 && $user_id > 0) {
             $employee_id = self::resolveEmployeeId($conn, $user_id);
+        }
+
+        $store = self::resolveWorkStore($conn, $user_id, $employee_id);
+
+        // Fetch schedule for today
+        $sched_data = null;
+        if ($employee_id > 0 && attTableExists($conn, 'schedules')) {
+            $s_stmt = mysqli_prepare($conn, "SELECT id, start_time, end_time, shift_type FROM schedules WHERE employee_id = ? AND schedule_date = ? LIMIT 1");
+            if ($s_stmt) {
+                mysqli_stmt_bind_param($s_stmt, "is", $employee_id, $today);
+                mysqli_stmt_execute($s_stmt);
+                $s_res = mysqli_stmt_get_result($s_stmt);
+                if ($s_row = mysqli_fetch_assoc($s_res)) {
+                    $sched_data = [
+                        'id' => (int)$s_row['id'],
+                        'start_time' => $s_row['start_time'],
+                        'start_formatted' => date('g:i A', strtotime($s_row['start_time'])),
+                        'end_time' => $s_row['end_time'],
+                        'end_formatted' => date('g:i A', strtotime($s_row['end_time'])),
+                        'shift_type' => $s_row['shift_type']
+                    ];
+                }
+                mysqli_stmt_close($s_stmt);
+            }
         }
 
         if ($employee_id <= 0) {
@@ -230,15 +279,22 @@ class AttendanceService {
                 'attendance_id' => 0,
                 'check_in_time' => null,
                 'check_out_time' => null,
+                'break_start' => null,
+                'break_end' => null,
                 'hr_status' => 'pending',
-                'store' => self::resolveWorkStore($conn, $user_id, $employee_id)
+                'schedule' => $sched_data,
+                'store' => $store
             ];
         }
 
+        $has_check_in_count = attColumnExists($conn, 'attendance', 'check_in_count');
+        $check_in_count_sql = $has_check_in_count ? "a.check_in_count" : "1 AS check_in_count";
+
         $stmt = mysqli_prepare($conn, "
-            SELECT id, attendance_date, check_in_time, check_out_time, status, notes, latitude, longitude, hr_status 
-            FROM attendance 
-            WHERE employee_id = ? AND attendance_date = ? 
+            SELECT a.id, a.attendance_date, a.check_in_time, a.break_start, a.break_end, a.check_out_time, 
+                   a.status, a.notes, a.latitude, a.longitude, a.hr_status, a.late_minutes, {$check_in_count_sql}
+            FROM attendance a
+            WHERE a.employee_id = ? AND a.attendance_date = ? 
             LIMIT 1
         ");
 
@@ -251,8 +307,6 @@ class AttendanceService {
             mysqli_stmt_close($stmt);
         }
 
-        $store = self::resolveWorkStore($conn, $user_id, $employee_id);
-
         if (!$record || empty($record['check_in_time'])) {
             return [
                 'has_record' => false,
@@ -261,13 +315,40 @@ class AttendanceService {
                 'attendance_id' => (int)($record['id'] ?? 0),
                 'check_in_time' => null,
                 'check_out_time' => null,
+                'break_start' => null,
+                'break_end' => null,
                 'hr_status' => 'pending',
+                'check_in_count' => 0,
+                'can_reenter' => false,
+                'schedule' => $sched_data,
                 'store' => $store
             ];
         }
 
         $is_timed_out = !empty($record['check_out_time']);
-        $shift_status = $is_timed_out ? 'timed_out' : 'timed_in';
+        $is_on_break = (!empty($record['break_start']) && empty($record['break_end']));
+        $check_in_count = (int)($record['check_in_count'] ?? 1);
+        $hr_status = $record['hr_status'] ?? 'pending';
+
+        // Calculate break elapsed time
+        $break_elapsed_seconds = 0;
+        $break_elapsed_minutes = 0;
+        if ($is_on_break && !empty($record['break_start'])) {
+            $break_start_ts = strtotime($today . ' ' . $record['break_start']);
+            $break_elapsed_seconds = max(0, time() - $break_start_ts);
+            $break_elapsed_minutes = (int)floor($break_elapsed_seconds / 60);
+        }
+
+        // Determine shift status
+        if ($is_timed_out) {
+            $shift_status = 'timed_out';
+        } elseif ($check_in_count >= 2 && $hr_status === 'pending') {
+            $shift_status = 'pending_approval';
+        } elseif ($is_on_break) {
+            $shift_status = 'on_break';
+        } else {
+            $shift_status = 'timed_in';
+        }
 
         return [
             'has_record' => true,
@@ -278,7 +359,18 @@ class AttendanceService {
             'check_in_formatted' => date('g:i A', strtotime($record['check_in_time'])),
             'check_out_time' => $record['check_out_time'],
             'check_out_formatted' => $is_timed_out ? date('g:i A', strtotime($record['check_out_time'])) : null,
-            'hr_status' => $record['hr_status'] ?? 'pending',
+            'break_start' => $record['break_start'],
+            'break_start_formatted' => !empty($record['break_start']) ? date('g:i A', strtotime($record['break_start'])) : null,
+            'break_end' => $record['break_end'],
+            'break_end_formatted' => !empty($record['break_end']) ? date('g:i A', strtotime($record['break_end'])) : null,
+            'break_elapsed_seconds' => $break_elapsed_seconds,
+            'break_elapsed_minutes' => $break_elapsed_minutes,
+            'is_break_nearing_limit' => ($break_elapsed_minutes >= 45),
+            'hr_status' => $hr_status,
+            'late_minutes' => (int)($record['late_minutes'] ?? 0),
+            'check_in_count' => $check_in_count,
+            'can_reenter' => $is_timed_out,
+            'schedule' => $sched_data,
             'latitude' => $record['latitude'],
             'longitude' => $record['longitude'],
             'notes' => $record['notes'],
@@ -287,9 +379,10 @@ class AttendanceService {
     }
 
     /**
-     * Executes Time In (Clock In) with geofence validation against shop location
+     * Executes Time In (Clock In) with geofence validation and late check against schedule
      */
     public static function clockIn($conn, $user_id, $lat, $lon, $ip_address = '', $radius_meters = 350.0) {
+        self::ensureSchema($conn);
         $user_id = (int)$user_id;
         $today = date('Y-m-d');
         $now = date('H:i:s');
@@ -324,25 +417,52 @@ class AttendanceService {
             mysqli_query($conn, "UPDATE riders SET employee_id = $employee_id WHERE id = $rider_id AND (employee_id IS NULL OR employee_id = 0) LIMIT 1");
         }
 
-        // Check if already timed in today
+        // Check existing today attendance
         $existing = self::getTodayAttendance($conn, $user_id, $employee_id);
-        if ($existing['status'] === 'timed_in') {
+        if ($existing['status'] === 'timed_in' || $existing['status'] === 'on_break') {
             return [
                 'success' => true,
-                'status' => 'timed_in',
+                'status' => $existing['status'],
                 'message' => 'You are already clocked in for today.',
                 'check_in_time' => $existing['check_in_formatted'],
-                'is_near_shop' => true,
                 'hr_status' => $existing['hr_status']
             ];
         }
 
-        if ($existing['status'] === 'timed_out') {
+        if ($existing['status'] === 'pending_approval') {
             return [
-                'success' => false,
-                'status' => 'timed_out',
-                'message' => 'You have already completed and timed out your shift for today.'
+                'success' => true,
+                'status' => 'pending_approval',
+                'message' => 'Your second check-in is pending shop owner approval.',
+                'hr_status' => 'pending'
             ];
+        }
+
+        // Check if this is a SECOND or subsequent check-in (employee had clocked out)
+        $is_second_check_in = ($existing['has_record'] && !empty($existing['check_out_time']));
+
+        // Check schedule for today
+        $sched_stmt = mysqli_prepare($conn, "SELECT start_time, end_time FROM schedules WHERE employee_id = ? AND schedule_date = ? LIMIT 1");
+        $sched = null;
+        if ($sched_stmt) {
+            mysqli_stmt_bind_param($sched_stmt, "is", $employee_id, $today);
+            mysqli_stmt_execute($sched_stmt);
+            $s_res = mysqli_stmt_get_result($sched_stmt);
+            $sched = mysqli_fetch_assoc($s_res);
+            mysqli_stmt_close($sched_stmt);
+        }
+
+        // Late calculation (15 minutes grace period)
+        $late_minutes = 0;
+        $att_status = 'present';
+        if (!$is_second_check_in && $sched && !empty($sched['start_time'])) {
+            $sched_start_ts = strtotime($today . ' ' . $sched['start_time']);
+            $actual_start_ts = strtotime($today . ' ' . $now);
+            $grace_period = 15 * 60; // 15 mins grace period
+            if ($actual_start_ts > ($sched_start_ts + $grace_period)) {
+                $late_minutes = (int)round(($actual_start_ts - $sched_start_ts) / 60);
+                $att_status = 'late';
+            }
         }
 
         // Resolve store location
@@ -358,11 +478,17 @@ class AttendanceService {
             }
         }
 
-        // Build note and status
-        if ($is_near_shop) {
+        // Determine HR status and notes
+        if ($is_second_check_in) {
+            // Second check in: REQUIRES shop owner approval
+            $hr_status = 'pending';
+            $prev_out = $existing['check_out_formatted'] ?? $existing['check_out_time'];
+            $dist_txt = ($distance_m !== null) ? round($distance_m) . 'm' : 'coords unavailable';
+            $geo_note = "Check-in #2 at " . date('g:i A', strtotime($now)) . " (Previous check-out: {$prev_out}, distance: {$dist_txt}). Pending shop owner approval.";
+        } elseif ($is_near_shop) {
             $dist_label = round($distance_m);
             $hr_status = 'approved';
-            $geo_note = "Location verified: within {$dist_label}m of {$store_name} (radius {$radius_meters}m). Auto-accepted.";
+            $geo_note = "Geo-check passed: within {$dist_label}m of {$store_name} (radius {$radius_meters}m). Auto-accepted.";
         } elseif ($distance_m !== null) {
             $dist_km = number_format($distance_m / 1000, 2);
             $dist_m = round($distance_m);
@@ -374,40 +500,72 @@ class AttendanceService {
             $geo_note = "Geo-check: device location coordinates not available. Pending HR review.";
         }
 
-        // Insert or update attendance record
+        if ($is_second_check_in) {
+            // Update attendance record for 2nd check in
+            $att_id = (int)$existing['attendance_id'];
+            $new_count = (int)($existing['check_in_count'] ?? 1) + 1;
+            $upd = mysqli_prepare($conn, "
+                UPDATE attendance 
+                SET check_out_time = NULL, check_in_count = ?, hr_status = 'pending', 
+                    notes = CONCAT(COALESCE(notes, ''), '\n', ?), 
+                    latitude = COALESCE(?, latitude), longitude = COALESCE(?, longitude)
+                WHERE id = ?
+            ");
+            if ($upd) {
+                mysqli_stmt_bind_param($upd, "isddi", $new_count, $geo_note, $lat, $lon, $att_id);
+                mysqli_stmt_execute($upd);
+                mysqli_stmt_close($upd);
+            }
+
+            // Rider remains offline until shop owner approves second check in
+            if ($is_rider && $rider_id > 0) {
+                mysqli_query($conn, "UPDATE riders SET duty_status = 'offline', last_location_update = NOW() WHERE id = $rider_id");
+            }
+
+            return [
+                'success' => true,
+                'status' => 'pending_approval',
+                'is_second_check_in' => true,
+                'check_in_time' => date('g:i A', strtotime($now)),
+                'message' => 'Second check-in requested! Submitted to shop owner for review and approval.'
+            ];
+        }
+
+        // First check in
         if (!empty($existing['attendance_id'])) {
             $att_id = (int)$existing['attendance_id'];
             $upd = mysqli_prepare($conn, "
                 UPDATE attendance 
-                SET check_in_time = ?, status = 'present', latitude = ?, longitude = ?, ip_address = ?, hr_status = ?, notes = ?
+                SET check_in_time = ?, status = ?, late_minutes = ?, latitude = ?, longitude = ?, ip_address = ?, hr_status = ?, notes = ?
                 WHERE id = ?
             ");
             if ($upd) {
-                mysqli_stmt_bind_param($upd, "sddsssi", $now, $lat, $lon, $ip_address, $hr_status, $geo_note, $att_id);
+                mysqli_stmt_bind_param($upd, "ssidssssi", $now, $att_status, $late_minutes, $lat, $lon, $ip_address, $hr_status, $geo_note, $att_id);
                 mysqli_stmt_execute($upd);
                 mysqli_stmt_close($upd);
             }
         } else {
             $ins = mysqli_prepare($conn, "
-                INSERT INTO attendance (employee_id, attendance_date, check_in_time, status, latitude, longitude, ip_address, hr_status, notes)
-                VALUES (?, ?, ?, 'present', ?, ?, ?, ?, ?)
+                INSERT INTO attendance (employee_id, attendance_date, check_in_time, status, late_minutes, latitude, longitude, ip_address, hr_status, notes, check_in_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
             ");
             if ($ins) {
-                mysqli_stmt_bind_param($ins, "issddssss", $employee_id, $today, $now, $lat, $lon, $ip_address, $hr_status, $geo_note);
+                mysqli_stmt_bind_param($ins, "isssiddsss", $employee_id, $today, $now, $att_status, $late_minutes, $lat, $lon, $ip_address, $hr_status, $geo_note);
                 mysqli_stmt_execute($ins);
                 mysqli_stmt_close($ins);
             }
         }
 
-        // If rider: set duty status to online and record location
+        // If rider: set duty status to online if approved
         if ($is_rider && $rider_id > 0) {
+            $r_duty = ($hr_status === 'approved') ? 'online' : 'offline';
             $r_upd = mysqli_prepare($conn, "
                 UPDATE riders 
-                SET duty_status = 'online', current_latitude = COALESCE(?, current_latitude), current_longitude = COALESCE(?, current_longitude), last_location_update = NOW()
+                SET duty_status = ?, current_latitude = COALESCE(?, current_latitude), current_longitude = COALESCE(?, current_longitude), last_location_update = NOW()
                 WHERE id = ?
             ");
             if ($r_upd) {
-                mysqli_stmt_bind_param($r_upd, "ddi", $lat, $lon, $rider_id);
+                mysqli_stmt_bind_param($r_upd, "sddi", $r_duty, $lat, $lon, $rider_id);
                 mysqli_stmt_execute($r_upd);
                 mysqli_stmt_close($r_upd);
             }
@@ -428,7 +586,7 @@ class AttendanceService {
 
         $check_in_formatted = date('g:i A', strtotime($now));
         $resp_msg = $is_near_shop
-            ? "Time In successful! Work location verified at {$store_name}. You are now on duty."
+            ? "Time In successful! Work location verified at {$store_name}." . ($att_status === 'late' ? " (Marked Late: {$late_minutes}m)" : " You are now on duty.")
             : ($distance_m !== null 
                 ? "Time In recorded ({$dist_text} from {$store_name}). Logged for shop owner review." 
                 : "Time In recorded. Location unavailable, logged for shop owner review.");
@@ -437,6 +595,8 @@ class AttendanceService {
             'success' => true,
             'status' => 'timed_in',
             'is_near_shop' => $is_near_shop,
+            'is_late' => ($att_status === 'late'),
+            'late_minutes' => $late_minutes,
             'distance_meters' => $distance_m,
             'hr_status' => $hr_status,
             'check_in_time' => $check_in_formatted,
@@ -446,9 +606,98 @@ class AttendanceService {
     }
 
     /**
+     * Executes Break Time start
+     */
+    public static function breakStart($conn, $user_id) {
+        self::ensureSchema($conn);
+        $user_id = (int)$user_id;
+        $today = date('Y-m-d');
+        $now = date('H:i:s');
+
+        $employee_id = self::resolveEmployeeId($conn, $user_id);
+        if ($employee_id <= 0) {
+            return ['success' => false, 'message' => 'Employee profile not found.'];
+        }
+
+        $existing = self::getTodayAttendance($conn, $user_id, $employee_id);
+        if (!$existing['has_record'] || $existing['status'] === 'not_timed_in') {
+            return ['success' => false, 'message' => 'You must Time In before taking a break.'];
+        }
+        if ($existing['status'] === 'on_break') {
+            return ['success' => false, 'message' => 'You are already on break.'];
+        }
+        if ($existing['status'] === 'timed_out') {
+            return ['success' => false, 'message' => 'You cannot take a break after timing out.'];
+        }
+
+        $att_id = (int)$existing['attendance_id'];
+        $stmt = mysqli_prepare($conn, "UPDATE attendance SET break_start = ?, break_end = NULL WHERE id = ?");
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, "si", $now, $att_id);
+            mysqli_stmt_execute($stmt);
+            mysqli_stmt_close($stmt);
+        }
+
+        // If rider: set duty status to busy while on break
+        if (attTableExists($conn, 'riders')) {
+            mysqli_query($conn, "UPDATE riders SET duty_status = 'busy', last_location_update = NOW() WHERE user_id = $user_id");
+        }
+
+        $break_start_fmt = date('g:i A', strtotime($now));
+        return [
+            'success' => true,
+            'status' => 'on_break',
+            'break_start' => $break_start_fmt,
+            'message' => "Break started at {$break_start_fmt}. Standard break limit is 1 hour."
+        ];
+    }
+
+    /**
+     * Executes Break Time end (Continue Shift)
+     */
+    public static function breakEnd($conn, $user_id) {
+        self::ensureSchema($conn);
+        $user_id = (int)$user_id;
+        $today = date('Y-m-d');
+        $now = date('H:i:s');
+
+        $employee_id = self::resolveEmployeeId($conn, $user_id);
+        if ($employee_id <= 0) {
+            return ['success' => false, 'message' => 'Employee profile not found.'];
+        }
+
+        $existing = self::getTodayAttendance($conn, $user_id, $employee_id);
+        if ($existing['status'] !== 'on_break') {
+            return ['success' => false, 'message' => 'You are not currently on break.'];
+        }
+
+        $att_id = (int)$existing['attendance_id'];
+        $stmt = mysqli_prepare($conn, "UPDATE attendance SET break_end = ? WHERE id = ?");
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, "si", $now, $att_id);
+            mysqli_stmt_execute($stmt);
+            mysqli_stmt_close($stmt);
+        }
+
+        // If rider: set duty status back to online
+        if (attTableExists($conn, 'riders')) {
+            mysqli_query($conn, "UPDATE riders SET duty_status = 'online', last_location_update = NOW() WHERE user_id = $user_id");
+        }
+
+        $break_end_fmt = date('g:i A', strtotime($now));
+        return [
+            'success' => true,
+            'status' => 'timed_in',
+            'break_end' => $break_end_fmt,
+            'message' => "Break ended at {$break_end_fmt}. Shift resumed!"
+        ];
+    }
+
+    /**
      * Executes Time Out (Clock Out)
      */
     public static function clockOut($conn, $user_id, $lat = null, $lon = null, $ip_address = '') {
+        self::ensureSchema($conn);
         $user_id = (int)$user_id;
         $today = date('Y-m-d');
         $now = date('H:i:s');
@@ -466,22 +715,32 @@ class AttendanceService {
             return ['success' => true, 'message' => 'You have already timed out today.', 'check_out_time' => $existing['check_out_formatted']];
         }
 
+        // If currently on break, end break
+        if ($existing['status'] === 'on_break') {
+            mysqli_query($conn, "UPDATE attendance SET break_end = '$now' WHERE id = " . (int)$existing['attendance_id']);
+        }
+
+        // Calculate OT if schedule exists
+        $ot_hours = 0.00;
+        if (!empty($existing['schedule']['end_time'])) {
+            $sched_end_ts = strtotime($today . ' ' . $existing['schedule']['end_time']);
+            $actual_end_ts = strtotime($today . ' ' . $now);
+            if ($actual_end_ts > $sched_end_ts) {
+                $ot_hours = round(($actual_end_ts - $sched_end_ts) / 3600, 2);
+            }
+        }
+
         $att_id = (int)$existing['attendance_id'];
-        $upd = mysqli_prepare($conn, "UPDATE attendance SET check_out_time = ? WHERE id = ?");
+        $upd = mysqli_prepare($conn, "UPDATE attendance SET check_out_time = ?, overtime_hours = ? WHERE id = ?");
         if ($upd) {
-            mysqli_stmt_bind_param($upd, "si", $now, $att_id);
+            mysqli_stmt_bind_param($upd, "sdi", $now, $ot_hours, $att_id);
             mysqli_stmt_execute($upd);
             mysqli_stmt_close($upd);
         }
 
         // If rider: set duty status to offline
         if (attTableExists($conn, 'riders')) {
-            $r_upd = mysqli_prepare($conn, "UPDATE riders SET duty_status = 'offline', last_location_update = NOW() WHERE user_id = ?");
-            if ($r_upd) {
-                mysqli_stmt_bind_param($r_upd, "i", $user_id);
-                mysqli_stmt_execute($r_upd);
-                mysqli_stmt_close($r_upd);
-            }
+            mysqli_query($conn, "UPDATE riders SET duty_status = 'offline', last_location_update = NOW() WHERE user_id = $user_id");
         }
 
         // Log into employees_geo_tracking if available
@@ -501,12 +760,12 @@ class AttendanceService {
             'success' => true,
             'status' => 'timed_out',
             'check_out_time' => date('g:i A', strtotime($now)),
-            'message' => 'Time Out successful! You are now off duty and cannot accept further orders.'
+            'message' => 'Time Out successful! You are now off duty. You can check in again later if approved by shop owner.'
         ];
     }
 
     /**
-     * Checks if a rider is permitted to accept orders (must be Timed In and not Timed Out)
+     * Checks if a rider is permitted to accept orders
      */
     public static function canRiderAcceptOrders($conn, $rider_id, $user_id = 0) {
         $rider_id = (int)$rider_id;
@@ -536,6 +795,12 @@ class AttendanceService {
         $att = self::getTodayAttendance($conn, $user_id);
         if ($att['status'] === 'not_timed_in') {
             return ['allowed' => false, 'reason' => 'You must Time In on your dashboard before you can accept delivery orders.'];
+        }
+        if ($att['status'] === 'on_break') {
+            return ['allowed' => false, 'reason' => 'You are currently on break. Please click Continue Shift to resume accepting orders.'];
+        }
+        if ($att['status'] === 'pending_approval') {
+            return ['allowed' => false, 'reason' => 'Your second check-in is pending shop owner approval.'];
         }
         if ($att['status'] === 'timed_out') {
             return ['allowed' => false, 'reason' => 'You have Timed Out for today. You cannot accept new orders while off duty.'];

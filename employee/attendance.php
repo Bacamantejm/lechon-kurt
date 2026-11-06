@@ -64,12 +64,49 @@ $store_display_name = $assigned_store['store_name'] ?? 'Store Branch';
 <div class="admin-main">
 
     <!-- Attendance Shift Time Clock & Geofencing Card -->
-    <div class="card mb-4" style="border-radius: 12px; border: 1px solid <?php echo $shift_status === 'timed_in' ? '#abefc6' : ($shift_status === 'timed_out' ? '#b2ddff' : '#fedf89'); ?>; background: <?php echo $shift_status === 'timed_in' ? '#f6fef9' : ($shift_status === 'timed_out' ? '#f8fbff' : '#fffcf5'); ?>; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+    <?php
+    $card_border = match($shift_status) {
+        'timed_in' => '#abefc6',
+        'on_break' => '#fedf89',
+        'pending_approval' => '#fedf89',
+        'timed_out' => '#b2ddff',
+        default => '#fedf89'
+    };
+    $card_bg = match($shift_status) {
+        'timed_in' => '#f6fef9',
+        'on_break' => '#fffcf5',
+        'pending_approval' => '#fffcf5',
+        'timed_out' => '#f8fbff',
+        default => '#fffcf5'
+    };
+    $icon_bg = match($shift_status) {
+        'timed_in' => '#ecfdf3',
+        'on_break' => '#fffaeb',
+        'pending_approval' => '#fffaeb',
+        'timed_out' => '#eff8ff',
+        default => '#fffaeb'
+    };
+    $icon_color = match($shift_status) {
+        'timed_in' => '#027a48',
+        'on_break' => '#b54708',
+        'pending_approval' => '#b54708',
+        'timed_out' => '#175cd3',
+        default => '#b54708'
+    };
+    $icon_class = match($shift_status) {
+        'timed_in' => 'fas fa-business-time',
+        'on_break' => 'fas fa-coffee',
+        'pending_approval' => 'fas fa-hourglass-half',
+        'timed_out' => 'fas fa-check-double',
+        default => 'fas fa-clock'
+    };
+    ?>
+    <div class="card mb-4" style="border-radius: 12px; border: 1px solid <?php echo $card_border; ?>; background: <?php echo $card_bg; ?>; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
         <div class="card-body p-3 p-md-4">
             <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
-                <div class="d-flex align-items-center gap-3">
-                    <div style="width: 46px; height: 46px; border-radius: 12px; background: <?php echo $shift_status === 'timed_in' ? '#ecfdf3' : ($shift_status === 'timed_out' ? '#eff8ff' : '#fffaeb'); ?>; color: <?php echo $shift_status === 'timed_in' ? '#027a48' : ($shift_status === 'timed_out' ? '#175cd3' : '#b54708'); ?>; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">
-                        <i class="<?php echo $shift_status === 'timed_in' ? 'fas fa-business-time' : ($shift_status === 'timed_out' ? 'fas fa-check-double' : 'fas fa-clock'); ?>"></i>
+                <div class="d-flex align-items-start align-items-md-center gap-3">
+                    <div style="width: 46px; height: 46px; border-radius: 12px; background: <?php echo $icon_bg; ?>; color: <?php echo $icon_color; ?>; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">
+                        <i class="<?php echo $icon_class; ?>"></i>
                     </div>
                     <div>
                         <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
@@ -78,6 +115,10 @@ $store_display_name = $assigned_store['store_name'] ?? 'Store Branch';
                                     Shift Attendance Required
                                 <?php elseif ($shift_status === 'timed_in'): ?>
                                     Active Shift &bull; On Duty
+                                <?php elseif ($shift_status === 'on_break'): ?>
+                                    On Break &bull; Shift Paused
+                                <?php elseif ($shift_status === 'pending_approval'): ?>
+                                    2nd Check-in &bull; Awaiting Owner Approval
                                 <?php else: ?>
                                     Shift Completed for Today
                                 <?php endif; ?>
@@ -96,6 +137,19 @@ $store_display_name = $assigned_store['store_name'] ?? 'Store Branch';
                                         <i class="fas fa-hourglass-half me-1"></i> Pending HR Review
                                     </span>
                                 <?php endif; ?>
+                                <?php if (!empty($today_attendance['late_minutes'])): ?>
+                                    <span class="badge" style="background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-size:11px; font-weight:700;">
+                                        <i class="fas fa-clock me-1"></i> Late (<?php echo (int)$today_attendance['late_minutes']; ?>m)
+                                    </span>
+                                <?php endif; ?>
+                            <?php elseif ($shift_status === 'on_break'): ?>
+                                <span class="badge" style="background:#fffaeb; color:#b54708; border:1px solid #fedf89; font-size:11px; font-weight:700;">
+                                    <i class="fas fa-pause-circle me-1"></i> On Break
+                                </span>
+                            <?php elseif ($shift_status === 'pending_approval'): ?>
+                                <span class="badge" style="background:#fffaeb; color:#b54708; border:1px solid #fedf89; font-size:11px; font-weight:700;">
+                                    <i class="fas fa-hourglass-half me-1"></i> Approval Pending
+                                </span>
                             <?php else: ?>
                                 <span class="badge" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; font-size:11px; font-weight:700;">
                                     Timed Out
@@ -104,28 +158,53 @@ $store_display_name = $assigned_store['store_name'] ?? 'Store Branch';
                         </div>
                         <p class="text-muted mb-0" style="font-size: 13px;">
                             <?php if ($shift_status === 'not_timed_in'): ?>
-                                Clock in using store geofencing. Your GPS proximity to <strong><?php echo htmlspecialchars($store_display_name); ?></strong> will automatically verify your attendance.
+                                Click Time In to begin your shift. Your proximity to <strong><?php echo htmlspecialchars($store_display_name); ?></strong> will verify your attendance.
+                                <?php if (!empty($today_attendance['schedule']['start_formatted'])): ?>
+                                    &bull; Shift: <strong><?php echo htmlspecialchars($today_attendance['schedule']['start_formatted']); ?> - <?php echo htmlspecialchars($today_attendance['schedule']['end_formatted']); ?></strong>
+                                <?php endif; ?>
                             <?php elseif ($shift_status === 'timed_in'): ?>
-                                Clocked in at <strong><?php echo htmlspecialchars($today_attendance['check_in_formatted']); ?></strong> &bull; Work Store: <strong><?php echo htmlspecialchars($store_display_name); ?></strong>. Remember to clock out when ending your shift.
+                                Clocked in at <strong><?php echo htmlspecialchars($today_attendance['check_in_formatted']); ?></strong> &bull; Work Store: <strong><?php echo htmlspecialchars($store_display_name); ?></strong>. Remember to take your break or time out when ending shift.
+                            <?php elseif ($shift_status === 'on_break'): ?>
+                                Break started at <strong><?php echo htmlspecialchars($today_attendance['break_start_formatted'] ?? '-'); ?></strong> &bull; Elapsed: <strong id="liveBreakTimer"><?php echo (int)($today_attendance['break_elapsed_minutes'] ?? 0); ?> mins</strong> (Max 1 hour).
+                            <?php elseif ($shift_status === 'pending_approval'): ?>
+                                Re-entry clocked in at <strong><?php echo htmlspecialchars($today_attendance['check_in_formatted']); ?></strong>. Waiting for your shop owner to approve your 2nd check-in.
                             <?php else: ?>
                                 Shift completed! In: <strong><?php echo htmlspecialchars($today_attendance['check_in_formatted'] ?? '-'); ?></strong> &bull; Out: <strong><?php echo htmlspecialchars($today_attendance['check_out_formatted'] ?? '-'); ?></strong>.
                             <?php endif; ?>
                         </p>
+
+                        <?php if ($shift_status === 'on_break'): ?>
+                            <div id="breakWarningBanner" class="alert mt-2 mb-0 py-2 px-3 align-items-center gap-2" style="<?php echo (($today_attendance['break_elapsed_minutes'] ?? 0) >= 45) ? 'display:flex;' : 'display:none;'; ?> background: #fff1f0; color: #b3261e; border: 1px solid #fee4e2; border-radius: 8px; font-size: 12.5px;">
+                                <i class="fas fa-exclamation-triangle flex-shrink-0"></i>
+                                <span><strong>Break Warning:</strong> Break time is nearing the 1-hour maximum limit (<span id="warnBreakMinutes"><?php echo (int)($today_attendance['break_elapsed_minutes'] ?? 0); ?></span> mins elapsed). Please click Continue Shift soon.</span>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
-                <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                <div class="d-flex align-items-center gap-2 flex-shrink-0 flex-wrap">
                     <?php if ($shift_status === 'not_timed_in'): ?>
                         <button type="button" class="btn text-white px-4 py-2 fw-bold d-inline-flex align-items-center gap-2" onclick="employeeTimeClock('clock_in')" style="background: #b3261e; border: none; border-radius: 10px; font-size: 13.5px; box-shadow: 0 1px 3px rgba(179,38,30,0.3);">
                             <i class="fas fa-sign-in-alt"></i> Time In (Verify Store GPS)
                         </button>
                     <?php elseif ($shift_status === 'timed_in'): ?>
+                        <button type="button" class="btn px-3 py-2 fw-bold d-inline-flex align-items-center gap-2" onclick="employeeTimeClock('break_start')" style="background: #fffaeb; color: #b54708; border: 1px solid #fedf89; border-radius: 10px; font-size: 13.5px;">
+                            <i class="fas fa-coffee"></i> Break Time
+                        </button>
                         <button type="button" class="btn btn-outline-danger px-4 py-2 fw-bold d-inline-flex align-items-center gap-2" onclick="employeeTimeClock('clock_out')" style="border-radius: 10px; font-size: 13.5px;">
                             <i class="fas fa-sign-out-alt"></i> Time Out (End Shift)
                         </button>
-                    <?php else: ?>
-                        <span class="badge py-2 px-3" style="background: #eaecf0; color: #475467; font-size: 12px; border-radius: 8px;">
-                            <i class="fas fa-lock me-1"></i> Shift Closed
+                    <?php elseif ($shift_status === 'on_break'): ?>
+                        <button type="button" class="btn text-white px-4 py-2 fw-bold d-inline-flex align-items-center gap-2" onclick="employeeTimeClock('break_end')" style="background: #027a48; border: none; border-radius: 10px; font-size: 13.5px; box-shadow: 0 1px 3px rgba(2,122,72,0.3);">
+                            <i class="fas fa-play"></i> Continue Shift
+                        </button>
+                    <?php elseif ($shift_status === 'pending_approval'): ?>
+                        <span class="badge py-2 px-3" style="background: #fffaeb; color: #b54708; border: 1px solid #fedf89; font-size: 12px; border-radius: 8px;">
+                            <i class="fas fa-hourglass-half me-1"></i> Awaiting Owner Approval
                         </span>
+                    <?php else: ?>
+                        <button type="button" class="btn text-white px-4 py-2 fw-bold d-inline-flex align-items-center gap-2" onclick="employeeTimeClock('reenter')" style="background: #b3261e; border: none; border-radius: 10px; font-size: 13.5px; box-shadow: 0 1px 3px rgba(179,38,30,0.3);">
+                            <i class="fas fa-sign-in-alt"></i> Check In Again
+                        </button>
                     <?php endif; ?>
                 </div>
             </div>
@@ -272,6 +351,25 @@ $store_display_name = $assigned_store['store_name'] ?? 'Store Branch';
     });
 
     let currentShiftStatus = <?php echo json_encode($shift_status); ?>;
+    let breakElapsedSeconds = <?php echo (int)($today_attendance['break_elapsed_seconds'] ?? 0); ?>;
+
+    if (currentShiftStatus === 'on_break') {
+        setInterval(() => {
+            breakElapsedSeconds++;
+            const mins = Math.floor(breakElapsedSeconds / 60);
+            const liveTimer = document.getElementById('liveBreakTimer');
+            if (liveTimer) liveTimer.innerText = mins + ' mins';
+            
+            const warnBanner = document.getElementById('breakWarningBanner');
+            const warnMinutes = document.getElementById('warnBreakMinutes');
+            if (warnBanner && warnMinutes) {
+                if (mins >= 45) {
+                    warnBanner.style.display = 'flex';
+                    warnMinutes.innerText = mins;
+                }
+            }
+        }, 1000);
+    }
 
     function employeeTimeClock(action) {
         if (action === 'clock_out') {
@@ -292,7 +390,64 @@ $store_display_name = $assigned_store['store_name'] ?? 'Store Branch';
             return;
         }
 
-        // action === 'clock_in'
+        if (action === 'break_start') {
+            Swal.fire({
+                title: 'Start Break Time?',
+                text: 'Your shift will be paused. Note: Break time has a maximum limit of 1 hour.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#f79009',
+                cancelButtonColor: '#667085',
+                confirmButtonText: 'Start Break',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    executeEmployeeTimeClock('break_start', null, null);
+                }
+            });
+            return;
+        }
+
+        if (action === 'break_end') {
+            Swal.fire({
+                title: 'Continue Shift?',
+                text: 'Ready to finish your break and resume work?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#027a48',
+                cancelButtonColor: '#667085',
+                confirmButtonText: 'Continue Shift',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    executeEmployeeTimeClock('break_end', null, null);
+                }
+            });
+            return;
+        }
+
+        if (action === 'reenter') {
+            Swal.fire({
+                title: 'Check In Again?',
+                text: 'You have already timed out today. Checking in again requires approval from your shop owner.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#b3261e',
+                cancelButtonColor: '#667085',
+                confirmButtonText: 'Request Check-In',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    acquireLocationAndExecute('clock_in');
+                }
+            });
+            return;
+        }
+
+        acquireLocationAndExecute('clock_in');
+    }
+
+    function acquireLocationAndExecute(action) {
         Swal.fire({
             title: 'Verifying Store Location...',
             text: 'Acquiring GPS coordinates to verify store proximity...',
@@ -303,17 +458,17 @@ $store_display_name = $assigned_store['store_name'] ?? 'Store Branch';
         });
 
         if (!navigator.geolocation) {
-            executeEmployeeTimeClock('clock_in', null, null);
+            executeEmployeeTimeClock(action, null, null);
             return;
         }
 
         navigator.geolocation.getCurrentPosition(
             (pos) => {
-                executeEmployeeTimeClock('clock_in', pos.coords.latitude, pos.coords.longitude);
+                executeEmployeeTimeClock(action, pos.coords.latitude, pos.coords.longitude);
             },
             (err) => {
                 console.warn('Geolocation error:', err);
-                executeEmployeeTimeClock('clock_in', null, null);
+                executeEmployeeTimeClock(action, null, null);
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
@@ -333,9 +488,14 @@ $store_display_name = $assigned_store['store_name'] ?? 'Store Branch';
         .then(data => {
             Swal.close();
             if (data.success) {
+                let alertTitle = 'Time In Recorded';
+                if (action === 'clock_out') alertTitle = 'Time Out Recorded';
+                else if (action === 'break_start') alertTitle = 'Break Started';
+                else if (action === 'break_end') alertTitle = 'Shift Resumed';
+
                 Swal.fire({
-                    icon: data.is_near_shop ? 'success' : 'info',
-                    title: action === 'clock_in' ? 'Time In Recorded' : 'Time Out Recorded',
+                    icon: (data.is_near_shop || action.includes('break') || action === 'clock_out') ? 'success' : 'info',
+                    title: alertTitle,
                     text: data.message,
                     confirmButtonColor: '#b3261e'
                 }).then(() => {
