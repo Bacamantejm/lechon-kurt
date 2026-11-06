@@ -2,7 +2,7 @@
 session_start();
 $current_page = 'preorder_details';
 $page_title = "Pre-Order Details | Lechon Delights";
-include 'includes/header.php';
+// header moved below auth guards
 require_once 'includes/config.php';
 require_once 'preorder_service.php';
 
@@ -53,6 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_preorder'])) {
         $message = "<div class='alert alert-danger'>" . $result['message'] . "</div>";
     }
 }
+include 'includes/header.php';
 ?>
 
 <section class="page-header">

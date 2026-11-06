@@ -11,14 +11,16 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $session_user_type = strtolower(trim((string)($_SESSION['user_type'] ?? 'customer')));
-if (in_array($session_user_type, ['admin', 'employee'], true)) {
-    // Admin/employee trying to access customer chat - redirect to backoffice dashboard
+if ($session_user_type === 'admin') {
+    header('Location: admin/index.php');
+    exit;
+} elseif ($session_user_type === 'employee') {
     header('Location: employee/dashboard.php');
     exit;
-}
-if (!in_array($session_user_type, ['customer', 'user', ''], true)) {
-    // Unknown role
-    die('Access Denied: Customer account required');
+} elseif (!in_array($session_user_type, ['customer', 'user', ''], true)) {
+    // Non-customer account visiting customer chat - route to appropriate backoffice
+    header('Location: admin/index.php');
+    exit;
 }
 
 require_once 'includes/config.php';

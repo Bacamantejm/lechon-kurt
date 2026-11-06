@@ -61,7 +61,9 @@ if (isset($_SESSION['user_id'])) {
             exit;
         }
         $redirect = getUserDashboardRoute($conn, $session_user_id, $_SESSION['user_type'] ?? '');
-        $custom_redirect = sanitizeRelativePhpRedirect($_GET['redirect'] ?? '');
+        $raw_target = $_GET['redirect'] ?? ($_SESSION['redirect_to'] ?? '');
+        $custom_redirect = sanitizeRelativePhpRedirect($raw_target);
+        if (isset($_SESSION['redirect_to'])) { unset($_SESSION['redirect_to']); }
         if ($custom_redirect !== null) {
             $custom_redirect_path = parse_url($custom_redirect, PHP_URL_PATH) ?: $custom_redirect;
             $is_backoffice_user = hasBackofficeAccess($conn, $session_user_id) || in_array(strtolower((string)($_SESSION['user_type'] ?? '')), ['admin', 'partner'], true);
@@ -240,8 +242,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
                 }
                 
                 // Check for redirect URL (override role-based default if specific page requested)
-                if (isset($_GET['redirect']) && !empty($_GET['redirect'])) {
-                    $custom_redirect = sanitizeRelativePhpRedirect($_GET['redirect']);
+                $raw_target = $_GET['redirect'] ?? ($_POST['redirect'] ?? ($_SESSION['redirect_to'] ?? ''));
+                if (!empty($raw_target)) {
+                    $custom_redirect = sanitizeRelativePhpRedirect($raw_target);
+                    if (isset($_SESSION['redirect_to'])) { unset($_SESSION['redirect_to']); }
                     if ($custom_redirect !== null) {
                         $custom_redirect_path = parse_url($custom_redirect, PHP_URL_PATH) ?: $custom_redirect;
                         $is_admin_redirect = strpos($custom_redirect_path, 'admin/') === 0;

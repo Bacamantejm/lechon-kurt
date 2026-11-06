@@ -8,7 +8,7 @@ require_once 'includes/delivery_pricing_helper.php';
 // Check if user is logged in BEFORE including header
 if (!isset($_SESSION['user_id'])) {
     $_SESSION['redirect_to'] = 'checkout.php';
-    header('Location: login.php');
+    header('Location: login.php?redirect=checkout.php');
     exit;
 }
 

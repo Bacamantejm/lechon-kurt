@@ -4,7 +4,7 @@ session_start();
 
 // Redirect to login if not logged in
 if (!isset($_SESSION['user_id'])) {
-    header('Location: register.php?mode=login#login&redirect=my_account.php');
+    header('Location: login.php?redirect=my_account.php');
     exit;
 }
 

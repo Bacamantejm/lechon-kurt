@@ -62,15 +62,15 @@ function renderForecastingWidget() {
             </div>
             
             <div class="btn-group w-100" role="group">
-                <a href="forecasting_dashboard.php" class="btn btn-sm btn-primary" 
+                <a href="../admin/forecasting_dashboard.php" class="btn btn-sm btn-primary" 
                    style="background-color: #667eea; border-color: #667eea; flex: 1;">
                     <i class="fas fa-chart-line"></i> Dashboard
                 </a>
-                <a href="forecasting_dashboard.php?view=recommendations" class="btn btn-sm btn-outline-primary" 
+                <a href="../admin/forecasting_dashboard.php?view=recommendations" class="btn btn-sm btn-outline-primary" 
                    style="flex: 1;">
                     <i class="fas fa-lightbulb"></i> Recommendations
                 </a>
-                <a href="events.php" class="btn btn-sm btn-outline-primary" style="flex: 1;">
+                <a href="../admin/events.php" class="btn btn-sm btn-outline-primary" style="flex: 1;">
                     <i class="fas fa-calendar"></i> Events
                 </a>
             </div>

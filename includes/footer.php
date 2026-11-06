@@ -2022,6 +2022,8 @@
     <style>
     .swal2-container.swal2-top-end,
     .swal2-container.swal2-top-right,
+    .swal2-container:has(.swal2-toast),
+    .swal2-container.swal2-top-right,
     .swal2-container.swal2-bottom-end,
     .swal2-container.swal2-bottom-right {
         top: 90px !important;
@@ -2077,6 +2079,8 @@
     }
     @media (max-width: 768px) {
         .swal2-container.swal2-top-end,
+    .swal2-container.swal2-top-right,
+    .swal2-container:has(.swal2-toast),
         .swal2-container.swal2-top-right {
             top: 75px !important;
             right: 14px !important;

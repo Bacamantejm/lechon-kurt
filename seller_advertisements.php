@@ -17,6 +17,19 @@ $user_info = $user_result ? mysqli_fetch_assoc($user_result) : null;
 mysqli_stmt_close($user_stmt);
 
 $has_seller_access = $user_info && (($user_info['account_type'] ?? '') === 'organization' || ($user_info['account_type'] ?? '') === 'seller');
+if (!$has_seller_access && $user_info) {
+    $appr_stmt = mysqli_prepare($conn, "SELECT business_name, business_type FROM franchise_applications WHERE user_id = ? AND status = 'approved' ORDER BY reviewed_at DESC LIMIT 1");
+    if ($appr_stmt) {
+        mysqli_stmt_bind_param($appr_stmt, 'i', $user_id);
+        mysqli_stmt_execute($appr_stmt);
+        $appr_res = mysqli_stmt_get_result($appr_stmt);
+        if ($appr_row = mysqli_fetch_assoc($appr_res)) {
+            $has_seller_access = true;
+            $_SESSION['account_type'] = 'organization';
+        }
+        mysqli_stmt_close($appr_stmt);
+    }
+}
 
 if (!$has_seller_access) {
     header('Location: my_account.php');

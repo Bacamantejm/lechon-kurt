@@ -2,7 +2,7 @@
 session_start();
 $current_page = 'preorder_payment_success';
 $page_title = "Payment Successful | Lechon Delights";
-include 'includes/header.php';
+// header.php omitted to prevent premature HTML output
 require_once 'includes/config.php';
 require_once 'preorder_service.php';
 

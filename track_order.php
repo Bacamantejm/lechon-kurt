@@ -10,7 +10,7 @@ $google_geocoding_enabled = function_exists('shouldUseGoogleGeocoding') ? should
 
 // Check login
 if (!isset($_SESSION['user_id'])) {
-    header('Location: register.php?mode=login#login&redirect=' . urlencode($_SERVER['REQUEST_URI']));
+    header('Location: login.php?redirect=' . urlencode($_SERVER['REQUEST_URI']));
     exit;
 }
 
@@ -18,7 +18,9 @@ $order_id = isset($_GET['order_id']) ? intval($_GET['order_id']) : 0;
 $user_id = $_SESSION['user_id'];
 
 if ($order_id === 0) {
-    die("Invalid Order ID.");
+    $_SESSION['error'] = 'Invalid Order ID.';
+    header('Location: my_orders.php');
+    exit;
 }
 
 // Verify order ownership and get details
@@ -31,7 +33,9 @@ $order = $order_result->fetch_assoc();
 $order_stmt->close();
 
 if (!$order) {
-    die("Order not found or you do not have permission to view it.");
+    $_SESSION['error'] = 'Order not found or you do not have permission to view it.';
+    header('Location: my_orders.php');
+    exit;
 }
 
 $is_pickup = (strtolower(trim((string)($order['delivery_option'] ?? 'delivery'))) === 'pickup');
