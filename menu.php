@@ -679,6 +679,34 @@ if (mysqli_num_rows($result) > 0) {
     error_log("No products found in database");
 }
 
+if (!empty($menu_categories)) {
+    $category_priority = [
+        'whole lechon' => 10,
+        'lechon belly' => 20,
+        'lechon' => 30,
+        'lechon parts' => 40,
+        'platters' => 50,
+        'rice meals' => 60,
+        'rice & side dishes' => 70,
+        'sides' => 80,
+        'pork' => 90,
+        'fried' => 100,
+        'desserts' => 800,
+        'beverages' => 900,
+        'drinks' => 910
+    ];
+    uksort($menu_categories, static function ($a, $b) use ($category_priority) {
+        $a_clean = strtolower(trim((string)$a));
+        $b_clean = strtolower(trim((string)$b));
+        $a_prio = $category_priority[$a_clean] ?? 200;
+        $b_prio = $category_priority[$b_clean] ?? 200;
+        if ($a_prio !== $b_prio) {
+            return $a_prio <=> $b_prio;
+        }
+        return strcasecmp((string)$a, (string)$b);
+    });
+}
+
 // Store product details in session for cart
 $_SESSION['product_details'] = $product_details;
 $_SESSION['delivery_fees'] = $delivery_fees;
@@ -773,10 +801,14 @@ if ($requested_seller_id > 0) {
     $store_display_subtitle = 'Browse products across all verified partner shops and official branches, or select a specific shop below.';
 }
 
-$category_keys = array_values(array_filter(array_keys($menu_categories), static function ($category) {
-    return trim((string)$category) !== '';
-}));
-$store_category_line = !empty($category_keys) ? implode(' • ', array_slice($category_keys, 0, 2)) : 'Lechon • Filipino';
+if (!$has_selected_store) {
+    $store_category_line = 'Cavite Marketplace • All Menus';
+} else {
+    $category_keys = array_values(array_filter(array_keys($menu_categories), static function ($category) {
+        return trim((string)$category) !== '';
+    }));
+    $store_category_line = !empty($category_keys) ? implode(' • ', array_slice($category_keys, 0, 2)) : 'Lechon • Filipino Specialties';
+}
 
 $store_item_count = count($product_details);
 $store_min_price = null;
@@ -784,12 +816,36 @@ $store_rating_weighted = 0.0;
 $store_review_total = 0;
 $store_logo_image = '';
 
-if (is_array($storefront_partner_account) && function_exists('resolveUserAvatarPathFromRow')) {
-    $logo_candidate = trim((string)resolveUserAvatarPathFromRow($storefront_partner_account));
-    if ($logo_candidate !== '') {
-        $logo_candidate_path = ltrim($logo_candidate, '/');
-        if (is_file(__DIR__ . '/' . $logo_candidate_path)) {
-            $store_logo_image = $logo_candidate_path;
+if (!$has_selected_store) {
+    $store_logo_image = 'assets/images/logo.png';
+} else {
+    if (is_array($storefront_partner_account) && function_exists('resolveUserAvatarPathFromRow')) {
+        $logo_candidate = trim((string)resolveUserAvatarPathFromRow($storefront_partner_account));
+        if ($logo_candidate !== '') {
+            $logo_candidate_path = ltrim($logo_candidate, '/');
+            if (is_file(__DIR__ . '/' . $logo_candidate_path)) {
+                $store_logo_image = $logo_candidate_path;
+            }
+        }
+    }
+    if ($store_logo_image === '' && $requested_branch_id > 0 && !empty($selected_pickup_branch['owner_user_id'])) {
+        $b_owner_id = (int)$selected_pickup_branch['owner_user_id'];
+        if ($b_owner_id > 0) {
+            $bo_stmt = mysqli_prepare($conn, "SELECT avatar, profile_picture FROM users WHERE id = ? LIMIT 1");
+            if ($bo_stmt) {
+                mysqli_stmt_bind_param($bo_stmt, "i", $b_owner_id);
+                mysqli_stmt_execute($bo_stmt);
+                $bo_res = mysqli_stmt_get_result($bo_stmt);
+                $bo_user = $bo_res ? mysqli_fetch_assoc($bo_res) : null;
+                if ($bo_res) mysqli_free_result($bo_res);
+                mysqli_stmt_close($bo_stmt);
+                if ($bo_user && function_exists('resolveUserAvatarPathFromRow')) {
+                    $b_logo = trim((string)resolveUserAvatarPathFromRow($bo_user));
+                    if ($b_logo !== '' && is_file(__DIR__ . '/' . ltrim($b_logo, '/'))) {
+                        $store_logo_image = ltrim($b_logo, '/');
+                    }
+                }
+            }
         }
     }
 }
@@ -805,19 +861,6 @@ foreach ($product_details as $product_info) {
     if ($item_reviews > 0 && $item_rating > 0) {
         $store_rating_weighted += ($item_rating * $item_reviews);
         $store_review_total += $item_reviews;
-    }
-
-    if ($store_logo_image === '') {
-        $image_path = trim((string)($product_info['image'] ?? ''));
-        if ($image_path !== '') {
-            if (stripos($image_path, 'http://') === 0 || stripos($image_path, 'https://') === 0) {
-                $store_logo_image = $image_path;
-            } elseif (strpos($image_path, '/') === false) {
-                $store_logo_image = 'images/menu/' . $image_path;
-            } else {
-                $store_logo_image = $image_path;
-            }
-        }
     }
 }
 
@@ -1474,7 +1517,7 @@ if (!empty($_SESSION['user_id'])) {
 
         <!-- Overlapping Center Store Badge -->
         <div class="fp-hero-badge-wrap">
-            <div class="fp-hero-badge">
+            <div class="fp-hero-badge<?php echo !$has_selected_store ? ' is-marketplace-logo' : ''; ?>">
                 <?php if ($store_logo_image !== ''): ?>
                     <img src="<?php echo htmlspecialchars($store_logo_image); ?>" alt="<?php echo htmlspecialchars($store_display_name); ?>">
                 <?php else: ?>
@@ -1536,7 +1579,7 @@ if (!empty($_SESSION['user_id'])) {
             <?php endif; ?>
         </nav>
         <div class="storefront-overview">
-            <div class="store-logo-tile">
+            <div class="store-logo-tile<?php echo !$has_selected_store ? ' is-marketplace-logo' : ''; ?>">
                 <?php if ($store_logo_image !== ''): ?>
                     <img src="<?php echo htmlspecialchars($store_logo_image); ?>" alt="<?php echo htmlspecialchars($store_display_name); ?>" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                     <span class="store-logo-initials" style="display:none;"><?php echo htmlspecialchars($store_initials); ?></span>
@@ -1686,7 +1729,7 @@ if (!empty($_SESSION['user_id'])) {
                     
                     <div class="fp-bar-search-box">
                         <i class="fas fa-magnifying-glass"></i>
-                        <input type="search" id="menuSearchInput" placeholder="Search <?php echo htmlspecialchars($store_display_name); ?>..." autocomplete="off">
+                        <input type="search" id="menuSearchInput" placeholder="<?php echo $has_selected_store ? ('Search ' . htmlspecialchars($store_display_name) . '...') : 'Search all menu items...'; ?>" autocomplete="off">
                     </div>
 
                     <button type="button" class="fp-bar-round-btn fp-bar-more js-open-store-reviews" aria-label="More Options">
@@ -1698,7 +1741,7 @@ if (!empty($_SESSION['user_id'])) {
                     <!-- Desktop Search in Menu Input -->
                     <div class="panda-menu-search-box fp-desktop-search">
                         <i class="fas fa-magnifying-glass"></i>
-                        <input type="search" id="menuSearchInputDesktop" placeholder="Search in this store's menu" autocomplete="off">
+                        <input type="search" id="menuSearchInputDesktop" placeholder="<?php echo $has_selected_store ? "Search in this store's menu" : "Search all menu items & dishes"; ?>" autocomplete="off">
                     </div>
 
                     <!-- Left Scroll Arrow -->
@@ -6950,6 +6993,34 @@ body.dark-mode .storefront-header.has-custom-store-banner {
     font-size: 2.2rem !important;
     font-weight: 800 !important;
     letter-spacing: -0.5px !important;
+}
+.store-logo-tile.is-marketplace-logo {
+    background: #ffffff !important;
+    border: 1.5px solid #eaecf0 !important;
+    padding: 10px !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+.store-logo-tile.is-marketplace-logo img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+}
+.fp-hero-badge.is-marketplace-logo {
+    background: #ffffff !important;
+    border: 2px solid #eaecf0 !important;
+    padding: 6px !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+.fp-hero-badge.is-marketplace-logo img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
 }
 .storefront-copy {
     padding: 0 !important;
