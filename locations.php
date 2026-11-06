@@ -110,6 +110,31 @@ function locationsIsCavite(string $address = '', string $city = '', string $prov
         || strpos($haystack, 'carmona') !== false
         || strpos($haystack, 'gen. trias') !== false;
 }
+
+function locationsSanitizeItems(array $items): array {
+    $clean = [];
+    $blacklist = ['tae', 'panis', 'test', 'sample', 'asd', 'asdasd', 'kain tae'];
+    foreach ($items as $item) {
+        $item = trim((string)$item);
+        if ($item === '') continue;
+        $lower = strtolower($item);
+        $bad = false;
+        foreach ($blacklist as $b) {
+            if (strpos($lower, $b) !== false) {
+                $bad = true;
+                break;
+            }
+        }
+        if (!$bad) {
+            $clean[] = $item;
+        }
+    }
+    if (empty($clean)) {
+        return ['Whole Lechon', 'Lechon Belly', 'Lechon Paksiw'];
+    }
+    return $clean;
+}
+
 function locationsAddUniqueLimited(array &$items, string $value, int $limit = 3): void {
     $value = trim($value);
     if ($value === '' || in_array($value, $items, true) || count($items) >= $limit) return;
@@ -317,7 +342,7 @@ if ($product_result) {
     mysqli_free_result($product_result);
 }
 $global_rating = $global_rating_count > 0 ? ($global_rating_sum / $global_rating_count) : 0.0;
-$global_items = array_slice(array_values(array_unique(array_filter(array_map(static function ($row) { return trim((string)($row['name'] ?? '')); }, $global_products)))), 0, 3);
+$global_items = array_slice(locationsSanitizeItems(array_values(array_unique(array_filter(array_map(static function ($row) { return trim((string)($row['name'] ?? '')); }, $global_products))))), 0, 3);
 $global_tags = array_slice(array_values(array_unique(array_filter(array_map(static function ($row) { return trim((string)($row['category'] ?? '')); }, $global_products)))), 0, 3);
 
 foreach ($branches as $branch) {
@@ -340,7 +365,8 @@ foreach ($stores as &$store) {
     if ($store['rating_count'] > 0) $store['rating'] = $store['rating_sum'] / $store['rating_count'];
     if ($store['image'] === '') $store['image'] = locationsAssetPath('images/hero-bg.jpg', 'images/store-bg.jpg');
     if (empty($store['tags'])) $store['tags'] = [$store['business_type']];
-    $store['summary'] = !empty($store['items']) ? implode(' | ', $store['items']) : 'Open this shop to view their latest menu and available items.';
+    $clean_store_items = locationsSanitizeItems($store['items'] ?? []);
+    $store['summary'] = implode(' · ', array_slice($clean_store_items, 0, 3));
     $search_blob = implode(' ', array_filter([
         strtolower(trim((string)$store['name'])), strtolower(trim((string)$store['location'])), strtolower(trim((string)$store['business_type'])), strtolower(trim((string)$store['city'])), strtolower(trim((string)$store['province'])),
         strtolower(trim((string)$store['note'])), strtolower(trim((string)implode(' ', $store['tags']))), strtolower(trim((string)implode(' ', $store['items']))), strtolower(trim((string)implode(' ', $store['search_terms']))),
@@ -415,7 +441,6 @@ include 'includes/header.php';
 :root {
     --loc-red: #b3261e;
     --loc-red-hover: #981b15;
-    --loc-orange: #ef6b2e;
     --loc-ink: #101828;
     --loc-muted: #475467;
     --loc-line: #eaecf0;
@@ -428,111 +453,104 @@ body {
     background: var(--loc-bg) !important;
 }
 
-.locations-hero {
-    padding: 40px 0 32px;
+/* ==========================================================================
+   COMPACT HEADER SECTION
+   ========================================================================== */
+.locations-header-section {
+    padding: 28px 0 20px;
 }
-.locations-hero .container,
+.locations-header-section .container,
 .locations-directory .container {
     max-width: 1240px;
 }
-.locations-hero .container {
-    display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(300px, 420px);
-    gap: 24px;
-    align-items: stretch;
-}
-.locations-hero-copy,
-.locations-hero-stats {
+.locations-compact-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 20px;
+    padding: 24px 28px;
     background: var(--loc-card);
     border: 1px solid var(--loc-line);
-    border-radius: 20px;
+    border-radius: 16px;
     box-shadow: var(--loc-shadow);
-}
-.locations-hero-copy {
-    padding: 32px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
 }
 .locations-kicker {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 14px;
-    padding: 6px 14px;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding: 4px 12px;
     border-radius: 999px;
     background: #fff1f0;
     color: var(--loc-red);
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     font-weight: 800;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
-    width: fit-content;
     border: 1px solid #fee4e2;
 }
-.locations-hero h1 {
-    margin: 0 0 12px;
-    font-size: clamp(1.8rem, 3.2vw, 2.8rem);
-    line-height: 1.15;
-    letter-spacing: -0.03em;
+.locations-compact-header h1 {
+    margin: 0 0 6px;
+    font-size: clamp(1.4rem, 2.2vw, 1.85rem);
+    line-height: 1.2;
+    letter-spacing: -0.02em;
     color: var(--loc-ink);
     font-weight: 800;
 }
-.locations-hero p {
+.locations-compact-header p {
     margin: 0;
-    font-size: 0.95rem;
-    line-height: 1.65;
+    font-size: 0.88rem;
+    line-height: 1.5;
     color: var(--loc-muted);
 }
-.locations-hero-stats {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-    padding: 16px;
-}
-.hero-stat {
-    display: grid;
-    gap: 4px;
-    padding: 18px;
-    border-radius: 14px;
+.locations-stat-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: 12px;
     background: #f8f9fa;
     border: 1px solid var(--loc-line);
-}
-.hero-stat strong {
-    font-size: 1.75rem;
-    color: var(--loc-ink);
-    line-height: 1;
-    font-weight: 800;
-}
-.hero-stat span {
+    white-space: nowrap;
+    font-size: 0.82rem;
     color: var(--loc-muted);
-    font-weight: 600;
-    font-size: 0.85rem;
 }
+.locations-stat-pill strong {
+    color: var(--loc-ink);
+    font-weight: 800;
+    font-size: 0.95rem;
+}
+.locations-stat-pill .stat-sep {
+    color: #cbd5e1;
+}
+
+/* ==========================================================================
+   DIRECTORY TOOLBAR & FILTERS
+   ========================================================================== */
 .locations-directory {
-    padding: 0 0 72px;
+    padding: 0 0 140px;
 }
 .directory-toolbar {
     display: flex;
-    gap: 14px;
+    gap: 12px;
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    margin-bottom: 20px;
-    padding: 16px 20px;
-    border-radius: 18px;
+    margin-bottom: 14px;
+    padding: 14px 18px;
+    border-radius: 16px;
     border: 1px solid var(--loc-line);
     background: var(--loc-card);
     box-shadow: var(--loc-shadow);
 }
 .directory-search {
-    flex: 1 1 300px;
+    flex: 1 1 280px;
     display: flex;
     align-items: center;
     gap: 10px;
-    min-height: 44px;
-    padding: 0 16px;
-    border-radius: 12px;
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: 10px;
     background: #f8f9fa;
     border: 1px solid var(--loc-line);
     transition: all 0.2s ease;
@@ -544,7 +562,7 @@ body {
 }
 .directory-search i {
     color: var(--loc-muted);
-    font-size: 0.9rem;
+    font-size: 0.88rem;
 }
 .directory-search input {
     width: 100%;
@@ -552,52 +570,23 @@ body {
     outline: none;
     background: transparent;
     color: var(--loc-ink);
-    font-size: 0.9rem;
+    font-size: 0.88rem;
 }
-.directory-filters,
-.directory-jumps {
+.directory-filters {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
-}
-.directory-sort {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 4px 8px 4px 12px;
-    border-radius: 12px;
-    border: 1px solid var(--loc-line);
-    background: #f8f9fa;
-}
-.directory-sort label {
-    font-size: 0.78rem;
-    font-weight: 800;
-    color: var(--loc-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-.directory-sort select {
-    min-height: 36px;
-    padding: 0 28px 0 10px;
-    border: 1px solid var(--loc-line);
-    border-radius: 8px;
-    background: #ffffff;
-    color: var(--loc-ink);
-    font-weight: 700;
-    font-size: 0.85rem;
-    outline: none;
-    cursor: pointer;
 }
 .filter-chip,
 .jump-chip {
-    min-height: 38px;
-    padding: 0 14px;
-    border-radius: 10px;
+    min-height: 36px;
+    padding: 0 12px;
+    border-radius: 8px;
     border: 1px solid var(--loc-line);
     background: #ffffff;
     color: var(--loc-ink);
     font-weight: 700;
-    font-size: 0.84rem;
+    font-size: 0.82rem;
     cursor: pointer;
     transition: all 0.18s ease;
 }
@@ -611,58 +600,46 @@ body {
     background: var(--loc-red);
     color: #ffffff;
     border-color: var(--loc-red);
-    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.2);
+    box-shadow: 0 2px 8px rgba(179, 38, 30, 0.2);
 }
-.directory-heading {
+.directory-dropdowns {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    gap: 16px;
-    margin-bottom: 14px;
+    gap: 8px;
+    align-items: center;
 }
-.directory-label {
-    margin: 0 0 4px;
-    color: var(--loc-red);
-    font-size: 0.82rem;
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-}
-.directory-heading h2 {
-    margin: 0 0 4px;
-    color: var(--loc-ink);
-    font-size: clamp(1.6rem, 2.5vw, 2.2rem);
-    letter-spacing: -0.03em;
-    font-weight: 800;
-}
-.directory-subtitle {
-    margin: 0;
-    color: var(--loc-muted);
-    font-size: 0.92rem;
-}
-.directory-count {
-    min-width: 110px;
-    padding: 12px 16px;
-    text-align: center;
-    border-radius: 14px;
-    background: var(--loc-card);
+.directory-sort {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 6px 2px 10px;
+    border-radius: 10px;
     border: 1px solid var(--loc-line);
-    box-shadow: var(--loc-shadow);
+    background: #f8f9fa;
 }
-.directory-count span {
-    display: block;
-    font-size: 1.5rem;
+.directory-sort label {
+    font-size: 0.72rem;
     font-weight: 800;
-    color: var(--loc-ink);
-    line-height: 1.1;
-}
-.directory-count small {
     color: var(--loc-muted);
-    font-weight: 600;
-    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.directory-sort select {
+    min-height: 32px;
+    padding: 0 24px 0 8px;
+    border: 1px solid var(--loc-line);
+    border-radius: 6px;
+    background: #ffffff;
+    color: var(--loc-ink);
+    font-weight: 700;
+    font-size: 0.82rem;
+    outline: none;
+    cursor: pointer;
 }
 .directory-jumps {
-    margin: 0 0 18px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
 }
 .nearest-store-notice,
 .empty-state {
@@ -673,62 +650,72 @@ body {
     box-shadow: var(--loc-shadow);
 }
 .nearest-store-notice {
-    padding: 14px 18px;
+    padding: 12px 16px;
     color: var(--loc-red);
     font-weight: 700;
-    font-size: 0.88rem;
+    font-size: 0.85rem;
 }
 .empty-state {
-    padding: 48px 24px;
+    padding: 44px 20px;
     text-align: center;
 }
 .empty-state i {
-    font-size: 2.4rem;
+    font-size: 2.2rem;
     color: var(--loc-red);
-    margin-bottom: 12px;
+    margin-bottom: 10px;
 }
 .empty-state h3 {
     margin: 0 0 6px;
     color: var(--loc-ink);
-    font-size: 1.25rem;
+    font-size: 1.15rem;
     font-weight: 800;
 }
 .empty-state p {
     margin: 0;
     color: var(--loc-muted);
+    font-size: 0.88rem;
 }
+
+/* ==========================================================================
+   CLEAN & COMPACT RESTAURANT GRID (MATCHING LANDING PAGE)
+   ========================================================================== */
 .restaurant-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
 }
 .restaurant-card {
-    border-radius: 18px;
+    border-radius: 16px;
     background: var(--loc-card);
     border: 1px solid var(--loc-line);
     box-shadow: var(--loc-shadow);
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
     transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
 }
 .restaurant-card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 12px 28px rgba(16, 24, 40, 0.08);
+    box-shadow: 0 10px 24px rgba(16, 24, 40, 0.08);
     border-color: #d0d5dd;
 }
 .restaurant-card.nearest-selected {
     border-color: var(--loc-red);
-    box-shadow: 0 0 0 4px rgba(179, 38, 30, 0.12), 0 12px 28px rgba(16, 24, 40, 0.08);
+    box-shadow: 0 0 0 4px rgba(179, 38, 30, 0.12), 0 10px 24px rgba(16, 24, 40, 0.08);
 }
 .restaurant-card-link {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
     color: inherit;
     text-decoration: none;
 }
 .restaurant-media {
     position: relative;
-    aspect-ratio: 16/9;
+    width: 100%;
+    height: 140px;
     overflow: hidden;
-    background: #e2e8f0;
+    background: #f1f5f9;
 }
 .restaurant-media img {
     width: 100%;
@@ -740,215 +727,162 @@ body {
 .restaurant-card:hover .restaurant-media img {
     transform: scale(1.04);
 }
-.restaurant-media-overlay {
+.market-type-pill {
     position: absolute;
-    inset: auto 0 0;
-    height: 60%;
-    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.5) 100%);
+    top: 8px;
+    left: 8px;
+    z-index: 2;
+    background: rgba(16, 24, 40, 0.78);
+    backdrop-filter: blur(4px);
+    color: #ffffff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
 }
-.restaurant-brand-badge {
+.market-time-pill {
     position: absolute;
-    left: 10px;
-    bottom: 10px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.95);
-    color: var(--loc-red);
-    font-weight: 900;
-    font-size: 0.82rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-.restaurant-pill {
-    position: absolute;
-    top: 10px;
+    bottom: 8px;
+    left: 8px;
+    z-index: 2;
+    font-size: 0.68rem;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 6px;
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    min-height: 26px;
-    padding: 0 8px;
-    border-radius: 999px;
-    font-size: 0.7rem;
-    font-weight: 800;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+.market-time-pill.pill-open {
+    background: #ecfdf3;
+    color: #027a48;
+    border: 1px solid #abefc6;
+}
+.market-time-pill.pill-closed {
+    background: #fff1f0;
+    color: #b3261e;
+    border: 1px solid #fee4e2;
 }
 .restaurant-pill-rating {
-    right: 10px;
-    background: rgba(255, 255, 255, 0.95);
-    color: #101828;
-}
-.restaurant-pill-rating i {
-    color: #ef6b2e;
-}
-.restaurant-pill-status {
-    left: 10px;
-}
-.restaurant-pill-status-open {
-    background: rgba(236, 253, 243, 0.95);
-    color: #027a48;
-}
-.restaurant-pill-status-away {
-    background: rgba(255, 250, 235, 0.95);
-    color: #b54708;
-}
-.restaurant-pill-status-closed {
-    background: rgba(254, 243, 242, 0.95);
-    color: #b42318;
-}
-.restaurant-hover-panel {
     position: absolute;
-    inset: auto 8px 8px 8px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 10px 12px;
-    border-radius: 12px;
-    background: rgba(16, 24, 40, 0.88);
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(4px);
-    color: #fff;
-    opacity: 0;
-    transform: translateY(6px);
-    transition: opacity 0.2s ease, transform 0.2s ease;
-}
-.restaurant-card:hover .restaurant-hover-panel {
-    opacity: 1;
-    transform: translateY(0);
-}
-.restaurant-hover-copy strong {
-    font-size: 0.86rem;
-    line-height: 1.2;
-    display: block;
-}
-.restaurant-hover-copy span {
-    font-size: 0.7rem;
-    color: rgba(255,255,255,0.75);
-}
-.restaurant-hover-cta {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 28px;
-    padding: 0 10px;
-    border-radius: 8px;
-    background: var(--loc-red);
+    color: #101828;
     font-size: 0.72rem;
     font-weight: 800;
-    white-space: nowrap;
+    padding: 2px 8px;
+    border-radius: 999px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
 }
 .restaurant-body {
-    display: grid;
-    gap: 8px;
-    padding: 14px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    flex: 1 1 auto;
+    padding: 10px 14px 12px 14px;
+    gap: 5px;
 }
 .restaurant-topline {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
 }
 .restaurant-topline h3 {
     margin: 0;
     color: var(--loc-ink);
-    font-size: 0.98rem;
+    font-size: 0.95rem;
     font-weight: 800;
-    line-height: 1.3;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
+    line-height: 1.25;
+    white-space: nowrap;
     overflow: hidden;
-}
-.restaurant-type {
-    flex: 0 0 auto;
-    padding: 3px 8px;
-    border-radius: 6px;
-    background: #f1f5f9;
-    color: #475569;
-    font-size: 0.68rem;
-    font-weight: 700;
-}
-.restaurant-location,
-.restaurant-summary,
-.restaurant-note {
-    margin: 0;
-    color: var(--loc-muted);
+    text-overflow: ellipsis;
 }
 .restaurant-location {
+    margin: 0;
+    color: var(--loc-muted);
+    font-size: 0.75rem;
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     display: flex;
     align-items: center;
-    gap: 6px;
-    line-height: 1.4;
-    font-size: 0.8rem;
+    gap: 5px;
 }
 .restaurant-location i {
     color: var(--loc-red);
-    font-size: 0.75rem;
+    font-size: 0.72rem;
+    flex-shrink: 0;
 }
 .restaurant-summary {
-    font-size: 0.82rem;
-    line-height: 1.45;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    margin: 0;
+    font-size: 0.78rem;
+    color: #64748b;
+    line-height: 1.35;
+    white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
 }
-.restaurant-tags {
+.panda-card-dss-info {
     display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
+    align-items: center;
+    gap: 6px;
+    margin: 2px 0 1px;
 }
-.restaurant-tags span {
-    padding: 3px 7px;
-    border-radius: 6px;
-    background: #f8f9fa;
-    border: 1px solid var(--loc-line);
-    color: #475467;
-    font-size: 0.7rem;
-    font-weight: 600;
-}
-.restaurant-meta-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    font-size: 0.74rem;
-    color: var(--loc-muted);
-}
-.restaurant-meta-row span {
+.dss-badge {
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 700;
 }
-.restaurant-footer {
+.dss-badge.dss-eta {
+    background: #fff1f0;
+    color: #b3261e;
+    border: 1px solid #fee4e2;
+}
+.dss-badge.dss-items {
+    background: #f8f9fa;
+    color: #475467;
+    border: 1px solid #eaecf0;
+}
+.panda-card-footer-line {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    margin-top: 4px;
     padding-top: 6px;
     border-top: 1px solid var(--loc-line);
+    gap: 8px;
 }
-.restaurant-note {
-    flex: 1 1 auto;
-    font-size: 0.75rem;
-}
-.restaurant-cta {
-    flex: 0 0 auto;
+.panda-card-city {
+    font-size: 0.74rem;
+    color: #64748b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    min-height: 30px;
-    padding: 0 10px;
-    border-radius: 8px;
-    background: var(--loc-red);
-    color: #fff;
-    font-size: 0.74rem;
-    font-weight: 800;
-    transition: background 0.18s ease;
+    gap: 4px;
 }
-.restaurant-card:hover .restaurant-cta {
-    background: var(--loc-red-hover);
+.panda-card-city i {
+    font-size: 0.7rem;
+}
+.panda-card-price-text {
+    font-size: 0.86rem;
+    font-weight: 800;
+    color: var(--loc-red);
+    white-space: nowrap;
 }
 .highlight {
     background: #fedf89;
@@ -956,289 +890,188 @@ body {
     padding: 0 2px;
 }
 
-@media (max-width: 960px) {
-    .locations-hero .container {
-        grid-template-columns: 1fr;
+/* ==========================================================================
+   RESPONSIVE LAYOUT BREAKPOINTS
+   ========================================================================== */
+@media (max-width: 1100px) {
+    .restaurant-grid {
+        grid-template-columns: repeat(3, 1fr);
     }
 }
 @media (max-width: 768px) {
-    .locations-hero {
-        padding-top: 24px;
-    }
-    .locations-hero-copy {
-        padding: 24px 20px;
-    }
-    .locations-hero-stats {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-    .directory-heading {
+    .locations-compact-header {
+        flex-direction: column;
         align-items: flex-start;
+        padding: 18px 20px;
     }
     .restaurant-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
     }
-    .directory-sort {
+    .directory-dropdowns {
         width: 100%;
         justify-content: space-between;
     }
+    .directory-sort {
+        flex: 1 1 auto;
+    }
+    .directory-sort select {
+        width: 100%;
+    }
 }
-@media (max-width: 540px) {
+@media (max-width: 520px) {
     .locations-directory {
         padding-bottom: 140px !important;
-    }
-    .directory-toolbar {
-        padding: 12px;
     }
     .restaurant-grid {
         grid-template-columns: 1fr;
     }
-    .restaurant-hover-panel {
-        display: none;
+    .directory-toolbar {
+        padding: 10px;
+    }
+    .restaurant-media {
+        height: 130px;
     }
 }
 
 /* ==========================================================================
-   LOCATIONS DARK MODE THEME ENGINE
+   DARK MODE ENGINE
    ========================================================================== */
 html.dark-mode body,
 body.dark-mode {
     background: #0f172a !important;
-    background-color: #0f172a !important;
     color: #f8fafc !important;
 }
-
-body.dark-mode .locations-hero-copy,
-body.dark-mode .locations-hero-stats {
+body.dark-mode .locations-compact-header,
+body.dark-mode .directory-toolbar,
+body.dark-mode .restaurant-card,
+body.dark-mode .empty-state,
+body.dark-mode .nearest-store-notice {
     background: #1e293b !important;
     border-color: #334155 !important;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
 }
-
 body.dark-mode .locations-kicker {
     background: rgba(179, 38, 30, 0.2) !important;
     border-color: rgba(239, 68, 68, 0.3) !important;
     color: #ef4444 !important;
 }
-
-body.dark-mode .locations-hero h1 {
+body.dark-mode .locations-compact-header h1,
+body.dark-mode .restaurant-topline h3,
+body.dark-mode .empty-state h3 {
     color: #f8fafc !important;
 }
-
-body.dark-mode .locations-hero p {
+body.dark-mode .locations-compact-header p,
+body.dark-mode .restaurant-location,
+body.dark-mode .restaurant-summary,
+body.dark-mode .empty-state p {
     color: #94a3b8 !important;
 }
-
-body.dark-mode .hero-stat {
-    background: #111827 !important;
-    border-color: #334155 !important;
-}
-
-body.dark-mode .hero-stat strong {
-    color: #f8fafc !important;
-}
-
-body.dark-mode .hero-stat span {
-    color: #94a3b8 !important;
-}
-
-body.dark-mode .directory-toolbar {
-    background: #1e293b !important;
-    border-color: #334155 !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
-}
-
-body.dark-mode .directory-search {
-    background: #0f172a !important;
-    border-color: #334155 !important;
-}
-
-body.dark-mode .directory-search i {
-    color: #94a3b8 !important;
-}
-
-body.dark-mode .directory-search input {
-    color: #f8fafc !important;
-}
-
-body.dark-mode .directory-sort {
-    background: #111827 !important;
-    border-color: #334155 !important;
-}
-
-body.dark-mode .directory-sort label {
-    color: #94a3b8 !important;
-}
-
-body.dark-mode .directory-sort select {
-    background: #0f172a !important;
-    border-color: #334155 !important;
-    color: #f8fafc !important;
-}
-
+body.dark-mode .locations-stat-pill,
+body.dark-mode .directory-search,
+body.dark-mode .directory-sort,
 body.dark-mode .filter-chip,
-body.dark-mode .jump-chip {
-    background: #111827 !important;
+body.dark-mode .jump-chip,
+body.dark-mode .dss-badge.dss-items {
+    background: #0f172a !important;
     border-color: #334155 !important;
     color: #cbd5e1 !important;
 }
-
+body.dark-mode .directory-search input,
+body.dark-mode .directory-sort select {
+    color: #f8fafc !important;
+    background: #0f172a !important;
+}
+body.dark-mode .locations-stat-pill strong {
+    color: #f8fafc !important;
+}
 body.dark-mode .filter-chip:hover,
 body.dark-mode .jump-chip:hover {
     background: #334155 !important;
     color: #ffffff !important;
 }
-
 body.dark-mode .filter-chip.active,
 body.dark-mode .jump-chip.active {
     background: #b3261e !important;
     color: #ffffff !important;
     border-color: #b3261e !important;
-    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.3) !important;
 }
-
-body.dark-mode .directory-label {
-    color: #ef4444 !important;
-}
-
-body.dark-mode .directory-heading h2 {
-    color: #f8fafc !important;
-}
-
-body.dark-mode .directory-subtitle {
-    color: #94a3b8 !important;
-}
-
-body.dark-mode .directory-count {
-    background: #1e293b !important;
-    border-color: #334155 !important;
-}
-
-body.dark-mode .directory-count span {
-    color: #f8fafc !important;
-}
-
-body.dark-mode .directory-count small {
-    color: #94a3b8 !important;
-}
-
-body.dark-mode .nearest-store-notice,
-body.dark-mode .empty-state {
-    background: #1e293b !important;
-    border-color: #334155 !important;
-    color: #f8fafc !important;
-}
-
-body.dark-mode .empty-state h3 {
-    color: #f8fafc !important;
-}
-
-body.dark-mode .empty-state p {
-    color: #94a3b8 !important;
-}
-
-body.dark-mode .restaurant-card {
-    background: #1e293b !important;
-    border-color: #334155 !important;
-    color: #f8fafc !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
-}
-
 body.dark-mode .restaurant-card:hover {
     border-color: #475569 !important;
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4) !important;
 }
-
-body.dark-mode .restaurant-topline h3 {
-    color: #f8fafc !important;
-}
-
-body.dark-mode .restaurant-type {
-    background: #334155 !important;
-    color: #f8fafc !important;
-}
-
-body.dark-mode .restaurant-location,
-body.dark-mode .restaurant-summary,
-body.dark-mode .restaurant-note {
-    color: #94a3b8 !important;
-}
-
-body.dark-mode .restaurant-tags span {
-    background: #111827 !important;
-    border-color: #334155 !important;
-    color: #cbd5e1 !important;
-}
-
-body.dark-mode .restaurant-meta-row {
-    color: #94a3b8 !important;
-}
-
-body.dark-mode .restaurant-footer {
+body.dark-mode .panda-card-footer-line {
     border-top-color: #334155 !important;
 }
-
+body.dark-mode .panda-card-city {
+    color: #94a3b8 !important;
+}
 body.dark-mode .highlight {
     background: #854d0e !important;
     color: #fef08a !important;
 }
 </style>
 
-<section class="locations-hero">
+<section class="locations-header-section">
     <div class="container">
-        <div class="locations-hero-copy">
-            <span class="locations-kicker"><i class="fas fa-store"></i> Cavite Shop Directory</span>
-            <h1>All Cavite restaurants and partner shops in one place</h1>
-            <p>Browse every available Cavite store, partner shop, and pickup branch from one clean directory. Instead of directions or phone calls, each card now takes customers straight to that shop's menu.</p>
-        </div>
-        <div class="locations-hero-stats">
-            <div class="hero-stat"><strong><?php echo number_format($total_store_count); ?></strong><span>Visible stores</span></div>
-            <div class="hero-stat"><strong><?php echo number_format($live_store_count); ?></strong><span>Live menus</span></div>
-            <div class="hero-stat"><strong><?php echo number_format($partner_store_count); ?></strong><span>Partner shops</span></div>
-            <div class="hero-stat"><strong><?php echo number_format(max($city_count, $branch_store_count)); ?></strong><span>Cavite areas covered</span></div>
+        <div class="locations-compact-header">
+            <div class="locations-header-text">
+                <span class="locations-kicker"><i class="fas fa-store"></i> Cavite Store Directory</span>
+                <h1>Cavite Lechon Shops &amp; Branches</h1>
+                <p>Browse local lechon stores and pickup branches in Cavite. Select a shop to explore their full menu and order directly.</p>
+            </div>
+            <div class="locations-header-meta">
+                <div class="locations-stat-pill">
+                    <span class="stat-item"><strong id="visibleStores"><?php echo number_format($total_store_count); ?></strong> Stores</span>
+                    <span class="stat-sep">·</span>
+                    <span class="stat-item"><strong><?php echo number_format($live_store_count); ?></strong> Menus</span>
+                    <span class="stat-sep">·</span>
+                    <span class="stat-item"><strong><?php echo number_format(max($city_count, $branch_store_count)); ?></strong> Cavite Areas</span>
+                </div>
+            </div>
         </div>
     </div>
 </section>
+
 <section class="locations-directory">
     <div class="container">
+        <!-- Compact Search & Filter Toolbar -->
         <div class="directory-toolbar">
-            <div class="directory-search"><i class="fas fa-search"></i><input type="text" id="storeSearch" placeholder="Search shops, places, branches, or menu tags..."></div>
+            <div class="directory-search">
+                <i class="fas fa-search"></i>
+                <input type="text" id="storeSearch" placeholder="Search shops, branches, or menu items...">
+            </div>
+            
             <div class="directory-filters">
                 <button type="button" class="filter-chip active" data-filter="all">All</button>
-                <button type="button" class="filter-chip" data-filter="live">Live Menus</button>
-                <button type="button" class="filter-chip" data-filter="partner">Partner Shops</button>
-                <button type="button" class="filter-chip" data-filter="branch">Branches</button>
                 <button type="button" class="filter-chip" data-filter="open">Open Now</button>
+                <button type="button" class="filter-chip" data-filter="branch">Branches</button>
+                <button type="button" class="filter-chip" data-filter="partner">Partner Shops</button>
             </div>
-            <div class="directory-sort directory-area">
-                <label for="storeAreaFilter">Area</label>
-                <select id="storeAreaFilter">
-                    <option value="">All Areas</option>
-                    <?php foreach ($area_filter_options as $area_label): ?>
-                        <option value="<?php echo htmlspecialchars($area_label); ?>"><?php echo htmlspecialchars($area_label); ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="directory-sort">
-                <label for="storeSort">Sort by</label>
-                <select id="storeSort">
-                    <option value="featured">Featured</option>
-                    <option value="rating">Rating</option>
-                    <option value="top_rated">Top rated</option>
-                    <option value="items">Most items</option>
-                    <option value="newest">Newest</option>
-                    <option value="name">Name</option>
-                </select>
+
+            <div class="directory-dropdowns">
+                <div class="directory-sort directory-area">
+                    <label for="storeAreaFilter">Area</label>
+                    <select id="storeAreaFilter">
+                        <option value="">All Areas</option>
+                        <?php foreach ($area_filter_options as $area_label): ?>
+                            <option value="<?php echo htmlspecialchars($area_label); ?>"><?php echo htmlspecialchars($area_label); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="directory-sort">
+                    <label for="storeSort">Sort</label>
+                    <select id="storeSort">
+                        <option value="featured">Featured</option>
+                        <option value="rating">Rating</option>
+                        <option value="items">Most items</option>
+                        <option value="name">Name</option>
+                    </select>
+                </div>
             </div>
         </div>
-        <div class="directory-heading">
-            <div>
-                <p class="directory-label">Cavite marketplace layout</p>
-                <h2>All Cavite restaurants</h2>
-                <p class="directory-subtitle">Card-based browsing for Cavite-only stores, wired to each shop's actual menu route.</p>
-            </div>
-            <div class="directory-count"><span id="visibleStores"><?php echo number_format($total_store_count); ?></span><small>showing now</small></div>
-        </div>
+
+        <!-- Area Jump Pills (Matching Landing Page style) -->
         <div class="directory-jumps" id="directoryJumps">
             <?php foreach ($quick_jump_terms as $label => $term): ?>
                 <button
@@ -1250,38 +1083,73 @@ body.dark-mode .highlight {
                 </button>
             <?php endforeach; ?>
         </div>
+
         <div class="nearest-store-notice" id="nearestStoreNotice" style="display:none;"></div>
-        <div class="empty-state" id="emptyState" style="display:none;"><i class="fas fa-store-slash"></i><h3>No matching stores</h3><p>Try a different shop name, city, branch, or filter.</p></div>
+        <div class="empty-state" id="emptyState" style="display:none;">
+            <i class="fas fa-store-slash"></i>
+            <h3>No matching stores</h3>
+            <p>Try searching for a different branch, city, or area.</p>
+        </div>
+
+        <!-- Modern Compact Store Cards Grid (Matching Landing Page) -->
         <div class="restaurant-grid" id="restaurantGrid">
             <?php foreach ($stores as $store): ?>
-                <article class="restaurant-card" data-store-name="<?php echo htmlspecialchars((string)$store['name']); ?>" data-store-search="<?php echo htmlspecialchars((string)$store['search']); ?>" data-type="<?php echo htmlspecialchars((string)$store['type']); ?>" data-live="<?php echo !empty($store['live']) ? '1' : '0'; ?>" data-status="<?php echo htmlspecialchars((string)($store['status_class'] ?? 'closed')); ?>" data-city="<?php echo htmlspecialchars((string)($store['city'] ?? '')); ?>" data-province="<?php echo htmlspecialchars((string)($store['province'] ?? '')); ?>" data-area="<?php echo htmlspecialchars((string)trim(((string)($store['city'] ?? '')) . ' ' . ((string)($store['province'] ?? '')))); ?>" data-rating="<?php echo htmlspecialchars(number_format((float)($store['rating'] ?? 0), 3, '.', '')); ?>" data-count="<?php echo (int)($store['count'] ?? 0); ?>" data-newest="<?php echo (int)($store['sort_newest'] ?? 0); ?>">
+                <?php
+                $clean_store_items = locationsSanitizeItems($store['items'] ?? []);
+                $clean_summary = implode(' · ', array_slice($clean_store_items, 0, 3));
+                $city_label = !empty($store['city']) ? $store['city'] . ', Cavite' : $store['location'];
+                $is_open = ($store['status_class'] ?? '') === 'open';
+                $price_display = !empty($store['start']) ? 'From ₱' . number_format((float)$store['start'], 2) : 'Menu Ready';
+                ?>
+                <article class="restaurant-card"
+                    data-store-name="<?php echo htmlspecialchars((string)$store['name']); ?>"
+                    data-store-search="<?php echo htmlspecialchars((string)$store['search']); ?>"
+                    data-type="<?php echo htmlspecialchars((string)$store['type']); ?>"
+                    data-live="<?php echo !empty($store['live']) ? '1' : '0'; ?>"
+                    data-status="<?php echo htmlspecialchars((string)($store['status_class'] ?? 'closed')); ?>"
+                    data-city="<?php echo htmlspecialchars((string)($store['city'] ?? '')); ?>"
+                    data-province="<?php echo htmlspecialchars((string)($store['province'] ?? '')); ?>"
+                    data-area="<?php echo htmlspecialchars((string)trim(((string)($store['city'] ?? '')) . ' ' . ((string)($store['province'] ?? '')))); ?>"
+                    data-rating="<?php echo htmlspecialchars(number_format((float)($store['rating'] ?? 0), 3, '.', '')); ?>"
+                    data-count="<?php echo (int)($store['count'] ?? 0); ?>"
+                    data-newest="<?php echo (int)($store['sort_newest'] ?? 0); ?>">
+                    
                     <a href="<?php echo htmlspecialchars((string)$store['menu_link']); ?>" class="restaurant-card-link">
+                        <!-- Image Wrap -->
                         <div class="restaurant-media">
                             <img src="<?php echo htmlspecialchars((string)$store['image']); ?>" alt="<?php echo htmlspecialchars((string)$store['name']); ?>" loading="lazy">
-                            <div class="restaurant-media-overlay"></div>
-                            <div class="restaurant-brand-badge"><?php echo htmlspecialchars((string)$store['brand_initials']); ?></div>
-                            <span class="restaurant-pill restaurant-pill-rating"><i class="fas fa-star"></i><?php echo number_format((float)($store['rating'] ?? 0), 1); ?></span>
-                            <span class="restaurant-pill restaurant-pill-status restaurant-pill-status-<?php echo htmlspecialchars((string)$store['status_class']); ?>"><?php echo htmlspecialchars((string)$store['status_label']); ?></span>
-                            <div class="restaurant-hover-panel">
-                                <div class="restaurant-hover-copy">
-                                    <strong><?php echo htmlspecialchars((string)$store['name']); ?></strong>
-                                    <span><?php echo htmlspecialchars((string)$store['type_label']); ?> | <?php echo number_format((int)($store['count'] ?? 0)); ?> items</span>
-                                </div>
-                                <span class="restaurant-hover-cta">Browse menu</span>
-                            </div>
+                            <span class="market-type-pill"><?php echo htmlspecialchars((string)$store['type_label']); ?></span>
+                            <span class="market-time-pill <?php echo $is_open ? 'pill-open' : 'pill-closed'; ?>">
+                                <i class="fas <?php echo $is_open ? 'fa-circle-check' : 'fa-clock'; ?>"></i>
+                                <?php echo $is_open ? 'Open now' : 'Closed'; ?>
+                            </span>
+                            <span class="restaurant-pill-rating">
+                                <i class="fas fa-star" style="color:#ef6b2e;"></i><?php echo (float)($store['rating'] ?? 0) > 0 ? number_format((float)$store['rating'], 1) : 'New'; ?>
+                                <?php if ((int)($store['reviews'] ?? 0) > 0): ?><small style="font-weight:normal; color:#64748b;">(<?php echo (int)$store['reviews']; ?>)</small><?php endif; ?>
+                            </span>
                         </div>
+
+                        <!-- Card Body -->
                         <div class="restaurant-body">
-                            <div class="restaurant-topline"><h3><?php echo htmlspecialchars((string)$store['name']); ?></h3><span class="restaurant-type"><?php echo htmlspecialchars((string)$store['type_label']); ?></span></div>
-                            <p class="restaurant-location"><i class="fas fa-location-dot"></i><span><?php echo htmlspecialchars((string)$store['location']); ?></span></p>
-                            <p class="restaurant-summary"><?php echo htmlspecialchars((string)$store['summary']); ?></p>
-                            <div class="restaurant-tags"><?php foreach (array_slice((array)$store['tags'], 0, 3) as $tag): ?><span><?php echo htmlspecialchars((string)$tag); ?></span><?php endforeach; ?></div>
-                            <div class="restaurant-meta-row">
-                                <span><i class="fas fa-bowl-food"></i> <?php echo number_format((int)($store['count'] ?? 0)); ?> items</span>
-                                <?php if (!empty($store['start'])): ?><span><i class="fas fa-tag"></i> From P<?php echo number_format((float)$store['start'], 2); ?></span><?php endif; ?>
-                                <span><i class="fas fa-comment-dots"></i> <?php echo number_format((int)($store['reviews'] ?? 0)); ?> reviews</span>
-                                <?php if (!empty($store['schedule_summary'])): ?><span><i class="fas fa-clock"></i> <?php echo htmlspecialchars((string)$store['schedule_summary']); ?></span><?php endif; ?>
+                            <div class="restaurant-topline">
+                                <h3><?php echo htmlspecialchars((string)$store['name']); ?></h3>
                             </div>
-                            <div class="restaurant-footer"><div class="restaurant-note"><?php echo htmlspecialchars((string)$store['note']); ?></div><span class="restaurant-cta">Open Menu <i class="fas fa-arrow-right"></i></span></div>
+                            
+                            <p class="restaurant-location">
+                                <i class="fas fa-location-dot"></i><span><?php echo htmlspecialchars((string)$store['location']); ?></span>
+                            </p>
+                            
+                            <p class="restaurant-summary"><?php echo htmlspecialchars($clean_summary); ?></p>
+
+                            <div class="panda-card-dss-info">
+                                <span class="dss-badge dss-eta"><i class="fas fa-truck-fast"></i> 20-30 min</span>
+                                <span class="dss-badge dss-items"><i class="fas fa-bowl-food"></i> <?php echo number_format((int)($store['count'] ?? 0)); ?> items</span>
+                            </div>
+
+                            <div class="panda-card-footer-line">
+                                <span class="panda-card-city"><i class="fas fa-store"></i> <?php echo htmlspecialchars($city_label); ?></span>
+                                <strong class="panda-card-price-text"><?php echo htmlspecialchars($price_display); ?></strong>
+                            </div>
                         </div>
                     </a>
                 </article>
@@ -1289,6 +1157,7 @@ body.dark-mode .highlight {
         </div>
     </div>
 </section>
+
 <?php include 'includes/footer.php'; ?>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
