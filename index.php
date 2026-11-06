@@ -262,7 +262,27 @@ $has_profile_image_column = function_exists('userAccountControlColumnExists') ? 
 sahEnsureStoreLocationAvailabilitySchema($conn);
 $branch_result = mysqli_query($conn, "SELECT store_id, owner_user_id, store_name, address, city, province, phone, email, opening_hours, opening_time, closing_time, operating_days, availability_mode, manual_status, is_active, latitude, longitude FROM store_locations WHERE is_active = 1 ORDER BY store_name");
 if ($branch_result) {
+    $sample_branch_blacklist = [
+        "dasmariñas central branch", "dasmarinas central branch", "dasmariñas branch", "dasmarinas branch", "dasmariñas main branch", "dasmarinas main branch",
+        "bacoor express branch", "bacoor branch",
+        "imus heritage branch", "imus branch",
+        "general trias branch",
+        "tagaytay ridge branch", "tagaytay branch",
+        "silang branch", "justine business", "justine business (silang depot)",
+        "janna restaurant", "janna restaurant (gen. trias)",
+        "lydias", "linda", "ako budoy"
+    ];
+    $sample_email_blacklist = [
+        "dasma@lechondelights.com", "bacoor@lechondelights.com", "imus@lechondelights.com",
+        "tagaytay@lechondelights.com", "gentrias@lechondelights.com", "silang@lechondelights.com",
+        "jannasantos@gmail.com", "justinehero033@gmail.com", "useraccount@gmail.com", "localone@gmail.com"
+    ];
     while ($row = mysqli_fetch_assoc($branch_result)) {
+        $row_name_norm = strtolower(trim((string)$row["store_name"]));
+        $row_email_norm = strtolower(trim((string)$row["email"]));
+        if (in_array($row_name_norm, $sample_branch_blacklist, true) || in_array($row_email_norm, $sample_email_blacklist, true)) {
+            continue;
+        }
         $availability = sahResolveStoreAvailability($row);
         $branch = [
             'id' => (int)$row['store_id'],
@@ -403,10 +423,29 @@ $seller_result = mysqli_query($conn, "SELECT u.id, u.full_name, u.email, u.phone
                                         {$seller_scope_filter}
                                       ORDER BY COALESCE(NULLIF(TRIM(u.business_name), ''), u.full_name)");
 if ($seller_result) {
+    $sample_seller_blacklist = [
+        "dasmariñas central branch", "dasmarinas central branch", "dasmariñas branch", "dasmarinas branch", "dasmariñas main branch", "dasmarinas main branch",
+        "bacoor express branch", "bacoor branch",
+        "imus heritage branch", "imus branch",
+        "general trias branch",
+        "tagaytay ridge branch", "tagaytay branch",
+        "silang branch", "justine business", "justine business (silang depot)",
+        "janna restaurant", "janna restaurant (gen. trias)",
+        "lydias", "linda", "ako budoy"
+    ];
+    $sample_seller_emails = [
+        "dasma@lechondelights.com", "bacoor@lechondelights.com", "imus@lechondelights.com",
+        "tagaytay@lechondelights.com", "gentrias@lechondelights.com", "silang@lechondelights.com",
+        "jannasantos@gmail.com", "justinehero033@gmail.com", "useraccount@gmail.com", "localone@gmail.com"
+    ];
     while ($row = mysqli_fetch_assoc($seller_result)) {
         $name = fixMojibakeText(trim((string)$row['business_name']) !== '' ? trim((string)$row['business_name']) : trim((string)$row['full_name']) . ' Store');
         $email = strtolower(trim((string)$row['email']));
         $seller_id = (int)$row['id'];
+        $seller_name_norm = strtolower(trim((string)$name));
+        if (in_array($seller_name_norm, $sample_seller_blacklist, true) || in_array($email, $sample_seller_emails, true)) {
+            continue;
+        }
         $match = $branch_by_owner[$seller_id] ?? ($branch_by_email[$email] ?? ($branch_by_name[norm_key($name)] ?? null));
         $availability_match = $match ?: ($branch_any_by_owner[$seller_id] ?? ($branch_any_by_email[$email] ?? ($branch_any_by_name[norm_key($name)] ?? null)));
         $application_address = trim((string)($row['business_address'] ?? ''));
@@ -493,7 +532,7 @@ $global_rating_count = 0;
 $global_reviews = 0;
 $product_scope_filter = ($scoped_partner_seller_id > 0) ? " AND p.seller_id = " . (int)$scoped_partner_seller_id : "";
 $product_sql = "SELECT p.id, p.seller_id, p.name, p.category, p.price, p.image, p.avg_rating, p.review_count,
-                       COALESCE(NULLIF(TRIM(u.business_name), ''), NULLIF(TRIM(sl.store_name), ''), NULLIF(TRIM(u.full_name), ''), 'Dasmariñas Main Branch') AS seller_name,
+                       COALESCE(NULLIF(TRIM(u.business_name), ''), NULLIF(TRIM(sl.store_name), ''), NULLIF(TRIM(u.full_name), ''), 'jm lechon') AS seller_name,
                        COALESCE(sl.store_id, 0) AS store_branch_id
                 FROM products p
                 LEFT JOIN users u ON p.seller_id = u.id
@@ -533,7 +572,7 @@ if ($product_result) {
         } else {
             $store_name = trim((string)$row['seller_name']);
             if ($store_name === '' || strtolower($store_name) === 'admin user' || strtolower($store_name) === 'lechon delights kitchen') {
-                $store_name = 'Dasmariñas Main Branch';
+                $store_name = 'jm lechon';
                 $branch_id = 1;
             }
         }
@@ -586,7 +625,7 @@ $initial_search_foods = [];
 if ($initial_search_query !== '' && isset($conn) && $conn instanceof mysqli) {
     $search_param = '%' . $initial_search_query . '%';
     $food_search_sql = "SELECT p.id, p.product_id, p.seller_id, p.name, p.category, p.price, p.image, p.avg_rating, p.review_count,
-                               COALESCE(NULLIF(TRIM(u.business_name), ''), NULLIF(TRIM(sl.store_name), ''), NULLIF(TRIM(u.full_name), ''), 'Dasmariñas Main Branch') AS store_name,
+                               COALESCE(NULLIF(TRIM(u.business_name), ''), NULLIF(TRIM(sl.store_name), ''), NULLIF(TRIM(u.full_name), ''), 'jm lechon') AS store_name,
                                COALESCE(sl.store_id, 0) AS branch_id,
                                COALESCE(SUM(CASE WHEN o.id IS NOT NULL THEN oi.quantity ELSE 0 END), 0) AS total_sold
                         FROM products p
@@ -610,7 +649,7 @@ if ($initial_search_query !== '' && isset($conn) && $conn instanceof mysqli) {
                 $f_branch_id = (int)($f_row['branch_id'] ?? 0);
                 $f_store = trim((string)$f_row['store_name']);
                 if ($f_store === '' || strtolower($f_store) === 'admin user') {
-                    $f_store = 'Dasmariñas Main Branch';
+                    $f_store = 'jm lechon';
                 }
                 $f_params = [];
                 if ($f_seller_id > 0) $f_params['seller_id'] = $f_seller_id;

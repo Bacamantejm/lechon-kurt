@@ -456,8 +456,9 @@ if (!function_exists('ensureUserStoreBannerSchema')) {
 
 if (!function_exists('ensureOnlyJmLechonStoreAndMenu')) {
     /**
-     * Remove all sample stores, sample branch manager users, and sample/test menu items from database,
-     * retaining exclusively JM Lechon shop and its genuine lechon menu products.
+     * Purges legacy Cavite sample branches, dummy partner applications, and mock menu products,
+     * ensuring the system starts exclusively with JM Lechon shop and genuine lechon products.
+     * Safely preserves any newly created/accepted stores and menus so dry-run additions persist.
      */
     function ensureOnlyJmLechonStoreAndMenu($conn): void {
         static $executed = false;
@@ -476,9 +477,9 @@ if (!function_exists('ensureOnlyJmLechonStoreAndMenu')) {
                 $jm_user_id = (int)$u_row['id'];
             }
 
-            // 2. Locate or ensure JM Lechon's store location
+            // 2. Locate or ensure JM Lechon's store location (Store ID 7 or existing)
             $jm_store_id = 0;
-            $s_res = @mysqli_query($conn, "SELECT store_id FROM store_locations WHERE " . ($jm_user_id > 0 ? "owner_user_id = {$jm_user_id} OR " : "") . "store_name LIKE '%jm lechon%' OR email = 'jm@gmail.com' ORDER BY store_id ASC LIMIT 1");
+            $s_res = @mysqli_query($conn, "SELECT store_id FROM store_locations WHERE " . ($jm_user_id > 0 ? "owner_user_id = {$jm_user_id} OR " : "") . "store_name = 'jm lechon' OR email = 'jm@gmail.com' ORDER BY (store_id = 7) DESC, store_id ASC LIMIT 1");
             if ($s_res && ($s_row = mysqli_fetch_assoc($s_res))) {
                 $jm_store_id = (int)$s_row['store_id'];
             }
@@ -496,56 +497,59 @@ if (!function_exists('ensureOnlyJmLechonStoreAndMenu')) {
                 @mysqli_query($conn, "UPDATE store_locations SET store_name = 'jm lechon', is_active = 1 WHERE store_id = {$jm_store_id}");
             }
 
-            // 3. Re-align orders, riders, preorders to JM Lechon store
+            // 3. Re-align orders, riders, preorders linked to legacy sample store IDs (1..6) to JM Lechon store
             if (appTableExists($conn, 'orders')) {
                 if (appColumnExists($conn, 'orders', 'store_id')) {
-                    @mysqli_query($conn, "UPDATE orders SET store_id = {$jm_store_id} WHERE store_id IS NOT NULL AND store_id <> {$jm_store_id}");
+                    @mysqli_query($conn, "UPDATE orders SET store_id = {$jm_store_id} WHERE store_id IN (1, 2, 3, 4, 5, 6)");
                 }
                 if (appColumnExists($conn, 'orders', 'pickup_location')) {
-                    @mysqli_query($conn, "UPDATE orders SET pickup_location = {$jm_store_id} WHERE pickup_location IS NOT NULL AND pickup_location <> {$jm_store_id}");
+                    @mysqli_query($conn, "UPDATE orders SET pickup_location = {$jm_store_id} WHERE pickup_location IN (1, 2, 3, 4, 5, 6)");
                 }
             }
             if (appTableExists($conn, 'riders') && appColumnExists($conn, 'riders', 'store_id')) {
-                @mysqli_query($conn, "UPDATE riders SET store_id = {$jm_store_id} WHERE store_id IS NOT NULL AND store_id <> {$jm_store_id}");
+                @mysqli_query($conn, "UPDATE riders SET store_id = {$jm_store_id} WHERE store_id IN (1, 2, 3, 4, 5, 6)");
             }
             if (appTableExists($conn, 'pre_orders') && appColumnExists($conn, 'pre_orders', 'pickup_location')) {
-                @mysqli_query($conn, "UPDATE pre_orders SET pickup_location = {$jm_store_id} WHERE pickup_location IS NOT NULL AND pickup_location <> {$jm_store_id}");
+                @mysqli_query($conn, "UPDATE pre_orders SET pickup_location = {$jm_store_id} WHERE pickup_location IN (1, 2, 3, 4, 5, 6)");
             }
 
-            // 4. Remove all other sample stores except JM Lechon
-            @mysqli_query($conn, "DELETE FROM store_locations WHERE store_id <> {$jm_store_id}");
+            // 4. Remove all legacy sample/dummy store branches (Targeted specific deletion so newly added stores are never removed)
+            $sample_store_names = "'Dasmariñas Branch', 'Dasmariñas Central Branch', 'Bacoor Branch', 'Bacoor Express Branch', 'Imus Branch', 'Imus Heritage Branch', 'General Trias Branch', 'Tagaytay Branch', 'Tagaytay Ridge Branch', 'Silang Branch', 'Janna Restaurant', 'Janna Restaurant (Gen. Trias)', 'justine business', 'justine business (Silang Depot)', 'Lydias', 'Linda'";
+            $sample_emails = "'dasma@lechondelights.com', 'bacoor@lechondelights.com', 'imus@lechondelights.com', 'tagaytay@lechondelights.com', 'gentrias@lechondelights.com', 'silang@lechondelights.com', 'jannasantos@gmail.com', 'justinehero033@gmail.com', 'useraccount@gmail.com', 'localone@gmail.com'";
 
-            // 5. Remove sample branch manager user accounts
-            @mysqli_query($conn, "DELETE FROM users WHERE email IN ('dasma@lechondelights.com', 'bacoor@lechondelights.com', 'imus@lechondelights.com', 'tagaytay@lechondelights.com', 'jannasantos@gmail.com', 'justinehero033@gmail.com') OR business_name IN ('Dasmariñas Central Branch', 'Bacoor Express Branch', 'Imus Heritage Branch', 'Tagaytay Ridge Branch', 'Janna Restaurant', 'justine business')");
+            @mysqli_query($conn, "DELETE FROM store_locations WHERE store_id IN (1, 2, 3, 4, 5, 6) OR store_name IN ({$sample_store_names}) OR email IN ({$sample_emails})");
 
-            // 6. Clean shop_preorder_schedules
+            // 5. Clean franchise applications & documents for dummy sample stores
+            if (appTableExists($conn, 'franchise_applications')) {
+                if (appTableExists($conn, 'franchise_documents')) {
+                    @mysqli_query($conn, "DELETE FROM franchise_documents WHERE application_id IN (SELECT id FROM franchise_applications WHERE business_name IN ({$sample_store_names}) OR contact_email IN ({$sample_emails}))");
+                }
+                @mysqli_query($conn, "DELETE FROM franchise_applications WHERE business_name IN ({$sample_store_names}) OR contact_email IN ({$sample_emails})");
+            }
+
+            // 6. Deactivate/Clean sample branch manager and dummy owner user accounts
+            @mysqli_query($conn, "UPDATE users SET account_type = 'individual', is_active = 0, business_name = NULL WHERE email IN ({$sample_emails}) OR business_name IN ({$sample_store_names})");
+            @mysqli_query($conn, "DELETE FROM users WHERE email IN ('dasma@lechondelights.com', 'bacoor@lechondelights.com', 'imus@lechondelights.com', 'tagaytay@lechondelights.com', 'gentrias@lechondelights.com', 'silang@lechondelights.com', 'jannasantos@gmail.com', 'justinehero033@gmail.com')");
+
+            // 7. Clean shop_preorder_schedules for sample stores
             if (appTableExists($conn, 'shop_preorder_schedules')) {
-                $del_sched_where = "seller_id <> {$jm_store_id}";
-                if ($jm_user_id > 0) {
-                    $del_sched_where .= " AND seller_id <> {$jm_user_id}";
-                }
-                @mysqli_query($conn, "DELETE FROM shop_preorder_schedules WHERE {$del_sched_where}");
+                @mysqli_query($conn, "DELETE FROM shop_preorder_schedules WHERE seller_id IN (1, 2, 3, 4, 5, 6)");
             }
 
-            // 7. Clean Products / Menu:
+            // 8. Clean Products / Menu (remove mock/joke items and ensure JM Lechon owns the active initial menu)
             if (appTableExists($conn, 'products')) {
-                // Delete test/mock/joke items (Panis, tae, Lydia, Linda)
                 @mysqli_query($conn, "DELETE FROM products WHERE name LIKE '%panis%' OR name LIKE '%tae%' OR name LIKE '%Lydia%' OR name LIKE '%Linda%'");
-                
-                // Assign genuine lechon menu items to JM Lechon shop
                 if ($jm_user_id > 0) {
-                    @mysqli_query($conn, "UPDATE products SET seller_id = {$jm_user_id}, is_active = 1, is_archived = 0 WHERE id IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 22, 23, 24, 25, 26, 27) OR seller_id IS NULL OR seller_id = 1");
-                    // Delete any remaining products not belonging to JM Lechon
-                    @mysqli_query($conn, "DELETE FROM products WHERE seller_id <> {$jm_user_id}");
+                    @mysqli_query($conn, "UPDATE products SET seller_id = {$jm_user_id}, is_active = 1, is_archived = 0 WHERE (id IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 22, 23, 24, 25, 26, 27) OR seller_id IS NULL OR seller_id = 1) AND (seller_id IS NULL OR seller_id NOT IN (SELECT id FROM users WHERE account_type = 'organization' AND id <> {$jm_user_id}))");
                 }
             }
 
-            // Clean orphaned cart items
+            // 9. Clean orphaned cart items
             if (appTableExists($conn, 'cart') && appTableExists($conn, 'products')) {
                 @mysqli_query($conn, "DELETE FROM cart WHERE product_id NOT IN (SELECT id FROM products)");
             }
         } catch (Throwable $e) {
-            // Silently allow continuation
+            // Guard clause to avoid breaking page requests
         }
     }
 }
