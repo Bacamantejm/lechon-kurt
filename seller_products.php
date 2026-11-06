@@ -73,6 +73,10 @@ if (!$has_seller_access) {
 $seller_sub_details = SubscriptionAccessService::getShopSubscriptionDetails($conn, $user_id);
 $can_upload_products = !empty($seller_sub_details['can_upload_products']);
 
+if (function_exists('ensureProductMultipleImagesSchema')) {
+    ensureProductMultipleImagesSchema($conn);
+}
+
 // Handle product status toggle
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_product'])) {
     $product_id = intval($_POST['product_id']);
@@ -120,32 +124,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_new_product'])) {
     if (empty($category)) $errors[] = "Category is required";
     if ($price <= 0) $errors[] = "Price must be greater than 0";
     
-    // Handle image upload
-    $image_path = '';
-    if (isset($_FILES['product_image']) && $_FILES['product_image']['size'] > 0) {
-        $file = $_FILES['product_image'];
-        $allowed = ['jpg', 'jpeg', 'png', 'gif'];
-        $filename = basename($file['name']);
-        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-        
-        if (!in_array($ext, $allowed)) {
-            $errors[] = "Only JPG, JPEG, PNG, and GIF files are allowed";
-        } elseif ($file['size'] > 5 * 1024 * 1024) {
-            $errors[] = "File size must not exceed 5MB";
-        } else {
-            $new_filename = time() . '_' . uniqid() . '.' . $ext;
-            $upload_dir = 'uploads/products/';
-            if (!is_dir($upload_dir)) {
-                mkdir($upload_dir, 0755, true);
-            }
-            if (move_uploaded_file($file['tmp_name'], $upload_dir . $new_filename)) {
-                $image_path = 'uploads/products/' . $new_filename;
-            } else {
-                $errors[] = "Failed to upload image";
-            }
+    // Handle image upload (supports multiple images and legacy single input)
+    $uploaded_images = [];
+    if (!empty($_FILES['product_images']['name'])) {
+        if (function_exists('handleProductMultiImageUpload')) {
+            $uploaded_images = handleProductMultiImageUpload($_FILES['product_images'], 'uploads/products/');
+        }
+    } elseif (!empty($_FILES['product_image']['name']) && (int)($_FILES['product_image']['size'] ?? 0) > 0) {
+        if (function_exists('handleProductMultiImageUpload')) {
+            $uploaded_images = handleProductMultiImageUpload($_FILES['product_image'], 'uploads/products/');
         }
     }
-    
+
+    $image_path = $uploaded_images[0] ?? '';
+    $additional_images = array_slice($uploaded_images, 1);
+    $additional_images_json = !empty($additional_images) ? json_encode(array_values($additional_images)) : null;
+
     if (empty($errors)) {
         // Generate unique product code
         do {
@@ -158,20 +152,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_new_product'])) {
             mysqli_stmt_close($check_stmt);
         } while ($exists);
 
-        if (!empty($image_path)) {
-            $insert_query = "INSERT INTO products (seller_id, product_id, name, category, price, description, weight_info, pax_info, image, stock, is_active, created_at) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())";
-            $stmt = mysqli_prepare($conn, $insert_query);
-            mysqli_stmt_bind_param($stmt, "isssdssssi", $user_id, $product_code, $name, $category, $price, $description, $weight_info, $pax_info, $image_path, $stock);
-        } else {
-            $insert_query = "INSERT INTO products (seller_id, product_id, name, category, price, description, weight_info, pax_info, stock, is_active, created_at) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())";
-            $stmt = mysqli_prepare($conn, $insert_query);
-            mysqli_stmt_bind_param($stmt, "isssdsssi", $user_id, $product_code, $name, $category, $price, $description, $weight_info, $pax_info, $stock);
-        }
-        
+        $insert_query = "INSERT INTO products (seller_id, product_id, name, category, price, description, weight_info, pax_info, image, additional_images, stock, is_active, created_at) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())";
+        $stmt = mysqli_prepare($conn, $insert_query);
+        mysqli_stmt_bind_param($stmt, "isssdsssssi", $user_id, $product_code, $name, $category, $price, $description, $weight_info, $pax_info, $image_path, $additional_images_json, $stock);
+
         if (mysqli_stmt_execute($stmt)) {
-            $_SESSION['success'] = "Product '$name' added successfully! It will now appear on the menu.";
+            $_SESSION['success'] = "Menu item '$name' added successfully! It is now live on the menu.";
             header("Location: seller_products.php");
             exit();
         } else {
@@ -181,6 +168,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_new_product'])) {
     } else {
         $_SESSION['error'] = implode("<br>", $errors);
     }
+}
+
+// Handle update product & re-upload images
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_product'])) {
+    $product_id = intval($_POST['product_id']);
+    
+    // Verify product belongs to this seller
+    $verify_query = "SELECT id, image, additional_images FROM products WHERE id = ? AND seller_id = ?";
+    $v_stmt = mysqli_prepare($conn, $verify_query);
+    mysqli_stmt_bind_param($v_stmt, "ii", $product_id, $user_id);
+    mysqli_stmt_execute($v_stmt);
+    $v_res = mysqli_stmt_get_result($v_stmt);
+    $existing_product = $v_res ? mysqli_fetch_assoc($v_res) : null;
+    mysqli_stmt_close($v_stmt);
+
+    if (!$existing_product) {
+        $_SESSION['error'] = "Unauthorized action. Product not found or does not belong to your shop.";
+        header("Location: seller_products.php");
+        exit;
+    }
+
+    $name = trim($_POST['product_name']);
+    $category = trim($_POST['product_category']);
+    $price = floatval($_POST['product_price']);
+    $description = trim($_POST['product_description'] ?? '');
+    $weight_info = trim($_POST['weight_info'] ?? '');
+    $pax_info = trim($_POST['pax_info'] ?? '');
+    $stock = intval($_POST['stock'] ?? 0);
+
+    $errors = [];
+    if (empty($name)) $errors[] = "Product name is required";
+    if (empty($category)) $errors[] = "Category is required";
+    if ($price <= 0) $errors[] = "Price must be greater than 0";
+
+    if (empty($errors)) {
+        // Collect kept existing images from checkboxes
+        $kept_images = isset($_POST['kept_images']) && is_array($_POST['kept_images']) ? $_POST['kept_images'] : [];
+        $valid_kept = [];
+        $all_curr = function_exists('getProductAllImages') ? getProductAllImages($existing_product) : array_filter([$existing_product['image'] ?? '']);
+        foreach ($kept_images as $kimg) {
+            $kimg_clean = trim((string)$kimg);
+            if (in_array($kimg_clean, $all_curr, true)) {
+                $valid_kept[] = $kimg_clean;
+            }
+        }
+
+        // Upload any newly selected images (shop owners can upload multiple images anytime)
+        $newly_uploaded = [];
+        if (!empty($_FILES['product_images']['name'])) {
+            if (function_exists('handleProductMultiImageUpload')) {
+                $newly_uploaded = handleProductMultiImageUpload($_FILES['product_images'], 'uploads/products/');
+            }
+        }
+
+        // Combine kept images + newly uploaded images
+        $final_images = array_merge($valid_kept, $newly_uploaded);
+        $final_primary = $final_images[0] ?? '';
+        $final_additional = array_slice($final_images, 1);
+        $final_additional_json = !empty($final_additional) ? json_encode(array_values($final_additional)) : null;
+
+        $update_query = "UPDATE products SET name = ?, category = ?, price = ?, description = ?, weight_info = ?, pax_info = ?, stock = ?, image = ?, additional_images = ?, updated_at = NOW() WHERE id = ? AND seller_id = ?";
+        $u_stmt = mysqli_prepare($conn, $update_query);
+        mysqli_stmt_bind_param($u_stmt, "ssdsssssiii", $name, $category, $price, $description, $weight_info, $pax_info, $stock, $final_primary, $final_additional_json, $product_id, $user_id);
+
+        if (mysqli_stmt_execute($u_stmt)) {
+            $_SESSION['success'] = "Menu item '$name' updated successfully! All photo and menu changes are now live.";
+        } else {
+            $_SESSION['error'] = "Failed to update product: " . mysqli_error($conn);
+        }
+        mysqli_stmt_close($u_stmt);
+    } else {
+        $_SESSION['error'] = implode("<br>", $errors);
+    }
+
+    header("Location: seller_products.php");
+    exit;
 }
 
 // Get seller's products
@@ -801,15 +864,35 @@ include 'includes/header.php';
                 while ($product = mysqli_fetch_assoc($products_result)) {
                     $status_class = $product['is_active'] ? 'badge-success' : 'badge-danger';
                     $status_text = $product['is_active'] ? 'Active' : 'Inactive';
+                    $all_product_images = function_exists('getProductAllImages') ? getProductAllImages($product) : array_filter([$product['image'] ?? '']);
+                    $photo_count = count($all_product_images);
+
+                    $product_payload = [
+                        'id' => (int)$product['id'],
+                        'product_id' => $product['product_id'],
+                        'name' => $product['name'],
+                        'category' => $product['category'],
+                        'price' => (float)$product['price'],
+                        'stock' => (int)$product['stock'],
+                        'weight_info' => (string)($product['weight_info'] ?? ''),
+                        'pax_info' => (string)($product['pax_info'] ?? ''),
+                        'description' => (string)($product['description'] ?? ''),
+                        'images' => $all_product_images
+                    ];
+                    $payload_json = htmlspecialchars(json_encode($product_payload), ENT_QUOTES, 'UTF-8');
                     
                     echo "
                     <div class='product-card'>
-                        <div class='product-image'>";
+                        <div class='product-image' style='position:relative;'>";
                     
                     if (!empty($product['image']) && file_exists($product['image'])) {
                         echo "<img src='" . htmlspecialchars($product['image']) . "' alt='" . htmlspecialchars($product['name']) . "'>";
                     } else {
                         echo "<i class='fas fa-image'></i>";
+                    }
+
+                    if ($photo_count > 1) {
+                        echo "<span class='photo-count-badge' style='position:absolute; top:10px; right:10px; background:rgba(16,24,40,0.85); color:#ffffff; font-size:11px; font-weight:700; padding:4px 8px; border-radius:20px; backdrop-filter:blur(4px); display:flex; align-items:center; gap:5px; z-index:2;'><i class='fas fa-images'></i> " . $photo_count . " photos</span>";
                     }
                     
                     echo "</div>
@@ -833,10 +916,13 @@ include 'includes/header.php';
                     
                     echo "</div>
                         
-                        <div class='product-footer'>
-                            <form method='POST' style='display: flex; gap: 10px; width: 100%;'>
+                        <div class='product-footer' style='display:flex; gap:8px; width:100%; flex-wrap:wrap;'>
+                            <button type='button' class='btn btn-sm btn-outline-primary js-edit-product-btn' data-product='" . $payload_json . "' style='flex:1; justify-content:center; border-radius:8px; font-weight:700; min-width:120px;'>
+                                <i class='fas fa-edit'></i> Edit &amp; Photos
+                            </button>
+                            <form method='POST' style='flex:1; margin:0; min-width:100px;'>
                                 <input type='hidden' name='product_id' value='{$product['id']}'>
-                                <button type='submit' name='toggle_product' class='btn btn-sm btn-" . ($product['is_active'] ? 'danger' : 'success') . "' style='flex: 1; justify-content: center;'>
+                                <button type='submit' name='toggle_product' class='btn btn-sm btn-" . ($product['is_active'] ? 'danger' : 'success') . "' style='width:100%; justify-content:center; border-radius:8px; font-weight:700;'>
                                     <i class='fas fa-" . ($product['is_active'] ? 'eye-slash' : 'eye') . "'></i>
                                     " . ($product['is_active'] ? 'Hide' : 'Show') . "
                                 </button>
@@ -890,9 +976,9 @@ include 'includes/header.php';
                             <input type="number" class="form-control" id="stock" name="stock" placeholder="0" min="0" value="0">
                         </div>
                         <div class="col-md-6">
-                            <label for="product_image" class="form-label"><strong>Product Image</strong></label>
-                            <input type="file" class="form-control" id="product_image" name="product_image" accept="image/*">
-                            <small class="text-muted">JPG, PNG, GIF (Max 5MB)</small>
+                            <label for="product_images" class="form-label"><strong><i class="fas fa-images text-danger"></i> Product Photos</strong></label>
+                            <input type="file" class="form-control" id="product_images" name="product_images[]" multiple accept="image/*">
+                            <small class="text-muted">Upload 1 or multiple photos (JPG, PNG, GIF, WEBP up to 8MB). You can add or change photos anytime.</small>
                         </div>
                     </div>
                     
@@ -919,8 +1005,88 @@ include 'includes/header.php';
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" form="addProductForm" class="btn btn-success">
+                <button type="submit" form="addProductForm" class="btn btn-success" style="background:#b3261e; border-color:#b3261e;">
                     <i class="fas fa-save"></i> Add Product
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Product Modal (Unlimited Menu Photo Updates) -->
+<div class="modal fade" id="editProductModal" tabindex="-1" aria-labelledby="editProductLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #b3261e, #981b15);">
+                <h5 class="modal-title" id="editProductLabel" style="color:#ffffff; font-weight:800; display:flex; align-items:center; gap:10px;">
+                    <i class="fas fa-edit"></i> Edit Menu Item &amp; Photos
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="filter: brightness(0) invert(1);"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editProductForm" method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="update_product" value="1">
+                    <input type="hidden" name="product_id" id="edit_product_id">
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="edit_product_name" class="form-label"><strong>Product Name *</strong></label>
+                            <input type="text" class="form-control" id="edit_product_name" name="product_name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_product_category" class="form-label"><strong>Category *</strong></label>
+                            <input type="text" class="form-control" id="edit_product_category" name="product_category" required>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="edit_product_price" class="form-label"><strong>Price (₱) *</strong></label>
+                            <input type="number" class="form-control" id="edit_product_price" name="product_price" step="0.01" min="0" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_stock" class="form-label"><strong>Stock Quantity</strong></label>
+                            <input type="number" class="form-control" id="edit_stock" name="stock" min="0">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="edit_weight_info" class="form-label"><strong>Weight / Portion Info</strong></label>
+                            <input type="text" class="form-control" id="edit_weight_info" name="weight_info" placeholder="e.g. 1 kg, 500g">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_pax_info" class="form-label"><strong>Pax Capacity</strong></label>
+                            <input type="text" class="form-control" id="edit_pax_info" name="pax_info" placeholder="e.g. 4-6 pax">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="edit_product_description" class="form-label"><strong>Description</strong></label>
+                        <textarea class="form-control" id="edit_product_description" name="product_description" rows="3"></textarea>
+                    </div>
+
+                    <!-- Current Photos Management -->
+                    <div class="mb-4" style="background:#f8f9fa; border:1px solid #eaecf0; border-radius:12px; padding:16px;">
+                        <label class="form-label mb-2" style="font-weight:700; color:#101828;">
+                            <i class="fas fa-images text-danger"></i> Current Menu Photos
+                        </label>
+                        <p class="small text-muted mb-2">Uncheck any photo you wish to remove. The first kept photo is used as the primary menu thumbnail.</p>
+                        <div id="editCurrentImagesContainer" style="display:flex; gap:12px; flex-wrap:wrap;"></div>
+                    </div>
+
+                    <!-- Upload New Photos -->
+                    <div class="mb-3">
+                        <label for="edit_product_images" class="form-label"><strong><i class="fas fa-cloud-arrow-up text-primary"></i> Upload More / New Photos</strong></label>
+                        <input type="file" class="form-control" id="edit_product_images" name="product_images[]" multiple accept="image/*">
+                        <small class="text-muted">You can upload multiple new photos at once (JPG, PNG, GIF, WEBP up to 8MB each). You can upload and update your menu photos as many times as you want!</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="editProductForm" class="btn btn-success" style="background:#b3261e; border-color:#b3261e;">
+                    <i class="fas fa-save"></i> Save Changes &amp; Photos
                 </button>
             </div>
         </div>
@@ -1095,3 +1261,68 @@ include 'includes/header.php';
 
 <script src="js/jquery-3.7.1.min.js"></script>
 <script src="js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.js-edit-product-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var raw = this.getAttribute('data-product');
+            if (!raw) return;
+            try {
+                var prod = JSON.parse(raw);
+                document.getElementById('edit_product_id').value = prod.id;
+                document.getElementById('edit_product_name').value = prod.name;
+                document.getElementById('edit_product_category').value = prod.category;
+                document.getElementById('edit_product_price').value = prod.price;
+                document.getElementById('edit_stock').value = prod.stock;
+                document.getElementById('edit_weight_info').value = prod.weight_info || '';
+                document.getElementById('edit_pax_info').value = prod.pax_info || '';
+                document.getElementById('edit_product_description').value = prod.description || '';
+
+                var container = document.getElementById('editCurrentImagesContainer');
+                container.innerHTML = '';
+                var images = prod.images || [];
+                if (images.length === 0) {
+                    container.innerHTML = '<span class="text-muted" style="font-size:0.85rem;">No images currently uploaded for this product.</span>';
+                } else {
+                    images.forEach(function(imgSrc, index) {
+                        var card = document.createElement('div');
+                        card.style.cssText = 'position:relative; width:100px; height:100px; border-radius:10px; overflow:hidden; border:1px solid #eaecf0; background:#f8fafc;';
+                        
+                        var img = document.createElement('img');
+                        img.src = imgSrc;
+                        img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+                        card.appendChild(img);
+
+                        var badge = document.createElement('span');
+                        badge.style.cssText = 'position:absolute; top:4px; left:4px; font-size:0.65rem; background:rgba(0,0,0,0.7); color:#fff; padding:2px 6px; border-radius:4px; font-weight:700;';
+                        badge.textContent = index === 0 ? 'Primary' : '#' + (index + 1);
+                        card.appendChild(badge);
+
+                        var label = document.createElement('label');
+                        label.style.cssText = 'position:absolute; bottom:0; left:0; right:0; background:rgba(255,255,255,0.94); padding:3px 4px; font-size:0.72rem; font-weight:700; color:#101828; display:flex; align-items:center; justify-content:center; gap:4px; margin:0; cursor:pointer;';
+                        
+                        var chk = document.createElement('input');
+                        chk.type = 'checkbox';
+                        chk.name = 'kept_images[]';
+                        chk.value = imgSrc;
+                        chk.checked = true;
+
+                        label.appendChild(chk);
+                        label.appendChild(document.createTextNode(' Keep'));
+                        card.appendChild(label);
+
+                        container.appendChild(card);
+                    });
+                }
+
+                var modalEl = document.getElementById('editProductModal');
+                var editModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                editModal.show();
+            } catch (e) {
+                console.error(e);
+            }
+        });
+    });
+});
+</script>
+<?php include 'includes/footer.php'; ?>
