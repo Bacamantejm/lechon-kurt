@@ -93,7 +93,7 @@ class PreOrderService {
                 return ['success' => false, 'message' => 'Database error: ' . mysqli_error($this->conn)];
             }
             
-            mysqli_stmt_bind_param($stmt, "iisiddssssssddd", $user_id, $product_id, $product_name, $quantity, 
+            mysqli_stmt_bind_param($stmt, "iisiddssssssddsdd", $user_id, $product_id, $product_name, $quantity,
                                   $unit_price, $total_price, $pickup_date, $pickup_time, $pickup_location, 
                                   $delivery_address, $delivery_method, $payment_type, $downpayment_amount, $remaining_amount, $special_instructions,
                                   $latitude, $longitude);

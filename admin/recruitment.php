@@ -60,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         mysqli_stmt_bind_param($stmt, "sissddssi", $position_title, $department_id, $description, $requirements, $salary_min, $salary_max, $employment_type, $closing_date, $user_id);
         
         if (mysqli_stmt_execute($stmt)) {
-            $_SESSION['success'] = "Job position posted successfully.";
+            $_SESSION['success'] = "Job title posted successfully.";
         } else {
             $_SESSION['error'] = "Unable to post job position.";
         }
@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $position_id = intval($_POST['position_id']);
         $new_status = hrSafeEnum($_POST['new_status'] ?? '', ['open', 'closed', 'on_hold'], 'open');
         if ($is_partner_scoped_hr && !hrPositionIdInScope($conn, $position_id)) {
-            $_SESSION['error'] = "Selected position is outside your partner HR scope.";
+            $_SESSION['error'] = "Selected job title is outside your partner HR scope.";
             header("Location: recruitment.php");
             exit();
         }
@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         mysqli_stmt_bind_param($stmt, "si", $new_status, $position_id);
         mysqli_stmt_execute($stmt);
         mysqli_stmt_close($stmt);
-        $_SESSION['success'] = "Position status updated.";
+        $_SESSION['success'] = "Job title status updated.";
     }
 
     header("Location: recruitment.php");
@@ -168,11 +168,11 @@ $departments = mysqli_query($conn, $departments_sql);
                 <?php endif; ?>
 
                 <div class="section-header">
-                    <h2>Job Positions</h2>
+                    <h2>Job Titles</h2>
                     <div class="d-flex gap-2">
                         <a href="candidates.php" class="btn btn-secondary"><i class="fas fa-user-tie"></i> Candidates</a>
                         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addPositionModal" <?php echo !$has_job_positions ? 'disabled' : ''; ?>>
-                            <i class="fas fa-plus"></i> Post New Position
+                            <i class="fas fa-plus"></i> Post New Job Title
                         </button>
                     </div>
                 </div>
@@ -181,7 +181,7 @@ $departments = mysqli_query($conn, $departments_sql);
                     <div class="card-body">
                         <form method="GET" class="row g-2 align-items-end">
                             <div class="col-md-4">
-                                <label class="form-label mb-1">Position Status</label>
+                                <label class="form-label mb-1">Job Title Status</label>
                                 <select name="status" class="form-select">
                                     <option value="" <?php echo $status_filter === '' ? 'selected' : ''; ?>>All Statuses</option>
                                     <option value="open" <?php echo $status_filter === 'open' ? 'selected' : ''; ?>>Open</option>
@@ -202,7 +202,7 @@ $departments = mysqli_query($conn, $departments_sql);
                     <table class="admin-table">
                         <thead>
                             <tr>
-                                <th>Position Title</th>
+                                <th>Job Title</th>
                                 <th>Department</th>
                                 <th>Employment Type</th>
                                 <th>Salary Range</th>
@@ -250,7 +250,7 @@ $departments = mysqli_query($conn, $departments_sql);
                                     </tr>
                                 <?php endwhile; ?>
                             <?php else: ?>
-                                <tr><td colspan="8" class="text-center text-muted">No job positions posted</td></tr>
+                                <tr><td colspan="8" class="text-center text-muted">No job titles posted</td></tr>
                             <?php endif; ?>
                         </tbody>
                     </table>
@@ -259,7 +259,7 @@ $departments = mysqli_query($conn, $departments_sql);
         </div>
     </div>
     
-    <!-- Add Position Modal -->
+    <!-- Add Job Title Modal -->
     <div class="modal fade modern-form-modal" id="addPositionModal" tabindex="-1">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
@@ -268,7 +268,7 @@ $departments = mysqli_query($conn, $departments_sql);
                         <i class="fas fa-briefcase"></i>
                     </div>
                     <div>
-                        <h5 class="modal-title">Post New Job Position</h5>
+                        <h5 class="modal-title">Post New Job Title</h5>
                         <p class="modal-subtitle">Publish open job roles, compensation brackets, and hiring requirements.</p>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -284,7 +284,7 @@ $departments = mysqli_query($conn, $departments_sql);
                                 <span class="form-req-pill">Required</span>
                             </div>
                             <div class="form-group-modern">
-                                <label class="form-label-modern">Position Title <span class="form-req-star">*</span></label>
+                                <label class="form-label-modern">Job Title <span class="form-req-star">*</span></label>
                                 <div class="form-input-wrap">
                                     <i class="fas fa-id-badge form-input-icon"></i>
                                     <input type="text" name="position_title" class="form-control" placeholder="e.g. Master Roaster, Cashier, Kitchen Cook" required>
@@ -383,7 +383,7 @@ $departments = mysqli_query($conn, $departments_sql);
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="add_position" class="btn-modal-primary"><i class="fas fa-plus"></i> Post Position</button>
+                        <button type="submit" name="add_position" class="btn-modal-primary"><i class="fas fa-plus"></i> Post Job Title</button>
                     </div>
                 </form>
             </div>
@@ -420,6 +420,5 @@ $departments = mysqli_query($conn, $departments_sql);
     </script>
 </body>
 </html>
-
 
 
