@@ -694,6 +694,14 @@ if ($current_page_number < 1) {
             background: #1e293b !important;
             color: #f87171 !important;
         }
+        .quick-metric-tab {
+            transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+        }
+        .quick-metric-tab:hover {
+            transform: translateY(-2px);
+            border-color: #d0d5dd !important;
+            box-shadow: 0 4px 12px rgba(16, 24, 40, 0.06);
+        }
         .rider-order-card {
             background: #ffffff;
             border: 1px solid #eaecf0;
@@ -799,19 +807,19 @@ if ($current_page_number < 1) {
                             </div>
                         </div>
                         <div class="d-flex align-items-center gap-2 ms-auto flex-wrap">
-                            <a href="#mapView" data-bs-toggle="tab" class="btn btn-sm btn-outline-secondary" style="border-radius:8px; padding: 7px 14px; font-weight:600;">
+                            <button type="button" onclick="switchLogisticsTab('#mapView')" class="btn btn-sm btn-outline-secondary" style="border-radius:8px; padding: 7px 14px; font-weight:600;">
                                 <i class="fas fa-map-marked-alt me-1 text-danger"></i> View Live Route Map
-                            </a>
-                            <a href="#driversTab" data-bs-toggle="tab" class="btn btn-sm" style="background:#b3261e; color:#ffffff; font-weight:600; border-radius:8px; padding: 7px 14px;">
+                            </button>
+                            <button type="button" onclick="switchLogisticsTab('#driversTab')" class="btn btn-sm" style="background:#b3261e; color:#ffffff; font-weight:600; border-radius:8px; padding: 7px 14px; border:none;">
                                 <i class="fas fa-motorcycle me-1"></i> Shop Drivers (<?php echo count($shop_drivers_list); ?>)
-                            </a>
+                            </button>
                         </div>
                     </div>
 
                     <!-- Quick Metric Cards Row -->
                     <div class="row g-3 mt-2">
                         <div class="col-6 col-md-3">
-                            <div class="p-3 rounded-3" style="background:#f8f9fa; border:1px solid #eaecf0;">
+                            <div class="p-3 rounded-3 quick-metric-tab" role="button" onclick="switchLogisticsTab('#driversTab')" style="background:#f8f9fa; border:1px solid #eaecf0; cursor:pointer;" title="Click to view Shop Drivers">
                                 <div class="text-muted small fw-semibold">Shop Drivers</div>
                                 <div class="d-flex align-items-baseline gap-2 mt-1">
                                     <span class="fs-4 fw-bold text-dark"><?php echo count($shop_drivers_list); ?></span>
@@ -820,7 +828,7 @@ if ($current_page_number < 1) {
                             </div>
                         </div>
                         <div class="col-6 col-md-3">
-                            <div class="p-3 rounded-3" style="background:#f8f9fa; border:1px solid #eaecf0;">
+                            <div class="p-3 rounded-3 quick-metric-tab" role="button" onclick="switchLogisticsTab('#availableTab')" style="background:#f8f9fa; border:1px solid #eaecf0; cursor:pointer;" title="Click to view Ready for Delivery">
                                 <div class="text-muted small fw-semibold">Ready for Delivery</div>
                                 <div class="d-flex align-items-baseline gap-2 mt-1">
                                     <span class="fs-4 fw-bold" style="color:#b3261e;"><?php echo count($available_delivery_orders); ?></span>
@@ -829,7 +837,7 @@ if ($current_page_number < 1) {
                             </div>
                         </div>
                         <div class="col-6 col-md-3">
-                            <div class="p-3 rounded-3" style="background:#f8f9fa; border:1px solid #eaecf0;">
+                            <div class="p-3 rounded-3 quick-metric-tab" role="button" onclick="switchLogisticsTab('#activeTab')" style="background:#f8f9fa; border:1px solid #eaecf0; cursor:pointer;" title="Click to view On-Going Deliveries">
                                 <div class="text-muted small fw-semibold">On-Going Deliveries</div>
                                 <div class="d-flex align-items-baseline gap-2 mt-1">
                                     <span class="fs-4 fw-bold" style="color:#175cd3;"><?php echo count($my_active_delivery_orders); ?></span>
@@ -838,7 +846,7 @@ if ($current_page_number < 1) {
                             </div>
                         </div>
                         <div class="col-6 col-md-3">
-                            <div class="p-3 rounded-3" style="background:#f8f9fa; border:1px solid #eaecf0;">
+                            <div class="p-3 rounded-3 quick-metric-tab" role="button" onclick="switchLogisticsTab('#tableView')" style="background:#f8f9fa; border:1px solid #eaecf0; cursor:pointer;" title="Click to view All Deliveries History">
                                 <div class="text-muted small fw-semibold">Completed Today</div>
                                 <div class="d-flex align-items-baseline gap-2 mt-1">
                                     <span class="fs-4 fw-bold" style="color:#027a48;"><?php echo $completed_deliveries_count; ?></span>
@@ -968,7 +976,11 @@ if ($current_page_number < 1) {
 
                                                 <!-- Current Delivery Mission (if any) -->
                                                 <?php if (!empty($driver['current_order_number'])): ?>
-                                                    <div class="p-2 rounded mb-3" style="background:#fff1f0; border:1px solid #fee4e2; font-size:12px;">
+                                                    <div class="p-2 rounded mb-3" 
+                                                         role="button" 
+                                                         onclick="switchLogisticsTab('#activeTab', '<?php echo htmlspecialchars($driver['current_order_number']); ?>')" 
+                                                         style="background:#fff1f0; border:1px solid #fee4e2; font-size:12px; cursor:pointer;" 
+                                                         title="Click to view this delivery in On-Going Deliveries">
                                                         <div class="d-flex justify-content-between align-items-center mb-1">
                                                             <span class="fw-bold" style="color:#b3261e;">
                                                                 <i class="fas fa-box me-1"></i> Delivering #<?php echo htmlspecialchars($driver['current_order_number']); ?>
@@ -989,9 +1001,12 @@ if ($current_page_number < 1) {
                                                         <i class="fas fa-phone-alt me-1"></i> Call Driver
                                                     </a>
                                                 <?php endif; ?>
-                                                <a href="#activeTab" data-bs-toggle="tab" class="btn btn-sm flex-fill" style="background:#b3261e; color:#ffffff; font-size:12px; font-weight:600; border-radius:8px;">
+                                                <button type="button" 
+                                                        class="btn btn-sm flex-fill" 
+                                                        onclick="switchLogisticsTab('#activeTab', '<?php echo htmlspecialchars($driver['current_order_number'] ?? ''); ?>')" 
+                                                        style="background:#b3261e; color:#ffffff; font-size:12px; font-weight:600; border-radius:8px; border:none;">
                                                     <i class="fas fa-list me-1"></i> Deliveries
-                                                </a>
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -1199,7 +1214,7 @@ if ($current_page_number < 1) {
                                     ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
                                     </script>
                                     <div class="col-md-6 col-lg-4">
-                                        <div class="rider-order-card" style="border: 1px solid #eaecf0; border-radius: 14px; padding: 18px; background: #ffffff; box-shadow: 0 1px 3px rgba(16,24,40,0.04); display:flex; flex-direction:column; justify-content:space-between;">
+                                        <div class="rider-order-card" id="activeOrderCard_<?php echo htmlspecialchars(preg_replace('/[^a-zA-Z0-9_-]/', '', (string)$myOrd['order_number'])); ?>" data-order-number="<?php echo htmlspecialchars($myOrd['order_number']); ?>" style="border: 1px solid #eaecf0; border-radius: 14px; padding: 18px; background: #ffffff; box-shadow: 0 1px 3px rgba(16,24,40,0.04); display:flex; flex-direction:column; justify-content:space-between;">
                                             <div>
                                                 <!-- Order Header Badge & Total -->
                                                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -3659,17 +3674,92 @@ if (mapViewTabTrigger) {
     });
 }
 
-// Auto-switch to tab if page hash is present (e.g. #activeTab, #mapView)
-if (window.location.hash) {
-    const hashTrigger = document.querySelector(`a[data-bs-toggle="tab"][href="${window.location.hash}"]`);
-    if (hashTrigger) {
-        try {
-            hashTrigger.click();
-        } catch (e) {
-            console.warn('Hash trigger click error:', e);
+// Robust Global Logistics Tab Switcher
+window.switchLogisticsTab = function(targetId, targetOrderNumber = '') {
+    if (!targetId) return;
+    const cleanId = targetId.startsWith('#') ? targetId : '#' + targetId;
+
+    // 1. Locate the master pill inside .rider-nav-pills
+    const navPill = document.querySelector(`.rider-nav-pills a[data-bs-target="${cleanId}"], .rider-nav-pills a[href="${cleanId}"]`);
+    if (navPill) {
+        if (window.bootstrap && bootstrap.Tab) {
+            try {
+                const tabInst = bootstrap.Tab.getOrCreateInstance(navPill);
+                tabInst.show();
+            } catch (err) {
+                navPill.click();
+            }
+        } else {
+            navPill.click();
+        }
+    } else {
+        // Fallback: manually activate pane & pill
+        document.querySelectorAll('.rider-nav-pills .nav-link').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-content .tab-pane').forEach(el => el.classList.remove('show', 'active'));
+        const directPane = document.querySelector(cleanId);
+        if (directPane) {
+            directPane.classList.add('show', 'active');
         }
     }
+
+    // 2. Synchronize URL hash without unwanted jumping
+    try {
+        if (window.history && history.replaceState) {
+            history.replaceState(null, null, cleanId);
+        } else {
+            window.location.hash = cleanId;
+        }
+    } catch (e) {}
+
+    // 3. Highlight & scroll to specific order card if requested
+    if (targetOrderNumber) {
+        setTimeout(() => {
+            const safeNum = targetOrderNumber.replace(/[^a-zA-Z0-9_-]/g, '');
+            const targetEl = document.getElementById('activeOrderCard_' + safeNum) 
+                          || document.querySelector(`[data-order-number="${targetOrderNumber}"]`);
+            if (targetEl) {
+                targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                targetEl.style.transition = 'all 0.3s ease';
+                targetEl.style.borderColor = '#b3261e';
+                targetEl.style.boxShadow = '0 0 0 4px rgba(179, 38, 30, 0.25)';
+                setTimeout(() => {
+                    targetEl.style.borderColor = '#eaecf0';
+                    targetEl.style.boxShadow = '0 1px 3px rgba(16,24,40,0.04)';
+                }, 3000);
+            }
+        }, 250);
+    } else {
+        // Smooth scroll to top of tab content
+        const tabContentEl = document.querySelector('.tab-content');
+        if (tabContentEl) {
+            tabContentEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+};
+
+// Initial page load hash handler
+if (window.location.hash) {
+    setTimeout(() => {
+        window.switchLogisticsTab(window.location.hash);
+    }, 100);
 }
+
+// Browser back/forward navigation hash listener
+window.addEventListener('hashchange', () => {
+    if (window.location.hash) {
+        window.switchLogisticsTab(window.location.hash);
+    }
+});
+
+// Intercept clicks on any external links targeting logistics tabs
+document.addEventListener('click', (e) => {
+    const link = e.target.closest('a[href^="#activeTab"], a[href^="#driversTab"], a[href^="#availableTab"], a[href^="#mapView"], a[href^="#tableView"], a[href^="#cancelledTab"]');
+    if (link && !link.classList.contains('nav-link')) {
+        e.preventDefault();
+        const href = link.getAttribute('href');
+        window.switchLogisticsTab(href);
+    }
+});
 
 function promptTicketReply(ticketId) {
     Swal.fire({
