@@ -1354,6 +1354,10 @@ $orders_result = mysqli_query($conn, $orders_query);
                 $orders_list = [];
                 if ($orders_result instanceof mysqli_result && mysqli_num_rows($orders_result) > 0) {
                     while ($order_row = mysqli_fetch_assoc($orders_result)) {
+                        if (function_exists('fixMojibakeText')) {
+                            if (isset($order_row['delivery_address'])) $order_row['delivery_address'] = fixMojibakeText($order_row['delivery_address']);
+                            if (isset($order_row['customer_name'])) $order_row['customer_name'] = fixMojibakeText($order_row['customer_name']);
+                        }
                         $orders_list[] = $order_row;
                     }
                 }

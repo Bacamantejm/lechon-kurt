@@ -13,7 +13,9 @@ if (!function_exists('caNormalizeAddressValue')) {
             return '';
         }
 
-        if (function_exists('fixMojibakeUtf8')) {
+        if (function_exists('fixMojibakeText')) {
+            $text = fixMojibakeText($text);
+        } elseif (function_exists('fixMojibakeUtf8')) {
             $text = fixMojibakeUtf8($text);
         }
 
@@ -116,7 +118,13 @@ if (!function_exists('caFetchUserSavedAddresses')) {
         $result = mysqli_stmt_get_result($stmt);
         if ($result) {
             while ($row = mysqli_fetch_assoc($result)) {
-                if (function_exists('fixMojibakeUtf8')) {
+                if (function_exists('fixMojibakeText')) {
+                    foreach ($row as $k => $v) {
+                        if (is_string($v)) {
+                            $row[$k] = fixMojibakeText($v);
+                        }
+                    }
+                } elseif (function_exists('fixMojibakeUtf8')) {
                     foreach ($row as $k => $v) {
                         if (is_string($v)) {
                             $row[$k] = fixMojibakeUtf8($v);

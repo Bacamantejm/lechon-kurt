@@ -43,8 +43,25 @@ if ($seller_scope_id !== null) {
     $st_res = mysqli_query($conn, "SELECT store_id, store_name, address, city FROM store_locations WHERE owner_user_id = " . (int)$seller_scope_id . " LIMIT 1");
     if ($st_res && ($st_row = mysqli_fetch_assoc($st_res))) {
         $shop_store_id = (int)$st_row['store_id'];
-        $shop_store_name = $st_row['store_name'];
-        $shop_store_address = $st_row['address'] . ', ' . $st_row['city'];
+        $shop_store_name = fixMojibakeText($st_row['store_name'] ?? '');
+        $shop_store_address = fixMojibakeText(($st_row['address'] ?? '') . ', ' . ($st_row['city'] ?? ''));
+    }
+}
+
+if (!function_exists('logisticsCleanOrderRow')) {
+    function logisticsCleanOrderRow(?array $row): array {
+        if (!$row) return [];
+        $keys = [
+            'delivery_address', 'address', 'customer_name', 'store_address',
+            'store_name', 'driver_name', 'assigned_rider_name', 'current_customer_name',
+            'special_instructions', 'customer_phone', 'driver_phone'
+        ];
+        foreach ($keys as $k) {
+            if (isset($row[$k]) && is_string($row[$k])) {
+                $row[$k] = fixMojibakeText($row[$k]);
+            }
+        }
+        return $row;
     }
 }
 
@@ -102,14 +119,14 @@ $avail_res = mysqli_query($conn, "
     LIMIT 24
 ");
 if ($avail_res) {
-    while ($r = mysqli_fetch_assoc($avail_res)) $available_delivery_orders[] = $r;
+    while ($r = mysqli_fetch_assoc($avail_res)) $available_delivery_orders[] = logisticsCleanOrderRow($r);
 }
 
 // Fallback store resolution
 if (!$shop_store_id && !empty($default_store)) {
     $shop_store_id = (int)($default_store['store_id'] ?? 0);
-    $shop_store_name = $default_store['store_name'] ?? 'Main Branch';
-    $shop_store_address = ($default_store['address'] ?? '') . ', ' . ($default_store['city'] ?? '');
+    $shop_store_name = fixMojibakeText($default_store['store_name'] ?? 'Main Branch');
+    $shop_store_address = fixMojibakeText(($default_store['address'] ?? '') . ', ' . ($default_store['city'] ?? ''));
 }
 
 // 2. Active Deliveries: all in-transit missions for this shop with assigned driver details
@@ -139,7 +156,7 @@ $my_act_res = mysqli_query($conn, "
     LIMIT 25
 ");
 if ($my_act_res) {
-    while ($r = mysqli_fetch_assoc($my_act_res)) $my_active_delivery_orders[] = $r;
+    while ($r = mysqli_fetch_assoc($my_act_res)) $my_active_delivery_orders[] = logisticsCleanOrderRow($r);
 }
 
 $active_mission = !empty($my_active_delivery_orders) ? $my_active_delivery_orders[0] : null;
@@ -184,7 +201,7 @@ if ($drivers_res) {
         if ($dr['duty_status'] === 'online' || $dr['duty_status'] === 'available') {
             $online_drivers_count++;
         }
-        $shop_drivers_list[] = $dr;
+        $shop_drivers_list[] = logisticsCleanOrderRow($dr);
     }
 }
 
@@ -216,7 +233,7 @@ $canc_res = mysqli_query($conn, "
     LIMIT 20
 ");
 if ($canc_res) {
-    while ($r = mysqli_fetch_assoc($canc_res)) $cancelled_delivery_orders[] = $r;
+    while ($r = mysqli_fetch_assoc($canc_res)) $cancelled_delivery_orders[] = logisticsCleanOrderRow($r);
 }
 
 $logistics = new LogisticsService($conn);
@@ -1686,6 +1703,7 @@ if ($current_page_number < 1) {
                             
                             if ($result && mysqli_num_rows($result) > 0) {
                                 while ($row = mysqli_fetch_assoc($result)) {
+                                    $row = logisticsCleanOrderRow($row);
                                     $status_class = 'badge-' . ($row['status'] == 'delivered' || $row['status'] == 'completed' || $row['status'] == 'confirmed' ? 'success' : ($row['status'] == 'cancelled' || $row['status'] == 'failed' ? 'danger' : 'warning'));
                                     $pickup_time = $row['pickup_time'] ? date('M d, H:i', strtotime($row['pickup_time'])) : '-';
                                     $est_delivery = $row['estimated_delivery'] ? date('M d, H:i', strtotime($row['estimated_delivery'])) : '-';
@@ -2617,9 +2635,42 @@ let lastGpsLat = null;
 let lastGpsLng = null;
 let lastGpsTime = 0;
 
+function fixMojibakeText(str) {
+    if (!str || typeof str !== 'string') return str || '';
+    return str
+        .replace(/Dasmari(?:[^\w\s]{1,8}|ñ|n|)?(?:as|a)?(?=\b|\s|,|$|\d)/gi, 'Dasmariñas')
+        .replace(/City of Dasmari[^\w\s]{1,8}(?:as|a)?/gi, 'City of Dasmariñas')
+        .replace(/Para[^\w\s]{1,8}aque/gi, 'Parañaque')
+        .replace(/├▒/g, 'ñ')
+        .replace(/├░/g, 'ñ')
+        .replace(/├æ/g, 'Ñ')
+        .replace(/Ã±/g, 'ñ')
+        .replace(/Ã‘/g, 'Ñ')
+        .replace(/├â╞Æ├é┬▒/g, 'ñ')
+        .replace(/├â┬▒/g, 'ñ')
+        .replace(/Γö£ΓûÆ/g, 'ñ')
+        .replace(/Ã©/g, 'é')
+        .replace(/Ã¨/g, 'è')
+        .replace(/Ã³/g, 'ó')
+        .replace(/Ã¡/g, 'á')
+        .replace(/Ãº/g, 'ú')
+        .replace(/Γé▒/g, '₱')
+        .replace(/â‚±/g, '₱')
+        .replace(/â‚/g, '₱')
+        .replace(/Ã¢â€šÂ±/g, '₱')
+        .replace(/\bré(\d+)/gi, '₱$1')
+        .replace(/â€¢/g, '•')
+        .replace(/â€“|ΓÇô/g, '–')
+        .replace(/â€”|ΓÇö/g, '—')
+        .replace(/â€™|ΓÇÖ/g, '’')
+        .replace(/â€˜|ΓÇÿ/g, '‘')
+        .replace(/â€œ/g, '“')
+        .replace(/â€/g, '”');
+}
+
 function escapeHtml(str) {
     if (!str) return '';
-    return String(str)
+    return String(fixMojibakeText(str))
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')

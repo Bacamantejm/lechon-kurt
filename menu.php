@@ -325,69 +325,17 @@ if ($store_result && mysqli_num_rows($store_result) > 0) {
 if (empty($store_locations)) {
     $store_locations = [
         [
-            'id' => 1,
-            'owner_user_id' => 0,
-            'name' => 'Dasmariñas Branch',
-            'street_address' => 'Governor Drive, Sampaloc 1',
-            'address' => 'Governor Drive, Sampaloc 1, Dasmariñas, Cavite',
-            'city' => 'Dasmariñas',
+            'id' => 7,
+            'owner_user_id' => 38,
+            'name' => 'jm lechon',
+            'street_address' => 'Blk 42 lot 32 50st metrogate, Salawag',
+            'address' => 'Blk 42 lot 32 50st metrogate, Salawag, City of Dasmariñas, Cavite (Partnership Scope)',
+            'city' => 'City of Dasmariñas',
             'province' => 'Cavite',
-            'phone' => '(046) 416-1234',
-            'hours' => '8:00 AM - 10:00 PM',
-            'latitude' => 14.32940000,
-            'longitude' => 120.93670000
-        ],
-        [
-            'id' => 2,
-            'owner_user_id' => 0,
-            'name' => 'Imus Branch',
-            'street_address' => 'Nueno Avenue, Poblacion',
-            'address' => 'Nueno Avenue, Poblacion, Imus, Cavite',
-            'city' => 'Imus',
-            'province' => 'Cavite',
-            'phone' => '(046) 471-5678',
-            'hours' => '8:00 AM - 10:00 PM',
-            'latitude' => 14.42970000,
-            'longitude' => 120.93670000
-        ],
-        [
-            'id' => 3,
-            'owner_user_id' => 0,
-            'name' => 'General Trias Branch',
-            'street_address' => 'Arnaldo Highway, San Francisco',
-            'address' => 'Arnaldo Highway, San Francisco, General Trias, Cavite',
-            'city' => 'General Trias',
-            'province' => 'Cavite',
-            'phone' => '(046) 509-9012',
-            'hours' => '8:00 AM - 10:00 PM',
-            'latitude' => 14.38690000,
-            'longitude' => 120.88090000
-        ],
-        [
-            'id' => 4,
-            'owner_user_id' => 0,
-            'name' => 'Bacoor Branch',
-            'street_address' => 'Aguinaldo Highway, Talaba',
-            'address' => 'Aguinaldo Highway, Talaba, Bacoor, Cavite',
-            'city' => 'Bacoor',
-            'province' => 'Cavite',
-            'phone' => '(046) 417-3456',
-            'hours' => '8:00 AM - 10:00 PM',
-            'latitude' => 14.46040000,
-            'longitude' => 120.96340000
-        ],
-        [
-            'id' => 5,
-            'owner_user_id' => 0,
-            'name' => 'Tagaytay Branch',
-            'street_address' => 'Emilio Aguinaldo Hwy, Silang Junction South',
-            'address' => 'Emilio Aguinaldo Hwy, Silang Junction South, Tagaytay, Cavite',
-            'city' => 'Tagaytay',
-            'province' => 'Cavite',
-            'phone' => '(046) 483-7890',
-            'hours' => '8:00 AM - 10:00 PM',
-            'latitude' => 14.11530000,
-            'longitude' => 120.96210000
+            'phone' => '09055657350',
+            'hours' => 'Daily | 8:00 AM - 8:00 PM',
+            'latitude' => 14.34680000,
+            'longitude' => 120.97120000
         ]
     ];
 }
@@ -594,10 +542,8 @@ if ($requested_seller_id > 0) {
     $query .= " AND p.seller_id = " . (int)$requested_seller_id;
 } elseif ($requested_branch_id > 0) {
     $branch_owner = $selected_pickup_branch ? (int)($selected_pickup_branch['owner_user_id'] ?? 0) : 0;
-    if ($branch_owner > 0 && !in_array($branch_owner, [0, 1, 42, 43, 44, 45], true)) {
+    if ($branch_owner > 0) {
         $query .= " AND p.seller_id = " . (int)$branch_owner;
-    } else {
-        $query .= " AND (p.seller_id = 1 OR p.seller_id IS NULL" . ($branch_owner > 0 ? " OR p.seller_id = " . (int)$branch_owner : "") . ")";
     }
 }
 $query .= " ORDER BY p.category, p.name";

@@ -159,9 +159,7 @@ function locationsMenuLink(array $store): string {
     return empty($params) ? 'menu.php' : 'menu.php?' . http_build_query($params);
 }
 function locationsBranchFallbacks(): array {
-    return [
-        ['id'=>1004,'name'=>'General Trias, Cavite Branch','address'=>"9002 Governor's Drive, Manggahan",'city'=>'General Trias','province'=>'Cavite','phone'=>'0917-887-2168','email'=>'gentrias@lechondelights.com','hours'=>'8:00 AM - 8:00 PM','latitude'=>null,'longitude'=>null],
-    ];
+    return [];
 }
 
 $branches = [];

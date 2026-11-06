@@ -212,9 +212,14 @@ if (!function_exists('isDeliveryDriverUser')) {
                 }
             }
 
-            // Fallback default: Store 1 (Dasmariñas Branch)
+            // Fallback default: JM Lechon store
             if ($store_id_val <= 0) {
-                $store_id_val = 1;
+                $st_q = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE is_active = 1 ORDER BY CASE WHEN store_name LIKE '%jm lechon%' THEN 0 ELSE 1 END, store_id ASC LIMIT 1");
+                if ($st_q && ($st_r = mysqli_fetch_assoc($st_q))) {
+                    $store_id_val = (int)$st_r['store_id'];
+                } else {
+                    $store_id_val = 7;
+                }
             }
 
             $s_sql_val = $store_id_val > 0 ? $store_id_val : "NULL";
