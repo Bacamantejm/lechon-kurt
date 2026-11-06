@@ -6309,34 +6309,61 @@ document.addEventListener('DOMContentLoaded', function() {
                 try {
                     const json = JSON.parse(data);
                     if (json.success) {
-                        window.location.reload();
+                        const userName = json.full_name || 'Customer';
+                        const redirectUrl = json.redirect || window.location.href;
+                        if (submitBtn) {
+                            submitBtn.disabled = true;
+                            submitBtn.innerHTML = '<i class="fas fa-check-circle"></i> <span>Success! Redirecting...</span>';
+                            submitBtn.style.background = '#027a48';
+                        }
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Login Successful',
+                                text: 'Welcome back, ' + userName + '! Redirecting to your dashboard...',
+                                confirmButtonText: 'Continue',
+                                confirmButtonColor: '#b3261e',
+                                timer: 1800,
+                                timerProgressBar: true,
+                                allowOutsideClick: false,
+                                willClose: () => {
+                                    window.location.href = redirectUrl;
+                                }
+                            }).then(() => {
+                                window.location.href = redirectUrl;
+                            });
+                        } else {
+                            window.location.href = redirectUrl;
+                        }
                         return;
                     }
                 } catch(e) {}
                 
                 if (data.includes('alert-error') || data.includes('Invalid email or password')) {
                     const errorMatch = data.match(/alert-error.*?<div>(.*?)<\/div>/s);
-                    const errMsg = errorMatch ? errorMatch[1].trim() : 'Invalid email or password';
-                    if (window.showPopupAlert) {
-                        window.showPopupAlert(errMsg, 'error');
-                    } else if (typeof Swal !== 'undefined') {
+                    const errMsg = errorMatch ? errorMatch[1].trim() : 'Invalid email/phone or password';
+                    if (typeof Swal !== 'undefined') {
                         Swal.fire({
                             icon: 'error',
                             title: 'Sign In Failed',
                             text: errMsg,
+                            confirmButtonText: 'OK',
                             confirmButtonColor: '#b3261e'
                         });
+                    } else if (window.showPopupAlert) {
+                        window.showPopupAlert(errMsg, 'error');
                     }
                 } else {
-                    if (window.showPopupAlert) {
-                        window.showPopupAlert('An unexpected error occurred. Please try again.', 'error');
-                    } else if (typeof Swal !== 'undefined') {
+                    if (typeof Swal !== 'undefined') {
                         Swal.fire({
                             icon: 'error',
-                            title: 'Error',
+                            title: 'Sign In Error',
                             text: 'An unexpected error occurred. Please try again.',
+                            confirmButtonText: 'OK',
                             confirmButtonColor: '#b3261e'
                         });
+                    } else if (window.showPopupAlert) {
+                        window.showPopupAlert('An unexpected error occurred. Please try again.', 'error');
                     }
                 }
                 

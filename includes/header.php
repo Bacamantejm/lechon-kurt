@@ -1358,7 +1358,8 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             left: 8.5px !important;
             transform: rotate(-45deg) !important;
         }
-        .swal2-popup.swal2-toast .swal2-timer-progress-bar {
+        .swal2-timer-progress-bar,
+        .swal2-popup .swal2-timer-progress-bar {
             background: #b3261e !important;
             height: 3px !important;
         }

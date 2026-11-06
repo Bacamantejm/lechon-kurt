@@ -1489,14 +1489,40 @@ document.addEventListener('DOMContentLoaded', function() {
                 try {
                     const jsonData = JSON.parse(data);
                     if (jsonData.success) {
-                        // Login successful, use server-provided redirect URL
-                        window.location.href = jsonData.redirect;
+                        const userName = jsonData.full_name || 'Customer';
+                        const redirectUrl = jsonData.redirect || 'index.php';
+                        if (btn) {
+                            btn.disabled = true;
+                            btn.classList.remove('loading');
+                            btn.innerHTML = '<i class="fas fa-check-circle"></i> <span>Success! Redirecting...</span>';
+                            btn.style.background = '#027a48';
+                        }
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Login Successful',
+                                text: 'Welcome back, ' + userName + '! Redirecting to your dashboard...',
+                                confirmButtonText: 'Continue',
+                                confirmButtonColor: '#b3261e',
+                                timer: 1800,
+                                timerProgressBar: true,
+                                allowOutsideClick: false,
+                                willClose: () => {
+                                    window.location.href = redirectUrl;
+                                }
+                            }).then(() => {
+                                window.location.href = redirectUrl;
+                            });
+                        } else {
+                            window.location.href = redirectUrl;
+                        }
                         return;
                     } else if (jsonData.message) {
                         Swal.fire({
                             icon: 'error',
-                            title: 'Login Failed',
+                            title: 'Sign In Failed',
                             text: jsonData.message,
+                            confirmButtonText: 'OK',
                             confirmButtonColor: '#b3261e'
                         });
                         if (btn) {
@@ -1517,12 +1543,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.includes('alert-error') || data.includes('Invalid email or password')) {
                     // Extract error message
                     const errorMatch = data.match(/alert-error.*?<div>(.*?)<\/div>/s);
-                    const errorMessage = errorMatch ? errorMatch[1].trim() : 'Invalid email or password';
+                    const errorMessage = errorMatch ? errorMatch[1].trim() : 'Invalid email/phone or password';
                     
                     Swal.fire({
                         icon: 'error',
-                        title: 'Login Failed',
+                        title: 'Sign In Failed',
                         text: errorMessage,
+                        confirmButtonText: 'OK',
                         confirmButtonColor: '#b3261e'
                     });
                     
@@ -1541,8 +1568,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Error:', error);
                 Swal.fire({
                     icon: 'error',
-                    title: 'Login Error',
+                    title: 'Sign In Error',
                     text: 'An error occurred while trying to log in. Please try again.',
+                    confirmButtonText: 'OK',
                     confirmButtonColor: '#b3261e'
                 });
                 
@@ -1700,28 +1728,30 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     <?php if ($error): ?>
-    if (window.showPopupAlert) {
-        window.showPopupAlert(<?php echo json_encode($error); ?>, 'error', 5000);
-    } else if (typeof Swal !== 'undefined') {
+    if (typeof Swal !== 'undefined') {
         Swal.fire({
             icon: 'error',
-            title: 'Login Error',
+            title: 'Sign In Failed',
             text: <?php echo json_encode($error); ?>,
+            confirmButtonText: 'OK',
             confirmButtonColor: '#b3261e'
         });
+    } else if (window.showPopupAlert) {
+        window.showPopupAlert(<?php echo json_encode($error); ?>, 'error', 5000);
     }
     <?php endif; ?>
     
     <?php if ($success): ?>
-    if (window.showPopupAlert) {
-        window.showPopupAlert(<?php echo json_encode($success); ?>, 'success', 4000);
-    } else if (typeof Swal !== 'undefined') {
+    if (typeof Swal !== 'undefined') {
         Swal.fire({
             icon: 'success',
-            title: 'Success!',
-            html: <?php echo json_encode($success); ?>,
+            title: 'Login Successful',
+            text: <?php echo json_encode($success); ?>,
+            confirmButtonText: 'Continue',
             confirmButtonColor: '#b3261e'
         });
+    } else if (window.showPopupAlert) {
+        window.showPopupAlert(<?php echo json_encode($success); ?>, 'success', 4000);
     }
     <?php endif; ?>
 });
