@@ -481,6 +481,15 @@ $order_store_id_select = $has_order_store_id ? 'o.store_id' : 'NULL AS store_id'
 $order_store_join_key = $has_order_store_id
     ? 'COALESCE(NULLIF(o.store_id, 0), NULLIF(o.pickup_location, 0))'
     : 'o.pickup_location';
+$order_product_seller_sql = "(SELECT product_owner.seller_id
+    FROM order_items order_item_owner
+    INNER JOIN products product_owner
+        ON (product_owner.product_id = order_item_owner.product_id OR product_owner.id = order_item_owner.product_id)
+    WHERE order_item_owner.order_id = o.id
+      AND product_owner.seller_id IS NOT NULL
+      AND product_owner.seller_id > 0
+    ORDER BY order_item_owner.id ASC
+    LIMIT 1)";
 
 $proof_parts = [];
 if ($has_lt_proof_col) {
@@ -521,7 +530,21 @@ $query = "
         {$order_store_id_select},
         o.delivery_location,
         o.is_archived,
-        COALESCE(NULLIF(TRIM(sl.store_name), ''), NULLIF(TRIM(seller.business_name), ''), NULLIF(TRIM(seller.full_name), ''), 'Lechon Delights') AS store_name,
+        COALESCE(
+            (SELECT NULLIF(TRIM(order_store.store_name), '')
+             FROM store_locations order_store
+             WHERE order_store.store_id = {$order_store_join_key}
+               AND order_store.owner_user_id = COALESCE(NULLIF({$order_product_seller_sql}, 0), NULLIF(o.seller_id, 0))
+             LIMIT 1),
+            (SELECT NULLIF(TRIM(product_store.store_name), '')
+             FROM store_locations product_store
+             WHERE product_store.owner_user_id = COALESCE(NULLIF({$order_product_seller_sql}, 0), NULLIF(o.seller_id, 0))
+             ORDER BY product_store.is_active DESC, product_store.store_id ASC
+             LIMIT 1),
+            NULLIF(TRIM(seller.business_name), ''),
+            NULLIF(TRIM(seller.full_name), ''),
+            'Lechon Delights'
+        ) AS store_name,
         {$proof_photo_sql},
         oi.product_name,
         oi.price,
@@ -531,7 +554,6 @@ $query = "
         oi.total as item_total,
         p.image as product_image
     FROM orders o
-    LEFT JOIN store_locations sl ON sl.store_id = {$order_store_join_key}
     LEFT JOIN users seller ON seller.id = o.seller_id
     LEFT JOIN logistics_tracking lt ON lt.order_id = o.id
     LEFT JOIN order_items oi ON o.id = oi.order_id
