@@ -2796,8 +2796,6 @@ if ($roles_query instanceof mysqli_result) {
                                             <i class="fas fa-info-circle"></i> Physical RFID card or employee badge number for attendance.
                                         </div>
                                     </div>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -3102,8 +3100,6 @@ if ($roles_query instanceof mysqli_result) {
                                         </div>
                                         <div class="emp-helper-text">
                                             <i class="fas fa-info-circle"></i> Physical RFID card or employee badge number for attendance.
-                                        </div>
-                                    </div>
                                         </div>
                                     </div>
                                 </div>
