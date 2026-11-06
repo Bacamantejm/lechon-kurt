@@ -454,6 +454,184 @@ if (!function_exists('ensureUserStoreBannerSchema')) {
     }
 }
 
+if (!function_exists('ensureOnlyJmLechonStoreAndMenu')) {
+    /**
+     * Remove all sample stores, sample branch manager users, and sample/test menu items from database,
+     * retaining exclusively JM Lechon shop and its genuine lechon menu products.
+     */
+    function ensureOnlyJmLechonStoreAndMenu($conn): void {
+        static $executed = false;
+        if ($executed || !$conn || !($conn instanceof mysqli)) return;
+        $executed = true;
+
+        try {
+            if (!appTableExists($conn, 'store_locations') || !appTableExists($conn, 'users')) {
+                return;
+            }
+
+            // 1. Locate JM Lechon's user account (JM Bacamante, jm@gmail.com)
+            $jm_user_id = 0;
+            $u_res = @mysqli_query($conn, "SELECT id FROM users WHERE email = 'jm@gmail.com' OR business_name = 'jm lechon' ORDER BY (email = 'jm@gmail.com') DESC, id ASC LIMIT 1");
+            if ($u_res && ($u_row = mysqli_fetch_assoc($u_res))) {
+                $jm_user_id = (int)$u_row['id'];
+            }
+
+            // 2. Locate or ensure JM Lechon's store location
+            $jm_store_id = 0;
+            $s_res = @mysqli_query($conn, "SELECT store_id FROM store_locations WHERE " . ($jm_user_id > 0 ? "owner_user_id = {$jm_user_id} OR " : "") . "store_name LIKE '%jm lechon%' OR email = 'jm@gmail.com' ORDER BY store_id ASC LIMIT 1");
+            if ($s_res && ($s_row = mysqli_fetch_assoc($s_res))) {
+                $jm_store_id = (int)$s_row['store_id'];
+            }
+
+            if ($jm_store_id <= 0) {
+                $owner_sql = $jm_user_id > 0 ? (int)$jm_user_id : "NULL";
+                @mysqli_query(
+                    $conn,
+                    "INSERT INTO store_locations (store_id, owner_user_id, store_name, address, city, province, phone, email, opening_hours, opening_time, closing_time, operating_days, availability_mode, manual_status, latitude, longitude, is_active)
+                     VALUES (7, {$owner_sql}, 'jm lechon', 'Blk 42 lot 32 50st metrogate, Salawag, City of Dasmariñas, Cavite (Partnership Scope), CALABARZON', 'City of Dasmariñas', 'Cavite (Partnership Scope)', '09055657350', 'jm@gmail.com', 'Daily | 8:00 AM - 8:00 PM', '08:00:00', '20:00:00', '1,2,3,4,5,6,7', 'schedule', 'open', 14.3468000, 120.9712000, 1)
+                     ON DUPLICATE KEY UPDATE store_name = 'jm lechon', is_active = 1"
+                );
+                $jm_store_id = 7;
+            } else {
+                @mysqli_query($conn, "UPDATE store_locations SET store_name = 'jm lechon', is_active = 1 WHERE store_id = {$jm_store_id}");
+            }
+
+            // 3. Re-align orders, riders, preorders to JM Lechon store
+            if (appTableExists($conn, 'orders')) {
+                if (appColumnExists($conn, 'orders', 'store_id')) {
+                    @mysqli_query($conn, "UPDATE orders SET store_id = {$jm_store_id} WHERE store_id IS NOT NULL AND store_id <> {$jm_store_id}");
+                }
+                if (appColumnExists($conn, 'orders', 'pickup_location')) {
+                    @mysqli_query($conn, "UPDATE orders SET pickup_location = {$jm_store_id} WHERE pickup_location IS NOT NULL AND pickup_location <> {$jm_store_id}");
+                }
+            }
+            if (appTableExists($conn, 'riders') && appColumnExists($conn, 'riders', 'store_id')) {
+                @mysqli_query($conn, "UPDATE riders SET store_id = {$jm_store_id} WHERE store_id IS NOT NULL AND store_id <> {$jm_store_id}");
+            }
+            if (appTableExists($conn, 'pre_orders') && appColumnExists($conn, 'pre_orders', 'pickup_location')) {
+                @mysqli_query($conn, "UPDATE pre_orders SET pickup_location = {$jm_store_id} WHERE pickup_location IS NOT NULL AND pickup_location <> {$jm_store_id}");
+            }
+
+            // 4. Remove all other sample stores except JM Lechon
+            @mysqli_query($conn, "DELETE FROM store_locations WHERE store_id <> {$jm_store_id}");
+
+            // 5. Remove sample branch manager user accounts
+            @mysqli_query($conn, "DELETE FROM users WHERE email IN ('dasma@lechondelights.com', 'bacoor@lechondelights.com', 'imus@lechondelights.com', 'tagaytay@lechondelights.com', 'jannasantos@gmail.com', 'justinehero033@gmail.com') OR business_name IN ('Dasmariñas Central Branch', 'Bacoor Express Branch', 'Imus Heritage Branch', 'Tagaytay Ridge Branch', 'Janna Restaurant', 'justine business')");
+
+            // 6. Clean shop_preorder_schedules
+            if (appTableExists($conn, 'shop_preorder_schedules')) {
+                $del_sched_where = "seller_id <> {$jm_store_id}";
+                if ($jm_user_id > 0) {
+                    $del_sched_where .= " AND seller_id <> {$jm_user_id}";
+                }
+                @mysqli_query($conn, "DELETE FROM shop_preorder_schedules WHERE {$del_sched_where}");
+            }
+
+            // 7. Clean Products / Menu:
+            if (appTableExists($conn, 'products')) {
+                // Delete test/mock/joke items (Panis, tae, Lydia, Linda)
+                @mysqli_query($conn, "DELETE FROM products WHERE name LIKE '%panis%' OR name LIKE '%tae%' OR name LIKE '%Lydia%' OR name LIKE '%Linda%'");
+                
+                // Assign genuine lechon menu items to JM Lechon shop
+                if ($jm_user_id > 0) {
+                    @mysqli_query($conn, "UPDATE products SET seller_id = {$jm_user_id}, is_active = 1, is_archived = 0 WHERE id IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 22, 23, 24, 25, 26, 27) OR seller_id IS NULL OR seller_id = 1");
+                    // Delete any remaining products not belonging to JM Lechon
+                    @mysqli_query($conn, "DELETE FROM products WHERE seller_id <> {$jm_user_id}");
+                }
+            }
+
+            // Clean orphaned cart items
+            if (appTableExists($conn, 'cart') && appTableExists($conn, 'products')) {
+                @mysqli_query($conn, "DELETE FROM cart WHERE product_id NOT IN (SELECT id FROM products)");
+            }
+        } catch (Throwable $e) {
+            // Silently allow continuation
+        }
+    }
+}
+
+if (!function_exists('ensureMojibakeEncodingRepaired')) {
+    /**
+     * Auto-repair corrupted character encoding (mojibake) in the database.
+     * Fixes sequences such as Dasmari├▒as, Dasmari├▒a, ├▒, ├░, ├æ, Ã±, Ã‘, Γé▒, â‚±, etc.
+     */
+    function ensureMojibakeEncodingRepaired($conn) {
+        static $checked = false;
+        if ($checked || !$conn || !($conn instanceof mysqli)) return;
+        $checked = true;
+
+        try {
+            // Repair orders
+            if (appTableExists($conn, 'orders')) {
+                $check = @mysqli_query($conn, "SELECT id FROM `orders` WHERE `delivery_address` LIKE '%├%' OR `delivery_address` LIKE '%Ã%' OR `delivery_address` LIKE '%Γ%' OR `customer_name` LIKE '%├%' OR `customer_name` LIKE '%Ã%' LIMIT 1");
+                if ($check && mysqli_num_rows($check) > 0) {
+                    @mysqli_query($conn, "UPDATE `orders` SET `delivery_address` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`delivery_address`, 'Dasmari├▒as', 'Dasmariñas'), 'Dasmari├▒a', 'Dasmariñas'), 'DasmariÃ±as', 'Dasmariñas'), 'DasmariÃ±a', 'Dasmariñas'), 'Dasmari├æas', 'Dasmariñas'), 'DasmariÃ‘as', 'Dasmariñas'), '├▒', 'ñ'), '├░', 'ñ'), '├æ', 'Ñ'), 'Ã±', 'ñ'), 'Ã‘', 'Ñ'), 'Ã©', 'é') WHERE `delivery_address` LIKE '%├%' OR `delivery_address` LIKE '%Ã%'");
+                    @mysqli_query($conn, "UPDATE `orders` SET `customer_name` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`customer_name`, 'Dasmari├▒as', 'Dasmariñas'), '├▒', 'ñ'), '├░', 'ñ'), '├æ', 'Ñ'), 'Ã±', 'ñ'), 'Ã‘', 'Ñ') WHERE `customer_name` LIKE '%├%' OR `customer_name` LIKE '%Ã%'");
+                    if (appColumnExists($conn, 'orders', 'shipping_address')) {
+                        @mysqli_query($conn, "UPDATE `orders` SET `shipping_address` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`shipping_address`, 'Dasmari├▒as', 'Dasmariñas'), '├▒', 'ñ'), '├░', 'ñ'), '├æ', 'Ñ'), 'Ã±', 'ñ'), 'Ã‘', 'Ñ') WHERE `shipping_address` LIKE '%├%' OR `shipping_address` LIKE '%Ã%'");
+                    }
+                    if (appColumnExists($conn, 'orders', 'billing_address')) {
+                        @mysqli_query($conn, "UPDATE `orders` SET `billing_address` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`billing_address`, 'Dasmari├▒as', 'Dasmariñas'), '├▒', 'ñ'), '├░', 'ñ'), '├æ', 'Ñ'), 'Ã±', 'ñ'), 'Ã‘', 'Ñ') WHERE `billing_address` LIKE '%├%' OR `billing_address` LIKE '%Ã%'");
+                    }
+                }
+            }
+
+            // Repair logistics_tracking
+            if (appTableExists($conn, 'logistics_tracking')) {
+                $check = @mysqli_query($conn, "SELECT id FROM `logistics_tracking` WHERE `delivery_address` LIKE '%├%' OR `delivery_address` LIKE '%Ã%' OR `customer_name` LIKE '%├%' OR `customer_name` LIKE '%Ã%' LIMIT 1");
+                if ($check && mysqli_num_rows($check) > 0) {
+                    @mysqli_query($conn, "UPDATE `logistics_tracking` SET `delivery_address` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`delivery_address`, 'Dasmari├▒as', 'Dasmariñas'), 'Dasmari├▒a', 'Dasmariñas'), 'DasmariÃ±as', 'Dasmariñas'), 'DasmariÃ±a', 'Dasmariñas'), 'Dasmari├æas', 'Dasmariñas'), 'DasmariÃ‘as', 'Dasmariñas'), '├▒', 'ñ'), '├░', 'ñ'), '├æ', 'Ñ'), 'Ã±', 'ñ'), 'Ã‘', 'Ñ'), 'Ã©', 'é') WHERE `delivery_address` LIKE '%├%' OR `delivery_address` LIKE '%Ã%'");
+                    @mysqli_query($conn, "UPDATE `logistics_tracking` SET `customer_name` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`customer_name`, 'Dasmari├▒as', 'Dasmariñas'), '├▒', 'ñ'), '├░', 'ñ'), '├æ', 'Ñ'), 'Ã±', 'ñ'), 'Ã‘', 'Ñ') WHERE `customer_name` LIKE '%├%' OR `customer_name` LIKE '%Ã%'");
+                    if (appColumnExists($conn, 'logistics_tracking', 'driver_name')) {
+                        @mysqli_query($conn, "UPDATE `logistics_tracking` SET `driver_name` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`driver_name`, 'Dasmari├▒as', 'Dasmariñas'), '├▒', 'ñ'), '├░', 'ñ'), '├æ', 'Ñ'), 'Ã±', 'ñ'), 'Ã‘', 'Ñ') WHERE `driver_name` LIKE '%├%' OR `driver_name` LIKE '%Ã%'");
+                    }
+                }
+            }
+
+            // Repair store_locations
+            if (appTableExists($conn, 'store_locations')) {
+                $check = @mysqli_query($conn, "SELECT store_id FROM `store_locations` WHERE `store_name` LIKE '%├%' OR `address` LIKE '%├%' OR `city` LIKE '%├%' OR `city` LIKE '%Ã%' LIMIT 1");
+                if ($check && mysqli_num_rows($check) > 0) {
+                    @mysqli_query($conn, "UPDATE `store_locations` SET `store_name` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`store_name`, 'Dasmari├▒as', 'Dasmariñas'), 'Dasmari├▒a', 'Dasmariñas'), '├▒', 'ñ'), '├░', 'ñ'), 'Ã±', 'ñ'), '├æ', 'Ñ') WHERE `store_name` LIKE '%├%' OR `store_name` LIKE '%Ã%'");
+                    @mysqli_query($conn, "UPDATE `store_locations` SET `address` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`address`, 'Dasmari├▒as', 'Dasmariñas'), 'Dasmari├▒a', 'Dasmariñas'), '├▒', 'ñ'), '├░', 'ñ'), 'Ã±', 'ñ'), '├æ', 'Ñ') WHERE `address` LIKE '%├%' OR `address` LIKE '%Ã%'");
+                    @mysqli_query($conn, "UPDATE `store_locations` SET `city` = 'Dasmariñas' WHERE (`city` LIKE 'Dasmari%as%' OR `city` LIKE 'Dasmari%a%' OR `city` LIKE '%Dasmari%') AND `city` <> 'Dasmariñas'");
+                }
+            }
+
+            // Repair user_saved_addresses
+            if (appTableExists($conn, 'user_saved_addresses')) {
+                $check = @mysqli_query($conn, "SELECT id FROM `user_saved_addresses` WHERE `address` LIKE '%├%' OR `city` LIKE '%├%' OR `city` LIKE '%Ã%' LIMIT 1");
+                if ($check && mysqli_num_rows($check) > 0) {
+                    @mysqli_query($conn, "UPDATE `user_saved_addresses` SET `address` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`address`, 'Dasmari├▒as', 'Dasmariñas'), 'Dasmari├▒a', 'Dasmariñas'), '├▒', 'ñ'), '├░', 'ñ'), 'Ã±', 'ñ'), '├æ', 'Ñ') WHERE `address` LIKE '%├%' OR `address` LIKE '%Ã%'");
+                    @mysqli_query($conn, "UPDATE `user_saved_addresses` SET `city` = 'Dasmariñas' WHERE (`city` LIKE 'Dasmari%as%' OR `city` LIKE 'Dasmari%a%' OR `city` LIKE '%Dasmari%') AND `city` <> 'Dasmariñas'");
+                }
+            }
+
+            // Repair users
+            if (appTableExists($conn, 'users')) {
+                $check = @mysqli_query($conn, "SELECT id FROM `users` WHERE `full_name` LIKE '%├%' OR `business_name` LIKE '%├%' OR `address` LIKE '%├%' LIMIT 1");
+                if ($check && mysqli_num_rows($check) > 0) {
+                    @mysqli_query($conn, "UPDATE `users` SET `full_name` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`full_name`, 'Dasmari├▒as', 'Dasmariñas'), '├▒', 'ñ'), '├░', 'ñ'), 'Ã±', 'ñ'), '├æ', 'Ñ'), 'Ã‘', 'Ñ') WHERE `full_name` LIKE '%├%' OR `full_name` LIKE '%Ã%'");
+                    @mysqli_query($conn, "UPDATE `users` SET `business_name` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`business_name`, 'Dasmari├▒as', 'Dasmariñas'), '├▒', 'ñ'), '├░', 'ñ'), 'Ã±', 'ñ'), '├æ', 'Ñ'), 'Ã‘', 'Ñ') WHERE `business_name` LIKE '%├%' OR `business_name` LIKE '%Ã%'");
+                    @mysqli_query($conn, "UPDATE `users` SET `address` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`address`, 'Dasmari├▒as', 'Dasmariñas'), 'Dasmari├▒a', 'Dasmariñas'), '├▒', 'ñ'), '├░', 'ñ'), 'Ã±', 'ñ'), '├æ', 'Ñ') WHERE `address` LIKE '%├%' OR `address` LIKE '%Ã%'");
+                }
+            }
+
+            // Repair franchise_applications
+            if (appTableExists($conn, 'franchise_applications')) {
+                $check = @mysqli_query($conn, "SELECT id FROM `franchise_applications` WHERE `address` LIKE '%├%' OR `city_name` LIKE '%├%' OR `business_address` LIKE '%├%' LIMIT 1");
+                if ($check && mysqli_num_rows($check) > 0) {
+                    @mysqli_query($conn, "UPDATE `franchise_applications` SET `address` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`address`, 'Dasmari├▒as', 'Dasmariñas'), 'Dasmari├▒a', 'Dasmariñas'), '├▒', 'ñ'), '├░', 'ñ'), 'Ã±', 'ñ'), '├æ', 'Ñ') WHERE `address` LIKE '%├%' OR `address` LIKE '%Ã%'");
+                    @mysqli_query($conn, "UPDATE `franchise_applications` SET `business_address` = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(`business_address`, 'Dasmari├▒as', 'Dasmariñas'), 'Dasmari├▒a', 'Dasmariñas'), '├▒', 'ñ'), '├░', 'ñ'), 'Ã±', 'ñ'), '├æ', 'Ñ') WHERE `business_address` LIKE '%├%' OR `business_address` LIKE '%Ã%'");
+                    @mysqli_query($conn, "UPDATE `franchise_applications` SET `city_name` = 'City of Dasmariñas' WHERE (`city_name` LIKE 'City of Dasmari%' OR `city_name` LIKE '%Dasmari%') AND `city_name` <> 'City of Dasmariñas'");
+                }
+            }
+        } catch (Throwable $e) {
+            // Silently allow continuation
+        }
+    }
+}
+
 if (!function_exists('resolveDistinctStoreImage')) {
     function resolveDistinctStoreImage($store_id, $store_name = '', $custom_image = ''): string {
         $custom = trim((string)$custom_image);
@@ -517,12 +695,6 @@ if (!function_exists('resolveDistinctStoreImage')) {
 
         // Specific branch mappings for canonical branches so each has a distinct photo
         $named_map = [
-            1 => 'images/panda_fresh_lechon.jpg',                       // Dasmariñas Branch
-            2 => 'images/panda_preorder_lechon.jpg',                    // Imus Branch
-            3 => 'images/menu/lechon.jpg',                              // General Trias Branch
-            4 => 'uploads/products/1773731574_69b8fef6a5cc3.jpg',       // Bacoor Branch
-            5 => 'uploads/products/1773731101_69b8fd1d0eb94.jpg',       // Tagaytay Branch
-            6 => 'uploads/products/1773731810_69b8ffe20dddb.jpg',       // Silang Branch
             7 => 'uploads/products/1773732340_69b901f4980cc.jpg',       // jm lechon (fallback until custom banner uploaded)
         ];
 
@@ -2008,6 +2180,8 @@ function authenticateRememberMeUser($conn) {
 
 // Automatically check and restore user session from remember cookie
 if (isset($conn) && $conn instanceof mysqli) {
+    ensureMojibakeEncodingRepaired($conn);
+    ensureOnlyJmLechonStoreAndMenu($conn);
     authenticateRememberMeUser($conn);
 }
 ?>

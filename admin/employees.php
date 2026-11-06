@@ -2438,7 +2438,7 @@ if ($roles_query instanceof mysqli_result) {
                                     </div>
                                     <div class="emp-contact-item" title="Assigned Store Branch">
                                         <i class="fas fa-store text-danger"></i>
-                                        <span class="fw-semibold text-dark"><?php echo htmlspecialchars($emp['store_branch_name'] ?? 'Dasmariñas Branch'); ?></span>
+                                        <span class="fw-semibold text-dark"><?php echo htmlspecialchars($emp['store_branch_name'] ?? 'jm lechon'); ?></span>
                                     </div>
                                 </div>
 

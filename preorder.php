@@ -248,28 +248,15 @@ function preorderGetStoreImage($store_id, $store_name, $custom_image = '') {
     }
     
     $image_map = [
-        1 => 'images/store-bg.jpg',               // Dasmariñas Central Branch
-        2 => 'images/panda_preorder_lechon.jpg',  // Bacoor Express Branch
-        3 => 'images/about-us-bg.jpg',             // Imus Heritage Branch
-        4 => 'images/hero-bg.jpg',                 // Tagaytay Ridge Branch
-        5 => 'images/panda_fresh_lechon.jpg',     // Janna Restaurant
-        6 => 'images/store-bg.jpg',               // Justine Business
         7 => 'images/panda_preorder_lechon.jpg',  // JM Lechon
     ];
     if (isset($image_map[$store_id])) {
         return $image_map[$store_id];
     }
-    
-    $name_lower = strtolower((string)$store_name);
-    if (str_contains($name_lower, 'lydia')) return 'images/panda_fresh_lechon.jpg';
-    if (str_contains($name_lower, 'linda')) return 'images/about-us-bg.jpg';
-    if (str_contains($name_lower, 'tagaytay')) return 'images/hero-bg.jpg';
-    if (str_contains($name_lower, 'bacoor')) return 'images/panda_preorder_lechon.jpg';
-    if (str_contains($name_lower, 'imus')) return 'images/about-us-bg.jpg';
-    return 'images/store-bg.jpg';
+    return 'images/panda_preorder_lechon.jpg';
 }
 
-$official_owner_ids = [0, 1, 42, 43, 44, 45];
+$official_owner_ids = [0, 1];
 
 // Fetch active store locations & partner vendor stores for pick-up / pre-order
 $stores = [];

@@ -542,10 +542,10 @@ if ($stmt) {
             $orders[$order_id] = [
                 'id' => $row['id'],
                 'order_number' => $row['order_number'],
-                'customer_name' => $row['customer_name'],
+                'customer_name' => function_exists('fixMojibakeText') ? fixMojibakeText($row['customer_name']) : $row['customer_name'],
                 'customer_email' => $row['customer_email'],
                 'customer_phone' => $row['customer_phone'],
-                'delivery_address' => $row['delivery_address'],
+                'delivery_address' => function_exists('fixMojibakeText') ? fixMojibakeText($row['delivery_address']) : $row['delivery_address'],
                 'delivery_date' => $row['delivery_date'],
                 'delivery_time' => $row['delivery_time'],
                 'payment_method' => $row['payment_method'],

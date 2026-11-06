@@ -122,19 +122,16 @@ function sahEnsureStoreLocationAvailabilitySchema($conn): void
         mysqli_query($conn, "ALTER TABLE store_locations ADD INDEX idx_store_email (email)");
     }
 
-    // Auto-heal any corrupted mojibake characters in database (Peso Γé▒50, Dasmari├▒a, ñ, etc.)
+    // Auto-clean database: keep exclusively JM Lechon store & repair mojibake
     static $mojibake_repaired = false;
     if (!$mojibake_repaired) {
         $mojibake_repaired = true;
-        // 1. Store Locations
-        @mysqli_query($conn, "UPDATE store_locations SET store_name = 'Dasmariñas Branch' WHERE (store_id = 1 OR store_name LIKE 'Dasmari%as%' OR store_name LIKE 'Dasmari%a%' OR store_name LIKE '%├%' OR store_name LIKE '%Ã%') AND store_name <> 'Dasmariñas Branch'");
-        @mysqli_query($conn, "UPDATE store_locations SET city = 'Dasmariñas' WHERE (city LIKE 'Dasmari%as%' OR city LIKE 'Dasmari%a%' OR city LIKE '%Dasmari%' OR city LIKE '%├%' OR city LIKE '%Ã%') AND city <> 'Dasmariñas'");
-        @mysqli_query($conn, "UPDATE store_locations SET address = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(address, '├░', 'ñ'), '├▒', 'ñ'), 'Ã±', 'ñ'), 'Γö£ΓûÆ', 'ñ'), 'Dasmari├▒a', 'Dasmariña') WHERE address LIKE '%├%' OR address LIKE '%Ã%'");
-
-        // 2. Users (Branch Managers & Addresses)
-        @mysqli_query($conn, "UPDATE users SET full_name = 'Dasmariñas Branch Manager' WHERE email = 'dasma@lechondelights.com' AND full_name <> 'Dasmariñas Branch Manager'");
-        @mysqli_query($conn, "UPDATE users SET business_name = 'Dasmariñas Central Branch' WHERE email = 'dasma@lechondelights.com' AND business_name <> 'Dasmariñas Central Branch'");
-        @mysqli_query($conn, "UPDATE users SET address = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(address, '├░', 'ñ'), '├▒', 'ñ'), 'Ã±', 'ñ'), 'Γö£ΓûÆ', 'ñ'), 'Dasmari├▒a', 'Dasmariña') WHERE address LIKE '%├%' OR address LIKE '%Ã%'");
+        if (function_exists('ensureOnlyJmLechonStoreAndMenu')) {
+            ensureOnlyJmLechonStoreAndMenu($conn);
+        }
+        if (function_exists('ensureMojibakeEncodingRepaired')) {
+            ensureMojibakeEncodingRepaired($conn);
+        }
 
         // 3. Partner Vouchers (Replace Γé▒50, â‚±, ré50 with clean ₱50)
         @mysqli_query($conn, "UPDATE partner_vouchers SET name = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(name, 'Ã¢â€šÂ±', '₱'), 'Γé▒', '₱'), 'â‚±', '₱'), 'â‚', '₱'), 'ré50', '₱50'), 'ré25', '₱25') WHERE name LIKE '%Γé▒%' OR name LIKE '%â‚%' OR name LIKE '%ré%'");
@@ -648,6 +645,12 @@ function sahFetchPartnerStoreLocations($conn, int $owner_user_id): array
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
     while ($result && ($row = mysqli_fetch_assoc($result))) {
+        if (function_exists('fixMojibakeText')) {
+            $row['store_name'] = fixMojibakeText((string)($row['store_name'] ?? ''));
+            $row['address'] = fixMojibakeText((string)($row['address'] ?? ''));
+            $row['city'] = fixMojibakeText((string)($row['city'] ?? ''));
+            $row['province'] = fixMojibakeText((string)($row['province'] ?? ''));
+        }
         $row['availability'] = sahResolveStoreAvailability($row);
         $rows[] = $row;
     }

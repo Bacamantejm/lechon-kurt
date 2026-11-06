@@ -110,7 +110,7 @@ $initials = strtoupper(substr($employee['first_name'] ?? 'E', 0, 1) . substr($em
             <div class="col-md-6">
                 <div class="p-2 rounded" style="background: #f8f9fa; border: 1px solid #eaecf0;">
                     <small class="text-muted d-block fw-semibold" style="font-size: 11px; text-transform: uppercase;">Store / Branch</small>
-                    <span class="fw-semibold text-danger" style="font-size: 13px;"><i class="fas fa-store me-1"></i><?php echo htmlspecialchars($employee['store_branch_name'] ?? 'Dasmariñas Branch'); ?></span>
+                    <span class="fw-semibold text-danger" style="font-size: 13px;"><i class="fas fa-store me-1"></i><?php echo htmlspecialchars($employee['store_branch_name'] ?? 'jm lechon'); ?></span>
                 </div>
             </div>
             <div class="col-md-6">
