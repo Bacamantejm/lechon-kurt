@@ -141,7 +141,7 @@ $latest_approved_partner_sql = "SELECT fa1.* FROM franchise_applications fa1 INN
 $shops_banner_col = function_exists('userAccountControlColumnExists') && userAccountControlColumnExists($conn, 'business_banner') ? 'u.business_banner, ' : '';
 $seller_sql = "SELECT u.id, u.full_name, u.email, u.phone, u.address, u.business_name, u.business_type, u.business_logo, {$shops_banner_col}u.profile_image, fa.business_address, fa.city_name, sl.latitude, sl.longitude, sl.opening_time, sl.closing_time, sl.operating_days, sl.availability_mode, sl.manual_status, sl.opening_hours, sl.is_active AS sl_is_active
               FROM users u
-              INNER JOIN ({$latest_approved_partner_sql}) fa ON fa.user_id = u.id
+              LEFT JOIN ({$latest_approved_partner_sql}) fa ON fa.user_id = u.id
               LEFT JOIN store_locations sl ON sl.owner_user_id = u.id AND sl.is_active = 1
               WHERE u.account_type = 'organization' AND u.is_active = 1
               ORDER BY COALESCE(NULLIF(TRIM(u.business_name), ''), u.full_name) ASC";

@@ -12,3 +12,9 @@ logs/*.txt
 *.tmp
 tmp_*.php
 .codex_write_test.txt
+
+# Dynamic user uploads
+uploads/business_banners/*
+!uploads/business_banners/.gitkeep
+uploads/business_logos/*
+!uploads/business_logos/.gitkeep

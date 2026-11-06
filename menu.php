@@ -1453,15 +1453,18 @@ if (!empty($storefront_partner_account['business_banner'])) {
     $candidate_banner = $store_row['business_banner'];
 }
 if ($candidate_banner !== '') {
-    $clean_banner = ltrim(str_replace('\\', '/', $candidate_banner), '/');
-    if (is_file(__DIR__ . '/' . $clean_banner)) {
+    $clean_banner = ltrim(str_replace(chr(92), '/', $candidate_banner), '/');
+    if (strpos($clean_banner, '../') === 0) {
+        $clean_banner = substr($clean_banner, 3);
+    }
+    if (preg_match('#^uploads/(business_banners|business_logos|profile_pictures)/#i', $clean_banner) || is_file(__DIR__ . '/' . $clean_banner)) {
         $store_banner_image = $clean_banner;
         $has_custom_store_banner = true;
     }
 }
 if (!$has_custom_store_banner) {
     $current_store_seed = $requested_branch_id > 0 ? $requested_branch_id : ($requested_seller_id > 0 ? (9000 + $requested_seller_id) : 1);
-    $store_banner_image = resolveDistinctStoreImage($current_store_seed, $store_display_name);
+    $store_banner_image = resolveDistinctStoreImage($current_store_seed, $store_display_name, $candidate_banner);
 }
 
 // Check if current viewer is authorized to edit this storefront's banner

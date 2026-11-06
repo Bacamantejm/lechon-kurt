@@ -430,11 +430,14 @@ function userAccountControlColumnExists($conn, $column_name) {
 }
 
 function normalizeUserAvatarPath($value) {
-    $path = str_replace('\\', '/', trim((string)$value));
+    $path = ltrim(trim(str_replace(chr(92), '/', (string)$value)), '/');
     if ($path === '') {
         return '';
     }
-    if (!preg_match('#^uploads/(profile_pictures|business_logos|business_banners)/[A-Za-z0-9._-]+$#', $path)) {
+    if (strpos($path, '../') === 0) {
+        $path = substr($path, 3);
+    }
+    if (!preg_match('#^uploads/(profile_pictures|business_logos|business_banners)/[A-Za-z0-9._-]+$#i', $path)) {
         return '';
     }
     return $path;
@@ -455,8 +458,14 @@ if (!function_exists('resolveDistinctStoreImage')) {
     function resolveDistinctStoreImage($store_id, $store_name = '', $custom_image = ''): string {
         $custom = trim((string)$custom_image);
         if ($custom !== '' && $custom !== 'default.jpg') {
-            $clean_custom = ltrim(str_replace('\\', '/', $custom), '/');
+            $clean_custom = ltrim(str_replace(chr(92), '/', $custom), '/');
+            if (strpos($clean_custom, '../') === 0) {
+                $clean_custom = substr($clean_custom, 3);
+            }
             if (str_starts_with($clean_custom, 'http://') || str_starts_with($clean_custom, 'https://')) {
+                return $clean_custom;
+            }
+            if (preg_match('#^uploads/(business_banners|business_logos|profile_pictures|products)/[A-Za-z0-9._-]+$#i', $clean_custom)) {
                 return $clean_custom;
             }
             if (is_file(__DIR__ . '/../' . $clean_custom)) {
@@ -470,6 +479,24 @@ if (!function_exists('resolveDistinctStoreImage')) {
             }
             if (is_file(__DIR__ . '/../images/' . basename($clean_custom))) {
                 return 'images/' . basename($clean_custom);
+            }
+        }
+
+        global $conn;
+        $sid = (int)$store_id;
+        if ($conn instanceof mysqli && $sid > 0) {
+            $owner_check = @mysqli_query($conn, "SELECT u.business_banner, u.business_logo, u.profile_image FROM store_locations sl INNER JOIN users u ON u.id = sl.owner_user_id WHERE sl.store_id = {$sid} LIMIT 1");
+            if ($owner_check && ($owner_media = mysqli_fetch_assoc($owner_check))) {
+                $found_media = trim((string)($owner_media['business_banner'] ?? ''));
+                if ($found_media === '') $found_media = trim((string)($owner_media['business_logo'] ?? ''));
+                if ($found_media === '') $found_media = trim((string)($owner_media['profile_image'] ?? ''));
+                if ($found_media !== '' && $found_media !== 'default.jpg') {
+                    $clean_found = ltrim(str_replace(chr(92), '/', $found_media), '/');
+                    if (strpos($clean_found, '../') === 0) $clean_found = substr($clean_found, 3);
+                    if (preg_match('#^uploads/(business_banners|business_logos|profile_pictures)/[A-Za-z0-9._-]+$#i', $clean_found)) {
+                        return $clean_found;
+                    }
+                }
             }
         }
 
@@ -499,7 +526,6 @@ if (!function_exists('resolveDistinctStoreImage')) {
             7 => 'uploads/products/1773732340_69b901f4980cc.jpg',       // jm lechon (fallback until custom banner uploaded)
         ];
 
-        $sid = (int)$store_id;
         if (isset($named_map[$sid]) && is_file(__DIR__ . '/../' . $named_map[$sid])) {
             return $named_map[$sid];
         }
