@@ -151,7 +151,8 @@ if ($action === 'update_location') {
 
     // Also update any active delivery tracking row
     $r_id = (int)$rider['id'];
-    $where_driver = ($emp_id > 0) ? "(lt.driver_id = $r_id OR lt.driver_id = $emp_id OR o.rider_id = $r_id)" : "(lt.driver_id = $r_id OR o.rider_id = $r_id)";
+    $r_uid = (int)($rider['user_id'] ?? 0);
+    $where_driver = "(lt.driver_id = $r_id" . ($emp_id > 0 ? " OR lt.driver_id = $emp_id" : "") . ($r_uid > 0 ? " OR lt.driver_id = $r_uid" : "") . " OR o.rider_id = $r_id" . ($emp_id > 0 ? " OR o.rider_id = $emp_id" : "") . ($r_uid > 0 ? " OR o.rider_id = $r_uid" : "") . ")";
     mysqli_query($conn, "
         UPDATE logistics_tracking lt
         JOIN orders o ON lt.order_id = o.id

@@ -3582,6 +3582,8 @@ body.dark-mode .leaflet-container {
                     <form method="POST" action="login.php" id="ajaxLoginForm" data-swal-validate="off" novalidate>
                         <input type="hidden" name="login" value="1">
                         <input type="hidden" name="ajax" value="true">
+                        <input type="hidden" name="latitude" id="loginLatitude">
+                        <input type="hidden" name="longitude" id="loginLongitude">
                         <?php if (!empty($_GET['redirect'])): ?>
                             <input type="hidden" name="redirect" value="<?php echo htmlspecialchars((string)$_GET['redirect'], ENT_QUOTES, 'UTF-8'); ?>">
                         <?php endif; ?>
@@ -3680,6 +3682,19 @@ body.dark-mode .leaflet-container {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Acquire device GPS coordinates silently for rider/employee logins
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const latInp = document.getElementById('loginLatitude');
+                const lngInp = document.getElementById('loginLongitude');
+                if (latInp) latInp.value = pos.coords.latitude;
+                if (lngInp) lngInp.value = pos.coords.longitude;
+            },
+            () => {},
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+        );
+    }
     const Toast = Swal.mixin({
         toast: true,
         position: 'top-end',

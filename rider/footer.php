@@ -88,6 +88,21 @@ function broadcastRiderLocation(onCoordsUpdate) {
     }
     if (!navigator.geolocation) return;
 
+    // Immediate initial device location fetch right on page load
+    navigator.geolocation.getCurrentPosition(
+        (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            const acc = pos.coords.accuracy || 0;
+            sendRiderLocationPing(lat, lng, acc);
+        },
+        (err) => {
+            console.warn('Initial device location error:', err.message);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+
+    // Watch position stream for real-time movement tracking
     if (riderGeoWatchId === null) {
         riderGeoWatchId = navigator.geolocation.watchPosition(
             (pos) => {
@@ -99,11 +114,11 @@ function broadcastRiderLocation(onCoordsUpdate) {
             (err) => {
                 console.debug('Geolocation watch notice:', err.message);
             },
-            { enableHighAccuracy: true, timeout: 8000, maximumAge: 1500 }
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 1000 }
         );
     }
 
-    // Secondary heartbeat interval (every 3.5s) to ensure continuous streaming even when stationary
+    // Secondary heartbeat interval (every 3 seconds) to ensure continuous streaming
     if (riderGeoIntervalId === null) {
         riderGeoIntervalId = setInterval(() => {
             navigator.geolocation.getCurrentPosition(
@@ -111,14 +126,14 @@ function broadcastRiderLocation(onCoordsUpdate) {
                     sendRiderLocationPing(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0);
                 },
                 () => {},
-                { enableHighAccuracy: true, timeout: 4000, maximumAge: 2000 }
+                { enableHighAccuracy: true, timeout: 4000, maximumAge: 1000 }
             );
-        }, 3500);
+        }, 3000);
     }
 }
 
-// Auto-start GPS broadcast if online or busy
-<?php if (!empty($rider) && in_array($rider['duty_status'], ['online', 'busy'], true)): ?>
+// Auto-start real-time GPS broadcast for ANY authenticated rider on login/page visit
+<?php if (!empty($rider)): ?>
 document.addEventListener('DOMContentLoaded', () => {
     broadcastRiderLocation();
 });
