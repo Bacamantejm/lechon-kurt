@@ -169,7 +169,27 @@ $branch_by_owner = [];
 sahEnsureStoreLocationAvailabilitySchema($conn);
 $branch_result = mysqli_query($conn, "SELECT store_id, owner_user_id, store_name, address, city, province, phone, email, opening_hours, opening_time, closing_time, operating_days, availability_mode, manual_status, is_active, latitude, longitude FROM store_locations WHERE is_active = 1 ORDER BY store_name");
 if ($branch_result) {
+    $sample_branch_blacklist = [
+        "dasmariñas central branch", "dasmarinas central branch", "dasmariñas branch", "dasmarinas branch", "dasmariñas main branch", "dasmarinas main branch",
+        "bacoor express branch", "bacoor branch",
+        "imus heritage branch", "imus branch",
+        "general trias branch",
+        "tagaytay ridge branch", "tagaytay branch",
+        "silang branch", "justine business", "justine business (silang depot)",
+        "janna restaurant", "janna restaurant (gen. trias)",
+        "lydias", "linda", "ako budoy"
+    ];
+    $sample_email_blacklist = [
+        "dasma@lechondelights.com", "bacoor@lechondelights.com", "imus@lechondelights.com",
+        "tagaytay@lechondelights.com", "gentrias@lechondelights.com", "silang@lechondelights.com",
+        "jannasantos@gmail.com", "justinehero033@gmail.com", "useraccount@gmail.com", "localone@gmail.com"
+    ];
     while ($row = mysqli_fetch_assoc($branch_result)) {
+        $row_name_norm = strtolower(trim((string)$row["store_name"]));
+        $row_email_norm = strtolower(trim((string)$row["email"]));
+        if (in_array($row_name_norm, $sample_branch_blacklist, true) || in_array($row_email_norm, $sample_email_blacklist, true)) {
+            continue;
+        }
         if (!locationsIsCavite((string)($row['address'] ?? ''), (string)($row['city'] ?? ''), (string)($row['province'] ?? ''))) {
             continue;
         }
@@ -249,10 +269,29 @@ $partner_sql = "SELECT u.id, u.full_name, u.email, u.phone, u.address, u.busines
                 ORDER BY COALESCE(NULLIF(TRIM(u.business_name), ''), u.full_name)";
 $partner_result = mysqli_query($conn, $partner_sql);
 if ($partner_result) {
+    $sample_partner_blacklist = [
+        "dasmariñas central branch", "dasmarinas central branch", "dasmariñas branch", "dasmarinas branch", "dasmariñas main branch", "dasmarinas main branch",
+        "bacoor express branch", "bacoor branch",
+        "imus heritage branch", "imus branch",
+        "general trias branch",
+        "tagaytay ridge branch", "tagaytay branch",
+        "silang branch", "justine business", "justine business (silang depot)",
+        "janna restaurant", "janna restaurant (gen. trias)",
+        "lydias", "linda", "ako budoy"
+    ];
+    $sample_partner_emails = [
+        "dasma@lechondelights.com", "bacoor@lechondelights.com", "imus@lechondelights.com",
+        "tagaytay@lechondelights.com", "gentrias@lechondelights.com", "silang@lechondelights.com",
+        "jannasantos@gmail.com", "justinehero033@gmail.com", "useraccount@gmail.com", "localone@gmail.com"
+    ];
     while ($row = mysqli_fetch_assoc($partner_result)) {
         $seller_id = (int)$row['id'];
         $store_name = trim((string)$row['business_name']) !== '' ? trim((string)$row['business_name']) : trim((string)$row['full_name']) . ' Store';
         $email = strtolower(trim((string)$row['email']));
+        $store_name_norm = strtolower(trim((string)$store_name));
+        if (in_array($store_name_norm, $sample_partner_blacklist, true) || in_array($email, $sample_partner_emails, true)) {
+            continue;
+        }
         $matched_branch = $branch_by_owner[$seller_id] ?? ($branch_by_email[$email] ?? ($branch_by_name[locationsNormalizeKey($store_name)] ?? null));
         $partner_application_address = trim((string)($row['business_address'] ?? ''));
         $partner_profile_address = trim((string)($row['address'] ?? ''));
