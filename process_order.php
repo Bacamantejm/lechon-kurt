@@ -218,7 +218,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($payment_method === 'cod') {
         $payment_type = 'full';
     }
-    $delivery_option = mysqli_real_escape_string($conn, $_POST['delivery_option']);
+    $delivery_option = mysqli_real_escape_string($conn, $_POST['delivery_option'] ?? 'pickup');
+
+    // Enforce Plan Gating: Stores on the Starter Plan strictly permit Store Pick-up only
+    require_once __DIR__ . '/includes/SubscriptionAccessService.php';
+    $effective_seller_for_gate = (int)($checkout_seller_owner_id ?? 0);
+    if ($effective_seller_for_gate <= 0 && !empty($_POST['pickup_location'])) {
+        $pLoc = (int)$_POST['pickup_location'];
+        $sChk = mysqli_query($conn, "SELECT owner_user_id FROM store_locations WHERE store_id = $pLoc LIMIT 1");
+        if ($sChk && $sRow = mysqli_fetch_assoc($sChk)) {
+            $effective_seller_for_gate = (int)($sRow['owner_user_id'] ?? 0);
+        }
+    }
+    if ($effective_seller_for_gate <= 0 && !empty($_SESSION['storefront_seller_id'])) {
+        $effective_seller_for_gate = (int)$_SESSION['storefront_seller_id'];
+    }
+
+    if ($effective_seller_for_gate > 0) {
+        $seller_sub = SubscriptionAccessService::getShopSubscriptionDetails($conn, $effective_seller_for_gate);
+        $seller_tier_level = (int)$seller_sub['tier_level']; // 0 = none, 1 = starter, 2 = growth, 3 = pro
+        if ($seller_tier_level < 2 && $delivery_option !== 'pickup') {
+            checkoutFail(
+                'Fulfillment Restricted',
+                'This store is currently on the Starter Plan which only supports Store Pick-up orders. Delivery and Pre-orders are available on Growth and Pro plans.',
+                'checkout.php?mode=pickup'
+            );
+            exit();
+        }
+    }
     $order_notes = isset($_POST['order_notes']) ? mysqli_real_escape_string($conn, $_POST['order_notes']) : '';
     $total_amount = floatval($_POST['total_amount'] ?? 0);
     $downpayment_amount = floatval($_POST['downpayment_amount'] ?? 0);

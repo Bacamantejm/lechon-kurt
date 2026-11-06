@@ -49,7 +49,23 @@ foreach ($_SESSION['cart'] as $index => $item) {
     ];
 }
 
-$delivery_option = $_SESSION['delivery_option'] ?? 'pickup';
+require_once __DIR__ . '/includes/partner_voucher_helper.php';
+require_once __DIR__ . '/includes/SubscriptionAccessService.php';
+
+$cart_tenant = function_exists('pvGetCheckoutTenantScope') ? pvGetCheckoutTenantScope($conn, $_SESSION['cart'] ?? []) : null;
+$cart_seller_id = (int)($cart_tenant['seller_id'] ?? ($_SESSION['storefront_seller_id'] ?? 0));
+$cart_shop_is_starter = false;
+if ($cart_seller_id > 0) {
+    $cart_sub = SubscriptionAccessService::getShopSubscriptionDetails($conn, $cart_seller_id);
+    if ((int)$cart_sub['tier_level'] < 2) {
+        $cart_shop_is_starter = true;
+    }
+}
+
+$delivery_option = $cart_shop_is_starter ? 'pickup' : ($_SESSION['delivery_option'] ?? 'pickup');
+if ($cart_shop_is_starter) {
+    $_SESSION['delivery_option'] = 'pickup';
+}
 $delivery_location = $_SESSION['delivery_location'] ?? 'metro_manila';
 $delivery_fee = 0;
 $current_delivery_quote = is_array($_SESSION['current_delivery_quote'] ?? null) ? $_SESSION['current_delivery_quote'] : [];

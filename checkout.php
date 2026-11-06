@@ -340,18 +340,52 @@ if (!empty($city_display_parts)) {
     $target_city_display = '';
 }
 
-// Fulfillment Mode: Check URL parameter first, then session, defaulting to 'delivery'
+require_once __DIR__ . '/includes/partner_voucher_helper.php';
+require_once __DIR__ . '/includes/SubscriptionAccessService.php';
+
+// Resolve cart tenant / store owner early to evaluate plan tier restrictions
+if (!isset($checkout_tenant_scope)) {
+    $checkout_tenant_scope = function_exists('pvGetCheckoutTenantScope')
+        ? pvGetCheckoutTenantScope($conn, $_SESSION['cart'])
+        : ['is_valid' => true, 'seller_id' => 0, 'message' => ''];
+}
+if (!empty($checkout_tenant_scope['seller_id'])) {
+    $storefront_seller_id = (int)$checkout_tenant_scope['seller_id'];
+    $_SESSION['storefront_seller_id'] = $storefront_seller_id;
+}
+if ($storefront_seller_id <= 0 && !empty($_SESSION['storefront_seller_id'])) {
+    $storefront_seller_id = (int)$_SESSION['storefront_seller_id'];
+}
+if ($storefront_seller_id <= 0 && !empty($stores)) {
+    $storefront_seller_id = (int)($stores[0]['owner_user_id'] ?? 0);
+}
+
+// Plan check: Starter Plan only allows Pick-up; Growth and Pro allow Pick-up, Delivery, and Pre-order
+$shop_subscription = SubscriptionAccessService::getShopSubscriptionDetails($conn, (int)$storefront_seller_id);
+$shop_tier_level = (int)$shop_subscription['tier_level']; // 0 = none, 1 = starter, 2 = growth, 3 = pro
+$shop_is_starter = ($shop_tier_level < 2); // true for Starter and un-subscribed
+$shop_plan_name = (string)($shop_subscription['plan_name'] ?? 'Starter Plan');
+
+// Fulfillment Mode: Starter shops strictly support 'pickup' only
+$default_mode = $shop_is_starter ? 'pickup' : 'delivery';
+
 if (!empty($_GET['mode']) && in_array(strtolower(trim((string)$_GET['mode'])), ['pickup', 'delivery', 'preorder'], true)) {
-    $_SESSION['delivery_option'] = strtolower(trim((string)$_GET['mode']));
+    $req_mode = strtolower(trim((string)$_GET['mode']));
+    $_SESSION['delivery_option'] = ($shop_is_starter && $req_mode !== 'pickup') ? 'pickup' : $req_mode;
     $_SESSION['delivery_option_explicit'] = true;
 } elseif (!empty($_GET['delivery_option']) && in_array(strtolower(trim((string)$_GET['delivery_option'])), ['pickup', 'delivery', 'preorder'], true)) {
-    $_SESSION['delivery_option'] = strtolower(trim((string)$_GET['delivery_option']));
+    $req_mode = strtolower(trim((string)$_GET['delivery_option']));
+    $_SESSION['delivery_option'] = ($shop_is_starter && $req_mode !== 'pickup') ? 'pickup' : $req_mode;
     $_SESSION['delivery_option_explicit'] = true;
 }
 
 $current_checkout_delivery_option = in_array(strtolower((string)($_SESSION['delivery_option'] ?? '')), ['pickup', 'delivery', 'preorder'], true)
     ? strtolower((string)$_SESSION['delivery_option'])
-    : 'delivery';
+    : $default_mode;
+
+if ($shop_is_starter) {
+    $current_checkout_delivery_option = 'pickup';
+}
 $_SESSION['delivery_option'] = $current_checkout_delivery_option;
 if (!isset($_SESSION['pickup_location']) && !empty($stores)) {
     $_SESSION['pickup_location'] = (int)($stores[0]['id'] ?? 1);
@@ -619,6 +653,14 @@ $remaining = $total - $downpayment;
                         <div class="fp-card fp-pickup-address-card">
                             <div class="fp-card-header fp-card-header-with-toggle">
                                 <div class="fp-mode-pill-toggle">
+                                    <?php if ($shop_is_starter): ?>
+                                    <button type="button" class="fp-mode-pill-btn is-active" style="cursor: default;">
+                                        <i class="fas fa-person-walking"></i> Store Pick-up
+                                    </button>
+                                    <span class="badge" style="background:#fffaeb; color:#b54708; border:1px solid #fedf89; font-size:11px; font-weight:700; padding:6px 12px; border-radius:999px; display:inline-flex; align-items:center; gap:5px;" title="Store is on the Starter Plan. Delivery and Pre-orders require Growth or Pro Plan.">
+                                        <i class="fas fa-store"></i> Starter Plan &bull; Pick-up Only
+                                    </span>
+                                    <?php else: ?>
                                     <button type="button" class="fp-mode-pill-btn" onclick="switchCheckoutFulfillmentMode('delivery')">
                                         <i class="fas fa-motorcycle"></i> Delivery
                                     </button>
@@ -628,6 +670,7 @@ $remaining = $total - $downpayment;
                                     <button type="button" class="fp-mode-pill-btn" onclick="switchCheckoutFulfillmentMode('preorder')">
                                         <i class="fas fa-calendar-alt"></i> Pre-Order
                                     </button>
+                                    <?php endif; ?>
                                 </div>
                                 <h3 class="fp-section-title">Pickup address</h3>
                             </div>
@@ -798,6 +841,14 @@ $remaining = $total - $downpayment;
                         <div class="fp-card fp-delivery-address-card">
                             <div class="fp-card-header fp-card-header-with-toggle">
                                 <div class="fp-mode-pill-toggle">
+                                    <?php if ($shop_is_starter): ?>
+                                    <button type="button" class="fp-mode-pill-btn" onclick="switchCheckoutFulfillmentMode('pickup')">
+                                        <i class="fas fa-person-walking"></i> Switch to Pick-up
+                                    </button>
+                                    <span class="badge" style="background:#fffaeb; color:#b54708; border:1px solid #fedf89; font-size:11px; font-weight:700; padding:6px 12px; border-radius:999px; display:inline-flex; align-items:center; gap:5px;">
+                                        <i class="fas fa-store"></i> Starter Plan &bull; Pick-up Only
+                                    </span>
+                                    <?php else: ?>
                                     <button type="button" class="fp-mode-pill-btn is-active">
                                         <i class="fas fa-motorcycle"></i> Delivery
                                     </button>
@@ -807,6 +858,7 @@ $remaining = $total - $downpayment;
                                     <button type="button" class="fp-mode-pill-btn" onclick="switchCheckoutFulfillmentMode('preorder')">
                                         <i class="fas fa-calendar-alt"></i> Pre-Order
                                     </button>
+                                    <?php endif; ?>
                                 </div>
                                 <h3 class="fp-section-title">Delivery address</h3>
                             </div>
@@ -1032,6 +1084,14 @@ $remaining = $total - $downpayment;
                         <div class="fp-card fp-pickup-address-card">
                             <div class="fp-card-header fp-card-header-with-toggle">
                                 <div class="fp-mode-pill-toggle">
+                                    <?php if ($shop_is_starter): ?>
+                                    <button type="button" class="fp-mode-pill-btn" onclick="switchCheckoutFulfillmentMode('pickup')">
+                                        <i class="fas fa-person-walking"></i> Switch to Pick-up
+                                    </button>
+                                    <span class="badge" style="background:#fffaeb; color:#b54708; border:1px solid #fedf89; font-size:11px; font-weight:700; padding:6px 12px; border-radius:999px; display:inline-flex; align-items:center; gap:5px;">
+                                        <i class="fas fa-store"></i> Starter Plan &bull; Pick-up Only
+                                    </span>
+                                    <?php else: ?>
                                     <button type="button" class="fp-mode-pill-btn" onclick="switchCheckoutFulfillmentMode('delivery')">
                                         <i class="fas fa-motorcycle"></i> Delivery
                                     </button>
@@ -1041,6 +1101,7 @@ $remaining = $total - $downpayment;
                                     <button type="button" class="fp-mode-pill-btn is-active">
                                         <i class="fas fa-calendar-alt"></i> Pre-Order
                                     </button>
+                                    <?php endif; ?>
                                 </div>
                                 <h3 class="fp-section-title">Pick-up store</h3>
                             </div>
@@ -5198,6 +5259,8 @@ const initialStoreContext = <?php echo json_encode([
     'longitude' => $overview_store_lng
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 const checkoutTenantBlocked = <?php echo $checkout_tenant_blocked ? 'true' : 'false'; ?>;
+const isShopStarter = <?php echo $shop_is_starter ? 'true' : 'false'; ?>;
+const shopPlanName = <?php echo json_encode($shop_plan_name); ?>;
 const checkoutTenantMessage = <?php echo json_encode($checkout_tenant_message, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 let latestResolvedAddressText = userAddressSeed || '';
 const psgcCache = new Map();
@@ -5235,7 +5298,9 @@ function applyFoodpandaPickupMode(modeOrIsPickup) {
     } else {
         currentMode = (String(activeCheckoutDeliveryOption || '').toLowerCase());
     }
-    if (!['delivery', 'pickup', 'preorder'].includes(currentMode)) {
+    if (isShopStarter) {
+        currentMode = 'pickup';
+    } else if (!['delivery', 'pickup', 'preorder'].includes(currentMode)) {
         currentMode = 'delivery';
     }
     activeCheckoutDeliveryOption = currentMode;
@@ -6228,6 +6293,17 @@ window.selectDeliveryPaymentMethod = selectDeliveryPaymentMethod;
 
 async function switchCheckoutFulfillmentMode(mode) {
     const rawMode = String(mode || '').toLowerCase();
+    if (isShopStarter && rawMode !== 'pickup') {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'info',
+                title: 'Pick-up Only Store',
+                text: 'This store is currently on the Starter Plan which only supports Store Pick-up. Delivery and Pre-orders are available on Growth and Pro plans.',
+                confirmButtonColor: '#b3261e'
+            });
+        }
+        return;
+    }
     const normalizedMode = (rawMode === 'preorder') ? 'preorder' : ((rawMode === 'pickup') ? 'pickup' : 'delivery');
     const isDelivery = (normalizedMode === 'delivery');
     activeCheckoutDeliveryOption = normalizedMode;

@@ -127,6 +127,16 @@ if ($active_seller_id > 0) {
     }
 }
 
+require_once __DIR__ . '/includes/SubscriptionAccessService.php';
+if ($active_seller_id > 0) {
+    $seller_plan = SubscriptionAccessService::getShopSubscriptionDetails($conn, (int)$active_seller_id);
+    if ((int)$seller_plan['tier_level'] < 2) {
+        $_SESSION['error'] = "This store is on the Starter Plan which only supports Store Pick-up. Pre-orders and Delivery are available on stores with Growth and Pro plans.";
+        header("Location: checkout.php?mode=pickup");
+        exit();
+    }
+}
+
 $preorder_schedule = posGetSellerSchedule($conn, (int)$active_seller_id);
 $initial_calendar_data = posGetCalendarAvailability($conn, (int)$active_seller_id);
 
