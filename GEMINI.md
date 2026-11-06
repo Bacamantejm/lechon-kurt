@@ -46,8 +46,14 @@
 - **No Lazy Placeholders:** Never output `// Your logic here` or `/* TODO */`. Always provide complete, production-ready code.
 
 ## 5. Git Commit & Branch Directives
-- **Commit Rules:**
-  - Do NOT commit changes unless explicitly requested by the user ("commit and push").
+- **Commit Rules & Shortcut Triggers:**
+  - Do NOT commit changes unless explicitly requested by the user.
+  - Accept any of these ultra-short user triggers as an explicit instruction to commit and push to both branches (`main` and `lechon-JM`):
+    - `pb` (Push Both)
+    - `p`
+    - `push`
+    - `push both`
+    - Clicking the "Proceed" button on any execution plan or update summary.
   - Do NOT include `"REVIEW THIS FIRST"` in commit messages.
 - **Git Commit Message Format:**
   - **Subject Line:** Specific, concise, and clear (e.g. `Redesign Help Center page with flat e-commerce design system tokens`).
