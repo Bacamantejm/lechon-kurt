@@ -488,16 +488,16 @@ if (!function_exists('getFranchiseScopedOrderExistsSql')) {
 
         $seller_scope_condition = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', $owner_id);
 
-        $direct_scope_clauses = ["o_scope.seller_id = {$owner_id}"];
+        $direct_scope_clauses = ["o_direct_scope.seller_id = {$owner_id}"];
         if (adminAuthColumnExists($conn, 'orders', 'store_id') && adminAuthTableExists($conn, 'store_locations')) {
-            $direct_scope_clauses[] = "o_scope.store_id IN (SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id})";
+            $direct_scope_clauses[] = "o_direct_scope.store_id IN (SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id})";
         }
         if (adminAuthColumnExists($conn, 'orders', 'pickup_location') && adminAuthTableExists($conn, 'store_locations')) {
-            $direct_scope_clauses[] = "o_scope.pickup_location IN (SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id})";
-            $direct_scope_clauses[] = "o_scope.pickup_location IN (SELECT store_name FROM store_locations WHERE owner_user_id = {$owner_id})";
+            $direct_scope_clauses[] = "o_direct_scope.pickup_location IN (SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id})";
+            $direct_scope_clauses[] = "o_direct_scope.pickup_location IN (SELECT store_name FROM store_locations WHERE owner_user_id = {$owner_id})";
         }
         if (adminAuthColumnExists($conn, 'orders', 'special_instructions') && adminAuthTableExists($conn, 'store_locations')) {
-            $direct_scope_clauses[] = "(o_scope.special_instructions IS NOT NULL AND o_scope.special_instructions LIKE CONCAT('%', (SELECT store_name FROM store_locations WHERE owner_user_id = {$owner_id} LIMIT 1), '%'))";
+            $direct_scope_clauses[] = "(o_direct_scope.special_instructions IS NOT NULL AND o_direct_scope.special_instructions LIKE CONCAT('%', (SELECT store_name FROM store_locations WHERE owner_user_id = {$owner_id} LIMIT 1), '%'))";
         }
         $direct_scope_sql = implode(" OR ", $direct_scope_clauses);
 
@@ -514,8 +514,8 @@ if (!function_exists('getFranchiseScopedOrderExistsSql')) {
               AND {$seller_scope_condition}
         )) OR (EXISTS (
             SELECT 1
-            FROM orders o_scope
-            WHERE o_scope.id = {$order_id_expr}
+            FROM orders o_direct_scope
+            WHERE o_direct_scope.id = {$order_id_expr}
               AND ({$direct_scope_sql})
         )))";
     }
@@ -637,6 +637,9 @@ if (!function_exists('adminPartnerScopeEntityExists')) {
                 return false;
             }
             $query = "SELECT 1 FROM pre_orders po_scope WHERE po_scope.id = ? AND {$scope_sql} LIMIT 1";
+        } elseif ($entity_type === 'order_or_preorder') {
+            return adminPartnerScopeEntityExists($conn, $seller_scope_owner_id, 'order', $entity_id)
+                || adminPartnerScopeEntityExists($conn, $seller_scope_owner_id, 'pre_order', $entity_id);
         } elseif ($entity_type === 'expense') {
             if (!adminAuthTableExists($conn, 'expenses')) {
                 return false;
@@ -946,8 +949,8 @@ if (!function_exists('enforcePartnerTenantScopedRequestAccess')) {
         $page_specific_id_entity_map = [
             'get_order_details.php' => 'order',
             'print_order_receipt.php' => 'order',
-            'get_preorder_details.php' => 'pre_order',
-            'print_preorder_receipt.php' => 'pre_order',
+            // 'get_preorder_details.php' => 'pre_order', // handled dynamically by source below
+            // 'print_preorder_receipt.php' => 'pre_order', // handled dynamically by source below
             'ajax_update_preorder.php' => 'pre_order',
             'get_inventory_details.php' => 'product',
             'get_inventory_history.php' => 'product',
@@ -958,7 +961,21 @@ if (!function_exists('enforcePartnerTenantScopedRequestAccess')) {
             'chat.php' => 'conversation',
             'expenses.php' => 'expense'
         ];
-        if (isset($page_specific_id_entity_map[$current_page])) {
+        if ($current_page === 'get_preorder_details.php') {
+            $source_param = strtolower(trim((string)($_GET['source'] ?? $_POST['source'] ?? $_POST['order_source'] ?? '')));
+            if ($source_param === 'order') {
+                $target_entity = 'order';
+            } elseif ($source_param === 'pre_order') {
+                $target_entity = 'pre_order';
+            } else {
+                $target_entity = 'order_or_preorder';
+            }
+            $add_check($checks, $seen, $target_entity, $request_int('id'), 'id');
+        } elseif ($current_page === 'print_preorder_receipt.php') {
+            $source_param = strtolower(trim((string)($_GET['source'] ?? $_POST['source'] ?? '')));
+            $target_entity = ($source_param === 'order') ? 'order' : 'pre_order';
+            $add_check($checks, $seen, $target_entity, $request_int('id'), 'id');
+        } elseif (isset($page_specific_id_entity_map[$current_page])) {
             $add_check($checks, $seen, $page_specific_id_entity_map[$current_page], $request_int('id'), 'id');
         }
 
