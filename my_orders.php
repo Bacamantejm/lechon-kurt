@@ -458,6 +458,7 @@ if ($total_orders > 0) {
 $has_pod_table = false;
 $has_dp_table = false;
 $has_lt_proof_col = false;
+$has_order_store_id = false;
 
 $res_pod = mysqli_query($conn, "SHOW TABLES LIKE 'proof_of_delivery'");
 if ($res_pod && mysqli_num_rows($res_pod) > 0) {
@@ -471,6 +472,15 @@ $res_lt = mysqli_query($conn, "SHOW COLUMNS FROM logistics_tracking LIKE 'proof_
 if ($res_lt && mysqli_num_rows($res_lt) > 0) {
     $has_lt_proof_col = true;
 }
+$res_order_store = mysqli_query($conn, "SHOW COLUMNS FROM orders LIKE 'store_id'");
+if ($res_order_store && mysqli_num_rows($res_order_store) > 0) {
+    $has_order_store_id = true;
+}
+
+$order_store_id_select = $has_order_store_id ? 'o.store_id' : 'NULL AS store_id';
+$order_store_join_key = $has_order_store_id
+    ? 'COALESCE(NULLIF(o.store_id, 0), NULLIF(o.pickup_location, 0))'
+    : 'o.pickup_location';
 
 $proof_parts = [];
 if ($has_lt_proof_col) {
@@ -508,8 +518,10 @@ $query = "
         o.updated_at,
         o.delivery_option,
         o.pickup_location,
+        {$order_store_id_select},
         o.delivery_location,
         o.is_archived,
+        COALESCE(NULLIF(TRIM(sl.store_name), ''), NULLIF(TRIM(seller.business_name), ''), NULLIF(TRIM(seller.full_name), ''), 'Lechon Delights') AS store_name,
         {$proof_photo_sql},
         oi.product_name,
         oi.price,
@@ -519,6 +531,8 @@ $query = "
         oi.total as item_total,
         p.image as product_image
     FROM orders o
+    LEFT JOIN store_locations sl ON sl.store_id = {$order_store_join_key}
+    LEFT JOIN users seller ON seller.id = o.seller_id
     LEFT JOIN logistics_tracking lt ON lt.order_id = o.id
     LEFT JOIN order_items oi ON o.id = oi.order_id
     LEFT JOIN products p ON oi.product_id = p.id
@@ -560,6 +574,8 @@ if ($stmt) {
                 'updated_at' => $row['updated_at'],
                 'delivery_option' => $row['delivery_option'],
                 'pickup_location' => $row['pickup_location'],
+                'store_id' => $row['store_id'],
+                'store_name' => function_exists('fixMojibakeText') ? fixMojibakeText($row['store_name']) : $row['store_name'],
                 'delivery_location' => $row['delivery_location'],
                 'is_archived' => $row['is_archived'],
                 'proof_photo' => !empty($row['proof_photo']) ? ('uploads/proof_of_delivery/' . basename($row['proof_photo'])) : '',
@@ -689,7 +705,7 @@ unset($order);
                             <div class="card-top-row main-row">
                                 <div class="shop-brand">
                                     <i class="fas fa-store shop-icon"></i>
-                                    <span class="shop-name">Lechon Delights</span>
+                                    <span class="shop-name"><?php echo htmlspecialchars($order['store_name'] ?: 'Lechon Delights'); ?></span>
                                 </div>
                                 <div class="ecom-status-label status-<?php echo htmlspecialchars($status_key); ?>">
                                     <span class="status-dot"></span>
