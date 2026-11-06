@@ -33,11 +33,14 @@ function baColumnExists(mysqli $conn, string $column_name): bool {
 }
 
 function baNormalizeMediaPath(string $value): string {
-    $path = trim(str_replace('\\', '/', $value));
+    $path = ltrim(trim(str_replace(chr(92), '/', $value)), '/');
     if ($path === '') {
         return '';
     }
-    if (!preg_match('#^uploads/(profile_pictures|business_logos|business_banners)/[A-Za-z0-9._-]+$#', $path)) {
+    if (strpos($path, '../') === 0) {
+        $path = substr($path, 3);
+    }
+    if (!preg_match('#^uploads/(profile_pictures|business_logos|business_banners)/[A-Za-z0-9._-]+$#i', $path)) {
         return '';
     }
     return $path;
@@ -329,8 +332,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_business_account
         }
     }
 
-    $current_logo_path = $logo_column !== '' ? baNormalizeMediaPath((string)($business_user[$logo_column] ?? '')) : '';
-    $next_logo_path = $current_logo_path;
+    $raw_existing_logo = $logo_column !== '' ? trim((string)($business_user[$logo_column] ?? '')) : '';
+    $current_logo_path = baNormalizeMediaPath($raw_existing_logo);
+    $next_logo_path = $current_logo_path !== '' ? $current_logo_path : $raw_existing_logo;
     $uploaded_new_logo = false;
     $remove_logo = isset($_POST['remove_business_logo']) && (string)$_POST['remove_business_logo'] === '1';
 
@@ -343,9 +347,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_business_account
         } else {
             if ($remove_logo) {
                 $next_logo_path = '';
-            }
-
-            if ($has_logo_upload) {
+            } elseif ($has_logo_upload) {
                 $upload_result = baUploadBusinessLogo((int)$seller_scope_id, $logo_file);
                 if (!($upload_result['success'] ?? false)) {
                     $errors[] = (string)($upload_result['message'] ?? 'Unable to upload business logo.');
@@ -357,8 +359,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_business_account
         }
     }
 
-    $current_banner_path = $has_business_banner_col ? baNormalizeMediaPath((string)($business_user['business_banner'] ?? '')) : '';
-    $next_banner_path = $current_banner_path;
+    $raw_existing_banner = $has_business_banner_col ? trim((string)($business_user['business_banner'] ?? '')) : '';
+    $current_banner_path = baNormalizeMediaPath($raw_existing_banner);
+    $next_banner_path = $current_banner_path !== '' ? $current_banner_path : $raw_existing_banner;
     $uploaded_new_banner = false;
     $remove_banner = isset($_POST['remove_business_banner']) && (string)$_POST['remove_business_banner'] === '1';
 
@@ -371,9 +374,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_business_account
         } else {
             if ($remove_banner) {
                 $next_banner_path = '';
-            }
-
-            if ($has_banner_upload) {
+            } elseif ($has_banner_upload) {
                 $upload_banner_result = baUploadBusinessBanner((int)$seller_scope_id, $banner_file);
                 if (!($upload_banner_result['success'] ?? false)) {
                     $errors[] = (string)($upload_banner_result['message'] ?? 'Unable to upload store background picture.');
@@ -494,10 +495,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_business_account
             exit;
         }
 
-        if ($current_logo_path !== '' && $current_logo_path !== $next_logo_path) {
+        if ($remove_logo && $current_logo_path !== '') {
+            baDeleteMediaIfExists($current_logo_path);
+        } elseif ($uploaded_new_logo && $current_logo_path !== '' && $current_logo_path !== $next_logo_path) {
             baDeleteMediaIfExists($current_logo_path);
         }
-        if ($current_banner_path !== '' && $current_banner_path !== $next_banner_path) {
+
+        if ($remove_banner && $current_banner_path !== '') {
+            baDeleteMediaIfExists($current_banner_path);
+        } elseif ($uploaded_new_banner && $current_banner_path !== '' && $current_banner_path !== $next_banner_path) {
             baDeleteMediaIfExists($current_banner_path);
         }
 
@@ -542,12 +548,18 @@ $business_user = baFetchOwnerBusinessAccount($conn, (int)$seller_scope_id, $edit
 $display_logo = '';
 if ($business_user && $logo_column !== '') {
     $display_logo = baNormalizeMediaPath((string)($business_user[$logo_column] ?? ''));
+    if ($display_logo === '' && !empty($business_user[$logo_column])) {
+        $display_logo = ltrim(trim(str_replace(chr(92), '/', (string)$business_user[$logo_column])), '/');
+    }
 }
 $display_logo_url = $display_logo !== '' ? '../' . ltrim($display_logo, '/') : '';
 
 $display_banner = '';
 if ($business_user && $has_business_banner_col) {
     $display_banner = baNormalizeMediaPath((string)($business_user['business_banner'] ?? ''));
+    if ($display_banner === '' && !empty($business_user['business_banner'])) {
+        $display_banner = ltrim(trim(str_replace(chr(92), '/', (string)$business_user['business_banner'])), '/');
+    }
 }
 $display_banner_url = $display_banner !== '' ? '../' . ltrim($display_banner, '/') : '';
 $flash_success = $_SESSION['success'] ?? '';

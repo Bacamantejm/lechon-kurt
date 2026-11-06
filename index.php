@@ -47,21 +47,27 @@ if (!function_exists('asset_path')) {
     function asset_path($path, $fallback = 'images/store-bg.jpg') {
         $path = trim((string)$path);
         if ($path !== '' && (stripos($path, 'http://') === 0 || stripos($path, 'https://') === 0)) return $path;
+        $clean = ltrim(str_replace(chr(92), '/', $path), '/');
+        if (strpos($clean, '../') === 0) {
+            $clean = substr($clean, 3);
+        }
+        if (preg_match('#^uploads/(business_banners|business_logos|profile_pictures|products)/#i', $clean)) {
+            return $clean;
+        }
         $candidates = [];
-        if ($path !== '') {
-            $path = ltrim(str_replace('\\', '/', $path), '/');
-            $candidates[] = $path;
-            if (strpos($path, '/') === false) {
-                $candidates[] = 'uploads/products/' . $path;
-                $candidates[] = 'images/menu/' . $path;
-                $candidates[] = 'images/' . $path;
+        if ($clean !== '') {
+            $candidates[] = $clean;
+            if (strpos($clean, '/') === false) {
+                $candidates[] = 'uploads/products/' . $clean;
+                $candidates[] = 'images/menu/' . $clean;
+                $candidates[] = 'images/' . $clean;
             }
         }
-        $candidates[] = ltrim(str_replace('\\', '/', $fallback), '/');
+        $candidates[] = ltrim(str_replace(chr(92), '/', $fallback), '/');
         foreach ($candidates as $candidate) {
             if ($candidate !== '' && is_file(__DIR__ . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $candidate))) return $candidate;
         }
-        return $fallback;
+        return $clean !== '' ? $clean : $fallback;
     }
 }
 
@@ -70,9 +76,10 @@ if (!function_exists('normalize_store_media_path')) {
         if (function_exists('normalizeUserAvatarPath')) {
             return normalizeUserAvatarPath($value);
         }
-        $path = str_replace('\\', '/', trim((string)$value));
+        $path = ltrim(trim(str_replace(chr(92), '/', (string)$value)), '/');
         if ($path === '') return '';
-        if (!preg_match('#^uploads/(profile_pictures|business_logos|business_banners)/[A-Za-z0-9._-]+$#', $path)) return '';
+        if (strpos($path, '../') === 0) $path = substr($path, 3);
+        if (!preg_match('#^uploads/(profile_pictures|business_logos|business_banners)/[A-Za-z0-9._-]+$#i', $path)) return '';
         return $path;
     }
 }
@@ -390,7 +397,7 @@ $seller_media_fields .= $has_profile_image_column ? ", u.profile_image" : ", NUL
 $seller_scope_filter = ($scoped_partner_seller_id > 0) ? " AND u.id = " . (int)$scoped_partner_seller_id : "";
 $seller_result = mysqli_query($conn, "SELECT u.id, u.full_name, u.email, u.phone, u.address, u.business_name, u.business_type, u.created_at{$seller_media_fields}, fa.business_address, fa.city_name, fa.province_name, fa.barangay_name
                                       FROM users u
-                                      INNER JOIN ({$latest_approved_partner_sql}) fa ON fa.user_id = u.id
+                                      LEFT JOIN ({$latest_approved_partner_sql}) fa ON fa.user_id = u.id
                                       WHERE u.account_type = 'organization'
                                         AND u.is_active = 1
                                         {$seller_scope_filter}
@@ -644,9 +651,7 @@ foreach ($branches as $branch) {
         'raw_address' => trim((string)($branch['address'] ?? '')),
         'raw_city' => trim((string)($branch['city'] ?? '')),
         'raw_province' => trim((string)($branch['province'] ?? '')),
-        'image' => !empty($branch_owner_images[(int)($branch['owner_user_id'] ?? 0)])
-            ? $branch_owner_images[(int)($branch['owner_user_id'] ?? 0)]
-            : resolveDistinctStoreImage((int)$branch['id'], (string)$branch['name']),
+        'image' => resolveDistinctStoreImage((int)$branch['id'], (string)$branch['name'], (!empty($branch_owner_images[(int)($branch['owner_user_id'] ?? 0)]) ? $branch_owner_images[(int)($branch['owner_user_id'] ?? 0)] : '')),
         'count' => count($products),
         'order_volume' => 0,
         'start' => $global_min,
