@@ -1336,7 +1336,7 @@ $owner_module_health_cards = [
     ],
     [
         'label' => 'RBAC Governance',
-        'href' => 'rbac_management.php',
+        'href' => '../admin/rbac_management.php',
         'metric' => number_format($roles_count),
         'subtitle' => 'Active roles',
         'detail' => number_format($permissions_count) . ' permissions configured',
@@ -1371,8 +1371,8 @@ $quick_actions = [
     ['label' => 'DSS Reports', 'href' => '../admin/dss_reports.php', 'icon' => 'fa-file-invoice', 'meta' => 'Decision reports'],
     ['label' => 'Statistics', 'href' => '../admin/statistics.php', 'icon' => 'fa-chart-bar', 'meta' => 'KPI dashboards'],
     ['label' => 'Events', 'href' => '../admin/events.php', 'icon' => 'fa-calendar-alt', 'meta' => 'Business events'],
-    ['label' => 'RBAC', 'href' => 'rbac_management.php', 'icon' => 'fa-lock', 'meta' => number_format($roles_count) . ' roles'],
-    ['label' => 'Tenant Tools', 'href' => 'tenant_scope_migration.php', 'icon' => 'fa-diagram-project', 'meta' => 'Owner maintenance']
+    ['label' => 'RBAC', 'href' => '../admin/rbac_management.php', 'icon' => 'fa-lock', 'meta' => number_format($roles_count) . ' roles'],
+    ['label' => 'Tenant Tools', 'href' => '../admin/tenant_scope_migration.php', 'icon' => 'fa-diagram-project', 'meta' => 'Owner maintenance']
 ];
 
 $dashboard_flash_messages = [];
@@ -2905,7 +2905,7 @@ if ($dashboard_flash_payload === false) {
                             Commission figures are estimated at <?php echo number_format($platform_commission_percent, 2); ?>%. Run Tenant Scope Migration to backfill actual settlement ledgers.
                         <?php endif; ?>
                         <?php if (!$has_user_control_status): ?>
-                            Partner suspension, ban, and restriction controls will appear after running <a href="tenant_scope_migration.php" class="owner-link">Tenant Scope Migration</a>.
+                            Partner suspension, ban, and restriction controls will appear after running <a href="../admin/tenant_scope_migration.php" class="owner-link">Tenant Scope Migration</a>.
                         <?php endif; ?>
                     </div>
                 </div>

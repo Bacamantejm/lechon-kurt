@@ -1037,14 +1037,32 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             background: #94a3b8;
         }
         /* Professional SweetAlert2 Modal & Toast Design System Theme */
-        .swal2-container {
+        /* Modal Overlay (Strictly NOT for toasts) */
+        .swal2-container:not(.swal2-top-end):not(.swal2-top-right):not(.swal2-bottom-end):not(.swal2-bottom-right):not(.swal2-backdrop-hide) {
             backdrop-filter: blur(4px) !important;
             -webkit-backdrop-filter: blur(4px) !important;
             background: rgba(16, 24, 40, 0.5) !important;
             z-index: 999999 !important;
             font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
         }
-        .swal2-popup {
+        /* Toast Container: ALWAYS transparent, NO blur, pass through clicks */
+        .swal2-container.swal2-top-end,
+        .swal2-container.swal2-top-right,
+        .swal2-container.swal2-bottom-end,
+        .swal2-container.swal2-bottom-right,
+        .swal2-container.swal2-backdrop-hide,
+        .swal2-container:has(.swal2-toast) {
+            background: transparent !important;
+            background-color: transparent !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            pointer-events: none !important;
+            z-index: 99999999 !important;
+            overflow: visible !important;
+            padding: 16px 20px !important;
+        }
+        /* Modal Popup (strictly NOT for toasts) */
+        .swal2-popup:not(.swal2-toast) {
             background: #ffffff !important;
             border-radius: 18px !important;
             border: 1px solid #eaecf0 !important;
@@ -1070,7 +1088,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             margin: 8px 0 0 !important;
             padding: 0 4px !important;
         }
-        .swal2-icon {
+        .swal2-popup:not(.swal2-toast) .swal2-icon {
             width: 60px !important;
             height: 60px !important;
             min-width: 60px !important;
@@ -1136,7 +1154,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             color: #b54708 !important;
         }
         /* Success Icon - Complete Crisp SVG/CSS Checkmark */
-        .swal2-icon.swal2-success {
+        .swal2-popup:not(.swal2-toast) .swal2-icon.swal2-success {
             border-color: #abefc6 !important;
             background-color: #ecfdf3 !important;
             color: #027a48 !important;
@@ -1260,26 +1278,89 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             font-weight: 700 !important;
             padding: 10px 20px !important;
         }
-        /* Modern SweetAlert Toast Style */
-        .swal2-toast {
+        /* Modern SweetAlert Toast Style - Crisp, Non-blocking, Perfect Layout */
+        .swal2-popup.swal2-toast {
+            pointer-events: auto !important;
             background: #ffffff !important;
+            color: #101828 !important;
             border: 1px solid #eaecf0 !important;
-            border-radius: 14px !important;
-            box-shadow: 0 12px 30px -4px rgba(16, 24, 40, 0.14), 0 4px 6px -2px rgba(16, 24, 40, 0.05) !important;
-            padding: 12px 18px !important;
+            border-radius: 12px !important;
+            box-shadow: 0 10px 25px -3px rgba(16, 24, 40, 0.12), 0 4px 6px -2px rgba(16, 24, 40, 0.05) !important;
+            padding: 10px 16px !important;
+            width: auto !important;
+            min-width: 280px !important;
+            max-width: 400px !important;
+            box-sizing: border-box !important;
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            gap: 10px !important;
+            margin: 0 !important;
+            overflow: hidden !important;
         }
-        .swal2-toast .swal2-title {
+        .swal2-popup.swal2-toast .swal2-title {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Outfit', sans-serif !important;
             font-size: 0.88rem !important;
-            font-weight: 700 !important;
+            font-weight: 600 !important;
             color: #101828 !important;
             margin: 0 !important;
+            padding: 0 !important;
+            line-height: 1.4 !important;
+            text-align: left !important;
+            flex: 1 1 auto !important;
+            white-space: normal !important;
+            word-break: break-word !important;
+        }
+        .swal2-popup.swal2-toast .swal2-html-container {
+            margin: 0 !important;
+            padding: 0 !important;
+            font-size: 0.88rem !important;
+            color: #475467 !important;
+            line-height: 1.4 !important;
             text-align: left !important;
         }
-        .swal2-toast .swal2-icon {
-            width: 28px !important;
-            height: 28px !important;
-            min-width: 28px !important;
-            margin: 0 10px 0 0 !important;
+        .swal2-popup.swal2-toast .swal2-icon {
+            width: 24px !important;
+            height: 24px !important;
+            min-width: 24px !important;
+            min-height: 24px !important;
+            margin: 0 !important;
+            border-width: 2px !important;
+            border-radius: 50% !important;
+            flex-shrink: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            box-sizing: border-box !important;
+            position: relative !important;
+        }
+        .swal2-popup.swal2-toast .swal2-icon.swal2-success {
+            border-color: #abefc6 !important;
+            background-color: #ecfdf3 !important;
+            color: #027a48 !important;
+        }
+        .swal2-popup.swal2-toast .swal2-icon.swal2-success [class^=swal2-success-line] {
+            background-color: #027a48 !important;
+            height: 2px !important;
+            position: absolute !important;
+            border-radius: 1px !important;
+            display: block !important;
+        }
+        .swal2-popup.swal2-toast .swal2-icon.swal2-success .swal2-success-line-tip {
+            width: 6px !important;
+            top: 11px !important;
+            left: 5px !important;
+            transform: rotate(45deg) !important;
+        }
+        .swal2-popup.swal2-toast .swal2-icon.swal2-success .swal2-success-line-long {
+            width: 11px !important;
+            top: 9.5px !important;
+            left: 8.5px !important;
+            transform: rotate(-45deg) !important;
+        }
+        .swal2-popup.swal2-toast .swal2-timer-progress-bar {
+            background: #b3261e !important;
+            height: 3px !important;
         }
         .swal2-close:focus {
             box-shadow: none !important;

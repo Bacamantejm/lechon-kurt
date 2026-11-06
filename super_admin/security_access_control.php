@@ -206,7 +206,7 @@ saRenderModuleHeader('Security & Access Control', 'Security & Access Control', $
             <h3>Role and Permission Matrix</h3>
             <p class="module-subtext">Role assignments and permission coverage for access governance.</p>
         </div>
-        <a href="rbac_management.php" class="btn btn-sm btn-outline-primary">
+        <a href="../admin/rbac_management.php" class="btn btn-sm btn-outline-primary">
             <i class="fas fa-user-shield"></i> Open RBAC Management
         </a>
     </div>

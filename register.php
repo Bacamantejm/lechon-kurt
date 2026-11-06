@@ -710,7 +710,7 @@ include 'includes/header.php';
 
 <style>
 /* SweetAlert Success Checkmark Full Animation & Complete Visibility */
-.swal2-icon.swal2-success {
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-success {
     border-color: #abefc6 !important;
     background-color: #ecfdf3 !important;
     color: #027a48 !important;
@@ -1687,7 +1687,7 @@ body.dark-mode .strength-bar {
 /* Fix for iOS Safari */
 @supports (-webkit-overflow-scrolling: touch) {
     /* SweetAlert Success Checkmark Full Animation & Complete Visibility */
-.swal2-icon.swal2-success {
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-success {
     border-color: #abefc6 !important;
     background-color: #ecfdf3 !important;
     color: #027a48 !important;
@@ -1864,7 +1864,7 @@ body {
 }
 
 /* SweetAlert Success Checkmark Full Animation & Complete Visibility */
-.swal2-icon.swal2-success {
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-success {
     border-color: #abefc6 !important;
     background-color: #ecfdf3 !important;
     color: #027a48 !important;
@@ -2094,7 +2094,7 @@ body.dark-mode .id-digital-tip .tip-desc {
 
 /* Full-screen split layout styling with smooth sliding animation */
 /* SweetAlert Success Checkmark Full Animation & Complete Visibility */
-.swal2-icon.swal2-success {
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-success {
     border-color: #abefc6 !important;
     background-color: #ecfdf3 !important;
     color: #027a48 !important;
@@ -2660,7 +2660,7 @@ body.dark-mode,
 html.dark-mode,
 body.dark-mode .registration-page,
 html.dark-mode /* SweetAlert Success Checkmark Full Animation & Complete Visibility */
-.swal2-icon.swal2-success {
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-success {
     border-color: #abefc6 !important;
     background-color: #ecfdf3 !important;
     color: #027a48 !important;
@@ -3582,6 +3582,9 @@ body.dark-mode .leaflet-container {
                     <form method="POST" action="login.php" id="ajaxLoginForm" data-swal-validate="off" novalidate>
                         <input type="hidden" name="login" value="1">
                         <input type="hidden" name="ajax" value="true">
+                        <?php if (!empty($_GET['redirect'])): ?>
+                            <input type="hidden" name="redirect" value="<?php echo htmlspecialchars((string)$_GET['redirect'], ENT_QUOTES, 'UTF-8'); ?>">
+                        <?php endif; ?>
 
                         <div class="form-group" style="margin-bottom: 20px;">
                             <label for="loginEmail" style="display:block; margin-bottom:8px; color:#333; font-weight:600; font-size:0.95rem;">Email Address *</label>
@@ -3684,6 +3687,7 @@ document.addEventListener('DOMContentLoaded', function() {
         showConfirmButton: false,
         timer: 3000,
         timerProgressBar: true,
+        width: 'auto',
         didOpen: function(toast) {
             toast.addEventListener('mouseenter', Swal.stopTimer);
             toast.addEventListener('mouseleave', Swal.resumeTimer);

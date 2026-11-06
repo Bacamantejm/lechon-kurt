@@ -1242,7 +1242,8 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                 <span>Employee Dashboard</span>
             </a>
         <?php endif; ?>
-        <a href="logout.php" class="logout-btn" id="logoutBtn">
+        <?php $sidebar_logout_href = !empty($is_super_admin_context) ? '../admin/logout.php' : 'logout.php'; ?>
+        <a href="<?php echo $sidebar_logout_href; ?>" class="logout-btn" id="logoutBtn">
             <i class="fas fa-sign-out-alt"></i>
             <span>Logout</span>
         </a>

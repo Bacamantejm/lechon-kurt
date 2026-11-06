@@ -161,15 +161,15 @@ echo json_encode([...]);</pre></div>
                 </li>
                 <li><strong>Submit form:</strong> Click the Submit button</li>
                 <li><strong>Expected result:</strong> Redirected to PayMongo checkout page</li>
-                <li><strong>Monitor:</strong> <a href="database_verify.php" style="color: #c62828;">Check log here</a></li>
+                <li><strong>Monitor:</strong> <span style="color: #667085;">Check logs/payment_errors.log</span></li>
             </ol>
         </div>
         
         <div class="action-buttons">
             <a href="preorder.php" class="btn btn-primary">🛒 Go to Pre-Orders</a>
-            <a href="preorder_debugger.php" class="btn btn-info">🔬 Debug Mode</a>
-            <a href="database_verify.php" class="btn btn-secondary">📊 Check Database</a>
-            <a href="paymongo_test.php" class="btn btn-secondary">🔗 Test PayMongo API</a>
+            <!-- Debug Mode removed -->
+            <!-- Check Database removed -->
+            <a href="checkout.php" class="btn btn-secondary">Go to Checkout</a>
         </div>
         
         <div class="section" style="margin-top: 30px; background: #fff3cd; border-left: 4px solid #ffc107;">

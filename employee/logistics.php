@@ -1,6 +1,6 @@
 <?php
 require_once 'session_check.php'; // Use the improved session check
-require_once 'header.php'; // Use employee header which includes sidebar
+// header.php moved after driver check
 require_once '../includes/config.php';
 require_once '../EnhancedLogisticsService.php';
 $google_maps_api_key = function_exists('getGoogleMapsApiKey')
@@ -13,6 +13,8 @@ if (empty($is_driver)) {
     header('Location: dashboard.php');
     exit();
 }
+
+require_once 'header.php'; // Employee header with sidebar
 
 if (!function_exists('logisticsOrdersColumnExists')) {
     function logisticsOrdersColumnExists($conn, $column_name) {

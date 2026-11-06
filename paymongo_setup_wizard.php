@@ -83,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         <p class="status-ok">✓ API Keys Configured</p>
                         <p>Secret Key: <span class="text-monospace"><?php echo substr($test_keys['secret'], 0, 15); ?>...<?php echo substr($test_keys['secret'], -5); ?></span></p>
                         <p>Public Key: <span class="text-monospace"><?php echo substr($test_keys['public'], 0, 15); ?>...<?php echo substr($test_keys['public'], -5); ?></span></p>
-                        <a href="debug_payment.php" class="btn btn-success">Continue to Debug Dashboard</a>
+                        <a href="checkout.php" class="btn btn-success">Continue to Checkout</a>
                     <?php else: ?>
                         <p class="status-error">✗ API Keys NOT Configured</p>
                         <p>You need to set PAYMONGO_SECRET_KEY and PAYMONGO_PUBLIC_KEY</p>
@@ -194,7 +194,7 @@ $paymongo_public = 'pk_test_YOUR_PUBLIC_KEY';
                 <div class="step">
                     <div class="step-title">3️⃣ Verify Configuration</div>
                     <ol>
-                        <li>Go to <a href="debug_payment.php">Debug Payment Dashboard</a></li>
+                        <li>Go to <a href="super_admin/platform_monetization.php">Monetization Settings</a></li>
                         <li>Scroll to "PayMongo Configuration"</li>
                         <li>Look for green checkmark ✓</li>
                     </ol>
