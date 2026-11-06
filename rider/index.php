@@ -893,12 +893,49 @@ function initHomeMap() {
 
 function recenterMap() {
     if (homeMap && riderMarker) {
-        homeMap.setView(riderMarker.getLatLng(), 15, { animate: true });
+        const statEl = document.getElementById('gpsStatusText');
+        if (statEl) {
+            statEl.innerHTML = `<span class="text-primary"><i class="fas fa-spinner fa-spin me-1"></i> Acquiring high-accuracy GPS...</span>`;
+        }
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    const acc = Math.round(pos.coords.accuracy || 0);
+                    updateRiderPositionOnMap(lat, lng, acc);
+                    if (typeof sendRiderLocationPing === 'function') {
+                        sendRiderLocationPing(lat, lng, acc);
+                    }
+                    if (homeMap) {
+                        homeMap.setView([lat, lng], 17, { animate: true });
+                    }
+                    if (statEl) {
+                        const accLabel = acc > 0 ? ` (±${acc}m accuracy)` : '';
+                        statEl.innerHTML = `<span class="text-success"><i class="fas fa-crosshairs me-1"></i> Location Locked${accLabel}</span>`;
+                    }
+                },
+                (err) => {
+                    console.warn('GPS location lock failed:', err);
+                    if (statEl) {
+                        statEl.innerHTML = `<span class="text-warning"><i class="fas fa-triangle-exclamation me-1"></i> GPS: ${err.message || 'Signal weak'}</span>`;
+                    }
+                    if (homeMap && riderMarker) {
+                        homeMap.setView(riderMarker.getLatLng(), 15, { animate: true });
+                    }
+                },
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+            );
+        } else {
+            homeMap.setView(riderMarker.getLatLng(), 15, { animate: true });
+        }
     }
 }
 
 let hasCenteredHomeMap = false;
-function updateRiderPositionOnMap(lat, lng) {
+let accuracyCircle = null;
+function updateRiderPositionOnMap(lat, lng, acc = null) {
     if (!lat || !lng) return;
     currentRiderLat = parseFloat(lat);
     currentRiderLng = parseFloat(lng);
@@ -915,7 +952,22 @@ function updateRiderPositionOnMap(lat, lng) {
     }
     const statEl = document.getElementById('gpsStatusText');
     if (statEl) {
-        statEl.innerHTML = `<span class="text-success"><i class="fas fa-check-circle me-1"></i> GPS Active (${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})</span>`;
+        if (acc && acc > 0 && homeMap) {
+            if (!accuracyCircle) {
+                accuracyCircle = L.circle([currentRiderLat, currentRiderLng], {
+                    radius: acc,
+                    color: '#b3261e',
+                    fillColor: '#b3261e',
+                    fillOpacity: 0.12,
+                    weight: 1
+                }).addTo(homeMap);
+            } else {
+                accuracyCircle.setLatLng([currentRiderLat, currentRiderLng]);
+                accuracyCircle.setRadius(acc);
+            }
+        }
+        const accInfo = acc ? ` (±${Math.round(acc)}m)` : '';
+        statEl.innerHTML = `<span class="text-success"><i class="fas fa-check-circle me-1"></i> GPS Active${accInfo} (${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})</span>`;
     }
 }
 

@@ -262,9 +262,21 @@ function sahTimeToSeconds(?string $time_value): ?int
     return ((int)date('H', $timestamp) * 3600) + ((int)date('i', $timestamp) * 60) + (int)date('s', $timestamp);
 }
 
+function sahGetNowManila(?DateTimeInterface $now = null): DateTimeInterface
+{
+    if ($now !== null) {
+        return $now;
+    }
+    try {
+        return new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
+    } catch (Throwable $e) {
+        return new DateTimeImmutable('now');
+    }
+}
+
 function sahIsScheduleDayAllowed(string $operating_days, ?string $opening_time, ?string $closing_time, ?DateTimeInterface $now = null): bool
 {
-    $now = $now ?: new DateTimeImmutable('now');
+    $now = sahGetNowManila($now);
     $open_days = array_map('intval', array_filter(explode(',', $operating_days)));
     if (empty($open_days)) {
         return false;
@@ -300,10 +312,11 @@ function sahIsTimeWithinSchedule(?string $opening_time, ?string $closing_time, ?
         return false;
     }
 
-    $now = $now ?: new DateTimeImmutable('now');
+    $now = sahGetNowManila($now);
     $today = $now->format('Y-m-d');
-    $open_at = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $today . ' ' . date('H:i:s', strtotime($opening_time)));
-    $close_at = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $today . ' ' . date('H:i:s', strtotime($closing_time)));
+    $tz = new DateTimeZone('Asia/Manila');
+    $open_at = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $today . ' ' . date('H:i:s', strtotime($opening_time)), $tz);
+    $close_at = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $today . ' ' . date('H:i:s', strtotime($closing_time)), $tz);
 
     if (!$open_at || !$close_at) {
         return false;
@@ -321,7 +334,7 @@ function sahIsTimeWithinSchedule(?string $opening_time, ?string $closing_time, ?
 
 function sahResolveStoreAvailability(array $store_row, ?DateTimeInterface $now = null): array
 {
-    $now = $now ?: new DateTimeImmutable('now');
+    $now = sahGetNowManila($now);
     $is_active = (int)($store_row['is_active'] ?? 1) === 1;
     $mode = strtolower(trim((string)($store_row['availability_mode'] ?? 'schedule')));
     $manual_status = strtolower(trim((string)($store_row['manual_status'] ?? 'closed')));

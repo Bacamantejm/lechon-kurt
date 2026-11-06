@@ -464,6 +464,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $suffix = trim($_POST['suffix'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
+        $employee_card_number = trim($_POST['employee_card_number'] ?? '');
+        if ($employee_card_number === '') {
+            $_SESSION['error'] = "Card Number / Employee ID is required.";
+            header("Location: employees.php");
+            exit();
+        }
+        $check_id = isset($id) ? (int)$id : 0;
+        $dup_chk_upd = mysqli_prepare($conn, "SELECT id FROM employees WHERE employee_id = ? AND (? = 0 OR id != ?) LIMIT 1");
+        if ($dup_chk_upd) {
+            mysqli_stmt_bind_param($dup_chk_upd, "sii", $employee_card_number, $check_id, $check_id);
+            mysqli_stmt_execute($dup_chk_upd);
+            mysqli_stmt_store_result($dup_chk_upd);
+            $has_dup = mysqli_stmt_num_rows($dup_chk_upd) > 0;
+            mysqli_stmt_close($dup_chk_upd);
+            if ($has_dup) {
+                $_SESSION['error'] = "Card Number / Employee ID '{$employee_card_number}' is already assigned to another employee.";
+                header("Location: employees.php");
+                exit();
+            }
+        }
+        $employee_id = $employee_card_number;
         $department_id = isset($_POST['department_id']) && $_POST['department_id'] !== '' ? intval($_POST['department_id']) : 0;
         $store_id = isset($_POST['store_id']) && $_POST['store_id'] !== '' ? intval($_POST['store_id']) : 0;
         if ($store_id <= 0) {
@@ -594,9 +615,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['error'] = "Password and Role are required when creating a user account.";
         } elseif ($create_user && $user_check_has_rows) {
             $_SESSION['error'] = "Email is already registered to a user account.";
+        } elseif ($employee_card_number === '') {
+            $_SESSION['error'] = "Card Number / Employee ID is required.";
         } elseif ($first_name === '' || $last_name === '' || $email === '' || $phone === '') {
             $_SESSION['error'] = "Please fill in all required personal fields (First Name, Last Name, Email, and Phone).";
         } else { // Proceed with adding employee
+            $dup_chk_stmt = mysqli_prepare($conn, "SELECT id FROM employees WHERE employee_id = ? LIMIT 1");
+            if ($dup_chk_stmt) {
+                mysqli_stmt_bind_param($dup_chk_stmt, "s", $employee_card_number);
+                mysqli_stmt_execute($dup_chk_stmt);
+                mysqli_stmt_store_result($dup_chk_stmt);
+                $has_dup = mysqli_stmt_num_rows($dup_chk_stmt) > 0;
+                mysqli_stmt_close($dup_chk_stmt);
+                if ($has_dup) {
+                    $_SESSION['error'] = "Card Number / Employee ID '{$employee_card_number}' is already assigned to another employee.";
+                    header("Location: employees.php");
+                    exit();
+                }
+            }
+            $employee_id = $employee_card_number;
             // Auto fallback defaults for optional attributes
             if ($department_id <= 0 && !empty($departments)) {
                 $department_id = (int)$departments[0]['id'];
@@ -744,7 +781,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Dynamic fallback if optional columns are absent in database schema
                 $all_cols = [
                     'employee_id' => ['s', $employee_id],
-                    'first_name' => ['s', $first_name],
+
+                'first_name' => ['s', $first_name],
                     'middle_initial' => ['s', $middle_initial],
                     'last_name' => ['s', $last_name],
                     'suffix' => ['s', $suffix],
@@ -836,6 +874,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $suffix = trim($_POST['suffix'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
+        $employee_card_number = trim($_POST['employee_card_number'] ?? '');
+        if ($employee_card_number === '') {
+            $_SESSION['error'] = "Card Number / Employee ID is required.";
+            header("Location: employees.php");
+            exit();
+        }
+        $check_id = isset($id) ? (int)$id : 0;
+        $dup_chk_upd = mysqli_prepare($conn, "SELECT id FROM employees WHERE employee_id = ? AND (? = 0 OR id != ?) LIMIT 1");
+        if ($dup_chk_upd) {
+            mysqli_stmt_bind_param($dup_chk_upd, "sii", $employee_card_number, $check_id, $check_id);
+            mysqli_stmt_execute($dup_chk_upd);
+            mysqli_stmt_store_result($dup_chk_upd);
+            $has_dup = mysqli_stmt_num_rows($dup_chk_upd) > 0;
+            mysqli_stmt_close($dup_chk_upd);
+            if ($has_dup) {
+                $_SESSION['error'] = "Card Number / Employee ID '{$employee_card_number}' is already assigned to another employee.";
+                header("Location: employees.php");
+                exit();
+            }
+        }
+        $employee_id = $employee_card_number;
         $department_id = isset($_POST['department_id']) && $_POST['department_id'] !== '' ? intval($_POST['department_id']) : 0;
         $store_id = isset($_POST['store_id']) && $_POST['store_id'] !== '' ? intval($_POST['store_id']) : 0;
         if ($store_id <= 0 && $id > 0) {
@@ -925,13 +984,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pos_id_param = ($position_id > 0) ? (int)$position_id : 0;
 
         $store_id_param = ($store_id > 0) ? (int)$store_id : 0;
-        $query = "UPDATE employees SET first_name=?, middle_initial=?, last_name=?, suffix=?, email=?, phone=?, department_id=NULLIF(?,0), position_id=NULLIF(?,0), position=?, hire_date=?, employment_type=?, employment_basis=?, salary=?, daily_rate=?, sss_number=?, philhealth_number=?, pagibig_number=?, tin_number=?, store_id=NULLIF(?,0) WHERE id=?";
+        $query = "UPDATE employees SET employee_id=?, first_name=?, middle_initial=?, last_name=?, suffix=?, email=?, phone=?, department_id=NULLIF(?,0), position_id=NULLIF(?,0), position=?, hire_date=?, employment_type=?, employment_basis=?, salary=?, daily_rate=?, sss_number=?, philhealth_number=?, pagibig_number=?, tin_number=?, store_id=NULLIF(?,0) WHERE id=?";
         $stmt = mysqli_prepare($conn, $query);
         if ($stmt) {
-            mysqli_stmt_bind_param($stmt, "ssssssiissssddssssii", $first_name, $middle_initial, $last_name, $suffix, $email, $phone, $dept_id_param, $pos_id_param, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $sss, $philhealth, $pagibig, $tin, $store_id_param, $id);
+            mysqli_stmt_bind_param($stmt, "sssssssiissssddssssii", $employee_card_number, $first_name, $middle_initial, $last_name, $suffix, $email, $phone, $dept_id_param, $pos_id_param, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $sss, $philhealth, $pagibig, $tin, $store_id_param, $id);
         } else {
             // Dynamic fallback update for employees
             $all_upd = [
+                'employee_id' => ['s', $employee_card_number],
                 'first_name' => ['s', $first_name],
                 'middle_initial' => ['s', $middle_initial],
                 'last_name' => ['s', $last_name],
@@ -2725,6 +2785,20 @@ if ($roles_query instanceof mysqli_result) {
                                         </div>
                                     </div>
                                 </div>
+                                <div class="col-md-12">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Card Number / Employee ID <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-id-card emp-input-icon"></i>
+                                            <input type="text" name="employee_card_number" class="form-control" placeholder="e.g. EMP-1001 or RFID Card #" required>
+                                        </div>
+                                        <div class="emp-helper-text">
+                                            <i class="fas fa-info-circle"></i> Physical RFID card or employee badge number for attendance.
+                                        </div>
+                                    </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -3016,6 +3090,20 @@ if ($roles_query instanceof mysqli_result) {
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-phone-alt emp-input-icon"></i>
                                             <input type="text" name="phone" id="edit_phone" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-12">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Card Number / Employee ID <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-id-card emp-input-icon"></i>
+                                            <input type="text" name="employee_card_number" id="edit_employee_card_number" class="form-control" placeholder="e.g. EMP-1001 or RFID Card #" required>
+                                        </div>
+                                        <div class="emp-helper-text">
+                                            <i class="fas fa-info-circle"></i> Physical RFID card or employee badge number for attendance.
+                                        </div>
+                                    </div>
                                         </div>
                                     </div>
                                 </div>
@@ -3452,6 +3540,13 @@ if ($roles_query instanceof mysqli_result) {
             }
 
             departmentEl.addEventListener('change', () => syncPositionSelect(mode));
+            selectEl.addEventListener('change', () => {
+                const selectedOpt = selectEl.options[selectEl.selectedIndex];
+                const deptId = selectedOpt ? selectedOpt.getAttribute('data-department-id') : null;
+                if (deptId && Number(deptId) > 0 && String(departmentEl.value) !== String(deptId)) {
+                    departmentEl.value = String(deptId);
+                }
+            });
             syncPositionSelect(mode);
         }
 
@@ -3499,6 +3594,7 @@ if ($roles_query instanceof mysqli_result) {
                     $('#edit_suffix').val(data.suffix || '');
                     $('#edit_email').val(data.email);
                     $('#edit_phone').val(data.phone);
+                    $('#edit_employee_card_number').val(data.employee_id || '');
                     $('#edit_sss').val(data.sss_number);
                     $('#edit_philhealth').val(data.philhealth_number);
                     $('#edit_pagibig').val(data.pagibig_number);

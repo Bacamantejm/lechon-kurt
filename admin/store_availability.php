@@ -195,6 +195,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $availability_mode = 'manual';
         $manual_status = $immediate_toggle;
         $is_active = 1;
+        if (!isset($_POST['opening_time'])) {
+            $opening_time = substr((string)($selected_store['opening_time'] ?? '08:00:00'), 0, 5);
+        }
+        if (!isset($_POST['closing_time'])) {
+            $closing_time = substr((string)($selected_store['closing_time'] ?? '20:00:00'), 0, 5);
+        }
     }
 
     $fallback_opening_time = substr((string)($selected_store['opening_time'] ?? '08:00:00'), 0, 5);
@@ -228,7 +234,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     sort($operating_days_arr);
-    $operating_days = !empty($operating_days_arr) ? implode(',', $operating_days_arr) : '';
+    if ($posted_days === null) {
+        $operating_days = !empty($selected_store['operating_days']) ? (string)$selected_store['operating_days'] : $fallback_operating_days;
+    } else {
+        $operating_days = !empty($operating_days_arr) ? implode(',', $operating_days_arr) : '';
+    }
+
+    if ($operating_days === '' && (($availability_mode === 'manual' && $manual_status === 'open') || $immediate_toggle === 'open')) {
+        $operating_days = $fallback_operating_days;
+    }
 
     $opening_hours = ($operating_days !== '')
         ? sahBuildOpeningHours($opening_time . ':00', $closing_time . ':00', $operating_days)

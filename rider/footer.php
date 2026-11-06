@@ -126,7 +126,7 @@ function broadcastRiderLocation(onCoordsUpdate) {
                     sendRiderLocationPing(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0);
                 },
                 () => {},
-                { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
         }, 3000);
     }

@@ -430,6 +430,25 @@ if (!function_exists('hrEnsureNormalizedPositionModel')) {
         @mysqli_query($conn, "UPDATE employees SET position = 'Kitchen Helper' WHERE LOWER(TRIM(position)) IN ('assistant cook', 'helper')");
         @mysqli_query($conn, "DELETE FROM job_positions WHERE LOWER(TRIM(position_title)) IN ('software developer', 'project manager', 'staff', 'hourly staff', 'asd', 'employee', 'receipt', 'driver')");
 
+        // Ensure standard lechon shop roles exist in job_positions
+        $core_shop_roles = [
+            'Lechon Roaster / Litsonero',
+            'Service Crew',
+            'Kitchen Helper',
+            'Delivery Rider'
+        ];
+        foreach ($core_shop_roles as $role_title) {
+            $esc_title = mysqli_real_escape_string($conn, $role_title);
+            @mysqli_query(
+                $conn,
+                "INSERT INTO job_positions (position_title, employment_type, status, posted_date, created_by, created_at, updated_at)
+                 SELECT '{$esc_title}', 'full_time', 'open', CURDATE(), NULL, NOW(), NOW()
+                 WHERE NOT EXISTS (
+                     SELECT 1 FROM job_positions WHERE LOWER(TRIM(position_title)) = LOWER('{$esc_title}')
+                 )"
+            );
+        }
+
         // Ensure legacy employee positions are represented in normalized job_positions.
         @mysqli_query(
             $conn,
@@ -986,7 +1005,7 @@ if (!function_exists('hrFetchDepartmentCatalog')) {
         }
 
         $query = "SELECT d.id, d.department_name FROM departments d";
-        if (is_string($department_scope_sql) && trim($department_scope_sql) !== '' && trim($department_scope_sql) !== '1=1') {
+        if (hrIsPartnerScopeEnabled($conn)) {
             $query .= " WHERE {$department_scope_sql}";
         }
         $query .= " ORDER BY d.department_name";
@@ -1024,8 +1043,9 @@ if (!function_exists('hrFetchPositionCatalog')) {
                   FROM job_positions jp
                   LEFT JOIN departments d ON d.id = jp.department_id
                   WHERE 1=1";
-        if (is_string($department_scope_sql) && trim($department_scope_sql) !== '' && trim($department_scope_sql) !== '1=1') {
-            $query .= " AND ({$department_scope_sql} OR jp.department_id IS NULL)";
+        if (hrIsPartnerScopeEnabled($conn)) {
+            $scope_sql = hrPositionScopeSql($conn, 'jp');
+            $query .= " AND ({$scope_sql} OR jp.created_by IS NULL OR jp.created_by = 0)";
         }
         $query .= " ORDER BY jp.position_title";
 
