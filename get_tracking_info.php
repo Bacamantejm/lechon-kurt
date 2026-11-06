@@ -69,6 +69,20 @@ if ($tracking_info) {
         $driver_longitude = (float)$tracking_info['current_longitude'];
     }
 
+    // Ensure driver_id is retrieved from orders.rider_id if logistics_tracking has not recorded it yet
+    if (empty($tracking_info['driver_id'])) {
+        $ord_r_chk = $conn->prepare("SELECT rider_id FROM orders WHERE id = ? LIMIT 1");
+        if ($ord_r_chk) {
+            $ord_r_chk->bind_param("i", $order_id);
+            $ord_r_chk->execute();
+            $ord_r_res = $ord_r_chk->get_result()->fetch_assoc();
+            $ord_r_chk->close();
+            if (!empty($ord_r_res['rider_id'])) {
+                $tracking_info['driver_id'] = (int)$ord_r_res['rider_id'];
+            }
+        }
+    }
+
     // Check latest coordinates from riders and employees_geo_tracking tables
     if (!empty($tracking_info['driver_id'])) {
         $driver_id = (int)$tracking_info['driver_id'];
@@ -192,6 +206,76 @@ if ($tracking_info) {
         $driver_longitude = null;
     }
 
+        // Fetch store and customer coordinates for real-time distance calculations
+    $store_info = null;
+    $sq_stmt = $conn->prepare("
+        SELECT sl.store_name, sl.latitude, sl.longitude, sl.address, sl.phone
+        FROM orders o 
+        LEFT JOIN store_locations sl ON (sl.store_id = o.pickup_location OR sl.id = o.pickup_location)
+        WHERE o.id = ? LIMIT 1
+    ");
+    if ($sq_stmt) {
+        $sq_stmt->bind_param("i", $order_id);
+        $sq_stmt->execute();
+        $store_info = $sq_stmt->get_result()->fetch_assoc();
+        $sq_stmt->close();
+    }
+    if (!$store_info || empty($store_info['latitude'])) {
+        $def_s = $conn->query("SELECT store_name, latitude, longitude, address, phone FROM store_locations WHERE is_active = 1 AND latitude IS NOT NULL LIMIT 1");
+        if ($def_s) {
+            $store_info = $def_s->fetch_assoc();
+        }
+    }
+
+    $cust_lat = null;
+    $cust_lng = null;
+    $cust_addr = '';
+    $cq_stmt = $conn->prepare("SELECT latitude, longitude, delivery_address FROM orders WHERE id = ? LIMIT 1");
+    if ($cq_stmt) {
+        $cq_stmt->bind_param("i", $order_id);
+        $cq_stmt->execute();
+        $cq_res = $cq_stmt->get_result()->fetch_assoc();
+        $cq_stmt->close();
+        if ($cq_res) {
+            $cust_lat = (isset($cq_res['latitude']) && is_numeric($cq_res['latitude'])) ? (float)$cq_res['latitude'] : null;
+            $cust_lng = (isset($cq_res['longitude']) && is_numeric($cq_res['longitude'])) ? (float)$cq_res['longitude'] : null;
+            $cust_addr = (string)($cq_res['delivery_address'] ?? '');
+        }
+    }
+
+    $dist_to_store_km = null;
+    $dist_to_store_formatted = null;
+    $dist_to_cust_km = null;
+    $dist_to_cust_formatted = null;
+
+    if ($driver_latitude !== null && $driver_longitude !== null) {
+        $earth_radius = 6371.0;
+
+        // Calculate distance from rider to store
+        if ($store_info && is_numeric($store_info['latitude']) && is_numeric($store_info['longitude'])) {
+            $s_lat = (float)$store_info['latitude'];
+            $s_lng = (float)$store_info['longitude'];
+            $dLat = deg2rad($s_lat - $driver_latitude);
+            $dLon = deg2rad($s_lng - $driver_longitude);
+            $a = sin($dLat / 2) * sin($dLat / 2) + cos(deg2rad($driver_latitude)) * cos(deg2rad($s_lat)) * sin($dLon / 2) * sin($dLon / 2);
+            $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+            $s_road_km = ($earth_radius * $c) * 1.25;
+            $dist_to_store_km = round($s_road_km, 2);
+            $dist_to_store_formatted = ($s_road_km < 0.95) ? round($s_road_km * 1000) . ' m' : number_format($s_road_km, 1) . ' km';
+        }
+
+        // Calculate distance from rider to customer
+        if ($cust_lat !== null && $cust_lng !== null) {
+            $dLat = deg2rad($cust_lat - $driver_latitude);
+            $dLon = deg2rad($cust_lng - $driver_longitude);
+            $a = sin($dLat / 2) * sin($dLat / 2) + cos(deg2rad($driver_latitude)) * cos(deg2rad($cust_lat)) * sin($dLon / 2) * sin($dLon / 2);
+            $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+            $c_road_km = ($earth_radius * $c) * 1.25;
+            $dist_to_cust_km = round($c_road_km, 2);
+            $dist_to_cust_formatted = ($c_road_km < 0.95) ? round($c_road_km * 1000) . ' m' : number_format($c_road_km, 1) . ' km';
+        }
+    }
+
     $proof_path = $tracking_info['proof_of_delivery_path'] ?? null;
     if (empty($proof_path)) {
         $pod_chk = $conn->prepare("SELECT photo_path FROM proof_of_delivery WHERE order_id = ? ORDER BY id DESC LIMIT 1");
@@ -227,6 +311,16 @@ if ($tracking_info) {
         'estimated_delivery' => $tracking_info['estimated_delivery'] ?? null,
         'status_timestamp' => $tracking_info['status_timestamp'] ?? null,
         'proof_path' => $proof_path,
+        'distance_to_store_km' => $dist_to_store_km,
+        'distance_to_store_formatted' => $dist_to_store_formatted,
+        'distance_to_customer_km' => $dist_to_cust_km,
+        'distance_to_customer_formatted' => $dist_to_cust_formatted,
+        'store_latitude' => $store_info ? (float)$store_info['latitude'] : null,
+        'store_longitude' => $store_info ? (float)$store_info['longitude'] : null,
+        'store_name' => $store_info['store_name'] ?? 'Store',
+        'customer_latitude' => $cust_lat,
+        'customer_longitude' => $cust_lng,
+        'customer_address' => $cust_addr,
         'delivery_review_exists' => $delivery_review_exists
     ]);
 } else {

@@ -23,10 +23,19 @@ require_once __DIR__ . '/header.php';
 ?>
 
 <div class="px-2 px-md-3 pt-2 pt-md-3">
-    <div class="d-flex align-items-center justify-content-between mb-3">
-        <h5 class="fw-bold mb-0" style="color: var(--primary-ink);"><i class="fas fa-bell text-danger me-2"></i>Notifications</h5>
-        <a href="notifications.php?action=mark_all_read" class="small text-decoration-none fw-semibold" style="color: var(--primary-red); font-size: 12px;">
-            Mark all as read
+    <!-- Header with Glass Pill Action -->
+    <div class="d-flex align-items-center justify-content-between mb-3 px-1">
+        <div class="d-flex align-items-center gap-2">
+            <div class="rider-glass-icon-btn text-danger" style="width: 36px; height: 36px; pointer-events: none;">
+                <i class="fas fa-bell"></i>
+            </div>
+            <div>
+                <h5 class="fw-bold mb-0" style="color: var(--primary-ink); font-size: 1.15rem; line-height: 1.2;">Notifications</h5>
+                <span class="text-muted" style="font-size: 11px;">Dispatches, wallet credits & shift alerts</span>
+            </div>
+        </div>
+        <a href="notifications.php?action=mark_all_read" class="rider-glass-pill" style="font-size: 11.5px; padding: 6px 12px; color: var(--primary-red);">
+            <i class="fas fa-check-double me-1"></i> Mark all read
         </a>
     </div>
 
@@ -34,30 +43,47 @@ require_once __DIR__ . '/header.php';
     <?php if ($notifs_q && mysqli_num_rows($notifs_q) > 0): ?>
         <?php while ($n = mysqli_fetch_assoc($notifs_q)): 
             $icon = 'fa-info-circle';
-            $bg_color = '#f8f9fa';
-            if ($n['type'] === 'delivery_request') { $icon = 'fa-motorcycle'; $bg_color = '#fff1f0'; }
-            elseif ($n['type'] === 'earnings') { $icon = 'fa-coins'; $bg_color = '#ecfdf3'; }
-            elseif ($n['type'] === 'cod_remittance') { $icon = 'fa-money-bill-wave'; $bg_color = '#fffaeb'; }
+            $icon_color = '#175cd3';
+            $icon_bg = 'rgba(239, 248, 255, 0.9)';
+            $icon_border = 'rgba(178, 221, 255, 0.8)';
+            if ($n['type'] === 'delivery_request') {
+                $icon = 'fa-motorcycle';
+                $icon_color = '#b3261e';
+                $icon_bg = 'rgba(255, 241, 240, 0.9)';
+                $icon_border = 'rgba(254, 228, 226, 0.8)';
+            } elseif ($n['type'] === 'earnings') {
+                $icon = 'fa-coins';
+                $icon_color = '#027a48';
+                $icon_bg = 'rgba(236, 253, 243, 0.9)';
+                $icon_border = 'rgba(171, 239, 198, 0.8)';
+            } elseif ($n['type'] === 'cod_remittance') {
+                $icon = 'fa-money-bill-wave';
+                $icon_color = '#b54708';
+                $icon_bg = 'rgba(255, 250, 235, 0.9)';
+                $icon_border = 'rgba(254, 223, 137, 0.8)';
+            }
+            $is_unread = empty($n['is_read']);
         ?>
-            <div class="rider-card p-3 mb-2 <?php echo empty($n['is_read']) ? 'border-danger-subtle' : ''; ?>" style="background: <?php echo empty($n['is_read']) ? '#ffffff' : '#fafafa'; ?>;">
+            <div class="rider-card rider-notif-card p-3 mb-2 <?php echo $is_unread ? 'is-unread' : 'is-read'; ?>">
                 <div class="d-flex align-items-start gap-3">
-                    <div style="width: 36px; height: 36px; border-radius: 10px; background: <?php echo $bg_color; ?>; display:flex; align-items:center; justify-content:center; font-size: 15px;">
-                        <i class="fas <?php echo $icon; ?> text-danger"></i>
+                    <div class="notif-icon-box" style="background: <?php echo $icon_bg; ?>; color: <?php echo $icon_color; ?>; border-color: <?php echo $icon_border; ?>;">
+                        <i class="fas <?php echo $icon; ?>"></i>
                     </div>
-                    <div style="flex: 1;">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <h6 class="mb-1 fw-bold text-dark" style="font-size: 13px;">
+                    <div style="flex: 1; min-width: 0;">
+                        <div class="d-flex justify-content-between align-items-center mb-1 gap-2">
+                            <h6 class="mb-0 fw-bold text-dark text-truncate" style="font-size: 13.5px;">
                                 <?php echo htmlspecialchars($n['title']); ?>
                             </h6>
-                            <?php if (empty($n['is_read'])): ?>
-                                <span class="badge rounded-pill bg-danger" style="font-size: 8px;">NEW</span>
+                            <?php if ($is_unread): ?>
+                                <span class="notif-badge-new">NEW</span>
                             <?php endif; ?>
                         </div>
-                        <p class="text-muted mb-1" style="font-size: 12px; line-height: 1.4;">
+                        <p class="text-muted mb-1.5" style="font-size: 12px; line-height: 1.45; word-wrap: break-word;">
                             <?php echo htmlspecialchars($n['message']); ?>
                         </p>
-                        <div class="text-muted" style="font-size: 10px;">
-                            <?php echo date('M d, h:i A', strtotime($n['created_at'])); ?>
+                        <div class="d-flex align-items-center gap-1 text-muted" style="font-size: 10.5px;">
+                            <i class="far fa-clock"></i>
+                            <span><?php echo date('M d, h:i A', strtotime($n['created_at'])); ?></span>
                         </div>
                     </div>
                 </div>

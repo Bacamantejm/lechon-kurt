@@ -621,9 +621,9 @@ body.dark-mode .rider-glass-handle {
                 <div id="activeDeliveryMap"></div>
                 <!-- Quick GPS Launch Controls Overlaid on Map -->
                 <div class="rider-map-glass-controls">
-                    <button type="button" id="btnSimulateDrive" class="rider-map-glass-btn border-0 cursor-pointer" onclick="toggleDriveSimulation()" title="Simulate real-time driving for testing">
-                        <i class="fas fa-play text-success" id="simDriveIcon"></i>
-                        <span id="simDriveText">Test Drive</span>
+                    <button type="button" id="btnLiveGpsIndicator" class="rider-map-glass-btn border-0" onclick="recenterDeliveryMap()" title="Live Device GPS Stream Active">
+                        <i class="fas fa-satellite-dish text-success" id="liveGpsIcon"></i>
+                        <span id="liveGpsText">Live GPS</span>
                     </button>
                     <a href="#" id="googleMapsBtn" target="_blank" class="rider-map-glass-btn">
                         <i class="fas fa-location-arrow text-danger"></i> Google Maps
@@ -1055,18 +1055,9 @@ function initActiveMap(retryCount = 0) {
 
     riderMarker = L.marker([currentRiderLat, currentRiderLng], { 
         icon: riderIcon,
-        draggable: true
+        draggable: false
     }).addTo(activeDeliveryMap);
-    riderMarker.bindPopup(`<strong>Your Location (Rider)</strong><br><small class="text-muted">Drag anywhere or click map to test GPS position</small>`);
-
-    riderMarker.on('dragend', (e) => {
-        const pos = e.target.getLatLng();
-        handleManualRiderLocationChange(pos.lat, pos.lng);
-    });
-
-    activeDeliveryMap.on('click', (e) => {
-        handleManualRiderLocationChange(e.latlng.lat, e.latlng.lng);
-    });
+    riderMarker.bindPopup(`<strong>Your Location (Rider)</strong><br><small class="text-success"><i class="fas fa-satellite-dish me-1"></i> Live Device GPS Active</small>`);
 
     // 2. Restaurant / Store Marker (Black store pin)
     const storeIcon = L.divIcon({
@@ -1204,16 +1195,41 @@ async function fetchRiderStreetRoute(originLat, originLng, destLat, destLng, for
     }
 }
 
+let hasReceivedFirstGps = false;
+
 function onRiderLocationChanged(lat, lng) {
-    currentRiderLat = lat;
-    currentRiderLng = lng;
-    if (riderMarker) riderMarker.setLatLng([lat, lng]);
+    if (!lat || !lng) return;
+    currentRiderLat = parseFloat(lat);
+    currentRiderLng = parseFloat(lng);
+
+    if (riderMarker) {
+        riderMarker.setLatLng([currentRiderLat, currentRiderLng]);
+    }
+
+    if (activeDeliveryMap) {
+        if (!hasReceivedFirstGps) {
+            hasReceivedFirstGps = true;
+            activeDeliveryMap.setView([currentRiderLat, currentRiderLng], 15);
+        } else {
+            activeDeliveryMap.panTo([currentRiderLat, currentRiderLng], { animate: true, duration: 0.6 });
+        }
+    }
 
     let destLat = (stepIndex < 3) ? storeLat : custLat;
     let destLng = (stepIndex < 3) ? storeLng : custLng;
 
-    updateRiderRouteHead(lat, lng);
-    fetchRiderStreetRoute(lat, lng, destLat, destLng, false);
+    const gmapsBtn = document.getElementById('googleMapsBtn');
+    if (gmapsBtn && destLat && destLng) {
+        gmapsBtn.href = `https://www.google.com/maps/dir/?api=1&origin=${currentRiderLat},${currentRiderLng}&destination=${destLat},${destLng}`;
+    }
+
+    const wazeBtn = document.getElementById('wazeBtn');
+    if (wazeBtn && destLat && destLng) {
+        wazeBtn.href = `https://waze.com/ul?ll=${destLat},${destLng}&navigate=yes`;
+    }
+
+    updateRiderRouteHead(currentRiderLat, currentRiderLng);
+    fetchRiderStreetRoute(currentRiderLat, currentRiderLng, destLat, destLng, false);
 }
 
 function handleManualRiderLocationChange(lat, lng) {

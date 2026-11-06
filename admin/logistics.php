@@ -2758,7 +2758,7 @@ function fetchDriverLocations(isManualRefresh = false) {
                         iconSize: [38, 38],
                         iconAnchor: [19, 19]
                     });
-                    const newMarker = L.marker([driverLat, driverLng], { icon: driverIcon }).addTo(logisticsMap);
+                    const newMarker = L.marker([driverLat, driverLng], { icon: driverIcon, draggable: false }).addTo(logisticsMap);
                     newMarker.bindPopup(driverPopupContent);
                     activeDriverMarkers.set(driverId, newMarker);
                 }

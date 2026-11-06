@@ -228,11 +228,37 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
             $is_rider_account = isDeliveryDriverUser($conn, $result['user_id']);
             if ($is_rider_account) {
                 $_SESSION['is_driver'] = true;
-                $r_fetch = mysqli_query($conn, "SELECT id, rider_code FROM riders WHERE user_id = " . (int)$result['user_id'] . " LIMIT 1");
-                if ($r_fetch && ($r_row = mysqli_fetch_assoc($r_fetch))) {
+                $r_fetch = mysqli_query($conn, "SELECT id, rider_code, employee_id FROM riders WHERE user_id = " . (int)$result['user_id'] . " LIMIT 1");
+                $r_row = ($r_fetch) ? mysqli_fetch_assoc($r_fetch) : null;
+                if ($r_row) {
                     $_SESSION['rider_id'] = (int)$r_row['id'];
                     $_SESSION['rider_code'] = $r_row['rider_code'];
                 }
+
+                // Immediately update rider device location on login
+                $login_lat = (isset($_POST['latitude']) && is_numeric($_POST['latitude'])) ? (float)$_POST['latitude'] : null;
+                $login_lng = (isset($_POST['longitude']) && is_numeric($_POST['longitude'])) ? (float)$_POST['longitude'] : null;
+                if ($login_lat !== null && $login_lng !== null && $login_lat != 0 && $login_lng != 0) {
+                    $r_id = (int)($_SESSION['rider_id'] ?? 0);
+                    $u_uid = (int)$result['user_id'];
+                    $emp_id = (int)($r_row['employee_id'] ?? 0);
+
+                    $u_r = mysqli_prepare($conn, "UPDATE riders SET current_latitude = ?, current_longitude = ?, last_location_update = NOW() WHERE id = ? OR user_id = ?");
+                    if ($u_r) {
+                        mysqli_stmt_bind_param($u_r, "ddii", $login_lat, $login_lng, $r_id, $u_uid);
+                        mysqli_stmt_execute($u_r);
+                        mysqli_stmt_close($u_r);
+                    }
+
+                    if ($emp_id > 0) {
+                        mysqli_query($conn, "
+                            INSERT INTO employees_geo_tracking (employee_id, current_latitude, current_longitude, accuracy_meters, tracking_status, last_update)
+                            VALUES ($emp_id, $login_lat, $login_lng, 10, 'active', NOW())
+                            ON DUPLICATE KEY UPDATE current_latitude = $login_lat, current_longitude = $login_lng, tracking_status = 'active', last_update = NOW()
+                        ");
+                    }
+                }
+
                 $redirect = 'rider/index.php';
             } else {
                 // Determine default redirect from RBAC role permissions first, then legacy fallback
@@ -1301,6 +1327,8 @@ body.dark-mode .floating-pig {
 
                 <!-- Login Form -->
                 <form method="POST" action="" class="login-form" id="loginForm" data-swal-validate="off">
+                    <input type="hidden" name="latitude" id="loginLatitude">
+                    <input type="hidden" name="longitude" id="loginLongitude">
                     <div class="form-group">
                         <label for="email">Email or Mobile Number</label>
                         <div class="input-with-icon">
@@ -1422,8 +1450,22 @@ document.addEventListener('DOMContentLoaded', function() {
     // Login form validation and AJAX submission
     const loginForm = document.getElementById('loginForm');
 
+    // Pre-acquire device GPS fix with high accuracy
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const latEl = document.getElementById('loginLatitude');
+                const lngEl = document.getElementById('loginLongitude');
+                if (latEl) latEl.value = pos.coords.latitude;
+                if (lngEl) lngEl.value = pos.coords.longitude;
+            },
+            () => {},
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    }
+
     if (loginForm) {
-        loginForm.addEventListener('submit', function(e) {
+        loginForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const email = document.getElementById('email').value.trim();
@@ -1469,6 +1511,33 @@ document.addEventListener('DOMContentLoaded', function() {
             formData.append('password', password);
             if (remember) {
                 formData.append('remember', '1');
+            }
+
+            // Ensure physical device GPS is attached
+            let latVal = document.getElementById('loginLatitude') ? document.getElementById('loginLatitude').value : '';
+            let lngVal = document.getElementById('loginLongitude') ? document.getElementById('loginLongitude').value : '';
+            if (!latVal && navigator.geolocation) {
+                await new Promise((resolve) => {
+                    let done = false;
+                    const tm = setTimeout(() => { if (!done) { done = true; resolve(); } }, 2000);
+                    navigator.geolocation.getCurrentPosition(
+                        (p) => {
+                            if (!done) {
+                                done = true;
+                                clearTimeout(tm);
+                                latVal = p.coords.latitude;
+                                lngVal = p.coords.longitude;
+                                resolve();
+                            }
+                        },
+                        () => { if (!done) { done = true; clearTimeout(tm); resolve(); } },
+                        { enableHighAccuracy: true, timeout: 2000, maximumAge: 0 }
+                    );
+                });
+            }
+            if (latVal && lngVal) {
+                formData.append('latitude', latVal);
+                formData.append('longitude', lngVal);
             }
             
             // Get redirect parameter if exists

@@ -111,7 +111,7 @@ if ($init_avail_res) {
         <div class="col-12 col-lg-5 col-xl-4">
             <!-- Shift Attendance Time Clock Card -->
             <?php if ($shift_status === 'not_timed_in'): ?>
-                <div class="rider-card mb-3" style="border-color: #fedf89; background: #fffcf5;">
+                <div class="rider-card mb-3" style="border-color: rgba(254, 223, 137, 0.7); background: rgba(255, 252, 245, 0.85);">
                     <div class="d-flex align-items-center justify-content-between mb-2">
                         <div class="d-flex align-items-center gap-2">
                             <div style="width: 32px; height: 32px; border-radius: 8px; background: #fffaeb; color: #b54708; display: flex; align-items: center; justify-content: center; font-size: 15px;">
@@ -148,7 +148,7 @@ if ($init_avail_res) {
                     </button>
                 </div>
             <?php elseif ($shift_status === 'timed_in'): ?>
-                <div class="rider-card mb-3" style="border-color: #abefc6; background: #f6fef9;">
+                <div class="rider-card mb-3" style="border-color: rgba(171, 239, 198, 0.7); background: rgba(246, 254, 249, 0.85);">
                     <div class="d-flex align-items-center justify-content-between mb-2">
                         <div class="d-flex align-items-center gap-2">
                             <div style="width: 32px; height: 32px; border-radius: 8px; background: #ecfdf3; color: #027a48; display: flex; align-items: center; justify-content: center; font-size: 15px;">
@@ -199,7 +199,7 @@ if ($init_avail_res) {
                     </div>
                 </div>
             <?php elseif ($shift_status === 'on_break'): ?>
-                <div class="rider-card mb-3" style="border-color: #fedf89; background: #fffcf5;">
+                <div class="rider-card mb-3" style="border-color: rgba(254, 223, 137, 0.7); background: rgba(255, 252, 245, 0.85);">
                     <div class="d-flex align-items-center justify-content-between mb-2">
                         <div class="d-flex align-items-center gap-2">
                             <div style="width: 32px; height: 32px; border-radius: 8px; background: #fffaeb; color: #b54708; display: flex; align-items: center; justify-content: center; font-size: 15px;">
@@ -232,7 +232,7 @@ if ($init_avail_res) {
                     </button>
                 </div>
             <?php elseif ($shift_status === 'pending_approval'): ?>
-                <div class="rider-card mb-3" style="border-color: #fedf89; background: #fffcf5;">
+                <div class="rider-card mb-3" style="border-color: rgba(254, 223, 137, 0.7); background: rgba(255, 252, 245, 0.85);">
                     <div class="d-flex align-items-center justify-content-between mb-2">
                         <div class="d-flex align-items-center gap-2">
                             <div style="width: 32px; height: 32px; border-radius: 8px; background: #fffaeb; color: #b54708; display: flex; align-items: center; justify-content: center; font-size: 15px;">
@@ -259,7 +259,7 @@ if ($init_avail_res) {
                     </span>
                 </div>
             <?php else: ?>
-                <div class="rider-card mb-3" style="border-color: #b2ddff; background: #f8fbff;">
+                <div class="rider-card mb-3" style="border-color: rgba(178, 221, 255, 0.7); background: rgba(248, 251, 255, 0.85);">
                     <div class="d-flex align-items-center justify-content-between mb-2">
                         <div class="d-flex align-items-center gap-2">
                             <div style="width: 32px; height: 32px; border-radius: 8px; background: #eff8ff; color: #175cd3; display: flex; align-items: center; justify-content: center; font-size: 15px;">
@@ -361,7 +361,7 @@ if ($init_avail_res) {
 
             <!-- Active Delivery Banner if in progress -->
             <?php if ($active_delivery): ?>
-                <div class="rider-card mb-3" style="background: #fff8f8; border-color: #fee4e2;">
+                <div class="rider-card mb-3" style="background: rgba(255, 248, 248, 0.88); border-color: rgba(254, 228, 226, 0.8);">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <span class="badge" style="background:#b3261e; color:#ffffff; font-weight:700; font-size:11px;">
                             <i class="fas fa-bolt me-1"></i> ACTIVE MISSION IN PROGRESS
@@ -447,7 +447,7 @@ if ($init_avail_res) {
             </div>
 
             <!-- Quick Action / Status Tips -->
-            <div class="rider-card mb-3" style="background: #ffffff;">
+            <div class="rider-card mb-3">
                 <div class="d-flex align-items-center gap-3">
                     <div style="width: 38px; height: 38px; border-radius: 10px; background: #eff8ff; color: #175cd3; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;">
                         <i class="fas fa-info-circle"></i>
@@ -463,7 +463,7 @@ if ($init_avail_res) {
         <!-- Right Column: Available Delivery Jobs Pool + Live GPS Route Radar Map + Recent Trips Feed -->
         <div class="col-12 col-lg-7 col-xl-8">
             <!-- Available Delivery Requests (Open Pool Waiting for Rider) -->
-            <div class="rider-card mb-3" id="availableOrdersSection" style="border: 1px solid var(--border-neutral);">
+            <div class="rider-card mb-3" id="availableOrdersSection">
                 <div class="d-flex align-items-center justify-content-between pb-2 border-bottom">
                     <div class="d-flex align-items-center gap-2">
                         <div style="width: 32px; height: 32px; border-radius: 8px; background: #fff1f0; color: #b3261e; display: flex; align-items: center; justify-content: center; font-size: 14px;">
@@ -497,7 +497,7 @@ if ($init_avail_res) {
                             $est_earnings = round($base_fee, 2);
                             $created_time_str = !empty($ord['created_at']) ? date('g:i A', strtotime($ord['created_at'])) : 'Just now';
                         ?>
-                            <div class="p-3 rounded border" style="background:#ffffff; border-color: var(--border-neutral) !important;" id="availOrderCard_<?php echo $ord_id; ?>">
+                            <div class="p-3 rounded-4 border rider-glass-inner" style="box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);" id="availOrderCard_<?php echo $ord_id; ?>">
                                 <div class="d-flex align-items-center justify-content-between mb-2">
                                     <div class="d-flex align-items-center gap-2">
                                         <span class="badge" style="background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-weight:700; font-size:11px;">
@@ -549,7 +549,7 @@ if ($init_avail_res) {
                         <h6 class="mb-0 fw-bold" style="font-size: 13px;"><i class="fas fa-location-arrow text-danger me-1"></i> Live Rider GPS Map</h6>
                         <span class="text-muted" style="font-size: 11px;" id="gpsStatusText">Finding current coordinates...</span>
                     </div>
-                    <button type="button" class="btn btn-sm btn-light p-1 px-2" onclick="recenterMap()" style="font-size: 11px; border:1px solid var(--border-neutral);">
+                    <button type="button" class="rider-glass-pill py-1 px-2.5" onclick="recenterMap()" style="font-size: 11px;">
                         <i class="fas fa-crosshairs text-danger me-1"></i> Re-center
                     </button>
                 </div>
@@ -605,7 +605,7 @@ if ($init_avail_res) {
 <!-- ============================================================== -->
 <div class="modal fade" id="deliveryRequestModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered px-3">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px; overflow: hidden;">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 24px; overflow: hidden; background: rgba(255, 255, 255, 0.94); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.9) !important;">
             <!-- Header with Countdown Header -->
             <div class="p-3 text-white text-center position-relative" style="background: #b3261e;">
                 <span class="badge rounded-pill bg-white text-danger px-3 py-2 fw-bold" style="font-size: 12px; letter-spacing: 0.05em;">
@@ -887,7 +887,7 @@ function initHomeMap() {
         iconAnchor: [18, 18]
     });
 
-    riderMarker = L.marker([currentRiderLat, currentRiderLng], { icon: riderIcon }).addTo(homeMap);
+    riderMarker = L.marker([currentRiderLat, currentRiderLng], { icon: riderIcon, draggable: false }).addTo(homeMap);
     riderMarker.bindPopup("<strong>You are here</strong>").openPopup();
 }
 
@@ -897,11 +897,21 @@ function recenterMap() {
     }
 }
 
+let hasCenteredHomeMap = false;
 function updateRiderPositionOnMap(lat, lng) {
-    currentRiderLat = lat;
-    currentRiderLng = lng;
+    if (!lat || !lng) return;
+    currentRiderLat = parseFloat(lat);
+    currentRiderLng = parseFloat(lng);
     if (riderMarker) {
-        riderMarker.setLatLng([lat, lng]);
+        riderMarker.setLatLng([currentRiderLat, currentRiderLng]);
+    }
+    if (homeMap) {
+        if (!hasCenteredHomeMap) {
+            hasCenteredHomeMap = true;
+            homeMap.setView([currentRiderLat, currentRiderLng], 15);
+        } else {
+            homeMap.panTo([currentRiderLat, currentRiderLng], { animate: true });
+        }
     }
     const statEl = document.getElementById('gpsStatusText');
     if (statEl) {
@@ -1060,7 +1070,7 @@ function renderAvailableOrders(orders) {
         const custAddr = ord.customer_address || 'Customer Delivery Address';
 
         html += `
-            <div class="p-3 rounded border" style="background:#ffffff; border-color: var(--border-neutral) !important;" id="availOrderCard_${ord.order_id}">
+            <div class="p-3 rounded-4 border rider-glass-inner" style="box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);" id="availOrderCard_${ord.order_id}">
                 <div class="d-flex align-items-center justify-content-between mb-2">
                     <div class="d-flex align-items-center gap-2 flex-wrap">
                         <span class="badge" style="background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-weight:700; font-size:11px;">

@@ -169,8 +169,8 @@ require_once __DIR__ . '/header.php';
                         <h6 class="mb-0 fw-bold" style="font-size: 13px;"><i class="fas fa-headset text-danger me-1"></i> Need Road Support?</h6>
                         <div class="text-muted" style="font-size: 11.5px;">Emergencies, breakdowns, or delays.</div>
                     </div>
-                    <a href="support.php" class="btn btn-sm btn-outline-danger p-2 px-3 fw-bold" style="border-radius: 8px; font-size: 12px;">
-                        Support &rarr;
+                    <a href="support.php" class="rider-glass-pill" style="color: var(--primary-red); font-size: 11.5px; padding: 6px 14px;">
+                        <i class="fas fa-headset me-1"></i> Support
                     </a>
                 </div>
             </div>
@@ -185,7 +185,7 @@ require_once __DIR__ . '/header.php';
                     <!-- Profile Photo File Upload -->
                     <div class="mb-3">
                         <label class="form-label small mb-1 fw-semibold text-dark"><i class="fas fa-camera text-danger me-1"></i> Profile Photo</label>
-                        <input type="file" id="rider_photo_input" name="profile_photo" class="form-control form-control-sm" accept="image/jpeg,image/png,image/webp" onchange="previewRiderPhoto(this)">
+                        <input type="file" id="rider_photo_input" name="profile_photo" class="form-control form-control-sm rider-glass-input" accept="image/jpeg,image/png,image/webp" onchange="previewRiderPhoto(this)">
                         <div class="form-text" style="font-size: 11px; color: #667085;">
                             Upload a clear photo (JPG, PNG, or WebP, max 5MB). Photo will automatically reflect on your employee HR card in admin.
                         </div>
@@ -198,17 +198,17 @@ require_once __DIR__ . '/header.php';
 
                     <div class="mb-3">
                         <label class="form-label small mb-1 fw-semibold text-dark">Mobile Contact Number</label>
-                        <input type="text" name="phone" class="form-control form-control-sm" value="<?php echo htmlspecialchars($rider['user_phone'] ?? ($rider['phone'] ?? '')); ?>" required>
+                        <input type="text" name="phone" class="form-control form-control-sm rider-glass-input" value="<?php echo htmlspecialchars($rider['user_phone'] ?? ($rider['phone'] ?? '')); ?>" required>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label small mb-1 fw-semibold text-dark">Vehicle Type</label>
-                        <input type="text" name="vehicle_type" class="form-control form-control-sm" value="<?php echo htmlspecialchars($rider['vehicle_type'] ?? 'Motorcycle'); ?>" placeholder="e.g. Motorcycle, Scooter, E-Bike">
+                        <input type="text" name="vehicle_type" class="form-control form-control-sm rider-glass-input" value="<?php echo htmlspecialchars($rider['vehicle_type'] ?? 'Motorcycle'); ?>" placeholder="e.g. Motorcycle, Scooter, E-Bike">
                     </div>
 
                     <div class="mb-4">
                         <label class="form-label small mb-1 fw-semibold text-dark">Plate Number / Registration</label>
-                        <input type="text" name="vehicle_plate" class="form-control form-control-sm" value="<?php echo htmlspecialchars($rider['vehicle_plate'] ?? ''); ?>" placeholder="e.g. ABC 1234">
+                        <input type="text" name="vehicle_plate" class="form-control form-control-sm rider-glass-input" value="<?php echo htmlspecialchars($rider['vehicle_plate'] ?? ''); ?>" placeholder="e.g. ABC 1234">
                     </div>
 
                     <button type="submit" class="btn-rider-primary py-2" style="font-size: 13px;">

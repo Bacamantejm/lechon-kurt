@@ -75,6 +75,23 @@ if (!$store_details) {
 $logisticsService = new LogisticsService($conn);
 $tracking_info = $logisticsService->getTrackingByOrderId($order_id);
 
+// If driver coordinates are empty in logistics_tracking, fetch latest device GPS from riders/employees_geo_tracking
+$effective_driver_id = (int)($tracking_info['driver_id'] ?? ($order['rider_id'] ?? 0));
+if ($effective_driver_id > 0) {
+    if (!is_array($tracking_info)) $tracking_info = [];
+    $r_fetch_stmt = $conn->prepare("SELECT current_latitude, current_longitude, last_location_update FROM riders WHERE id = ? OR employee_id = ? OR user_id = ? ORDER BY last_location_update DESC LIMIT 1");
+    if ($r_fetch_stmt) {
+        $r_fetch_stmt->bind_param("iii", $effective_driver_id, $effective_driver_id, $effective_driver_id);
+        $r_fetch_stmt->execute();
+        $r_f_row = $r_fetch_stmt->get_result()->fetch_assoc();
+        $r_fetch_stmt->close();
+        if ($r_f_row && isset($r_f_row['current_latitude']) && is_numeric($r_f_row['current_latitude']) && (float)$r_f_row['current_latitude'] != 0) {
+            $tracking_info['current_latitude'] = (float)$r_f_row['current_latitude'];
+            $tracking_info['current_longitude'] = (float)$r_f_row['current_longitude'];
+        }
+    }
+}
+
 $initial_proof_path = $tracking_info['proof_of_delivery_path'] ?? null;
 if (empty($initial_proof_path)) {
     $pod_chk = $conn->prepare("SELECT photo_path FROM proof_of_delivery WHERE order_id = ? ORDER BY id DESC LIMIT 1");
@@ -2647,14 +2664,30 @@ body.dark-mode .fp-btn-link-sec:hover {
                 </button>
                 <div class="fp-map-floating-bar">
                     <div class="fp-map-pill-stat">
+                        <?php if ($is_pickup): ?>
                         <div class="stat-item">
-                            <i class="<?php echo $is_pickup ? 'fas fa-store' : 'fas fa-route'; ?>" style="color:var(--fp-primary);"></i>
-                            <span><?php echo $is_pickup ? 'Store:' : 'Dist:'; ?> <strong id="mapDistStat"><?php echo htmlspecialchars($store_details['store_name'] ?? 'Lechon Delights'); ?></strong></span>
+                            <i class="fas fa-store" style="color:var(--fp-primary);"></i>
+                            <span>Store: <strong id="mapDistStat"><?php echo htmlspecialchars($store_details['store_name'] ?? 'Lechon Delights'); ?></strong></span>
                         </div>
                         <div class="stat-item">
                             <i class="fas fa-clock" style="color:#027a48;"></i>
-                            <span><span id="mapEtaLabel"><?php echo $is_pickup ? 'Status:' : 'ETA:'; ?></span> <strong id="mapEtaStat"><?php echo ucfirst(htmlspecialchars((string)$order['status'])); ?></strong></span>
+                            <span><span id="mapEtaLabel">Status:</span> <strong id="mapEtaStat"><?php echo ucfirst(htmlspecialchars((string)$order['status'])); ?></strong></span>
                         </div>
+                        <?php else: ?>
+                        <div class="stat-item" title="Rider distance from fulfillment store">
+                            <i class="fas fa-store" style="color:#b3261e;"></i>
+                            <span>From Store: <strong id="mapDistStoreStat">--</strong></span>
+                        </div>
+                        <div class="stat-item" title="Rider distance to your location">
+                            <i class="fas fa-house" style="color:#027a48;"></i>
+                            <span>To You: <strong id="mapDistCustStat">--</strong></span>
+                        </div>
+                        <div class="stat-item" title="Estimated Arrival Time">
+                            <i class="fas fa-clock" style="color:#175cd3;"></i>
+                            <span>ETA: <strong id="mapEtaStat"><?php echo ucfirst(htmlspecialchars((string)$order['status'])); ?></strong></span>
+                        </div>
+                        <span id="mapDistStat" style="display:none;"></span>
+                        <?php endif; ?>
                     </div>
 
                     <div class="fp-map-actions">
@@ -2987,7 +3020,10 @@ body.dark-mode .fp-btn-link-sec:hover {
                         <!-- Origin: Fulfillment Branch -->
                         <div class="fp-timeline-node origin">
                             <span class="fp-timeline-dot"><i class="fas fa-store"></i></span>
-                            <span class="fp-timeline-label">Pick-up from</span>
+                            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:4px;">
+                                <span class="fp-timeline-label">Pick-up from</span>
+                                <span class="badge" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; font-size:10.5px; font-weight:700;"><i class="fas fa-store me-1"></i>Rider: <strong id="timelineRiderToStore">--</strong> from store</span>
+                            </div>
                             <span class="fp-timeline-name"><?php echo htmlspecialchars($store_details['store_name'] ?? 'Lechon Delights Main Branch'); ?></span>
                             <span class="fp-timeline-desc"><?php echo htmlspecialchars($store_details['address'] ?? 'Cavite, Philippines'); ?></span>
                         </div>
@@ -2995,7 +3031,10 @@ body.dark-mode .fp-btn-link-sec:hover {
                         <!-- Destination: Customer Address -->
                         <div class="fp-timeline-node destination">
                             <span class="fp-timeline-dot"><i class="fas fa-map-marker-alt"></i></span>
-                            <span class="fp-timeline-label">Delivering to</span>
+                            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:4px;">
+                                <span class="fp-timeline-label">Delivering to</span>
+                                <span class="badge" style="background:#ecfdf3; color:#027a48; border:1px solid #abefc6; font-size:10.5px; font-weight:700;"><i class="fas fa-house me-1"></i>Rider: <strong id="timelineRiderToCust">--</strong> from you</span>
+                            </div>
                             <span class="fp-timeline-name"><?php echo htmlspecialchars($order['customer_name'] ?: 'Customer'); ?></span>
                             <span class="fp-timeline-desc"><?php echo htmlspecialchars($order['delivery_address']); ?></span>
                         </div>
@@ -3491,6 +3530,18 @@ body.dark-mode .fp-btn-link-sec:hover {
                 updateFoodpandaPickupStatusUI(status, data);
             } else {
                 updateFoodpandaDeliveryStatusUI(status, data);
+                if (data.distance_to_store_formatted) {
+                    const stEl = document.getElementById('mapDistStoreStat');
+                    const tlSt = document.getElementById('timelineRiderToStore');
+                    if (stEl) stEl.textContent = data.distance_to_store_formatted;
+                    if (tlSt) tlSt.textContent = data.distance_to_store_formatted;
+                }
+                if (data.distance_to_customer_formatted) {
+                    const cuEl = document.getElementById('mapDistCustStat');
+                    const tlCu = document.getElementById('timelineRiderToCust');
+                    if (cuEl) cuEl.textContent = data.distance_to_customer_formatted;
+                    if (tlCu) tlCu.textContent = data.distance_to_customer_formatted;
+                }
                 const activeDeliveryStatuses = ['assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving'];
                 if (activeDeliveryStatuses.includes(status) && data.latitude && data.longitude) {
                     updateDriverMarker(data.latitude, data.longitude, data.driver_name || 'Driver', status);
@@ -3828,7 +3879,79 @@ body.dark-mode .fp-btn-link-sec:hover {
         return `${numKm.toFixed(1)} km`;
     }
 
-    function updateMapEtaPill(distFormatted, durMins, isHeadingToStore, status, rawDistKm = null) {
+    function updateMapEtaPill(distFormatted, durMins, isHeadingToStore, status, rawDistKm = null, distToStoreFormatted = null, distToCustFormatted = null) {
+        const distEl = document.getElementById('mapDistStat');
+        const distStoreEl = document.getElementById('mapDistStoreStat');
+        const distCustEl = document.getElementById('mapDistCustStat');
+        const etaEl = document.getElementById('mapEtaStat');
+        const fpEtaVal = document.getElementById('fpEtaValue');
+        const mobEtaVal = document.getElementById('mobRiderEta');
+        const tlStore = document.getElementById('timelineRiderToStore');
+        const tlCust = document.getElementById('timelineRiderToCust');
+
+        let etaText = durMins > 1 ? `${durMins} mins` : '1 min';
+        const numKm = (rawDistKm !== null) ? parseFloat(rawDistKm) : (parseFloat(distFormatted) || 0);
+        if (numKm > 0 && numKm < 0.15 && ['on_the_way', 'arriving'].includes(status)) {
+            etaText = 'Arriving now';
+        }
+
+        if (distStoreEl && distToStoreFormatted) {
+            distStoreEl.textContent = distToStoreFormatted;
+        }
+        if (distCustEl && distToCustFormatted) {
+            distCustEl.textContent = distToCustFormatted;
+        }
+        if (tlStore && distToStoreFormatted) {
+            tlStore.textContent = distToStoreFormatted;
+        }
+        if (tlCust && distToCustFormatted) {
+            tlCust.textContent = distToCustFormatted;
+        }
+
+        if (distEl) {
+            if (isHeadingToStore) {
+                distEl.textContent = `${distFormatted} to store`;
+            } else {
+                distEl.textContent = distFormatted;
+            }
+        }
+
+        if (etaEl) {
+            if (isHeadingToStore) {
+                etaEl.textContent = (status === 'arrived_at_restaurant') ? 'At Restaurant' : `${etaText} to store`;
+            } else {
+                etaEl.textContent = etaText;
+            }
+        }
+
+        const etaLabelEl = document.getElementById('mapEtaLabel');
+        if (etaLabelEl && !isPickupOrder) {
+            etaLabelEl.textContent = 'ETA:';
+        }
+
+        const dualDistSummary = (distToStoreFormatted && distToCustFormatted && distToStoreFormatted !== '--' && distToCustFormatted !== '--')
+            ? `${distToStoreFormatted} to store • ${distToCustFormatted} to you`
+            : distFormatted;
+
+        if (fpEtaVal && status !== 'delivered') {
+            if (isHeadingToStore) {
+                fpEtaVal.textContent = (status === 'arrived_at_restaurant') ? 'At Store (Waiting for Food)' : `~${etaText} (${dualDistSummary})`;
+            } else {
+                fpEtaVal.textContent = `${etaText} (${dualDistSummary})`;
+            }
+        }
+
+        if (mobEtaVal && status !== 'delivered') {
+            if (isHeadingToStore) {
+                mobEtaVal.textContent = (status === 'arrived_at_restaurant') ? 'At Store' : `${etaText} • ${distToStoreFormatted} to store`;
+            } else {
+                mobEtaVal.textContent = `${etaText} • ${distToCustFormatted} to you`;
+            }
+        }
+        return;
+    }
+
+    function old_updateMapEtaPill(distFormatted, durMins, isHeadingToStore, status, rawDistKm = null) {
         const distEl = document.getElementById('mapDistStat');
         const etaEl = document.getElementById('mapEtaStat');
         const fpEtaVal = document.getElementById('fpEtaValue');
@@ -3948,12 +4071,15 @@ body.dark-mode .fp-btn-link-sec:hover {
         const point = [parseFloat(lat), parseFloat(lng)];
 
         if (!driverMarker) {
-            driverMarker = L.marker(point, { icon: riderIcon, title: name }).addTo(map);
+            driverMarker = L.marker(point, { icon: riderIcon, title: name, draggable: false }).addTo(map);
             if (isAutoTrackingRider && map) {
                 map.setView(point, 16);
             }
         } else {
             animateDriverMovement(point, 1400);
+            if (isAutoTrackingRider && map) {
+                map.panTo(point, { animate: true, duration: 0.5 });
+            }
         }
 
         if (!hasAutoFitBounds) {
@@ -4012,14 +4138,47 @@ body.dark-mode .fp-btn-link-sec:hover {
             updateRouteHeadPoint(driverPoint);
         }
 
-        // Direct distance calculation (Haversine) - ALWAYS CALCULATE & UPDATE LIVE UI IMMEDIATELY!
+        // Calculate Distance from Rider to Store
+        let distToStoreFormatted = '--';
+        let distToStoreRoad = 0;
+        if (storeLocationObj && Number.isFinite(storeLocationObj[0]) && Number.isFinite(storeLocationObj[1])) {
+            const sStraight = calculateHaversineDistanceKm(driverPoint[0], driverPoint[1], storeLocationObj[0], storeLocationObj[1]);
+            distToStoreRoad = sStraight * 1.25;
+            distToStoreFormatted = formatDistanceDisplay(distToStoreRoad);
+        }
+
+        // Calculate Distance from Rider to Customer
+        let distToCustFormatted = '--';
+        let distToCustRoad = 0;
+        if (customerLocationObj && Number.isFinite(customerLocationObj[0]) && Number.isFinite(customerLocationObj[1])) {
+            const cStraight = calculateHaversineDistanceKm(driverPoint[0], driverPoint[1], customerLocationObj[0], customerLocationObj[1]);
+            distToCustRoad = cStraight * 1.25;
+            distToCustFormatted = formatDistanceDisplay(distToCustRoad);
+        }
+
+        // Direct distance calculation (Haversine) to current destination target
         const straightDistKm = calculateHaversineDistanceKm(driverPoint[0], driverPoint[1], destPoint[0], destPoint[1]);
         const estimatedRoadDistKm = straightDistKm * 1.25;
         const estimatedMins = Math.max(1, Math.round((estimatedRoadDistKm / 24) * 60));
         const formattedDist = formatDistanceDisplay(estimatedRoadDistKm);
 
-        // Update distance and ETA pills instantly on every location update
-        updateMapEtaPill(formattedDist, estimatedMins, isHeadingToStore, status, estimatedRoadDistKm);
+        // Update distance and ETA pills instantly on every location update with both distances
+        updateMapEtaPill(formattedDist, estimatedMins, isHeadingToStore, status, estimatedRoadDistKm, distToStoreFormatted, distToCustFormatted);
+
+        // Update Rider Marker Popup with live dual distances
+        if (driverMarker) {
+            const driverPopupName = initialDriverName || 'Assigned Rider';
+            driverMarker.bindPopup(`
+                <div style="font-family: inherit; font-size: 12px; line-height: 1.45; min-width: 170px;">
+                    <strong style="font-size: 13px; color: #101828;">${driverPopupName}</strong>
+                    <div style="margin-top: 5px; color: #475467;">
+                        <div><i class="fas fa-store text-danger me-1"></i> <strong>${distToStoreFormatted}</strong> from store</div>
+                        <div><i class="fas fa-house text-success me-1"></i> <strong>${distToCustFormatted}</strong> to you</div>
+                        <div class="small text-muted mt-1" style="font-size:10px;"><i class="fas fa-satellite-dish text-primary me-1"></i> Live Device GPS</div>
+                    </div>
+                </div>
+            `);
+        }
 
         // Throttle external OSRM directions calls to avoid rate limits (refresh route every 6s or if moved > 25m)
         const now = Date.now();
