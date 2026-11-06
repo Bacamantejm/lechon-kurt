@@ -75,6 +75,23 @@ if (!$store_details) {
 $logisticsService = new LogisticsService($conn);
 $tracking_info = $logisticsService->getTrackingByOrderId($order_id);
 
+// If driver coordinates are empty in logistics_tracking, fetch latest device GPS from riders/employees_geo_tracking
+$effective_driver_id = (int)($tracking_info['driver_id'] ?? ($order['rider_id'] ?? 0));
+if ($effective_driver_id > 0) {
+    if (!is_array($tracking_info)) $tracking_info = [];
+    $r_fetch_stmt = $conn->prepare("SELECT current_latitude, current_longitude, last_location_update FROM riders WHERE id = ? OR employee_id = ? OR user_id = ? ORDER BY last_location_update DESC LIMIT 1");
+    if ($r_fetch_stmt) {
+        $r_fetch_stmt->bind_param("iii", $effective_driver_id, $effective_driver_id, $effective_driver_id);
+        $r_fetch_stmt->execute();
+        $r_f_row = $r_fetch_stmt->get_result()->fetch_assoc();
+        $r_fetch_stmt->close();
+        if ($r_f_row && isset($r_f_row['current_latitude']) && is_numeric($r_f_row['current_latitude']) && (float)$r_f_row['current_latitude'] != 0) {
+            $tracking_info['current_latitude'] = (float)$r_f_row['current_latitude'];
+            $tracking_info['current_longitude'] = (float)$r_f_row['current_longitude'];
+        }
+    }
+}
+
 $initial_proof_path = $tracking_info['proof_of_delivery_path'] ?? null;
 if (empty($initial_proof_path)) {
     $pod_chk = $conn->prepare("SELECT photo_path FROM proof_of_delivery WHERE order_id = ? ORDER BY id DESC LIMIT 1");
@@ -4054,12 +4071,15 @@ body.dark-mode .fp-btn-link-sec:hover {
         const point = [parseFloat(lat), parseFloat(lng)];
 
         if (!driverMarker) {
-            driverMarker = L.marker(point, { icon: riderIcon, title: name }).addTo(map);
+            driverMarker = L.marker(point, { icon: riderIcon, title: name, draggable: false }).addTo(map);
             if (isAutoTrackingRider && map) {
                 map.setView(point, 16);
             }
         } else {
             animateDriverMovement(point, 1400);
+            if (isAutoTrackingRider && map) {
+                map.panTo(point, { animate: true, duration: 0.5 });
+            }
         }
 
         if (!hasAutoFitBounds) {

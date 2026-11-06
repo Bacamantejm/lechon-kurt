@@ -887,7 +887,7 @@ function initHomeMap() {
         iconAnchor: [18, 18]
     });
 
-    riderMarker = L.marker([currentRiderLat, currentRiderLng], { icon: riderIcon }).addTo(homeMap);
+    riderMarker = L.marker([currentRiderLat, currentRiderLng], { icon: riderIcon, draggable: false }).addTo(homeMap);
     riderMarker.bindPopup("<strong>You are here</strong>").openPopup();
 }
 
@@ -897,11 +897,21 @@ function recenterMap() {
     }
 }
 
+let hasCenteredHomeMap = false;
 function updateRiderPositionOnMap(lat, lng) {
-    currentRiderLat = lat;
-    currentRiderLng = lng;
+    if (!lat || !lng) return;
+    currentRiderLat = parseFloat(lat);
+    currentRiderLng = parseFloat(lng);
     if (riderMarker) {
-        riderMarker.setLatLng([lat, lng]);
+        riderMarker.setLatLng([currentRiderLat, currentRiderLng]);
+    }
+    if (homeMap) {
+        if (!hasCenteredHomeMap) {
+            hasCenteredHomeMap = true;
+            homeMap.setView([currentRiderLat, currentRiderLng], 15);
+        } else {
+            homeMap.panTo([currentRiderLat, currentRiderLng], { animate: true });
+        }
     }
     const statEl = document.getElementById('gpsStatusText');
     if (statEl) {

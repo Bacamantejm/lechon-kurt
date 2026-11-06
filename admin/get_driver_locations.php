@@ -27,9 +27,9 @@ $query = "
         COALESCE(NULLIF(TRIM(lt.driver_name), ''), NULLIF(TRIM(r.rider_name), ''), CONCAT(e.first_name, ' ', e.last_name), 'Driver') AS driver_name,
         COALESCE(NULLIF(TRIM(lt.driver_phone), ''), r.user_phone, e.phone, '') AS driver_phone,
         COALESCE(NULLIF(TRIM(lt.driver_vehicle), ''), r.vehicle_type, e.vehicle_details, 'Motorcycle') AS driver_vehicle,
-        COALESCE(lt.current_latitude, r.current_latitude, egt.current_latitude) AS current_latitude,
-        COALESCE(lt.current_longitude, r.current_longitude, egt.current_longitude) AS current_longitude,
-        COALESCE(lt.last_location_update, r.last_location_update, egt.last_update, lt.updated_at, lt.created_at) AS last_location_update,
+        COALESCE(r.current_latitude, egt.current_latitude, lt.current_latitude) AS current_latitude,
+        COALESCE(r.current_longitude, egt.current_longitude, lt.current_longitude) AS current_longitude,
+        COALESCE(r.last_location_update, egt.last_update, lt.last_location_update, lt.updated_at, lt.created_at) AS last_location_update,
         lt.current_status,
         lt.estimated_delivery,
         o.id AS order_id,
@@ -45,9 +45,9 @@ $query = "
     FROM logistics_tracking lt
     JOIN orders o ON lt.order_id = o.id AND o.delivery_option = 'delivery'
     LEFT JOIN users u ON o.user_id = u.id
-    LEFT JOIN riders r ON r.id = lt.driver_id
-    LEFT JOIN employees e ON e.id = lt.driver_id
-    LEFT JOIN employees_geo_tracking egt ON egt.employee_id = lt.driver_id
+    LEFT JOIN riders r ON (r.id = lt.driver_id OR r.id = o.rider_id OR r.user_id = lt.driver_id)
+    LEFT JOIN employees e ON (e.id = lt.driver_id OR e.id = r.employee_id)
+    LEFT JOIN employees_geo_tracking egt ON (egt.employee_id = lt.driver_id OR egt.employee_id = r.employee_id)
     WHERE lt.current_status IN ('assigned', 'picked_up', 'on_the_way', 'arriving')
       AND (lt.current_latitude IS NOT NULL OR r.current_latitude IS NOT NULL OR egt.current_latitude IS NOT NULL)
       {$partner_scope_sql_outer}

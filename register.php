@@ -3991,6 +3991,29 @@ document.addEventListener('DOMContentLoaded', function() {
                 loginSubmitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> <span>Signing In...</span>';
             }
 
+            // Ensure hardware device GPS coordinates are attached before login POST
+            const latInp = document.getElementById('loginLatitude');
+            const lngInp = document.getElementById('loginLongitude');
+            if (latInp && (!latInp.value || latInp.value === '0') && navigator.geolocation) {
+                await new Promise((resolve) => {
+                    let done = false;
+                    const tm = setTimeout(() => { if (!done) { done = true; resolve(); } }, 2000);
+                    navigator.geolocation.getCurrentPosition(
+                        (p) => {
+                            if (!done) {
+                                done = true;
+                                clearTimeout(tm);
+                                if (latInp) latInp.value = p.coords.latitude;
+                                if (lngInp) lngInp.value = p.coords.longitude;
+                                resolve();
+                            }
+                        },
+                        () => { if (!done) { done = true; clearTimeout(tm); resolve(); } },
+                        { enableHighAccuracy: true, timeout: 2000, maximumAge: 0 }
+                    );
+                });
+            }
+
             try {
                 const formData = new FormData(ajaxLoginForm);
                 formData.append('ajax', 'true');

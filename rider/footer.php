@@ -114,7 +114,7 @@ function broadcastRiderLocation(onCoordsUpdate) {
             (err) => {
                 console.debug('Geolocation watch notice:', err.message);
             },
-            { enableHighAccuracy: true, timeout: 8000, maximumAge: 1000 }
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
     }
 
@@ -126,7 +126,7 @@ function broadcastRiderLocation(onCoordsUpdate) {
                     sendRiderLocationPing(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0);
                 },
                 () => {},
-                { enableHighAccuracy: true, timeout: 4000, maximumAge: 1000 }
+                { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
             );
         }, 3000);
     }

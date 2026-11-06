@@ -69,6 +69,20 @@ if ($tracking_info) {
         $driver_longitude = (float)$tracking_info['current_longitude'];
     }
 
+    // Ensure driver_id is retrieved from orders.rider_id if logistics_tracking has not recorded it yet
+    if (empty($tracking_info['driver_id'])) {
+        $ord_r_chk = $conn->prepare("SELECT rider_id FROM orders WHERE id = ? LIMIT 1");
+        if ($ord_r_chk) {
+            $ord_r_chk->bind_param("i", $order_id);
+            $ord_r_chk->execute();
+            $ord_r_res = $ord_r_chk->get_result()->fetch_assoc();
+            $ord_r_chk->close();
+            if (!empty($ord_r_res['rider_id'])) {
+                $tracking_info['driver_id'] = (int)$ord_r_res['rider_id'];
+            }
+        }
+    }
+
     // Check latest coordinates from riders and employees_geo_tracking tables
     if (!empty($tracking_info['driver_id'])) {
         $driver_id = (int)$tracking_info['driver_id'];

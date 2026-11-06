@@ -157,8 +157,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             setcookie('rider_remember', $token, time() + (86400 * 30), '/', '', false, true);
                         }
 
-                        // Update rider duty to online on login if currently offline
-                        mysqli_query($conn, "UPDATE riders SET duty_status = 'online', last_location_update = NOW() WHERE id = $rider_id AND duty_status = 'offline'");
+                        // Capture real-time hardware device location on login
+                        $login_lat = (isset($_POST['latitude']) && is_numeric($_POST['latitude'])) ? (float)$_POST['latitude'] : null;
+                        $login_lng = (isset($_POST['longitude']) && is_numeric($_POST['longitude'])) ? (float)$_POST['longitude'] : null;
+                        $login_acc = (isset($_POST['accuracy']) && is_numeric($_POST['accuracy'])) ? (float)$_POST['accuracy'] : 10.0;
+
+                        if ($login_lat !== null && $login_lng !== null && $login_lat != 0 && $login_lng != 0) {
+                            $u_r = mysqli_prepare($conn, "UPDATE riders SET current_latitude = ?, current_longitude = ?, duty_status = 'online', last_location_update = NOW() WHERE id = ?");
+                            if ($u_r) {
+                                mysqli_stmt_bind_param($u_r, "ddi", $login_lat, $login_lng, $rider_id);
+                                mysqli_stmt_execute($u_r);
+                                mysqli_stmt_close($u_r);
+                            }
+
+                            $emp_pk = (int)($user['employee_pk'] ?? 0);
+                            if ($emp_pk > 0) {
+                                mysqli_query($conn, "
+                                    INSERT INTO employees_geo_tracking (employee_id, current_latitude, current_longitude, accuracy_meters, tracking_status, last_update)
+                                    VALUES ($emp_pk, $login_lat, $login_lng, $login_acc, 'active', NOW())
+                                    ON DUPLICATE KEY UPDATE current_latitude = $login_lat, current_longitude = $login_lng, accuracy_meters = $login_acc, tracking_status = 'active', last_update = NOW()
+                                ");
+                            }
+
+                            mysqli_query($conn, "
+                                UPDATE logistics_tracking lt
+                                JOIN orders o ON lt.order_id = o.id
+                                SET lt.current_latitude = $login_lat,
+                                    lt.current_longitude = $login_lng,
+                                    lt.last_location_update = NOW(),
+                                    lt.updated_at = NOW()
+                                WHERE (lt.driver_id = $rider_id OR o.rider_id = $rider_id)
+                                  AND lt.current_status IN ('assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving')
+                            ");
+                        } else {
+                            mysqli_query($conn, "UPDATE riders SET duty_status = 'online', last_location_update = NOW() WHERE id = $rider_id AND duty_status = 'offline'");
+                        }
 
                         header("Location: " . (!empty($redirect) ? $redirect : 'index.php'));
                         exit;
@@ -310,7 +343,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     <?php endif; ?>
 
-    <form method="POST" action="login.php<?php echo !empty($redirect) ? '?redirect=' . urlencode($redirect) : ''; ?>">
+    <form id="riderLoginForm" method="POST" action="login.php<?php echo !empty($redirect) ? '?redirect=' . urlencode($redirect) : ''; ?>">
+        <input type="hidden" name="latitude" id="riderLoginLat">
+        <input type="hidden" name="longitude" id="riderLoginLng">
+        <input type="hidden" name="accuracy" id="riderLoginAcc">
         <div class="mb-3">
             <label class="form-label small fw-bold text-dark">Rider ID / Email / Mobile</label>
             <div class="input-group">
@@ -364,6 +400,70 @@ if (toggleBtn && passInput) {
         const isPassword = passInput.getAttribute('type') === 'password';
         passInput.setAttribute('type', isPassword ? 'text' : 'password');
         passIcon.className = isPassword ? 'fas fa-eye-slash' : 'fas fa-eye';
+    });
+}
+
+// Immediate high-accuracy GPS acquisition on rider login
+const latField = document.getElementById('riderLoginLat');
+const lngField = document.getElementById('riderLoginLng');
+const accField = document.getElementById('riderLoginAcc');
+const riderForm = document.getElementById('riderLoginForm');
+
+function acquireGpsFix(timeoutMs = 8000) {
+    if (!navigator.geolocation) return Promise.resolve(null);
+    return new Promise((resolve) => {
+        let done = false;
+        const timer = setTimeout(() => {
+            if (!done) { done = true; resolve(null); }
+        }, timeoutMs);
+
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                if (!done) {
+                    done = true;
+                    clearTimeout(timer);
+                    resolve({
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude,
+                        acc: pos.coords.accuracy || 10
+                    });
+                }
+            },
+            () => {
+                if (!done) { done = true; clearTimeout(timer); resolve(null); }
+            },
+            { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 0 }
+        );
+    });
+}
+
+// Start acquiring immediately on page load
+acquireGpsFix(10000).then((coords) => {
+    if (coords && latField && lngField) {
+        latField.value = coords.lat;
+        lngField.value = coords.lng;
+        if (accField) accField.value = coords.acc;
+    }
+});
+
+// Intercept submit to guarantee coordinates before POST
+if (riderForm) {
+    riderForm.addEventListener('submit', async function(e) {
+        if (latField && (!latField.value || latField.value === '0')) {
+            e.preventDefault();
+            const submitBtn = riderForm.querySelector('.btn-rider-submit');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-satellite-dish fa-spin me-2"></i> Connecting GPS...';
+            }
+            const coords = await acquireGpsFix(2500);
+            if (coords && latField && lngField) {
+                latField.value = coords.lat;
+                lngField.value = coords.lng;
+                if (accField) accField.value = coords.acc;
+            }
+            riderForm.submit();
+        }
     });
 }
 </script>
