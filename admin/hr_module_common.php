@@ -423,6 +423,13 @@ if (!function_exists('hrEnsureNormalizedPositionModel')) {
             return false;
         }
 
+        // Remap legacy generic sample positions to authentic lechon shop roles
+        @mysqli_query($conn, "UPDATE employees SET position = 'Service Crew' WHERE LOWER(TRIM(position)) IN ('software developer', 'project manager', 'staff', 'hourly staff', 'asd', 'employee', 'receipt')");
+        @mysqli_query($conn, "UPDATE employees SET position = 'Delivery Rider' WHERE LOWER(TRIM(position)) IN ('driver', 'delivery driver', 'rider')");
+        @mysqli_query($conn, "UPDATE employees SET position = 'Lechon Roaster / Litsonero' WHERE LOWER(TRIM(position)) IN ('chef / lechonero', 'lechonero', 'roaster')");
+        @mysqli_query($conn, "UPDATE employees SET position = 'Kitchen Helper' WHERE LOWER(TRIM(position)) IN ('assistant cook', 'helper')");
+        @mysqli_query($conn, "DELETE FROM job_positions WHERE LOWER(TRIM(position_title)) IN ('software developer', 'project manager', 'staff', 'hourly staff', 'asd', 'employee', 'receipt', 'driver')");
+
         // Ensure legacy employee positions are represented in normalized job_positions.
         @mysqli_query(
             $conn,

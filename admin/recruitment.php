@@ -36,8 +36,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $department_id = $department_id > 0 ? $department_id : null;
         $description = trim($_POST['description'] ?? '');
         $requirements = trim($_POST['requirements'] ?? '');
-        $salary_min = $_POST['salary_min'] ? floatval($_POST['salary_min']) : null;
-        $salary_max = $_POST['salary_max'] ? floatval($_POST['salary_max']) : null;
+        $salary_min = (isset($_POST['salary_min']) && $_POST['salary_min'] !== '' && is_numeric($_POST['salary_min'])) ? floatval($_POST['salary_min']) : null;
+        $salary_max = (isset($_POST['salary_max']) && $_POST['salary_max'] !== '' && is_numeric($_POST['salary_max'])) ? floatval($_POST['salary_max']) : null;
         $employment_type = hrSafeEnum($_POST['employment_type'] ?? '', ['full_time', 'part_time', 'contract', 'temporary'], '');
         $closing_date = trim($_POST['closing_date'] ?? '');
         $closing_date = ($closing_date !== '' && hrIsValidDate($closing_date)) ? $closing_date : null;
@@ -65,6 +65,121 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['error'] = "Unable to post job position.";
         }
         mysqli_stmt_close($stmt);
+    }
+
+    if (isset($_POST['update_position'])) {
+        $position_id = intval($_POST['position_id'] ?? 0);
+        $position_title = trim($_POST['position_title'] ?? '');
+        $department_id = intval($_POST['department_id'] ?? 0);
+        $department_id = $department_id > 0 ? $department_id : null;
+        $description = trim($_POST['description'] ?? '');
+        $requirements = trim($_POST['requirements'] ?? '');
+        $salary_min = (isset($_POST['salary_min']) && $_POST['salary_min'] !== '' && is_numeric($_POST['salary_min'])) ? floatval($_POST['salary_min']) : null;
+        $salary_max = (isset($_POST['salary_max']) && $_POST['salary_max'] !== '' && is_numeric($_POST['salary_max'])) ? floatval($_POST['salary_max']) : null;
+        $employment_type = hrSafeEnum($_POST['employment_type'] ?? '', ['full_time', 'part_time', 'contract', 'temporary'], 'full_time');
+        $status = hrSafeEnum($_POST['status'] ?? '', ['open', 'closed', 'on_hold'], 'open');
+        $closing_date = trim($_POST['closing_date'] ?? '');
+        $closing_date = ($closing_date !== '' && hrIsValidDate($closing_date)) ? $closing_date : null;
+
+        if ($position_id <= 0 || $position_title === '' || ($salary_min !== null && $salary_max !== null && $salary_min > $salary_max)) {
+            $_SESSION['error'] = "Please provide valid job title details.";
+            header("Location: recruitment.php");
+            exit();
+        }
+
+        if ($is_partner_scoped_hr && !hrPositionIdInScope($conn, $position_id)) {
+            $_SESSION['error'] = "Selected job title is outside your partner HR scope.";
+            header("Location: recruitment.php");
+            exit();
+        }
+        if ($is_partner_scoped_hr && $department_id !== null && !hrDepartmentIdInScope($conn, (int)$department_id)) {
+            $_SESSION['error'] = "Selected department is outside your partner HR scope.";
+            header("Location: recruitment.php");
+            exit();
+        }
+
+        $update_sql = "UPDATE job_positions 
+                       SET position_title = ?, department_id = ?, description = ?, requirements = ?,
+                           salary_range_min = ?, salary_range_max = ?, employment_type = ?, status = ?, closing_date = ?
+                       WHERE id = ?";
+        $stmt = mysqli_prepare($conn, $update_sql);
+        mysqli_stmt_bind_param($stmt, "sissddsssi", $position_title, $department_id, $description, $requirements, $salary_min, $salary_max, $employment_type, $status, $closing_date, $position_id);
+
+        if (mysqli_stmt_execute($stmt)) {
+            if (hrTableExists($conn, 'employees')) {
+                $sync_emp_sql = "UPDATE employees SET position = ?, department_id = COALESCE(?, department_id) WHERE position_id = ?";
+                $sync_stmt = mysqli_prepare($conn, $sync_emp_sql);
+                if ($sync_stmt) {
+                    mysqli_stmt_bind_param($sync_stmt, "sii", $position_title, $department_id, $position_id);
+                    mysqli_stmt_execute($sync_stmt);
+                    mysqli_stmt_close($sync_stmt);
+                }
+            }
+            $_SESSION['success'] = "Job title '" . htmlspecialchars($position_title) . "' updated successfully.";
+        } else {
+            $_SESSION['error'] = "Unable to update job title.";
+        }
+        mysqli_stmt_close($stmt);
+
+        header("Location: recruitment.php");
+        exit();
+    }
+
+    if (isset($_POST['delete_position'])) {
+        $position_id = intval($_POST['position_id'] ?? 0);
+        if ($position_id <= 0) {
+            $_SESSION['error'] = "Invalid job title selected.";
+            header("Location: recruitment.php");
+            exit();
+        }
+        if ($is_partner_scoped_hr && !hrPositionIdInScope($conn, $position_id)) {
+            $_SESSION['error'] = "Selected job title is outside your partner HR scope.";
+            header("Location: recruitment.php");
+            exit();
+        }
+
+        $emp_count = 0;
+        if (hrTableExists($conn, 'employees')) {
+            $chk = mysqli_prepare($conn, "SELECT COUNT(*) FROM employees WHERE position_id = ?");
+            if ($chk) {
+                mysqli_stmt_bind_param($chk, "i", $position_id);
+                mysqli_stmt_execute($chk);
+                mysqli_stmt_bind_result($chk, $emp_count);
+                mysqli_stmt_fetch($chk);
+                mysqli_stmt_close($chk);
+            }
+        }
+
+        $cand_count = 0;
+        if (hrTableExists($conn, 'candidates')) {
+            $chk = mysqli_prepare($conn, "SELECT COUNT(*) FROM candidates WHERE position_id = ?");
+            if ($chk) {
+                mysqli_stmt_bind_param($chk, "i", $position_id);
+                mysqli_stmt_execute($chk);
+                mysqli_stmt_bind_result($chk, $cand_count);
+                mysqli_stmt_fetch($chk);
+                mysqli_stmt_close($chk);
+            }
+        }
+
+        if ($emp_count > 0 || $cand_count > 0) {
+            $_SESSION['error'] = "Cannot delete this job title because {$emp_count} employee(s) and {$cand_count} candidate(s) are assigned to it. Please reassign them first or change status to Closed.";
+            header("Location: recruitment.php");
+            exit();
+        }
+
+        $del_stmt = mysqli_prepare($conn, "DELETE FROM job_positions WHERE id = ?");
+        if ($del_stmt) {
+            mysqli_stmt_bind_param($del_stmt, "i", $position_id);
+            if (mysqli_stmt_execute($del_stmt)) {
+                $_SESSION['success'] = "Job title deleted successfully.";
+            } else {
+                $_SESSION['error'] = "Failed to delete job title.";
+            }
+            mysqli_stmt_close($del_stmt);
+        }
+        header("Location: recruitment.php");
+        exit();
     }
     
     if (isset($_POST['update_position_status'])) {
@@ -117,6 +232,12 @@ if ($is_partner_scoped_hr) {
 }
 $departments_sql .= " ORDER BY department_name";
 $departments = mysqli_query($conn, $departments_sql);
+$department_list = [];
+if ($departments) {
+    while ($d_row = mysqli_fetch_assoc($departments)) {
+        $department_list[] = $d_row;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -169,7 +290,7 @@ $departments = mysqli_query($conn, $departments_sql);
 
                 <div class="section-header">
                     <h2>Job Titles</h2>
-                    <div class="d-flex gap-2">
+                    <div class="d-flex gap-2 flex-wrap">
                         <a href="candidates.php" class="btn btn-secondary"><i class="fas fa-user-tie"></i> Candidates</a>
                         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addPositionModal" <?php echo !$has_job_positions ? 'disabled' : ''; ?>>
                             <i class="fas fa-plus"></i> Post New Job Title
@@ -189,10 +310,13 @@ $departments = mysqli_query($conn, $departments_sql);
                                     <option value="closed" <?php echo $status_filter === 'closed' ? 'selected' : ''; ?>>Closed</option>
                                 </select>
                             </div>
-                            <div class="col-md-8 d-flex gap-2 justify-content-md-end">
+                            <div class="col-md-8 d-flex gap-2 justify-content-md-end flex-wrap">
                                 <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Apply</button>
                                 <a href="recruitment.php" class="btn btn-secondary">Reset</a>
                                 <a href="hr_reports.php?type=turnover" class="btn btn-secondary"><i class="fas fa-chart-bar"></i> HR Reports</a>
+                                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addPositionModal" <?php echo !$has_job_positions ? 'disabled' : ''; ?>>
+                                    <i class="fas fa-plus"></i> Add New Job Title
+                                </button>
                             </div>
                         </form>
                     </div>
@@ -234,7 +358,10 @@ $departments = mysqli_query($conn, $departments_sql);
                                         <td><span class="badge bg-info"><?php echo (int)$pos['candidate_count']; ?></span></td>
                                         <td><span class="status-badge <?php echo $status_class; ?>"><?php echo ucfirst(str_replace('_', ' ', $position_status)); ?></span></td>
                                         <td>
-                                            <button class="btn-icon" onclick="viewCandidates(<?php echo (int)$pos['id']; ?>)" title="View Candidates">
+                                            <button class="btn-icon text-primary" type="button" onclick='openEditPositionModal(<?php echo htmlspecialchars(json_encode($pos), ENT_QUOTES, 'UTF-8'); ?>)' title="Edit Job Title">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn-icon" type="button" onclick="viewCandidates(<?php echo (int)$pos['id']; ?>)" title="View Candidates">
                                                 <i class="fas fa-users"></i>
                                             </button>
                                             <form method="POST" style="display:inline;">
@@ -246,6 +373,9 @@ $departments = mysqli_query($conn, $departments_sql);
                                                     <i class="fas <?php echo $position_status === 'open' ? 'fa-lock' : 'fa-unlock'; ?>"></i>
                                                 </button>
                                             </form>
+                                            <button class="btn-icon text-danger" type="button" onclick="confirmDeletePosition(<?php echo (int)$pos['id']; ?>, <?php echo htmlspecialchars(json_encode($pos['position_title']), ENT_QUOTES, 'UTF-8'); ?>)" title="Delete Job Title">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
                                         </td>
                                     </tr>
                                 <?php endwhile; ?>
@@ -258,6 +388,13 @@ $departments = mysqli_query($conn, $departments_sql);
             </div>
         </div>
     </div>
+
+    <!-- Hidden Form for Position Deletion -->
+    <form id="deletePosForm" method="POST" style="display:none;">
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+        <input type="hidden" name="delete_position" value="1">
+        <input type="hidden" name="position_id" id="delete_position_id" value="">
+    </form>
     
     <!-- Add Job Title Modal -->
     <div class="modal fade modern-form-modal" id="addPositionModal" tabindex="-1">
@@ -287,7 +424,7 @@ $departments = mysqli_query($conn, $departments_sql);
                                 <label class="form-label-modern">Job Title <span class="form-req-star">*</span></label>
                                 <div class="form-input-wrap">
                                     <i class="fas fa-id-badge form-input-icon"></i>
-                                    <input type="text" name="position_title" class="form-control" placeholder="e.g. Master Roaster, Cashier, Kitchen Cook" required>
+                                    <input type="text" name="position_title" class="form-control" placeholder="e.g. Lechon Roaster / Litsonero, Service Crew" required>
                                 </div>
                             </div>
                             <div class="row g-3">
@@ -298,14 +435,9 @@ $departments = mysqli_query($conn, $departments_sql);
                                             <i class="fas fa-building form-input-icon"></i>
                                             <select name="department_id" class="form-select">
                                                 <option value="">Unassigned</option>
-                                                <?php
-                                                if ($departments) {
-                                                    mysqli_data_seek($departments, 0);
-                                                    while ($dept = mysqli_fetch_assoc($departments)) {
-                                                        echo "<option value='{$dept['id']}'>" . htmlspecialchars($dept['department_name']) . "</option>";
-                                                    }
-                                                }
-                                                ?>
+                                                <?php foreach ($department_list as $dept): ?>
+                                                    <option value="<?php echo (int)$dept['id']; ?>"><?php echo htmlspecialchars($dept['department_name']); ?></option>
+                                                <?php endforeach; ?>
                                             </select>
                                         </div>
                                     </div>
@@ -317,7 +449,7 @@ $departments = mysqli_query($conn, $departments_sql);
                                             <i class="fas fa-business-time form-input-icon"></i>
                                             <select name="employment_type" class="form-select" required>
                                                 <option value="">Select Type</option>
-                                                <option value="full_time">Full Time</option>
+                                                <option value="full_time" selected>Full Time</option>
                                                 <option value="part_time">Part Time</option>
                                                 <option value="contract">Contract</option>
                                                 <option value="temporary">Temporary</option>
@@ -389,6 +521,146 @@ $departments = mysqli_query($conn, $departments_sql);
             </div>
         </div>
     </div>
+
+    <!-- Edit Job Title Modal -->
+    <div class="modal fade modern-form-modal" id="editPositionModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-header-icon" style="background: rgba(179, 38, 30, 0.1); color: #b3261e;">
+                        <i class="fas fa-edit"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Edit Job Title</h5>
+                        <p class="modal-subtitle">Update role title, department assignment, compensation, and requirements.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form method="POST">
+                    <div class="modal-body">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                        <input type="hidden" name="update_position" value="1">
+                        <input type="hidden" name="position_id" id="edit_position_id" value="">
+                        
+                        <!-- Section 1: Role & Department -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-user-tag"></i> Role & Department</span>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Job Title <span class="form-req-star">*</span></label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-id-badge form-input-icon"></i>
+                                    <input type="text" name="position_title" id="edit_position_title" class="form-control" placeholder="e.g. Lechon Roaster / Litsonero" required>
+                                </div>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Department</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-building form-input-icon"></i>
+                                            <select name="department_id" id="edit_department_id" class="form-select">
+                                                <option value="">Unassigned</option>
+                                                <?php foreach ($department_list as $dept): ?>
+                                                    <option value="<?php echo (int)$dept['id']; ?>"><?php echo htmlspecialchars($dept['department_name']); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Employment Type <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-business-time form-input-icon"></i>
+                                            <select name="employment_type" id="edit_employment_type" class="form-select" required>
+                                                <option value="full_time">Full Time</option>
+                                                <option value="part_time">Part Time</option>
+                                                <option value="contract">Contract</option>
+                                                <option value="temporary">Temporary</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Status <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-toggle-on form-input-icon"></i>
+                                            <select name="status" id="edit_status" class="form-select" required>
+                                                <option value="open">Open</option>
+                                                <option value="on_hold">On Hold</option>
+                                                <option value="closed">Closed</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Section 2: Compensation & Timeline -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-coins"></i> Compensation & Schedule</span>
+                                <span class="form-opt-pill">Optional</span>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Salary Min (PHP)</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-peso-sign form-input-icon"></i>
+                                            <input type="number" name="salary_min" id="edit_salary_min" class="form-control" placeholder="0.00" step="0.01">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Salary Max (PHP)</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-peso-sign form-input-icon"></i>
+                                            <input type="number" name="salary_max" id="edit_salary_max" class="form-control" placeholder="0.00" step="0.01">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Closing Date</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-calendar-alt form-input-icon"></i>
+                                            <input type="date" name="closing_date" id="edit_closing_date" class="form-control">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Section 3: Job Description & Requirements -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-file-alt"></i> Job Details & Criteria</span>
+                                <span class="form-opt-pill">Optional</span>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Position Description</label>
+                                <textarea name="description" id="edit_description" class="form-control" rows="3" placeholder="Outline day-to-day duties and operational goals..."></textarea>
+                            </div>
+                            <div class="form-group-modern mt-3">
+                                <label class="form-label-modern">Candidate Requirements</label>
+                                <textarea name="requirements" id="edit_requirements" class="form-control" rows="3" placeholder="Skills, years of experience, certifications, and educational background..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary"><i class="fas fa-save"></i> Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
     
     <script src="../js/jquery-3.7.1.min.js"></script>
     <script src="../js/bootstrap.bundle.min.js"></script>
@@ -399,7 +671,7 @@ $departments = mysqli_query($conn, $departments_sql);
             Swal.fire({
                 icon: 'success',
                 title: 'Success',
-                text: '<?php echo $_SESSION['success']; ?>',
+                text: <?php echo json_encode((string)$_SESSION['success']); ?>,
                 timer: 2000,
                 showConfirmButton: false
             });
@@ -409,16 +681,56 @@ $departments = mysqli_query($conn, $departments_sql);
             Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: '<?php echo $_SESSION['error']; ?>'
+                text: <?php echo json_encode((string)$_SESSION['error']); ?>
             });
         <?php unset($_SESSION['error']); endif; ?>
 
         function viewCandidates(positionId) {
             window.location.href = 'candidates.php?position_id=' + positionId;
         }
-        
+
+        function openEditPositionModal(pos) {
+            if (!pos) return;
+            document.getElementById('edit_position_id').value = pos.id || '';
+            document.getElementById('edit_position_title').value = pos.position_title || '';
+            document.getElementById('edit_department_id').value = pos.department_id ? String(pos.department_id) : '';
+            document.getElementById('edit_employment_type').value = pos.employment_type || 'full_time';
+            document.getElementById('edit_status').value = pos.status || 'open';
+            document.getElementById('edit_salary_min').value = (pos.salary_range_min !== null && pos.salary_range_min !== undefined && pos.salary_range_min !== '') ? parseFloat(pos.salary_range_min) : '';
+            document.getElementById('edit_salary_max').value = (pos.salary_range_max !== null && pos.salary_range_max !== undefined && pos.salary_range_max !== '') ? parseFloat(pos.salary_range_max) : '';
+            document.getElementById('edit_closing_date').value = pos.closing_date ? pos.closing_date.split(' ')[0] : '';
+            document.getElementById('edit_description').value = pos.description || '';
+            document.getElementById('edit_requirements').value = pos.requirements || '';
+
+            var modalEl = document.getElementById('editPositionModal');
+            var modal = bootstrap.Modal.getInstance(modalEl);
+            if (!modal) {
+                modal = new bootstrap.Modal(modalEl);
+            }
+            modal.show();
+        }
+
+        function confirmDeletePosition(posId, title) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Delete Job Title?',
+                    text: 'Are you sure you want to delete "' + title + '"? This cannot be undone.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#b3261e',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Yes, delete it'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        document.getElementById('delete_position_id').value = posId;
+                        document.getElementById('deletePosForm').submit();
+                    }
+                });
+            } else if (confirm('Are you sure you want to delete "' + title + '"?')) {
+                document.getElementById('delete_position_id').value = posId;
+                document.getElementById('deletePosForm').submit();
+            }
+        }
     </script>
 </body>
 </html>
-
-

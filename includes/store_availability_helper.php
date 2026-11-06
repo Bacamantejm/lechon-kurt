@@ -516,7 +516,11 @@ function sahUpsertPartnerStoreLocation($conn, array $app_data): array
             $conn,
             "UPDATE store_locations
              SET owner_user_id = ?, store_name = ?, address = ?, city = ?, province = ?, phone = ?, email = ?,
-                 opening_hours = ?, opening_time = ?, closing_time = ?, operating_days = ?, availability_mode = ?,
+                 opening_hours = COALESCE(NULLIF(opening_hours, ''), ?),
+                 opening_time = COALESCE(opening_time, ?),
+                 closing_time = COALESCE(closing_time, ?),
+                 operating_days = COALESCE(NULLIF(operating_days, ''), ?),
+                 availability_mode = COALESCE(NULLIF(availability_mode, ''), ?),
                  latitude = COALESCE(?, latitude), longitude = COALESCE(?, longitude),
                  is_active = 1
              WHERE store_id = ?"
