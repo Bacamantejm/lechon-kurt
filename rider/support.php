@@ -63,7 +63,7 @@ require_once __DIR__ . '/header.php';
     </div>
 
     <!-- Emergency Hotline Banner -->
-    <div class="rider-card p-3 mb-3" style="background:#fff1f0; border-color:#fee4e2;">
+    <div class="rider-card p-3 mb-3" style="background: rgba(255, 241, 240, 0.88); border-color: rgba(254, 228, 226, 0.8);">
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
             <div class="d-flex align-items-center gap-3">
                 <div style="width: 40px; height: 40px; border-radius: 50%; background:#b3261e; color:#ffffff; display:flex; align-items:center; justify-content:center; font-size: 18px; flex-shrink: 0;">
@@ -74,7 +74,7 @@ require_once __DIR__ . '/header.php';
                     <div class="text-muted" style="font-size: 11px;">Tap to call central emergency operations hotline immediately.</div>
                 </div>
             </div>
-            <a href="tel:09171234567" class="btn btn-sm btn-danger p-2 px-3 fw-bold ms-auto ms-sm-0" style="background:#b3261e; border-color:#b3261e; border-radius: 8px;">
+            <a href="tel:09171234567" class="btn-rider-primary ms-auto ms-sm-0" style="padding: 9px 16px; font-size: 12.5px; width: auto;">
                 <i class="fas fa-phone-alt me-1"></i> Call Emergency Hotline
             </a>
         </div>
@@ -96,7 +96,7 @@ require_once __DIR__ . '/header.php';
                 <form method="POST" action="support.php">
                     <div class="mb-2">
                         <label class="form-label small mb-1 fw-semibold text-dark">Related Order (Optional)</label>
-                        <select name="order_id" class="form-select form-select-sm">
+                        <select name="order_id" class="form-select form-select-sm rider-glass-input">
                             <option value="0">-- General Issue (Not Order Specific) --</option>
                             <?php if ($my_orders_q): while ($ord = mysqli_fetch_assoc($my_orders_q)): ?>
                                 <option value="<?php echo (int)$ord['order_id']; ?>">Order #<?php echo htmlspecialchars($ord['order_number']); ?> (<?php echo htmlspecialchars($ord['customer_name']); ?>)</option>
@@ -106,7 +106,7 @@ require_once __DIR__ . '/header.php';
 
                     <div class="mb-2">
                         <label class="form-label small mb-1 fw-semibold text-dark">Problem Category</label>
-                        <select name="issue_category" class="form-select form-select-sm" required>
+                        <select name="issue_category" class="form-select form-select-sm rider-glass-input" required>
                             <option value="customer_unavailable">Customer Unavailable / Phone Unreachable</option>
                             <option value="restaurant_problem">Restaurant Delay / Store Problem</option>
                             <option value="wrong_address">Wrong Address / Inaccessible Area</option>
@@ -121,7 +121,7 @@ require_once __DIR__ . '/header.php';
 
                     <div class="mb-3">
                         <label class="form-label small mb-1 fw-semibold text-dark">Describe the Situation</label>
-                        <textarea name="description" class="form-control form-control-sm" rows="4" placeholder="Provide full details so dispatch can resolve quickly..." required></textarea>
+                        <textarea name="description" class="form-control form-control-sm rider-glass-input" rows="4" placeholder="Provide full details so dispatch can resolve quickly..." required></textarea>
                     </div>
 
                     <button type="submit" class="btn-rider-primary py-2" style="font-size: 13px;">
@@ -164,7 +164,7 @@ require_once __DIR__ . '/header.php';
                             </p>
 
                             <?php if (!empty($t['admin_response'])): ?>
-                                <div class="p-2 rounded mb-1" style="background:#f2f4f7; border-left: 3px solid #b3261e; font-size: 11.5px;">
+                                <div class="p-2.5 rounded-3 mb-1 rider-glass-inner" style="background: rgba(239, 248, 255, 0.85); border: 1px solid rgba(178, 221, 255, 0.8); font-size: 11.5px;">
                                     <strong>Dispatch Response:</strong> <?php echo htmlspecialchars($t['admin_response']); ?>
                                 </div>
                             <?php endif; ?>

@@ -75,11 +75,11 @@ $trans_res = mysqli_query($conn, $trans_sql);
     </div>
 
     <!-- Filter Buttons -->
-    <div class="d-flex gap-1 mb-3 overflow-auto pb-1" style="white-space: nowrap;">
-        <a href="earnings.php?filter=today" class="btn btn-sm <?php echo $filter === 'today' ? 'btn-danger' : 'btn-outline-secondary'; ?>" style="border-radius: 20px; font-size: 12px; font-weight: 600;">Today</a>
-        <a href="earnings.php?filter=week" class="btn btn-sm <?php echo $filter === 'week' ? 'btn-danger' : 'btn-outline-secondary'; ?>" style="border-radius: 20px; font-size: 12px; font-weight: 600;">This Week</a>
-        <a href="earnings.php?filter=month" class="btn btn-sm <?php echo $filter === 'month' ? 'btn-danger' : 'btn-outline-secondary'; ?>" style="border-radius: 20px; font-size: 12px; font-weight: 600;">This Month</a>
-        <button type="button" class="btn btn-sm <?php echo $filter === 'custom' ? 'btn-danger' : 'btn-outline-secondary'; ?>" onclick="document.getElementById('customDateFilter').classList.toggle('d-none')" style="border-radius: 20px; font-size: 12px; font-weight: 600;">
+    <div class="d-flex gap-2 mb-3 overflow-auto pb-1" style="white-space: nowrap;">
+        <a href="earnings.php?filter=today" class="rider-glass-pill <?php echo $filter === 'today' ? 'active' : ''; ?>">Today</a>
+        <a href="earnings.php?filter=week" class="rider-glass-pill <?php echo $filter === 'week' ? 'active' : ''; ?>">This Week</a>
+        <a href="earnings.php?filter=month" class="rider-glass-pill <?php echo $filter === 'month' ? 'active' : ''; ?>">This Month</a>
+        <button type="button" class="rider-glass-pill <?php echo $filter === 'custom' ? 'active' : ''; ?>" onclick="document.getElementById('customDateFilter').classList.toggle('d-none')">
             <i class="fas fa-calendar-alt me-1"></i> Custom Date
         </button>
     </div>
@@ -90,14 +90,14 @@ $trans_res = mysqli_query($conn, $trans_sql);
             <input type="hidden" name="filter" value="custom">
             <div class="col-6">
                 <label class="form-label small mb-1">Start Date</label>
-                <input type="date" name="start_date" class="form-control form-control-sm" value="<?php echo htmlspecialchars($start_date); ?>" required>
+                <input type="date" name="start_date" class="form-control form-control-sm rider-glass-input" value="<?php echo htmlspecialchars($start_date); ?>" required>
             </div>
             <div class="col-6">
                 <label class="form-label small mb-1">End Date</label>
-                <input type="date" name="end_date" class="form-control form-control-sm" value="<?php echo htmlspecialchars($end_date); ?>" required>
+                <input type="date" name="end_date" class="form-control form-control-sm rider-glass-input" value="<?php echo htmlspecialchars($end_date); ?>" required>
             </div>
             <div class="col-12 mt-2">
-                <button type="submit" class="btn btn-sm btn-dark w-100">Apply Date Range</button>
+                <button type="submit" class="btn-rider-primary" style="padding: 10px 16px; font-size: 13px;">Apply Date Range</button>
             </div>
         </form>
     </div>

@@ -50,10 +50,10 @@ require_once __DIR__ . '/header.php';
     <div class="rider-card p-3 mb-3">
         <form method="GET" action="history.php" class="row g-2">
             <div class="col-8 col-md-9">
-                <input type="text" name="search" class="form-control form-control-sm" placeholder="Search order #, customer, area..." value="<?php echo htmlspecialchars($search); ?>">
+                <input type="text" name="search" class="form-control form-control-sm rider-glass-input" placeholder="Search order #, customer, area..." value="<?php echo htmlspecialchars($search); ?>">
             </div>
             <div class="col-4 col-md-3">
-                <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                <select name="status" class="form-select form-select-sm rider-glass-input" onchange="this.form.submit()">
                     <option value="all" <?php echo $status_filter === 'all' ? 'selected' : ''; ?>>All Status</option>
                     <option value="delivered" <?php echo $status_filter === 'delivered' ? 'selected' : ''; ?>>Delivered</option>
                     <option value="assigned" <?php echo $status_filter === 'assigned' ? 'selected' : ''; ?>>Assigned</option>

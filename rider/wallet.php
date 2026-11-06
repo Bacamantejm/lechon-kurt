@@ -73,7 +73,7 @@ require_once __DIR__ . '/header.php';
     </div>
 
     <!-- Separation Disclaimer Banner (Section 14) -->
-    <div class="p-3 rounded mb-3" style="background:#eff8ff; border:1px solid #b2ddff; font-size:12px; color:#175cd3;">
+    <div class="p-3 mb-3 rider-glass-inner" style="background: rgba(239, 248, 255, 0.85); border-color: rgba(178, 221, 255, 0.8) !important; font-size:12px; color:#175cd3;">
         <i class="fas fa-shield-alt me-1"></i> <strong>Strict Distinction:</strong> Customer cash collected from COD orders belongs to the restaurant/platform and is tracked separately from your personal delivery earnings.
     </div>
 
@@ -102,7 +102,7 @@ require_once __DIR__ . '/header.php';
                     </div>
                 </div>
                 <div class="col-4 col-sm-4 col-lg-12">
-                    <div class="rider-card p-3 text-center h-100" style="background:#fff8f8; border-color:#fee4e2;">
+                    <div class="rider-card p-3 text-center h-100" style="background: rgba(255, 248, 248, 0.88); border-color: rgba(254, 228, 226, 0.8);">
                         <span class="text-danger d-block" style="font-size: 11px; font-weight: 700; text-transform: uppercase;">Remaining Due</span>
                         <strong style="color: #b3261e; font-size: 1.35rem;">₱<?php echo number_format($cod_stats['remaining_cod'], 2); ?></strong>
                     </div>
@@ -117,11 +117,11 @@ require_once __DIR__ . '/header.php';
                         <input type="hidden" name="action" value="remit_cod">
                         <div class="mb-2">
                             <label class="form-label small mb-1 fw-semibold">Remittance Amount (₱)</label>
-                            <input type="number" step="0.01" name="remit_amount" class="form-control form-control-sm fw-bold" value="<?php echo $cod_stats['remaining_cod']; ?>" required>
+                            <input type="number" step="0.01" name="remit_amount" class="form-control form-control-sm rider-glass-input fw-bold" value="<?php echo $cod_stats['remaining_cod']; ?>" required>
                         </div>
                         <div class="mb-3">
                             <label class="form-label small mb-1 fw-semibold">Deposit Reference / Cashier Name</label>
-                            <input type="text" name="remit_reference" class="form-control form-control-sm" placeholder="e.g. GCash Ref #12345 or Cashier Justine" required>
+                            <input type="text" name="remit_reference" class="form-control form-control-sm rider-glass-input" placeholder="e.g. GCash Ref #12345 or Cashier Justine" required>
                         </div>
                         <button type="submit" class="btn-rider-primary py-2" style="font-size: 13px;">
                             <i class="fas fa-check-circle me-1"></i> Submit Remittance for Verification
