@@ -1,6 +1,6 @@
 <?php
 /**
- * AJAX Controller: Employee & Rider Time Clock (Time In / Time Out)
+ * AJAX Controller: Employee & Rider Time Clock (Time In / Break Time / Continue Shift / Time Out)
  */
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -32,6 +32,18 @@ try {
 
     if ($action === 'clock_in') {
         $res = AttendanceService::clockIn($conn, $user_id, $lat, $lon, $ip_address);
+        echo json_encode($res);
+        exit();
+    }
+
+    if ($action === 'break_start') {
+        $res = AttendanceService::breakStart($conn, $user_id);
+        echo json_encode($res);
+        exit();
+    }
+
+    if ($action === 'break_end') {
+        $res = AttendanceService::breakEnd($conn, $user_id);
         echo json_encode($res);
         exit();
     }

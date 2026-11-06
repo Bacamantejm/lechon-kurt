@@ -236,6 +236,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_hr_status'])) 
     mysqli_stmt_close($stmt);
 }
 
+// Handle Save / Edit Schedule
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_schedule'])) {
+    $sched_emp_id = intval($_POST['employee_id'] ?? 0);
+    $sched_date = trim($_POST['schedule_date'] ?? date('Y-m-d'));
+    $start_time = trim($_POST['start_time'] ?? '');
+    $end_time = trim($_POST['end_time'] ?? '');
+    $shift_type = trim($_POST['shift_type'] ?? 'regular');
+
+    if ($sched_emp_id <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $sched_date) || empty($start_time) || empty($end_time)) {
+        $_SESSION['error'] = "Please provide valid employee, date, start time, and end time.";
+    } elseif ($is_partner_scoped_hr && !hrEmployeeIdInScope($conn, $sched_emp_id)) {
+        $_SESSION['error'] = "Selected employee is outside your partner HR scope.";
+    } else {
+        $chk_stmt = mysqli_prepare($conn, "SELECT id FROM schedules WHERE employee_id = ? AND schedule_date = ? LIMIT 1");
+        mysqli_stmt_bind_param($chk_stmt, "is", $sched_emp_id, $sched_date);
+        mysqli_stmt_execute($chk_stmt);
+        $chk_res = mysqli_stmt_get_result($chk_stmt);
+        $existing_sched = mysqli_fetch_assoc($chk_res);
+        mysqli_stmt_close($chk_stmt);
+
+        if ($existing_sched) {
+            $upd_stmt = mysqli_prepare($conn, "UPDATE schedules SET start_time = ?, end_time = ?, shift_type = ? WHERE id = ?");
+            mysqli_stmt_bind_param($upd_stmt, "sssi", $start_time, $end_time, $shift_type, $existing_sched['id']);
+            if (mysqli_stmt_execute($upd_stmt)) {
+                $_SESSION['success'] = "Employee shift schedule updated successfully.";
+            } else {
+                $_SESSION['error'] = "Failed to update schedule: " . mysqli_error($conn);
+            }
+            mysqli_stmt_close($upd_stmt);
+        } else {
+            $admin_user_id = (int)($_SESSION['user_id'] ?? 0);
+            $ins_stmt = mysqli_prepare($conn, "INSERT INTO schedules (employee_id, schedule_date, shift_type, start_time, end_time, created_by) VALUES (?, ?, ?, ?, ?, ?)");
+            mysqli_stmt_bind_param($ins_stmt, "issssi", $sched_emp_id, $sched_date, $shift_type, $start_time, $end_time, $admin_user_id);
+            if (mysqli_stmt_execute($ins_stmt)) {
+                $_SESSION['success'] = "Employee shift schedule saved successfully.";
+            } else {
+                $_SESSION['error'] = "Failed to save schedule: " . mysqli_error($conn);
+            }
+            mysqli_stmt_close($ins_stmt);
+        }
+    }
+    $red_from = $_GET['date_from'] ?? date('Y-m-d');
+    $red_to = $_GET['date_to'] ?? date('Y-m-d');
+    header("Location: attendance.php?date_from=" . urlencode($red_from) . "&date_to=" . urlencode($red_to));
+    exit();
+}
+
 // Handle Time Clock Actions (Kiosk Mode)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
@@ -480,13 +527,35 @@ if ($emp_res) {
                     if ($employee_filter > 0) {
                         $stats_where .= " AND employee_id = {$employee_filter}";
                     }
-                    $stats_query = "SELECT 
-                        COUNT(CASE WHEN status = 'present' THEN 1 END) as present,
-                        COUNT(CASE WHEN status = 'absent' THEN 1 END) as absent,
-                        COUNT(CASE WHEN late_minutes > 0 THEN 1 END) as late,
-                        COUNT(CASE WHEN status = 'on_leave' THEN 1 END) as on_leave
-                        FROM attendance WHERE $stats_where";
-                    $stats_res = mysqli_query($conn, $stats_query);
+
+                    if ($date_from === $date_to) {
+                        // Include non-clocked-in employees who have passed shift end as absent
+                        $emp_scoped_clause = "WHERE e.status = 'active'";
+                        if ($is_partner_scoped_hr) $emp_scoped_clause .= " AND {$employee_scope_sql}";
+                        if ($dept_filter > 0) $emp_scoped_clause .= " AND e.department_id = {$dept_filter}";
+                        if ($employee_filter > 0) $emp_scoped_clause .= " AND e.id = {$employee_filter}";
+
+                        $stats_query = "SELECT 
+                            COUNT(CASE WHEN a.check_in_time IS NOT NULL AND a.status IN ('present', 'late', 'half_day') THEN 1 END) as present,
+                            COUNT(CASE WHEN a.check_in_time IS NOT NULL AND a.late_minutes > 0 THEN 1 END) as late,
+                            COUNT(CASE WHEN a.status = 'on_leave' THEN 1 END) as on_leave,
+                            COUNT(CASE 
+                                WHEN a.status = 'absent' THEN 1 
+                                WHEN a.check_in_time IS NULL AND ('$date_from' < CURDATE() OR (s.end_time IS NOT NULL AND CURTIME() > s.end_time)) THEN 1 
+                                ELSE NULL 
+                            END) as absent
+                            FROM employees e
+                            LEFT JOIN attendance a ON e.id = a.employee_id AND a.attendance_date = '$date_from'
+                            LEFT JOIN schedules s ON e.id = s.employee_id AND s.schedule_date = '$date_from'
+                            $emp_scoped_clause";
+                    } else {
+                        $stats_query = "SELECT 
+                            COUNT(CASE WHEN status = 'present' THEN 1 END) as present,
+                            COUNT(CASE WHEN status = 'absent' THEN 1 END) as absent,
+                            COUNT(CASE WHEN late_minutes > 0 THEN 1 END) as late,
+                            COUNT(CASE WHEN status = 'on_leave' THEN 1 END) as on_leave
+                            FROM attendance WHERE $stats_where";
+                    }$stats_res = mysqli_query($conn, $stats_query);
                     $stats = ($stats_res instanceof mysqli_result) ? (mysqli_fetch_assoc($stats_res) ?: []) : [];
                     ?>
                     <div class="col-md-3">
@@ -589,83 +658,210 @@ if ($emp_res) {
                         </thead>
                         <tbody>
                             <?php
-                            $where = "WHERE a.attendance_date BETWEEN '$date_from' AND '$date_to'";
-                            if ($dept_filter > 0) $where .= " AND e.department_id = {$dept_filter}";
-                            if ($employee_filter > 0) $where .= " AND e.id = {$employee_filter}";
-                            if ($is_partner_scoped_hr) $where .= " AND {$employee_scope_sql}";
+                            $has_check_in_count = function_exists('attColumnExists') ? attColumnExists($conn, 'attendance', 'check_in_count') : true;
+                            $check_in_count_sql = $has_check_in_count ? "COALESCE(a.check_in_count, 1)" : "1";
 
-                            $attendance = mysqli_query($conn, "
-                                SELECT a.*, e.id as employee_db_id, e.employee_id, e.first_name, e.last_name, 
-                                s.start_time as sched_start, s.end_time as sched_end
-                                FROM attendance a
-                                JOIN employees e ON a.employee_id = e.id
-                                LEFT JOIN schedules s ON e.id = s.employee_id AND a.attendance_date = s.schedule_date
-                                $where
-                                ORDER BY a.attendance_date DESC, a.check_in_time DESC
-                            ");
-                            
-                            if (mysqli_num_rows($attendance) > 0) {
+                            if ($date_from === $date_to) {
+                                // Single-day view (e.g. today): ALL employees in shop scope appear, even newly added
+                                $emp_clause = "WHERE e.status = 'active'";
+                                if ($dept_filter > 0) $emp_clause .= " AND e.department_id = {$dept_filter}";
+                                if ($employee_filter > 0) $emp_clause .= " AND e.id = {$employee_filter}";
+                                if ($is_partner_scoped_hr) $emp_clause .= " AND {$employee_scope_sql}";
+
+                                $att_sql = "
+                                    SELECT 
+                                        COALESCE(a.id, 0) as id,
+                                        '$date_from' as attendance_date,
+                                        a.check_in_time,
+                                        a.break_start,
+                                        a.break_end,
+                                        a.check_out_time,
+                                        a.status as att_status,
+                                        a.notes,
+                                        a.latitude,
+                                        a.longitude,
+                                        a.ip_address,
+                                        a.hr_status,
+                                        a.late_minutes,
+                                        a.overtime_hours,
+                                        {$check_in_count_sql} as check_in_count,
+                                        e.id as employee_db_id,
+                                        e.employee_id,
+                                        e.first_name,
+                                        e.last_name,
+                                        e.department_id,
+                                        s.id as schedule_id,
+                                        s.start_time as sched_start,
+                                        s.end_time as sched_end,
+                                        s.shift_type
+                                    FROM employees e
+                                    LEFT JOIN attendance a ON e.id = a.employee_id AND a.attendance_date = '$date_from'
+                                    LEFT JOIN schedules s ON e.id = s.employee_id AND s.schedule_date = '$date_from'
+                                    $emp_clause
+                                    ORDER BY 
+                                        CASE 
+                                            WHEN a.check_in_time IS NOT NULL THEN 1 
+                                            WHEN s.start_time IS NOT NULL THEN 2 
+                                            ELSE 3 
+                                        END,
+                                        a.check_in_time DESC,
+                                        e.first_name ASC
+                                ";
+                            } else {
+                                // Multi-day range view
+                                $where = "WHERE a.attendance_date BETWEEN '$date_from' AND '$date_to'";
+                                if ($dept_filter > 0) $where .= " AND e.department_id = {$dept_filter}";
+                                if ($employee_filter > 0) $where .= " AND e.id = {$employee_filter}";
+                                if ($is_partner_scoped_hr) $where .= " AND {$employee_scope_sql}";
+
+                                $att_sql = "
+                                    SELECT a.*, a.status as att_status, e.id as employee_db_id, e.employee_id, e.first_name, e.last_name, 
+                                    s.id as schedule_id, s.start_time as sched_start, s.end_time as sched_end, s.shift_type,
+                                    {$check_in_count_sql} as check_in_count
+                                    FROM attendance a
+                                    JOIN employees e ON a.employee_id = e.id
+                                    LEFT JOIN schedules s ON e.id = s.employee_id AND a.attendance_date = s.schedule_date
+                                    $where
+                                    ORDER BY a.attendance_date DESC, a.check_in_time DESC
+                                ";
+                            }
+
+                            $attendance = mysqli_query($conn, $att_sql);
+
+                            if ($attendance && mysqli_num_rows($attendance) > 0) {
                                 while ($att = mysqli_fetch_assoc($attendance)) {
-                                    $status_class = 'badge-' . str_replace('_', '-', $att['status']);
-                                    $check_in = $att['check_in_time'] ? date('H:i', strtotime($att['check_in_time'])) : '-';
-                                    $check_out = $att['check_out_time'] ? date('H:i', strtotime($att['check_out_time'])) : '-';
-                                    $break = ($att['break_start'] && $att['break_end']) ? 
-                                        date('H:i', strtotime($att['break_start'])) . ' - ' . date('H:i', strtotime($att['break_end'])) : '-';
-                                    
-                                    $sched = ($att['sched_start']) ? 
-                                        date('H:i', strtotime($att['sched_start'])) . ' - ' . date('H:i', strtotime($att['sched_end'])) : 'No Sched';
+                                    $has_clock_in = !empty($att['check_in_time']);
+                                    $emp_full_name = htmlspecialchars($att['first_name'] . ' ' . $att['last_name'], ENT_QUOTES);
+                                    $sched_start = $att['sched_start'] ?? null;
+                                    $sched_end = $att['sched_end'] ?? null;
+                                    $sched_type = $att['shift_type'] ?? 'regular';
 
-                                    $late_display = $att['late_minutes'] > 0 ? "<span class='text-danger'>{$att['late_minutes']}m Late</span>" : "On Time";
-                                    $ot_display = $att['overtime_hours'] > 0 ? "<br><span class='text-success'>+{$att['overtime_hours']}h OT</span>" : "";
-                                    
-                                    $location_link = ($att['latitude'] && $att['longitude']) ? 
-                                        "<a href='https://www.google.com/maps?q={$att['latitude']},{$att['longitude']}' target='_blank' title='{$att['ip_address']}'><i class='fas fa-map-marker-alt text-danger'></i> View</a>" : 
-                                        "<span class='text-muted'>-</span>";
-
-                                    $geo_notes_text = (string)($att['notes'] ?? '');
-                                    if (stripos($geo_notes_text, 'Geo-check passed:') !== false || stripos($geo_notes_text, 'Within work location') !== false || stripos($geo_notes_text, 'within') !== false) {
-                                        $location_link .= "<div class='small text-success mt-1'>Within work location</div>";
-                                    } elseif (stripos($geo_notes_text, 'Geo-check outside radius:') !== false || stripos($geo_notes_text, 'outside') !== false || stripos($geo_notes_text, 'Outside work location') !== false) {
-                                        $location_link .= "<div class='small text-danger mt-1'>Outside work location</div>";
-                                    } elseif (stripos($geo_notes_text, 'Geo-check:') !== false) {
-                                        $location_link .= "<div class='small text-warning mt-1'>Location review needed</div>";
+                                    // Schedule Column with Quick Edit Modal trigger
+                                    if (!empty($sched_start) && !empty($sched_end)) {
+                                        $sched_text = date('g:i A', strtotime($sched_start)) . ' - ' . date('g:i A', strtotime($sched_end));
+                                        $sched_display = "<div class='fw-semibold text-dark' style='font-size:12.5px;'><i class='fas fa-clock text-primary me-1'></i>{$sched_text}</div>";
+                                        $sched_display .= "<button type='button' class='btn btn-sm btn-link p-0 text-muted' onclick='openScheduleModal({$att['employee_db_id']}, \"{$emp_full_name}\", \"{$att['attendance_date']}\", \"" . substr($sched_start, 0, 5) . "\", \"" . substr($sched_end, 0, 5) . "\", \"{$sched_type}\")' style='font-size:11px; text-decoration:none;'><i class='fas fa-edit me-1'></i>Edit Sched</button>";
+                                    } else {
+                                        $sched_display = "<span class='text-muted fst-italic' style='font-size:12px;'>No Sched</span><br>";
+                                        $sched_display .= "<button type='button' class='btn btn-sm btn-link p-0 text-primary' onclick='openScheduleModal({$att['employee_db_id']}, \"{$emp_full_name}\", \"{$att['attendance_date']}\", \"08:00\", \"17:00\", \"regular\")' style='font-size:11px; text-decoration:none;'><i class='fas fa-plus-circle me-1'></i>Set Sched</button>";
                                     }
-                                    
-                                    $hr_status = isset($att['hr_status']) ? $att['hr_status'] : 'pending';
-                                    $hr_badge_class = match($hr_status) {
-                                        'approved' => 'success',
-                                        'rejected' => 'danger',
-                                        default => 'warning text-dark'
-                                    };
-                                    $hr_status_display = "<span class='badge bg-$hr_badge_class'>" . ucfirst($hr_status) . "</span>";
 
-                                    $actions = "<form method='POST' style='display:inline-block;'>
-                                            <input type='hidden' name='attendance_id' value='{$att['id']}'>
-                                            <input type='hidden' name='update_hr_status' value='1'>
-                                            <button type='submit' name='hr_status' value='approved' class='btn btn-sm btn-success py-0 px-1' title='Approve'><i class='fas fa-check'></i></button>
-                                            <button type='submit' name='hr_status' value='rejected' class='btn btn-sm btn-danger py-0 px-1' title='Reject'><i class='fas fa-times'></i></button>
-                                        </form>";
+                                    // In / Out
+                                    if ($has_clock_in) {
+                                        $check_in_formatted = date('g:i A', strtotime($att['check_in_time']));
+                                        $check_out_formatted = !empty($att['check_out_time']) ? date('g:i A', strtotime($att['check_out_time'])) : '-';
+                                        $in_out_display = "<div class='text-success' style='font-size:12.5px;'><i class='fas fa-sign-in-alt me-1'></i>{$check_in_formatted}</div>";
+                                        $in_out_display .= "<div class='text-danger' style='font-size:12.5px;'><i class='fas fa-sign-out-alt me-1'></i>{$check_out_formatted}</div>";
+                                    } else {
+                                        $in_out_display = "<span class='text-muted'>-</span>";
+                                    }
+
+                                    // Break
+                                    if ($has_clock_in && !empty($att['break_start']) && !empty($att['break_end'])) {
+                                        $break_display = "<small>" . date('g:i A', strtotime($att['break_start'])) . ' - ' . date('g:i A', strtotime($att['break_end'])) . "</small>";
+                                    } elseif ($has_clock_in && !empty($att['break_start'])) {
+                                        $break_display = "<span class='badge' style='background:#fffaeb; color:#b54708; border:1px solid #fedf89; font-size:10.5px;'><i class='fas fa-coffee me-1'></i>On Break</span>";
+                                    } else {
+                                        $break_display = "<span class='text-muted'>-</span>";
+                                    }
+
+                                    // Late / OT
+                                    if ($has_clock_in) {
+                                        $late_display = ($att['late_minutes'] > 0) ? "<span class='text-danger fw-semibold'>{$att['late_minutes']}m Late</span>" : "<span class='text-success'>On Time</span>";
+                                        $ot_display = (!empty($att['overtime_hours']) && $att['overtime_hours'] > 0) ? "<br><span class='text-success'>+{$att['overtime_hours']}h OT</span>" : "";
+                                    } else {
+                                        if ($att['attendance_date'] === date('Y-m-d') && !empty($sched_start) && time() > (strtotime($att['attendance_date'] . ' ' . $sched_start) + 900)) {
+                                            $late_display = "<span class='text-warning' style='font-size:11.5px;'><i class='fas fa-clock me-1'></i>Overdue</span>";
+                                        } else {
+                                            $late_display = "<span class='text-muted'>-</span>";
+                                        }
+                                        $ot_display = "";
+                                    }
+
+                                    // Status & Absent Determination
+                                    if ($has_clock_in) {
+                                        $raw_status = $att['att_status'] ?? 'present';
+                                        $status_class = 'badge-' . str_replace('_', '-', $raw_status);
+                                        $status_display = "<span class='status-badge {$status_class}'>" . ucfirst(str_replace('_', ' ', $raw_status)) . "</span>";
+                                    } else {
+                                        $is_absent = false;
+                                        if ($att['attendance_date'] < date('Y-m-d')) {
+                                            $is_absent = true;
+                                        } elseif ($att['attendance_date'] === date('Y-m-d')) {
+                                            if (!empty($sched_end) && time() > strtotime($att['attendance_date'] . ' ' . $sched_end)) {
+                                                $is_absent = true;
+                                            }
+                                        }
+                                        if ($is_absent) {
+                                            $status_display = "<span class='badge' style='background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-weight:700;'>Absent</span>";
+                                        } else {
+                                            $status_display = "<span class='badge' style='background:#f2f4f7; color:#475467; border:1px solid #d0d5dd;'>Not Clocked In</span>";
+                                        }
+                                    }
+
+                                    // Location Link
+                                    if ($has_clock_in && !empty($att['latitude']) && !empty($att['longitude'])) {
+                                        $location_link = "<a href='https://www.google.com/maps?q={$att['latitude']},{$att['longitude']}' target='_blank' style='font-size:12.5px;'><i class='fas fa-map-marker-alt text-danger'></i> View</a>";
+                                        $geo_notes_text = (string)($att['notes'] ?? '');
+                                        if (stripos($geo_notes_text, 'passed:') !== false || stripos($geo_notes_text, 'within') !== false || stripos($geo_notes_text, 'Within work location') !== false) {
+                                            $location_link .= "<div class='small text-success mt-1'>Within work location</div>";
+                                        } elseif (stripos($geo_notes_text, 'outside') !== false) {
+                                            $location_link .= "<div class='small text-danger mt-1'>Outside work location</div>";
+                                        } else {
+                                            $location_link .= "<div class='small text-warning mt-1'>Location review needed</div>";
+                                        }
+                                    } else {
+                                        $location_link = "<span class='text-muted'>-</span>";
+                                    }
+
+                                    // HR Status
+                                    $check_in_count = (int)($att['check_in_count'] ?? 1);
+                                    if ($has_clock_in) {
+                                        $hr_status = $att['hr_status'] ?? 'pending';
+                                        if ($check_in_count >= 2 && $hr_status === 'pending') {
+                                            $hr_status_display = "<span class='badge' style='background:#fffaeb; color:#b54708; border:1px solid #fedf89; font-weight:700;'><i class='fas fa-exclamation-circle me-1'></i>2nd Check-in (Pending)</span>";
+                                        } else {
+                                            $hr_badge_class = match($hr_status) {
+                                                'approved' => 'success',
+                                                'rejected' => 'danger',
+                                                default => 'warning text-dark'
+                                            };
+                                            $hr_status_display = "<span class='badge bg-{$hr_badge_class}'>" . ucfirst($hr_status) . "</span>";
+                                        }
+                                    } else {
+                                        $hr_status_display = "<span class='text-muted'>-</span>";
+                                    }
+
+                                    // Actions
+                                    if (!empty($att['id'])) {
+                                        $actions = "<form method='POST' style='display:inline-block;'>
+                                                <input type='hidden' name='attendance_id' value='{$att['id']}'>
+                                                <input type='hidden' name='update_hr_status' value='1'>
+                                                <button type='submit' name='hr_status' value='approved' class='btn btn-sm btn-success py-0 px-2 me-1' title='Approve'><i class='fas fa-check'></i></button>
+                                                <button type='submit' name='hr_status' value='rejected' class='btn btn-sm btn-danger py-0 px-2' title='Reject'><i class='fas fa-times'></i></button>
+                                            </form>";
+                                    } else {
+                                        $actions = "<button type='button' class='btn btn-sm btn-outline-primary py-0 px-2' onclick='openScheduleModal({$att['employee_db_id']}, \"{$emp_full_name}\", \"{$att['attendance_date']}\", \"08:00\", \"17:00\", \"regular\")' title='Set Schedule'><i class='fas fa-clock me-1'></i>Set</button>";
+                                    }
 
                                     echo "
                                     <tr>
                                         <td>" . date('M d', strtotime($att['attendance_date'])) . "</td>
-                                        <td>{$att['employee_id']}</td><td><a href='#' data-bs-toggle='modal' data-bs-target='#employeeDetailsModal' onclick='loadEmployeeDetails({$att['employee_db_id']})'>{$att['first_name']} {$att['last_name']}</a></td>
-                                        <td><small>$sched</small></td>
-                                        <td>
-                                            <div class='text-success'><i class='fas fa-sign-in-alt'></i> $check_in</div>
-                                            <div class='text-danger'><i class='fas fa-sign-out-alt'></i> $check_out</div>
-                                        </td>
-                                        <td>$break</td>
-                                        <td><small>$late_display $ot_display</small></td>
-                                        <td><span class='status-badge $status_class'>" . ucfirst(str_replace('_', ' ', $att['status'])) . "</span></td>
-                                        <td>$location_link</td>
-                                        <td>$hr_status_display</td>
-                                        <td>$actions</td>
+                                        <td>{$att['employee_id']}</td>
+                                        <td><a href='#' data-bs-toggle='modal' data-bs-target='#employeeDetailsModal' onclick='loadEmployeeDetails({$att['employee_db_id']})'>{$att['first_name']} {$att['last_name']}</a></td>
+                                        <td>{$sched_display}</td>
+                                        <td>{$in_out_display}</td>
+                                        <td>{$break_display}</td>
+                                        <td><small>{$late_display} {$ot_display}</small></td>
+                                        <td>{$status_display}</td>
+                                        <td>{$location_link}</td>
+                                        <td>{$hr_status_display}</td>
+                                        <td>{$actions}</td>
                                     </tr>
                                     ";
                                 }
                             } else {
-                                echo "<tr><td colspan='11' class='text-center text-muted'>No attendance records for selected filters</td></tr>";
+                                echo "<tr><td colspan='11' class='text-center text-muted py-4'>No employee attendance records found for the selected filters.</td></tr>";
                             }
                             ?>
                         </tbody>
@@ -736,6 +932,131 @@ if ($emp_res) {
         </div>
     </div>
 
+    <!-- Set / Edit Schedule Modal -->
+    <div class="modal fade modern-form-modal" id="setScheduleModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-header-icon" style="background:#eff8ff; color:#175cd3;">
+                        <i class="fas fa-calendar-alt"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Employee Shift Schedule</h5>
+                        <p class="modal-subtitle">Define work hours. Late grace period is 15 minutes.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form method="POST">
+                    <div class="modal-body">
+                        <input type="hidden" name="save_schedule" value="1">
+                        <input type="hidden" name="employee_id" id="modalSchedEmpId">
+                        <input type="hidden" name="schedule_date" id="modalSchedDate">
+
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Employee</label>
+                            <input type="text" id="modalSchedEmpName" class="form-control fw-bold" readonly style="background:#f8f9fa;">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Schedule Date</label>
+                            <input type="text" id="modalSchedDateDisplay" class="form-control" readonly style="background:#f8f9fa;">
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label small fw-bold">Shift Start Time *</label>
+                                <input type="time" name="start_time" id="modalSchedStartTime" class="form-control fw-bold" required>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-bold">Shift End Time *</label>
+                                <input type="time" name="end_time" id="modalSchedEndTime" class="form-control fw-bold" required>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">Shift Type</label>
+                            <select name="shift_type" id="modalSchedShiftType" class="form-select">
+                                <option value="regular">Regular Shift</option>
+                                <option value="morning">Morning Shift</option>
+                                <option value="afternoon">Afternoon Shift</option>
+                                <option value="night">Night Shift</option>
+                                <option value="custom">Custom Shift</option>
+                            </select>
+                        </div>
+                        <div class="alert alert-light border small text-muted mb-0 mt-3">
+                            <i class="fas fa-info-circle text-primary me-1"></i>
+                            Employees clocking in after <strong>15 minutes</strong> from start time are marked as <strong>Late</strong>. If no check-in occurs before shift end, they are considered <strong>Absent</strong>.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn text-white fw-semibold" style="background:#b3261e;">Save Schedule</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Attendance Modal -->
+    <div class="modal fade modern-form-modal" id="addAttendanceModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-header-icon" style="background:#ecfdf3; color:#027a48;">
+                        <i class="fas fa-user-clock"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Manual Attendance Record</h5>
+                        <p class="modal-subtitle">Manually record or adjust attendance for an employee.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form method="POST">
+                    <div class="modal-body">
+                        <input type="hidden" name="add_attendance" value="1">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Select Employee *</label>
+                            <select name="employee_id" class="form-select" required>
+                                <option value="">-- Choose Employee --</option>
+                                <?php foreach ($employees_list as $emp): ?>
+                                    <option value="<?php echo $emp['id']; ?>"><?php echo htmlspecialchars($emp['first_name'] . ' ' . $emp['last_name'] . ' (' . $emp['employee_id'] . ')'); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Attendance Date *</label>
+                            <input type="date" name="attendance_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Status *</label>
+                            <select name="status" class="form-select" id="attendanceStatus" onchange="toggleTimeInputs()" required>
+                                <option value="present">Present</option>
+                                <option value="late">Late</option>
+                                <option value="absent">Absent</option>
+                                <option value="on_leave">On Leave</option>
+                            </select>
+                        </div>
+                        <div id="timeInputs" class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label small fw-bold">Time In</label>
+                                <input type="time" name="check_in_time" class="form-control" value="08:00">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-bold">Time Out</label>
+                                <input type="time" name="check_out_time" class="form-control" value="17:00">
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">Notes</label>
+                            <textarea name="notes" class="form-control" rows="2" placeholder="Manual entry reason or note..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn text-white fw-semibold" style="background:#b3261e;">Save Record</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Employee Details Modal -->
     <div class="modal fade modern-form-modal" id="employeeDetailsModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -764,6 +1085,23 @@ if ($emp_res) {
     <script src="../js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
+        function openScheduleModal(empId, empName, schedDate, startTime, endTime, shiftType) {
+            document.getElementById('modalSchedEmpId').value = empId;
+            document.getElementById('modalSchedDate').value = schedDate;
+            document.getElementById('modalSchedEmpName').value = empName;
+            document.getElementById('modalSchedDateDisplay').value = schedDate;
+            document.getElementById('modalSchedStartTime').value = startTime || '08:00';
+            document.getElementById('modalSchedEndTime').value = endTime || '17:00';
+            if (document.getElementById('modalSchedShiftType')) {
+                document.getElementById('modalSchedShiftType').value = shiftType || 'regular';
+            }
+            const modalEl = document.getElementById('setScheduleModal');
+            if (modalEl) {
+                const modal = new bootstrap.Modal(modalEl);
+                modal.show();
+            }
+        }
+
         function loadEmployeeDetails(employeeId) {
             $('#employeeDetailsContent').html('<div class="text-center p-4"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>');
             $.get('get_employee_details.php', { id: employeeId }, function(data) {
