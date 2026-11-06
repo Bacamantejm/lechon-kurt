@@ -658,6 +658,8 @@ if (mysqli_num_rows($result) > 0) {
             'store_name' => trim((string)($product['store_name'] ?? '')),
             'base_price' => $product['price'],
             'image' => $product['image'],
+            'all_images' => function_exists('getProductAllImages') ? getProductAllImages($product) : array_filter([$product['image'] ?? '']),
+            'additional_images' => !empty($product['additional_images']) ? (json_decode($product['additional_images'], true) ?: []) : [],
             'sizes' => $sizes,
             'weights' => $weights,
             'good_for' => $good_for,
@@ -1247,6 +1249,7 @@ body.dark-mode .storefront-change-shop-btn:hover {
         <div class="preview-body">
             <div class="preview-image">
                 <img id="previewProductImage" src="" alt="">
+                <div class="preview-thumbnails-strip" id="previewThumbnailsStrip" style="display:none; gap:8px; margin-top:10px; overflow-x:auto; padding-bottom:4px;"></div>
             </div>
             <div class="preview-details">
                 <h3 id="previewProductName"></h3>
@@ -1846,6 +1849,9 @@ if (!empty($_SESSION['user_id'])) {
                             <?php if (($item['total_sold'] ?? 0) > 0): ?>
                             <span class="top-seller-badge"><i class="fas fa-fire"></i> Top Seller</span>
                             <?php endif; ?>
+                            <?php if (!empty($item['all_images']) && count($item['all_images']) > 1): ?>
+                            <span class="top-seller-badge" style="right: auto; left: 8px; background: rgba(16,24,40,0.85);"><i class="fas fa-images"></i> <?php echo count($item['all_images']); ?></span>
+                            <?php endif; ?>
                         </div>
 
                         <!-- Card Favorite Heart Button (Positioned at top right of card, away from product image) -->
@@ -1920,6 +1926,7 @@ if (!empty($_SESSION['user_id'])) {
                                         data-name="<?php echo htmlspecialchars($item['name']); ?>"
                                         data-description="<?php echo htmlspecialchars($item['description']); ?>"
                                         data-image="<?php echo htmlspecialchars($imageSrc); ?>"
+                                        data-all-images='<?php echo htmlspecialchars(json_encode(!empty($item["all_images"]) ? $item["all_images"] : [$imageSrc]), ENT_QUOTES, "UTF-8"); ?>'
                                         data-sizes='<?php echo json_encode($item['sizes']); ?>'
                                         data-weights='<?php echo json_encode($item['weights']); ?>'
                                         data-good-for='<?php echo json_encode($item['good_for']); ?>'
@@ -2966,6 +2973,7 @@ document.addEventListener('click', function(e) {
             name: button.getAttribute('data-name'),
             description: button.getAttribute('data-description'),
             image: button.getAttribute('data-image'),
+            allImages: JSON.parse(button.getAttribute('data-all-images') || '[]'),
             sizes: JSON.parse(button.getAttribute('data-sizes')),
             weights: JSON.parse(button.getAttribute('data-weights')),
             goodFor: JSON.parse(button.getAttribute('data-good-for')),
@@ -2987,6 +2995,30 @@ document.addEventListener('click', function(e) {
         img.onerror = function() {
             this.src = `https://via.placeholder.com/400x300?text=${placeholderText}`;
         };
+
+        // Render thumbnails strip for multiple photos
+        const thumbStrip = document.getElementById('previewThumbnailsStrip');
+        if (thumbStrip) {
+            thumbStrip.innerHTML = '';
+            const allImgs = (product.allImages && product.allImages.length > 0) ? product.allImages : [resolvedImage];
+            if (allImgs.length > 1) {
+                thumbStrip.style.display = 'flex';
+                allImgs.forEach((imgSrc, idx) => {
+                    const thumb = document.createElement('img');
+                    thumb.src = imgSrc;
+                    thumb.alt = product.name;
+                    thumb.style.cssText = 'width:56px; height:56px; object-fit:cover; border-radius:8px; cursor:pointer; border:2.5px solid ' + (idx === 0 ? '#b3261e' : '#eaecf0') + '; transition:all 0.15s; flex-shrink:0;';
+                    thumb.addEventListener('click', function() {
+                        img.src = this.src;
+                        thumbStrip.querySelectorAll('img').forEach(t => t.style.borderColor = '#eaecf0');
+                        this.style.borderColor = '#b3261e';
+                    });
+                    thumbStrip.appendChild(thumb);
+                });
+            } else {
+                thumbStrip.style.display = 'none';
+            }
+        }
         
         // Set product info
         document.getElementById('previewProductName').textContent = product.name;

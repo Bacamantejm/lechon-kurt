@@ -635,6 +635,99 @@ if (!function_exists('ensureUserMobileSplashSchema')) {
     }
 }
 
+if (!function_exists('ensureProductMultipleImagesSchema')) {
+    function ensureProductMultipleImagesSchema($conn): void {
+        static $checked = false;
+        if ($checked || !$conn || !($conn instanceof mysqli)) return;
+        $checked = true;
+
+        try {
+            if (!function_exists('appTableExists') || appTableExists($conn, 'products')) {
+                $res = @mysqli_query($conn, "SHOW COLUMNS FROM `products` LIKE 'additional_images'");
+                if ($res && mysqli_num_rows($res) === 0) {
+                    @mysqli_query($conn, "ALTER TABLE `products` ADD COLUMN `additional_images` TEXT NULL DEFAULT NULL COMMENT 'JSON array of additional product images' AFTER `image`");
+                }
+                if ($res) {
+                    mysqli_free_result($res);
+                }
+            }
+        } catch (Throwable $e) {
+            // Non-blocking schema guard
+        }
+    }
+}
+
+if (!function_exists('getProductAllImages')) {
+    function getProductAllImages($product_row): array {
+        $images = [];
+        $primary = trim((string)($product_row['image'] ?? ''));
+        if ($primary !== '') {
+            $images[] = $primary;
+        }
+        $extra_raw = trim((string)($product_row['additional_images'] ?? ''));
+        if ($extra_raw !== '') {
+            $decoded = json_decode($extra_raw, true);
+            if (is_array($decoded)) {
+                foreach ($decoded as $img) {
+                    $img = trim((string)$img);
+                    if ($img !== '' && !in_array($img, $images, true)) {
+                        $images[] = $img;
+                    }
+                }
+            }
+        }
+        return $images;
+    }
+}
+
+if (!function_exists('handleProductMultiImageUpload')) {
+    function handleProductMultiImageUpload(array $files_array, string $upload_dir = 'uploads/products/'): array {
+        $uploaded_paths = [];
+        if (!isset($files_array['name'])) {
+            return $uploaded_paths;
+        }
+
+        $names = is_array($files_array['name']) ? $files_array['name'] : [$files_array['name']];
+        $tmp_names = is_array($files_array['tmp_name']) ? $files_array['tmp_name'] : [$files_array['tmp_name']];
+        $sizes = is_array($files_array['size']) ? $files_array['size'] : [$files_array['size']];
+        $errors = is_array($files_array['error']) ? $files_array['error'] : [$files_array['error']];
+
+        $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+        
+        $clean_upload_dir = trim($upload_dir, '/\\');
+        $base_root = dirname(__DIR__);
+        $target_dir = $base_root . '/' . $clean_upload_dir . '/';
+        if (!is_dir($target_dir)) {
+            @mkdir($target_dir, 0755, true);
+        }
+
+        foreach ($names as $idx => $orig_name) {
+            $err = $errors[$idx] ?? UPLOAD_ERR_NO_FILE;
+            if ($err !== UPLOAD_ERR_OK) {
+                continue;
+            }
+            $tmp = $tmp_names[$idx] ?? '';
+            $size = (int)($sizes[$idx] ?? 0);
+            if ($size <= 0 || $size > 8 * 1024 * 1024 || !is_uploaded_file($tmp)) {
+                continue;
+            }
+
+            $ext = strtolower(pathinfo((string)$orig_name, PATHINFO_EXTENSION));
+            if (!in_array($ext, $allowed, true)) {
+                continue;
+            }
+
+            $new_filename = time() . '_' . uniqid('pimg_') . '.' . $ext;
+            $dest = $target_dir . $new_filename;
+            if (move_uploaded_file($tmp, $dest)) {
+                $uploaded_paths[] = $clean_upload_dir . '/' . $new_filename;
+            }
+        }
+
+        return $uploaded_paths;
+    }
+}
+
 if (!function_exists('ensureOrdersTableSchema')) {
     function ensureOrdersTableSchema($conn) {
         static $checked = false;

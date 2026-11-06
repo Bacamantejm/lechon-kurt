@@ -35,6 +35,9 @@ $check_lead_time_column = mysqli_query($conn, "SHOW COLUMNS FROM products LIKE '
 if (mysqli_num_rows($check_lead_time_column) == 0) {
     mysqli_query($conn, "ALTER TABLE products ADD COLUMN lead_time_hours INT(11) NOT NULL DEFAULT 24 COMMENT 'Minimum hours notice required for pre-order'");
 }
+if (function_exists('ensureProductMultipleImagesSchema')) {
+    ensureProductMultipleImagesSchema($conn);
+}
 
 /**
  * Generate a unique product code for the products.product_id column.
@@ -95,47 +98,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_new_product'])) {
     if (empty($category)) $errors[] = "Category is required";
     if ($price <= 0) $errors[] = "Price must be greater than 0";
     
-    // Handle image upload
-    $image_path = '';
-    if (isset($_FILES['product_image']) && $_FILES['product_image']['size'] > 0) {
-        $file = $_FILES['product_image'];
-        $allowed = ['jpg', 'jpeg', 'png', 'gif'];
-        $filename = basename($file['name']);
-        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-        
-        if (!in_array($ext, $allowed)) {
-            $errors[] = "Only JPG, JPEG, PNG, and GIF files are allowed";
-        } elseif ($file['size'] > 5 * 1024 * 1024) {
-            $errors[] = "File size must not exceed 5MB";
-        } else {
-            $new_filename = time() . '_' . uniqid() . '.' . $ext;
-            $upload_dir = '../uploads/products/';
-            if (!is_dir($upload_dir)) {
-                mkdir($upload_dir, 0755, true);
-            }
-            if (move_uploaded_file($file['tmp_name'], $upload_dir . $new_filename)) {
-                $image_path = 'uploads/products/' . $new_filename;
-            } else {
-                $errors[] = "Failed to upload image";
-            }
+    // Handle image upload (supports multiple images and legacy single input)
+    $uploaded_images = [];
+    if (!empty($_FILES['product_images']['name'])) {
+        if (function_exists('handleProductMultiImageUpload')) {
+            $uploaded_images = handleProductMultiImageUpload($_FILES['product_images'], 'uploads/products/');
+        }
+    } elseif (!empty($_FILES['product_image']['name']) && (int)($_FILES['product_image']['size'] ?? 0) > 0) {
+        if (function_exists('handleProductMultiImageUpload')) {
+            $uploaded_images = handleProductMultiImageUpload($_FILES['product_image'], 'uploads/products/');
         }
     }
-    
+
+    $image_path = $uploaded_images[0] ?? '';
+    $additional_images = array_slice($uploaded_images, 1);
+    $additional_images_json = !empty($additional_images) ? json_encode(array_values($additional_images)) : null;
+
     if (empty($errors)) {
         $product_code = generateProductCode($conn);
 
-        if (!empty($image_path)) {
+        if (!empty($image_path) || $additional_images_json !== null) {
             if ($seller_scope_id !== null) {
-                $insert_query = "INSERT INTO products (seller_id, product_id, name, category, price, description, weight_info, pax_info, lead_time_hours, image, is_active, created_at) 
+                $insert_query = "INSERT INTO products (seller_id, product_id, name, category, price, description, weight_info, pax_info, lead_time_hours, image, additional_images, is_active, created_at) 
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())";
+                $stmt = mysqli_prepare($conn, $insert_query);
+                mysqli_stmt_bind_param($stmt, "isssdsssiss", $seller_scope_id, $product_code, $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours, $image_path, $additional_images_json);
+            } else {
+                $insert_query = "INSERT INTO products (product_id, name, category, price, description, weight_info, pax_info, lead_time_hours, image, additional_images, is_active, created_at) 
                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())";
                 $stmt = mysqli_prepare($conn, $insert_query);
-                mysqli_stmt_bind_param($stmt, "isssdsssis", $seller_scope_id, $product_code, $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours, $image_path);
-            } else {
-                // Query with image
-                $insert_query = "INSERT INTO products (product_id, name, category, price, description, weight_info, pax_info, lead_time_hours, image, is_active, created_at) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())";
-                $stmt = mysqli_prepare($conn, $insert_query);
-                mysqli_stmt_bind_param($stmt, "sssdsssis", $product_code, $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours, $image_path);
+                mysqli_stmt_bind_param($stmt, "sssdsssiss", $product_code, $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours, $image_path, $additional_images_json);
             }
         } else {
             if ($seller_scope_id !== null) {
@@ -182,40 +174,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_product'])) {
     if (empty($category)) $errors[] = "Category is required";
     if ($price <= 0) $errors[] = "Price must be greater than 0";
     
-    // Handle image upload
-    $image_path = '';
-    if (isset($_FILES['product_image']) && $_FILES['product_image']['size'] > 0) {
-        $file = $_FILES['product_image'];
-        $allowed = ['jpg', 'jpeg', 'png', 'gif'];
-        $filename = basename($file['name']);
-        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-        
-        if (!in_array($ext, $allowed)) {
-            $errors[] = "Only JPG, JPEG, PNG, and GIF files are allowed";
-        } elseif ($file['size'] > 5 * 1024 * 1024) {
-            $errors[] = "File size must not exceed 5MB";
-        } else {
-            $new_filename = time() . '_' . uniqid() . '.' . $ext;
-            $upload_dir = '../uploads/products/';
-            if (!is_dir($upload_dir)) {
-                mkdir($upload_dir, 0755, true);
-            }
-            if (move_uploaded_file($file['tmp_name'], $upload_dir . $new_filename)) {
-                $image_path = 'uploads/products/' . $new_filename;
-            } else {
-                $errors[] = "Failed to upload image";
-            }
+    // Handle image upload (supports multiple images and legacy single input)
+    $uploaded_images = [];
+    if (!empty($_FILES['product_images']['name'])) {
+        if (function_exists('handleProductMultiImageUpload')) {
+            $uploaded_images = handleProductMultiImageUpload($_FILES['product_images'], 'uploads/products/');
+        }
+    } elseif (!empty($_FILES['product_image']['name']) && (int)($_FILES['product_image']['size'] ?? 0) > 0) {
+        if (function_exists('handleProductMultiImageUpload')) {
+            $uploaded_images = handleProductMultiImageUpload($_FILES['product_image'], 'uploads/products/');
         }
     }
-    
+
     if (empty($errors)) {
-        if (!empty($image_path)) {
-            $update_query = "UPDATE products SET name=?, category=?, price=?, description=?, weight_info=?, pax_info=?, lead_time_hours=?, image=? WHERE id=?" . ($seller_scope_id !== null ? " AND seller_id=?" : "");
+        if (!empty($uploaded_images)) {
+            // Append newly uploaded images to existing ones
+            $curr_q = mysqli_query($conn, "SELECT image, additional_images FROM products WHERE id = " . intval($id));
+            $curr_row = $curr_q ? mysqli_fetch_assoc($curr_q) : null;
+            if ($curr_q) mysqli_free_result($curr_q);
+
+            $existing_imgs = $curr_row && function_exists('getProductAllImages') ? getProductAllImages($curr_row) : array_filter([$curr_row['image'] ?? '']);
+            $merged_imgs = array_merge($existing_imgs, $uploaded_images);
+            $new_primary = $merged_imgs[0] ?? '';
+            $new_additional = array_slice($merged_imgs, 1);
+            $new_additional_json = !empty($new_additional) ? json_encode(array_values($new_additional)) : null;
+
+            $update_query = "UPDATE products SET name=?, category=?, price=?, description=?, weight_info=?, pax_info=?, lead_time_hours=?, image=?, additional_images=? WHERE id=?" . ($seller_scope_id !== null ? " AND seller_id=?" : "");
             $stmt = mysqli_prepare($conn, $update_query);
             if ($seller_scope_id !== null) {
-                mysqli_stmt_bind_param($stmt, "ssdsssisii", $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours, $image_path, $id, $seller_scope_id);
+                mysqli_stmt_bind_param($stmt, "ssdsssissii", $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours, $new_primary, $new_additional_json, $id, $seller_scope_id);
             } else {
-                mysqli_stmt_bind_param($stmt, "ssdsssisi", $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours, $image_path, $id);
+                mysqli_stmt_bind_param($stmt, "ssdsssissi", $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours, $new_primary, $new_additional_json, $id);
             }
         } else {
             $update_query = "UPDATE products SET name=?, category=?, price=?, description=?, weight_info=?, pax_info=?, lead_time_hours=? WHERE id=?" . ($seller_scope_id !== null ? " AND seller_id=?" : "");
@@ -1113,7 +1102,7 @@ if (empty($product_decisions)) {
                                         <label for="product_image" class="form-label-modern">Product Image</label>
                                         <div class="form-input-wrap">
                                             <i class="fas fa-image form-input-icon"></i>
-                                            <input type="file" class="form-control" id="product_image" name="product_image" accept="image/*">
+                                            <input type="file" class="form-control" id="product_image" name="product_images[]" multiple accept="image/*">
                                         </div>
                                         <div class="form-helper-text"><i class="fas fa-info-circle"></i> JPG, PNG, GIF (Max 5MB)</div>
                                     </div>
@@ -1265,7 +1254,7 @@ if (empty($product_decisions)) {
                                         <label for="edit_product_image" class="form-label-modern">Product Image</label>
                                         <div class="form-input-wrap">
                                             <i class="fas fa-image form-input-icon"></i>
-                                            <input type="file" class="form-control" id="edit_product_image" name="product_image" accept="image/*">
+                                            <input type="file" class="form-control" id="edit_product_image" name="product_images[]" multiple accept="image/*">
                                         </div>
                                         <div class="form-helper-text"><i class="fas fa-info-circle"></i> Leave empty to keep current image</div>
                                     </div>
