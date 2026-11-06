@@ -3923,30 +3923,48 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const emailVal = emailInput ? emailInput.value.trim() : '';
             if (!emailVal) {
-                if (window.showPopupAlert) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Missing Email',
+                        text: 'Please enter your email address.',
+                        confirmButtonText: 'OK',
+                        confirmButtonColor: '#b3261e'
+                    });
+                } else if (window.showPopupAlert) {
                     showPopupAlert('Please enter your email address.', 'alert');
-                } else if (typeof Toast !== 'undefined') {
-                    Toast.fire({ icon: 'warning', title: 'Please enter your email address' });
                 }
                 if (emailInput) emailInput.focus();
                 return;
             }
 
             if (!isValidEmail(emailVal)) {
-                if (window.showPopupAlert) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Invalid Email',
+                        text: 'Please enter a valid email address.',
+                        confirmButtonText: 'OK',
+                        confirmButtonColor: '#b3261e'
+                    });
+                } else if (window.showPopupAlert) {
                     showPopupAlert('Please enter a valid email address.', 'alert');
-                } else if (typeof Toast !== 'undefined') {
-                    Toast.fire({ icon: 'warning', title: 'Please enter a valid email address' });
                 }
                 if (emailInput) emailInput.focus();
                 return;
             }
 
             if (!passInput || !passInput.value) {
-                if (window.showPopupAlert) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Missing Password',
+                        text: 'Please enter your password.',
+                        confirmButtonText: 'OK',
+                        confirmButtonColor: '#b3261e'
+                    });
+                } else if (window.showPopupAlert) {
                     showPopupAlert('Please enter your password.', 'alert');
-                } else if (typeof Toast !== 'undefined') {
-                    Toast.fire({ icon: 'warning', title: 'Please enter your password' });
                 }
                 if (passInput) passInput.focus();
                 return;
@@ -3974,35 +3992,48 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
                 if (data.success) {
                     const userName = data.full_name || 'Customer';
-                    if (window.showPopupAlert) {
-                        showPopupAlert('Welcome back, ' + userName + '! Redirecting...', 'success', 3000);
-                    } else if (typeof Toast !== 'undefined') {
-                        Toast.fire({
-                            icon: 'success',
-                            title: 'Welcome back, ' + userName + '! Redirecting...'
-                        });
-                    }
+                    const redirectUrl = data.redirect || 'index.php';
+
                     if (loginSubmitBtn) {
+                        loginSubmitBtn.disabled = true;
                         loginSubmitBtn.innerHTML = '<i class="fas fa-check-circle"></i> <span>Success! Redirecting...</span>';
                         loginSubmitBtn.style.background = '#027a48';
                     }
-                    setTimeout(() => {
-                        window.location.href = data.redirect || 'index.php';
-                    }, 600);
+
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Login Successful',
+                            text: 'Welcome back, ' + userName + '! Redirecting to your dashboard...',
+                            confirmButtonText: 'Continue',
+                            confirmButtonColor: '#b3261e',
+                            timer: 1800,
+                            timerProgressBar: true,
+                            allowOutsideClick: false,
+                            willClose: () => {
+                                window.location.href = redirectUrl;
+                            }
+                        }).then(() => {
+                            window.location.href = redirectUrl;
+                        });
+                    } else {
+                        window.location.href = redirectUrl;
+                    }
                 } else {
                     if (loginSubmitBtn) {
                         loginSubmitBtn.disabled = false;
                         loginSubmitBtn.innerHTML = origBtnHtml;
                     }
-                    if (window.showPopupAlert) {
-                        showPopupAlert(data.message || 'Invalid email or password. Please try again.', 'error', 4500);
-                    } else {
+                    if (typeof Swal !== 'undefined') {
                         Swal.fire({
                             icon: 'error',
                             title: 'Sign In Failed',
-                            text: data.message || 'Invalid email or password. Please try again.',
+                            text: data.message || 'Invalid email/phone or password',
+                            confirmButtonText: 'OK',
                             confirmButtonColor: '#b3261e'
                         });
+                    } else if (window.showPopupAlert) {
+                        showPopupAlert(data.message || 'Invalid email/phone or password', 'error', 4500);
                     }
                 }
             } catch (err) {
@@ -4011,15 +4042,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     loginSubmitBtn.disabled = false;
                     loginSubmitBtn.innerHTML = origBtnHtml;
                 }
-                if (window.showPopupAlert) {
-                    showPopupAlert('Unable to connect to login server. Please try again.', 'error', 4500);
-                } else {
+                if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'error',
                         title: 'Sign In Error',
                         text: 'Unable to connect to login server. Please try again.',
+                        confirmButtonText: 'OK',
                         confirmButtonColor: '#b3261e'
                     });
+                } else if (window.showPopupAlert) {
+                    showPopupAlert('Unable to connect to login server. Please try again.', 'error', 4500);
                 }
             }
         });
