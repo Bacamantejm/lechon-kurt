@@ -69,6 +69,14 @@ function shopsGetCityDefaultCoords(string $city_or_address): array {
 
 // Fetch real store branches from store_locations table
 $shops = [];
+$shop_branch_keys = [];
+$shop_owner_city_keys = [];
+
+function shopsNormalizeIdentityPart(string $value): string
+{
+    $value = str_replace(['ñ', 'Ñ'], ['n', 'N'], strtolower(trim($value)));
+    return preg_replace('/[^a-z0-9]+/', '', $value);
+}
 
 $shops_banner_join = function_exists('userAccountControlColumnExists') && userAccountControlColumnExists($conn, 'business_banner') ? 'u.business_banner, ' : '';
 $branch_sql = "SELECT sl.store_id, sl.owner_user_id, sl.store_name, sl.address, sl.city, sl.province, sl.phone, sl.email, sl.opening_hours, sl.opening_time, sl.closing_time, sl.operating_days, sl.availability_mode, sl.manual_status, sl.latitude, sl.longitude, sl.is_active,
@@ -81,6 +89,7 @@ $branch_res = @mysqli_query($conn, $branch_sql);
 if ($branch_res) {
     while ($row = mysqli_fetch_assoc($branch_res)) {
         $store_id = (int)$row['store_id'];
+        $owner_id = (int)($row['owner_user_id'] ?? 0);
         $availability = sahResolveStoreAvailability($row);
         
         $min_price_sql = "SELECT MIN(price) AS min_price FROM products WHERE is_archived = 0 AND is_active = 1" . ($row['owner_user_id'] > 0 ? " AND seller_id = " . (int)$row['owner_user_id'] : "");
@@ -90,6 +99,15 @@ if ($branch_res) {
 
         $city_label = !empty($row['city']) ? trim($row['city']) : 'Branch Store';
         $location_display = !empty($row['address']) ? trim($row['address']) : $city_label;
+        $branch_identity = ($owner_id > 0 ? (string)$owner_id : shopsNormalizeIdentityPart((string)$row['store_name']))
+            . '|' . shopsNormalizeIdentityPart($city_label);
+        if (isset($shop_branch_keys[$branch_identity])) {
+            continue;
+        }
+        $shop_branch_keys[$branch_identity] = true;
+        if ($owner_id > 0) {
+            $shop_owner_city_keys[$owner_id . '|' . shopsNormalizeIdentityPart($city_label)] = true;
+        }
 
         $lat = isset($row['latitude']) && $row['latitude'] !== null && (float)$row['latitude'] != 0 ? (float)$row['latitude'] : null;
         $lng = isset($row['longitude']) && $row['longitude'] !== null && (float)$row['longitude'] != 0 ? (float)$row['longitude'] : null;
@@ -151,6 +169,9 @@ if ($seller_res) {
         $seller_id = (int)$row['id'];
         $name = trim((string)$row['business_name']) !== '' ? trim((string)$row['business_name']) : trim((string)$row['full_name']) . ' Store';
         $city = !empty($row['city_name']) ? trim($row['city_name']) : (!empty($row['address']) ? trim($row['address']) : 'Partner Store');
+        if (isset($shop_owner_city_keys[$seller_id . '|' . shopsNormalizeIdentityPart($city)])) {
+            continue;
+        }
 
         $min_price_sql = "SELECT MIN(price) AS min_price FROM products WHERE seller_id = " . $seller_id . " AND is_archived = 0 AND is_active = 1";
         $min_res = @mysqli_query($conn, $min_price_sql);
