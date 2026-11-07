@@ -70,7 +70,7 @@ function shopsGetCityDefaultCoords(string $city_or_address): array {
 // Fetch real store branches from store_locations table
 $shops = [];
 $shop_branch_keys = [];
-$shop_owner_city_keys = [];
+$shop_owner_keys = [];
 
 function shopsNormalizeIdentityPart(string $value): string
 {
@@ -99,14 +99,15 @@ if ($branch_res) {
 
         $city_label = !empty($row['city']) ? trim($row['city']) : 'Branch Store';
         $location_display = !empty($row['address']) ? trim($row['address']) : $city_label;
-        $branch_identity = ($owner_id > 0 ? (string)$owner_id : shopsNormalizeIdentityPart((string)$row['store_name']))
-            . '|' . shopsNormalizeIdentityPart($city_label);
+        $branch_identity = $owner_id > 0
+            ? 'owner-' . $owner_id
+            : 'name-' . shopsNormalizeIdentityPart((string)$row['store_name']);
         if (isset($shop_branch_keys[$branch_identity])) {
             continue;
         }
         $shop_branch_keys[$branch_identity] = true;
         if ($owner_id > 0) {
-            $shop_owner_city_keys[$owner_id . '|' . shopsNormalizeIdentityPart($city_label)] = true;
+            $shop_owner_keys[$owner_id] = true;
         }
 
         $lat = isset($row['latitude']) && $row['latitude'] !== null && (float)$row['latitude'] != 0 ? (float)$row['latitude'] : null;
@@ -169,7 +170,7 @@ if ($seller_res) {
         $seller_id = (int)$row['id'];
         $name = trim((string)$row['business_name']) !== '' ? trim((string)$row['business_name']) : trim((string)$row['full_name']) . ' Store';
         $city = !empty($row['city_name']) ? trim($row['city_name']) : (!empty($row['address']) ? trim($row['address']) : 'Partner Store');
-        if (isset($shop_owner_city_keys[$seller_id . '|' . shopsNormalizeIdentityPart($city)])) {
+        if (isset($shop_owner_keys[$seller_id])) {
             continue;
         }
 
