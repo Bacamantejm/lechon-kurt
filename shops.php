@@ -1456,6 +1456,18 @@ document.addEventListener('DOMContentLoaded', function () {
     function renderStoreMapMarkers() {
         if (!leafletMap || typeof L === 'undefined') return;
 
+        const escapePopupText = function (value) {
+            return String(value || '').replace(/[&<>"']/g, function (character) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                }[character];
+            });
+        };
+
         // Clear existing store markers
         storeMarkers.forEach(m => leafletMap.removeLayer(m));
         storeMarkers.length = 0;
@@ -1469,9 +1481,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const storeLat = parseFloat(card.dataset.lat || '');
             const storeLng = parseFloat(card.dataset.lng || '');
             const distance = parseFloat(card.dataset.distance || '999');
-            const storeTitle = card.querySelector('h3')?.textContent.trim() || 'Lechon Store';
+            const storeTitle = card.querySelector('h3')?.textContent.trim() || card.dataset.shopName || 'Lechon Store';
             const storeType = card.querySelector('.market-type-pill')?.textContent.trim() || 'Store';
             const storeRating = card.dataset.rating || '4.9';
+            const storeCity = card.dataset.city || card.dataset.location || 'Cavite';
             const menuLink = card.getAttribute('href') || 'menu.php';
 
             if (!Number.isFinite(storeLat) || !Number.isFinite(storeLng) || storeLat === 0 || storeLng === 0) {
@@ -1499,16 +1512,20 @@ document.addEventListener('DOMContentLoaded', function () {
             const marker = L.marker([storeLat, storeLng], { icon: storeIcon }).addTo(leafletMap);
             marker.bindPopup(`
                 <div style="font-family:'Outfit',sans-serif; padding:4px; min-width:170px;">
-                    <span style="display:inline-block; font-size:10px; font-weight:800; color:#b3261e; background:#fff1f0; padding:2px 6px; border-radius:4px; margin-bottom:4px;">${storeType}</span>
-                    <strong style="font-size:14px; color:#171922; display:block; line-height:1.3;">${storeTitle}</strong>
+                    <span style="display:inline-block; font-size:10px; font-weight:800; color:#b3261e; background:#fff1f0; padding:2px 6px; border-radius:4px; margin-bottom:4px;">${escapePopupText(storeType)}</span>
+                    <strong style="font-size:14px; color:#171922; display:block; line-height:1.3;">${escapePopupText(storeTitle)}</strong>
                     <div style="font-size:12px; color:#64748b; margin:4px 0 8px 0;">
-                        <i class="fas fa-location-arrow" style="color:#b3261e;"></i> ${distance < 900 ? (distance.toFixed(1) + ' km away') : (card.dataset.city || 'Cavite')} &bull; ⭐ ${storeRating}
+                        <i class="fas fa-location-arrow" style="color:#b3261e;"></i> ${distance < 900 ? (distance.toFixed(1) + ' km away') : escapePopupText(storeCity)} &bull; Rating ${escapePopupText(storeRating)}
                     </div>
-                    <a href="${menuLink}" style="background:#b3261e; color:#ffffff; padding:6px 12px; border-radius:8px; font-size:12px; font-weight:700; text-decoration:none; display:inline-block;">View Store &amp; Order</a>
+                    <a href="${escapePopupText(menuLink)}" style="background:#b3261e; color:#ffffff; padding:6px 12px; border-radius:8px; font-size:12px; font-weight:700; text-decoration:none; display:inline-block;">View Store &amp; Order</a>
                 </div>
             `);
 
-            marker.on('click', function() {
+            marker.on('click', function(event) {
+                if (event && event.originalEvent) {
+                    L.DomEvent.stopPropagation(event.originalEvent);
+                }
+                marker.openPopup();
                 card.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 card.style.outline = '3px solid #b3261e';
                 card.style.boxShadow = '0 0 20px rgba(179,38,30,0.35)';
