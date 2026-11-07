@@ -448,10 +448,17 @@ if (!empty($b_owner_ids_to_fetch) && isset($conn) && $conn instanceof mysqli) {
 }
 
 // 1. Physical branches
+$directory_partner_owners = [];
 foreach ($store_locations as $loc) {
     $b_id = (int)$loc['id'];
     $b_owner = (int)($loc['owner_user_id'] ?? 1);
     $is_partner = ($b_owner > 0 && !in_array($b_owner, $official_owner_ids, true));
+    if ($is_partner && isset($directory_partner_owners[$b_owner])) {
+        continue;
+    }
+    if ($is_partner) {
+        $directory_partner_owners[$b_owner] = true;
+    }
     $b_owner_custom_img = !empty($menu_branch_owner_media[$b_owner]) ? $menu_branch_owner_media[$b_owner] : '';
     $all_menu_shops[] = [
         'id' => $b_id,
@@ -9454,4 +9461,3 @@ body.dark-mode .menu-banner-choose-btn {
 </script>
 
 <?php include 'includes/footer.php'; ?>
-
