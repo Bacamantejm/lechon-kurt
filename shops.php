@@ -902,6 +902,14 @@ body.dark-mode .leaflet-popup-content div,
 body.dark-mode .leaflet-popup-content span {
     color: #cbd5e1 !important;
 }
+
+.shops-map-banner .leaflet-popup-pane {
+    z-index: 1000 !important;
+}
+
+.shops-map-banner .leaflet-popup {
+    z-index: 1001 !important;
+}
 </style>
 
 <div class="market-home">
@@ -1519,13 +1527,14 @@ document.addEventListener('DOMContentLoaded', function () {
                     </div>
                     <a href="${escapePopupText(menuLink)}" style="background:#b3261e; color:#ffffff; padding:6px 12px; border-radius:8px; font-size:12px; font-weight:700; text-decoration:none; display:inline-block;">View Store &amp; Order</a>
                 </div>
-            `);
+            `, {
+                autoPan: true,
+                closeButton: true,
+                maxWidth: 280,
+                className: 'shop-location-popup'
+            });
 
-            marker.on('click', function(event) {
-                if (event && event.originalEvent) {
-                    L.DomEvent.stopPropagation(event.originalEvent);
-                }
-                marker.openPopup();
+            marker.on('popupopen', function() {
                 card.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 card.style.outline = '3px solid #b3261e';
                 card.style.boxShadow = '0 0 20px rgba(179,38,30,0.35)';
