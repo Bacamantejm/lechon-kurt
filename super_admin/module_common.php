@@ -388,7 +388,7 @@ function saRenderModuleHeader($page_title, $page_heading, $admin_info) {
                             <div class="sa-dropdown-panel sa-alert-dropdown" id="saAlertDropdown">
                                 <div class="sa-dropdown-head">
                                     <span>Security & Shop Alerts</span>
-                                    <a href="../super_admin/reports_complaints.php" class="sa-dropdown-head-link">View All</a>
+                                    <a href="../admin/alerts.php" class="sa-dropdown-head-link">View All</a>
                                 </div>
                                 <div class="sa-filter-bar" id="saAlertFilters">
                                     <button type="button" class="sa-filter-pill active" data-filter="all">All</button>
@@ -412,7 +412,10 @@ function saRenderModuleHeader($page_title, $page_heading, $admin_info) {
                             <div class="sa-dropdown-panel sa-notification-dropdown" id="saNotificationDropdown">
                                 <div class="sa-dropdown-head">
                                     <span>Notifications</span>
-                                    <button type="button" class="sa-dropdown-head-link" id="saMarkAllNotifsRead">Mark all read</button>
+                                    <span>
+                                        <a href="../super_admin/notifications.php" class="sa-dropdown-head-link me-2">View All</a>
+                                        <button type="button" class="sa-dropdown-head-link" id="saMarkAllNotifsRead">Mark all read</button>
+                                    </span>
                                 </div>
                                 <div class="sa-dropdown-list" id="saNotificationList"><div class="p-3 text-muted">Loading notifications...</div></div>
                                 <div class="sa-dropdown-pages" id="saNotificationPages" hidden>
@@ -495,7 +498,7 @@ function saRenderModuleFooter($extra_scripts = '') {
                 pageItems.forEach(item => {
                     const el = document.createElement('a');
                     el.className = 'sa-item';
-                    el.href = item.link || '#';
+                    el.href = item.link || 'alerts.php?alert=' + encodeURIComponent(item.id || '');
                     const tagClass = item.category ? item.category : 'default';
                     el.innerHTML = `
                         <div class="sa-item-header">
@@ -608,7 +611,7 @@ function saRenderModuleFooter($extra_scripts = '') {
 
                     const item = document.createElement('a');
                     item.className = `sa-item ${isUnread ? 'unread' : ''}`;
-                    item.href = notification.link || '#';
+                    item.href = notification.link || 'notifications.php?id=' + encodeURIComponent(notification.id || '');
                     item.innerHTML = `
                         <div class="sa-item-header">
                             <span class="sa-tag ${statusTag}">${escapeHtml(statusTag.toUpperCase())}</span>
