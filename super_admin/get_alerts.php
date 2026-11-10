@@ -13,8 +13,11 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/auth.php';
 
+mysqli_report(MYSQLI_REPORT_OFF);
+
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+ini_set('display_errors', '0');
 
 // Ensure user is authenticated
 if (!isset($_SESSION['user_id'])) {
@@ -43,7 +46,7 @@ function saCheckTableExists($conn, string $tableName): bool {
     if ($tableName === '' || !$conn) return false;
     if (array_key_exists($tableName, $cache)) return $cache[$tableName];
     $safeTable = mysqli_real_escape_string($conn, $tableName);
-    $res = mysqli_query($conn, "SHOW TABLES LIKE '{$safeTable}'");
+    $res = @mysqli_query($conn, "SHOW TABLES LIKE '{$safeTable}'");
     $exists = ($res && mysqli_num_rows($res) > 0);
     if ($res instanceof mysqli_result) mysqli_free_result($res);
     return $cache[$tableName] = $exists;
@@ -56,14 +59,14 @@ function saCheckColumnExists($conn, string $tableName, string $columnName): bool
     if (!saCheckTableExists($conn, $tableName)) return $cache[$key] = false;
     $safeTable = mysqli_real_escape_string($conn, $tableName);
     $safeCol = mysqli_real_escape_string($conn, $columnName);
-    $res = mysqli_query($conn, "SHOW COLUMNS FROM `{$safeTable}` LIKE '{$safeCol}'");
+    $res = @mysqli_query($conn, "SHOW COLUMNS FROM `{$safeTable}` LIKE '{$safeCol}'");
     $exists = ($res && mysqli_num_rows($res) > 0);
     if ($res instanceof mysqli_result) mysqli_free_result($res);
     return $cache[$key] = $exists;
 }
 
 function saFetchRows($conn, string $query): array {
-    $result = mysqli_query($conn, $query);
+    $result = @mysqli_query($conn, $query);
     if (!$result) {
         error_log('Super admin alerts query failed: ' . mysqli_error($conn));
         return [];
@@ -226,7 +229,7 @@ function fetchSuperAdminAlerts($conn): array {
                 'status' => (string)$row['status'],
                 'created_at' => (string)($row['created_at'] ?? ''),
                 'time_ago' => saTimeElapsedString($row['created_at'] ?? null),
-                'link' => '../admin/alerts.php?alert=' . urlencode('complaint_' . $row['id'])
+                'link' => '../super_admin/reports_complaints.php?conversation_id=' . urlencode((string)$row['id'])
             ];
         }
     }
