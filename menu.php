@@ -3107,14 +3107,20 @@ document.addEventListener('click', function(e) {
                 }
                 
                 // Add weight and pax info to button
-                const weightInfo = product.weights && product.weights[size] ? ` | ${product.weights[size]}` : '';
-                const paxInfo = product.goodFor && product.goodFor[size] ? ` | ${product.goodFor[size]}` : '';
-                const infoText = (weightInfo && weightInfo !== (' | ' + size) ? weightInfo : '') + (paxInfo ? paxInfo : '');
+                const cleanWeight = (product.weights && product.weights[size] && String(product.weights[size]).trim() !== String(size).trim()) ? String(product.weights[size]).trim() : '';
+                let cleanPax = (product.goodFor && product.goodFor[size]) ? String(product.goodFor[size]).trim() : '';
+                if (cleanPax && !/pax/i.test(cleanPax)) {
+                    cleanPax = cleanPax + ' pax';
+                }
+                const infoParts = [];
+                if (cleanWeight) infoParts.push(cleanWeight);
+                if (cleanPax) infoParts.push(cleanPax);
+                const infoText = infoParts.join(' • ');
                 
                 button.innerHTML = `
-                    <span class="size-name" style="font-weight: 700;">${size}</span>
-                    <span class="size-price" style="font-weight: 700; color: #b3261e; margin-left: 6px;">₱${optPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                    ${infoText ? `<span class="size-info" style="font-size: 0.75rem; color: #667085; display: block; margin-top: 2px;">${infoText}</span>` : ''}
+                    <span class="size-name">${size}</span>
+                    <span class="size-price">₱${optPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    ${infoText ? `<span class="size-info">${infoText}</span>` : ''}
                 `;
                 
                 button.addEventListener('click', function() {
@@ -4651,33 +4657,92 @@ document.addEventListener('click', function(e) {
 }
 
 .size-preview-btn {
-    padding: 12px 20px;
+    padding: 10px 16px;
     background-color: white;
-    border: 1px solid #ddd;
+    border: 1.5px solid #d0d5dd;
     border-radius: 12px;
-    color: var(--text-main);
+    color: #101828;
     cursor: pointer;
-    transition: var(--transition);
+    transition: all 0.18s ease-in-out;
     font-weight: 500;
     text-align: left;
     margin-right: 10px;
     margin-bottom: 10px;
     display: inline-flex;
     flex-direction: column;
+    min-width: 96px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
 }
 
-.size-preview-btn:hover,
-.size-preview-btn.active {
-    background-color: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
-    box-shadow: 0 4px 10px rgba(179, 38, 30, 0.2);
+.size-preview-btn .size-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #101828;
+    line-height: 1.25;
+    transition: color 0.15s ease;
+}
+
+.size-preview-btn .size-price {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #b3261e;
+    margin-top: 3px;
+    line-height: 1.2;
+    transition: color 0.15s ease;
 }
 
 .size-preview-btn .size-info {
-    font-size: 0.85rem;
-    opacity: 0.8;
-    margin-top: 5px;
+    font-size: 0.75rem;
+    color: #667085;
+    margin-top: 3px;
+    line-height: 1.2;
+    transition: color 0.15s ease;
+}
+
+.size-preview-btn:hover:not(.active) {
+    background-color: #fff1f0;
+    border-color: #b3261e;
+    box-shadow: 0 2px 8px rgba(179, 38, 30, 0.12);
+    transform: translateY(-1px);
+}
+
+.size-preview-btn:hover:not(.active) .size-name,
+.size-preview-btn:hover:not(.active) .size-price {
+    color: #b3261e;
+}
+
+.size-preview-btn:hover:not(.active) .size-info {
+    color: #475467;
+}
+
+.size-preview-btn.active {
+    background-color: #b3261e;
+    color: #ffffff;
+    border-color: #b3261e;
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.28);
+}
+
+.size-preview-btn.active .size-name,
+.size-preview-btn.active .size-price {
+    color: #ffffff !important;
+}
+
+.size-preview-btn.active .size-info {
+    color: rgba(255, 255, 255, 0.92) !important;
+}
+
+.size-preview-btn.active:hover {
+    background-color: #981b15;
+    border-color: #981b15;
+}
+
+.size-preview-btn.active:hover .size-name,
+.size-preview-btn.active:hover .size-price {
+    color: #ffffff !important;
+}
+
+.size-preview-btn.active:hover .size-info {
+    color: rgba(255, 255, 255, 0.95) !important;
 }
 
 .addons-list {
@@ -7786,14 +7851,31 @@ body.dark-mode .quantity-selection label {
 }
 
 body.dark-mode .size-preview-btn {
-    background-color: #111827 !important;
+    background-color: #1e293b !important;
     border-color: #334155 !important;
-    color: #cbd5e1 !important;
+    color: #f8fafc !important;
 }
 
-body.dark-mode .size-preview-btn:hover {
+body.dark-mode .size-preview-btn .size-name {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .size-preview-btn .size-price {
+    color: #f87171 !important;
+}
+
+body.dark-mode .size-preview-btn .size-info {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .size-preview-btn:hover:not(.active) {
+    background-color: #334155 !important;
     border-color: #b3261e !important;
-    color: #ffffff !important;
+}
+
+body.dark-mode .size-preview-btn:hover:not(.active) .size-name,
+body.dark-mode .size-preview-btn:hover:not(.active) .size-price {
+    color: #fca5a5 !important;
 }
 
 body.dark-mode .size-preview-btn.active {
@@ -7803,9 +7885,13 @@ body.dark-mode .size-preview-btn.active {
     box-shadow: 0 4px 14px rgba(179, 38, 30, 0.4) !important;
 }
 
-body.dark-mode .size-preview-btn .size-info {
-    color: #cbd5e1 !important;
-    opacity: 0.9 !important;
+body.dark-mode .size-preview-btn.active .size-name,
+body.dark-mode .size-preview-btn.active .size-price {
+    color: #ffffff !important;
+}
+
+body.dark-mode .size-preview-btn.active .size-info {
+    color: rgba(255, 255, 255, 0.9) !important;
 }
 
 body.dark-mode .addon-checkbox {
@@ -9015,11 +9101,19 @@ body.dark-mode .fp-toggle-pill.active {
 }
 
 .size-preview-btn {
-    background: rgba(255, 255, 255, 0.78) !important;
-    backdrop-filter: blur(10px) !important;
-    -webkit-backdrop-filter: blur(10px) !important;
-    border: 1.5px solid rgba(226, 232, 240, 0.9) !important;
+    background: #ffffff !important;
+    border: 1.5px solid rgba(208, 213, 221, 0.9) !important;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.size-preview-btn:hover:not(.active) {
+    background: #fff1f0 !important;
+    border-color: #b3261e !important;
+}
+
+.size-preview-btn:hover:not(.active) .size-name,
+.size-preview-btn:hover:not(.active) .size-price {
+    color: #b3261e !important;
 }
 
 .size-preview-btn.active {
@@ -9027,6 +9121,29 @@ body.dark-mode .fp-toggle-pill.active {
     border-color: #b3261e !important;
     color: #ffffff !important;
     transform: scale(1.02) !important;
+}
+
+.size-preview-btn.active .size-name,
+.size-preview-btn.active .size-price {
+    color: #ffffff !important;
+}
+
+.size-preview-btn.active .size-info {
+    color: rgba(255, 255, 255, 0.92) !important;
+}
+
+.size-preview-btn.active:hover {
+    background: #981b15 !important;
+    border-color: #981b15 !important;
+}
+
+.size-preview-btn.active:hover .size-name,
+.size-preview-btn.active:hover .size-price {
+    color: #ffffff !important;
+}
+
+.size-preview-btn.active:hover .size-info {
+    color: rgba(255, 255, 255, 0.95) !important;
 }
 
 .preview-actions-wrap {
