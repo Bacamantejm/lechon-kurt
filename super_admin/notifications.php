@@ -17,15 +17,15 @@ function saNotificationDestination(array $notification): string
         || strpos($type, 'franchise') !== false
         || strpos($type, 'business_application') !== false
     ) {
-        return 'franchise_applications.php' . ($related_id > 0 ? '?search=' . $related_id : '');
+        return '../super_admin/franchise_applications.php' . ($related_id > 0 ? '?search=' . $related_id : '');
     }
     if ($related_type === 'order' || strpos($type, 'order') !== false) {
-        return 'transactions_financial.php';
+        return '../super_admin/transactions_financial.php';
     }
     if ($related_type === 'user') {
-        return 'user_business_management.php';
+        return '../super_admin/user_business_management.php';
     }
-    return 'notifications.php?id=' . (int)($notification['id'] ?? 0);
+    return '../super_admin/notifications.php?id=' . (int)($notification['id'] ?? 0);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

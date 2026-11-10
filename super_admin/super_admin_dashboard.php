@@ -2747,7 +2747,7 @@ if ($dashboard_flash_payload === false) {
                                 <div class="sa-dropdown-head">
                                     <span>Notifications</span>
                                     <span>
-                                        <a href="notifications.php" class="sa-dropdown-head-link me-2">View All</a>
+                                        <a href="../super_admin/notifications.php" class="sa-dropdown-head-link me-2">View All</a>
                                         <button type="button" class="sa-dropdown-head-link" id="saMarkAllNotifsRead">Mark all read</button>
                                     </span>
                                 </div>
@@ -3705,7 +3705,7 @@ if ($dashboard_flash_payload === false) {
                 pageItems.forEach(item => {
                     const el = document.createElement('a');
                     el.className = 'sa-item';
-                    el.href = item.link || 'alerts.php?alert=' + encodeURIComponent(item.id || '');
+                    el.href = item.link || ('../super_admin/alerts.php?alert=' + encodeURIComponent(item.id || ''));
                     const tagClass = item.category ? item.category : 'default';
                     el.innerHTML = `
                         <div class="sa-item-header">
@@ -3818,7 +3818,7 @@ if ($dashboard_flash_payload === false) {
 
                     const item = document.createElement('a');
                     item.className = `sa-item ${isUnread ? 'unread' : ''}`;
-                    item.href = notification.link || 'notifications.php?id=' + encodeURIComponent(notification.id || '');
+                    item.href = notification.link || ('../super_admin/notifications.php?id=' + encodeURIComponent(notification.id || ''));
                     item.innerHTML = `
                         <div class="sa-item-header">
                             <span class="sa-tag ${statusTag}">${escapeHtml(statusTag.toUpperCase())}</span>
