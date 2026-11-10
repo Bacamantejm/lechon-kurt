@@ -448,10 +448,17 @@ if (!empty($b_owner_ids_to_fetch) && isset($conn) && $conn instanceof mysqli) {
 }
 
 // 1. Physical branches
+$directory_partner_owners = [];
 foreach ($store_locations as $loc) {
     $b_id = (int)$loc['id'];
     $b_owner = (int)($loc['owner_user_id'] ?? 1);
     $is_partner = ($b_owner > 0 && !in_array($b_owner, $official_owner_ids, true));
+    if ($is_partner && isset($directory_partner_owners[$b_owner])) {
+        continue;
+    }
+    if ($is_partner) {
+        $directory_partner_owners[$b_owner] = true;
+    }
     $b_owner_custom_img = !empty($menu_branch_owner_media[$b_owner]) ? $menu_branch_owner_media[$b_owner] : '';
     $all_menu_shops[] = [
         'id' => $b_id,
@@ -564,41 +571,60 @@ if (mysqli_num_rows($result) > 0) {
             $menu_categories[$category] = [];
         }
         
-        // Parse product details
-        $sizes = ['Regular']; // Always include Regular size
-        $addons = [];
+        // Parse product details and optional weight-based pricing options
+        $has_weight_options = false;
+        $sizes = [];
         $weights = [];
         $good_for = [];
         $size_prices = [];
+        $size_images = [];
+        $addons = [];
         
-        // Set default Regular size values
-        $weights['Regular'] = $product['weight_info'] ?? '';
-        $good_for['Regular'] = $product['pax_info'] ?? '';
-        $size_prices['Regular'] = $product['price'];
-        
-        // Parse sizes if they exist
-        if ($product['sizes']) {
-            $sizes_data = json_decode($product['sizes'], true);
-            if ($sizes_data && is_array($sizes_data)) {
-                foreach ($sizes_data as $size) {
-                    if (isset($size['name'])) {
-                        $size_name = $size['name'];
-                        if (!in_array($size_name, $sizes)) {
-                            $sizes[] = $size_name;
+        // Parse sizes/weight options if they exist in DB
+        if (!empty($product['sizes'])) {
+            $sizes_data = is_string($product['sizes']) ? json_decode($product['sizes'], true) : $product['sizes'];
+            if (is_array($sizes_data) && count($sizes_data) > 0) {
+                foreach ($sizes_data as $size_row) {
+                    $s_name = trim((string)($size_row['name'] ?? $size_row['weight'] ?? ''));
+                    if ($s_name !== '') {
+                        if (!in_array($s_name, $sizes, true)) {
+                            $sizes[] = $s_name;
                         }
-                        $weights[$size_name] = $size['weight'] ?? $product['weight_info'] ?? '';
-                        $good_for[$size_name] = $size['good_for'] ?? $product['pax_info'] ?? '';
-                        $size_prices[$size_name] = $size['price'] ?? $product['price'];
+                        $weights[$s_name] = trim((string)($size_row['weight'] ?? $s_name));
+                        $good_for[$s_name] = trim((string)($size_row['good_for'] ?? $size_row['pax'] ?? ''));
+                        $size_prices[$s_name] = floatval($size_row['price'] ?? $product['price']);
+                        if (!empty($size_row['image'])) {
+                            $size_images[$s_name] = trim((string)$size_row['image']);
+                        }
                     }
+                }
+                if (count($sizes) > 0) {
+                    $has_weight_options = true;
                 }
             }
         }
         
+        // If shop owner did NOT put weight options, fallback to base product price without artificial variant button
+        if (!$has_weight_options) {
+            $sizes = ['Regular'];
+            $weights['Regular'] = $product['weight_info'] ?? '';
+            $good_for['Regular'] = $product['pax_info'] ?? '';
+            $size_prices['Regular'] = floatval($product['price']);
+        }
+        
         // Parse addons if they exist
-        if ($product['addons']) {
-            $addons_data = json_decode($product['addons'], true);
+        if (!empty($product['addons'])) {
+            $addons_data = is_string($product['addons']) ? json_decode($product['addons'], true) : $product['addons'];
             if ($addons_data && is_array($addons_data)) {
                 $addons = $addons_data;
+            }
+        }
+        
+        // Collect all images including any tier-specific photos
+        $all_images = function_exists('getProductAllImages') ? getProductAllImages($product) : array_filter([$product['image'] ?? '']);
+        foreach ($size_images as $tier_img) {
+            if (!empty($tier_img) && !in_array($tier_img, $all_images, true)) {
+                $all_images[] = $tier_img;
             }
         }
         
@@ -610,12 +636,14 @@ if (mysqli_num_rows($result) > 0) {
             'store_name' => trim((string)($product['store_name'] ?? '')),
             'base_price' => $product['price'],
             'image' => $product['image'],
-            'all_images' => function_exists('getProductAllImages') ? getProductAllImages($product) : array_filter([$product['image'] ?? '']),
+            'all_images' => array_values($all_images),
             'additional_images' => !empty($product['additional_images']) ? (json_decode($product['additional_images'], true) ?: []) : [],
-            'sizes' => $sizes,
+            'has_weight_options' => $has_weight_options,
+            'sizes' => $has_weight_options ? $sizes : [],
             'weights' => $weights,
             'good_for' => $good_for,
             'size_prices' => $size_prices,
+            'size_images' => $size_images,
             'addons' => $addons,
             'category' => $category,
             'general_weight' => $product['weight_info'],
@@ -1213,8 +1241,8 @@ body.dark-mode .storefront-change-shop-btn:hover {
                 </div>
                 
                 <div class="preview-options">
-                    <div class="size-selection">
-                        <label>Select Size:</label>
+                    <div class="size-selection" id="previewSizeSection">
+                        <label id="previewSizeLabel"><i class="fas fa-weight-hanging me-1" style="color:#b3261e;"></i> Select Weight / Option:</label>
                         <div class="size-buttons" id="previewSizeButtons"></div>
                     </div>
                     
@@ -1932,10 +1960,15 @@ $curr_store_status_note = $curr_store_avail ? ($curr_store_avail['note'] ?? '') 
                                         data-description="<?php echo htmlspecialchars($item['description']); ?>"
                                         data-image="<?php echo htmlspecialchars($imageSrc); ?>"
                                         data-all-images='<?php echo htmlspecialchars(json_encode(!empty($item["all_images"]) ? $item["all_images"] : [$imageSrc]), ENT_QUOTES, "UTF-8"); ?>'
+                                        data-has-weight-options="<?php echo !empty($item['has_weight_options']) ? '1' : '0'; ?>"
                                         data-sizes='<?php echo json_encode($item['sizes']); ?>'
                                         data-weights='<?php echo json_encode($item['weights']); ?>'
                                         data-good-for='<?php echo json_encode($item['good_for']); ?>'
                                         data-size-prices='<?php echo json_encode($item['size_prices']); ?>'
+                                        data-size-images='<?php echo json_encode($item['size_images'] ?? []); ?>'
+                                        data-base-price="<?php echo $item['base_price']; ?>"
+                                        data-weight-info="<?php echo htmlspecialchars($item['general_weight'] ?? ''); ?>"
+                                        data-pax-info="<?php echo htmlspecialchars($item['general_pax'] ?? ''); ?>"
                                         data-addons='<?php echo json_encode($item['addons']); ?>'
                                         data-avg-rating='<?php echo $item['avg_rating']; ?>'
                                         data-stock="<?php echo $item['stock']; ?>"
@@ -2979,11 +3012,16 @@ document.addEventListener('click', function(e) {
             description: button.getAttribute('data-description'),
             image: button.getAttribute('data-image'),
             allImages: JSON.parse(button.getAttribute('data-all-images') || '[]'),
-            sizes: JSON.parse(button.getAttribute('data-sizes')),
-            weights: JSON.parse(button.getAttribute('data-weights')),
-            goodFor: JSON.parse(button.getAttribute('data-good-for')),
-            sizePrices: JSON.parse(button.getAttribute('data-size-prices')),
-            addons: JSON.parse(button.getAttribute('data-addons')),
+            hasWeightOptions: button.getAttribute('data-has-weight-options') === '1',
+            sizes: JSON.parse(button.getAttribute('data-sizes') || '[]'),
+            weights: JSON.parse(button.getAttribute('data-weights') || '{}'),
+            goodFor: JSON.parse(button.getAttribute('data-good-for') || '{}'),
+            sizePrices: JSON.parse(button.getAttribute('data-size-prices') || '{}'),
+            sizeImages: JSON.parse(button.getAttribute('data-size-images') || '{}'),
+            basePrice: parseFloat(button.getAttribute('data-base-price')) || 0,
+            weightInfo: button.getAttribute('data-weight-info') || '',
+            paxInfo: button.getAttribute('data-pax-info') || '',
+            addons: JSON.parse(button.getAttribute('data-addons') || '[]'),
             stock: parseInt(button.getAttribute('data-stock'))
         };
         
@@ -3049,37 +3087,61 @@ document.addEventListener('click', function(e) {
             stockDisplay.textContent = `${product.stock} units available`;
         }
         
-        // Create size buttons
+        // Create size/weight buttons if weight options are present
+        const sizeSection = document.getElementById('previewSizeSection') || document.querySelector('.size-selection');
         const sizeButtons = document.getElementById('previewSizeButtons');
         sizeButtons.innerHTML = '';
         
-        product.sizes.forEach((size, index) => {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'size-preview-btn' + (index === 0 ? ' active' : '');
-            button.textContent = size;
-            button.dataset.size = size;
-            button.dataset.price = product.sizePrices[size];
-            
-            // Add weight and pax info to button
-            const weightInfo = product.weights[size] ? ` | ${product.weights[size]}` : '';
-            const paxInfo = product.goodFor[size] ? ` | ${product.goodFor[size]}` : '';
-            
-            if (weightInfo || paxInfo) {
-                const infoSpan = document.createElement('span');
-                infoSpan.className = 'size-info';
-                infoSpan.textContent = weightInfo + paxInfo;
-                button.appendChild(infoSpan);
-            }
-            
-            button.addEventListener('click', function() {
-                document.querySelectorAll('.size-preview-btn').forEach(btn => btn.classList.remove('active'));
-                this.classList.add('active');
-                updateOrderSummary();
+        if (product.hasWeightOptions && Array.isArray(product.sizes) && product.sizes.length > 0) {
+            if (sizeSection) sizeSection.style.display = 'block';
+
+            product.sizes.forEach((size, index) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'size-preview-btn' + (index === 0 ? ' active' : '');
+                button.dataset.size = size;
+                const optPrice = product.sizePrices && product.sizePrices[size] !== undefined ? parseFloat(product.sizePrices[size]) : (product.basePrice || product.price || 0);
+                button.dataset.price = optPrice;
+                if (product.sizeImages && product.sizeImages[size]) {
+                    button.dataset.image = product.sizeImages[size];
+                }
+                
+                // Add weight and pax info to button
+                const weightInfo = product.weights && product.weights[size] ? ` | ${product.weights[size]}` : '';
+                const paxInfo = product.goodFor && product.goodFor[size] ? ` | ${product.goodFor[size]}` : '';
+                const infoText = (weightInfo && weightInfo !== (' | ' + size) ? weightInfo : '') + (paxInfo ? paxInfo : '');
+                
+                button.innerHTML = `
+                    <span class="size-name" style="font-weight: 700;">${size}</span>
+                    <span class="size-price" style="font-weight: 700; color: #b3261e; margin-left: 6px;">₱${optPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    ${infoText ? `<span class="size-info" style="font-size: 0.75rem; color: #667085; display: block; margin-top: 2px;">${infoText}</span>` : ''}
+                `;
+                
+                button.addEventListener('click', function() {
+                    document.querySelectorAll('.size-preview-btn').forEach(btn => btn.classList.remove('active'));
+                    this.classList.add('active');
+
+                    // If a photo exists for this weight tier, switch main image to it
+                    if (this.dataset.image) {
+                        const mainImg = document.getElementById('previewProductImage');
+                        if (mainImg) mainImg.src = this.dataset.image;
+                        const thumbStrip = document.getElementById('previewThumbnailsStrip');
+                        if (thumbStrip) {
+                            thumbStrip.querySelectorAll('img').forEach(t => {
+                                const srcAttr = t.getAttribute('src');
+                                t.style.borderColor = (srcAttr === this.dataset.image || t.src.includes(this.dataset.image)) ? '#b3261e' : '#eaecf0';
+                            });
+                        }
+                    }
+                    updateOrderSummary();
+                });
+                
+                sizeButtons.appendChild(button);
             });
-            
-            sizeButtons.appendChild(button);
-        });
+        } else {
+            // Shop owner did not configure weight options -> HIDE the selector completely!
+            if (sizeSection) sizeSection.style.display = 'none';
+        }
         
         // Create addons checkboxes
         const addonsList = document.getElementById('previewAddonsList');
@@ -3104,8 +3166,6 @@ document.addEventListener('click', function(e) {
         // Set initial price
         updateOrderSummary();
 
-
-        
         if (addToCartConfirm) {
             addToCartConfirm.disabled = (parseInt(product.stock) <= 0);
             addToCartConfirm.innerHTML = (parseInt(product.stock) <= 0) ? '<i class="fas fa-ban"></i> Currently Sold Out' : '<i class="fas fa-cart-plus"></i> Add to Cart';
@@ -3123,11 +3183,11 @@ document.addEventListener('click', function(e) {
     }
     
     function updateOrderSummary() {
+        if (!currentProduct) return;
         const activeSizeBtn = document.querySelector('.size-preview-btn.active');
-        if (!activeSizeBtn || !currentProduct) return;
-        
-        const size = activeSizeBtn.dataset.size;
-        const unitPrice = parseFloat(activeSizeBtn.dataset.price);
+        const hasWeight = currentProduct.hasWeightOptions && activeSizeBtn;
+        const size = hasWeight ? activeSizeBtn.dataset.size : '';
+        const unitPrice = hasWeight ? parseFloat(activeSizeBtn.dataset.price) : (currentProduct.basePrice || currentProduct.price || 0);
         const quantity = parseInt(document.querySelector('.qty-input').value) || 1;
         
         // Get selected addons
@@ -3137,23 +3197,34 @@ document.addEventListener('click', function(e) {
         });
         
         // Update display
-        document.getElementById('previewPrice').textContent = `PHP ${unitPrice.toFixed(2)}`;
-        document.getElementById('summarySize').textContent = size;
+        document.getElementById('previewPrice').textContent = `PHP ${unitPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        
+        const summarySizeEl = document.getElementById('summarySize');
+        if (summarySizeEl && summarySizeEl.parentElement) {
+            if (hasWeight) {
+                summarySizeEl.parentElement.style.display = '';
+                summarySizeEl.textContent = size;
+            } else {
+                summarySizeEl.parentElement.style.display = 'none';
+            }
+        }
         document.getElementById('summaryAddons').textContent = selectedAddons.length > 0 ? selectedAddons.join(', ') : 'None';
         document.getElementById('summaryQuantity').textContent = quantity;
-        document.getElementById('summaryUnitPrice').textContent = `PHP ${unitPrice.toFixed(2)}`;
+        document.getElementById('summaryUnitPrice').textContent = `PHP ${unitPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         
         const total = unitPrice * quantity;
-        document.getElementById('summaryTotal').textContent = `PHP ${total.toFixed(2)}`;
+        document.getElementById('summaryTotal').textContent = `PHP ${total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         
-        // Update size weight info
+        // Update size weight info under the Price
         const weightInfoDiv = document.getElementById('sizeWeightInfo');
+        let weightText = hasWeight ? (currentProduct.weights && currentProduct.weights[size] ? currentProduct.weights[size] : size) : (currentProduct.weightInfo || '');
+        let paxText = hasWeight ? (currentProduct.goodFor && currentProduct.goodFor[size] ? currentProduct.goodFor[size] : '') : (currentProduct.paxInfo || '');
         let weightInfo = '';
-        if (currentProduct.weights && currentProduct.weights[size]) {
-            weightInfo += `<div class="weight-info"><i class="fas fa-weight"></i> ${currentProduct.weights[size]}</div>`;
+        if (weightText) {
+            weightInfo += `<div class="weight-info"><i class="fas fa-weight-hanging"></i> ${weightText}</div>`;
         }
-        if (currentProduct.goodFor && currentProduct.goodFor[size]) {
-            weightInfo += `<div class="pax-info"><i class="fas fa-users"></i> ${currentProduct.goodFor[size]}</div>`;
+        if (paxText) {
+            weightInfo += `<div class="pax-info"><i class="fas fa-users"></i> ${paxText}</div>`;
         }
         if (weightInfoDiv) weightInfoDiv.innerHTML = weightInfo;
     }
@@ -3196,8 +3267,9 @@ document.addEventListener('click', function(e) {
             if (!currentProduct) return;
             
             const activeSizeBtn = document.querySelector('.size-preview-btn.active');
-            const size = activeSizeBtn ? activeSizeBtn.dataset.size : 'Regular';
-            const price = activeSizeBtn ? parseFloat(activeSizeBtn.dataset.price) : (currentProduct.price || 0);
+            const hasWeight = currentProduct.hasWeightOptions && activeSizeBtn;
+            const size = hasWeight ? activeSizeBtn.dataset.size : 'Regular';
+            const price = hasWeight ? parseFloat(activeSizeBtn.dataset.price) : (currentProduct.basePrice || currentProduct.price || 0);
             const quantity = parseInt(document.querySelector('.qty-input').value) || 1;
             
             const selectedAddons = [];
@@ -3214,6 +3286,9 @@ document.addEventListener('click', function(e) {
                 formData.append('quantity', quantity);
                 formData.append('size', size);
                 formData.append('price', price);
+                if (hasWeight && activeSizeBtn && activeSizeBtn.dataset.image) {
+                    formData.append('size_image', activeSizeBtn.dataset.image);
+                }
                 formData.append('addons', JSON.stringify(selectedAddons));
 
                 const response = await fetch('add_to_cart.php', {
@@ -9454,4 +9529,3 @@ body.dark-mode .menu-banner-choose-btn {
 </script>
 
 <?php include 'includes/footer.php'; ?>
-

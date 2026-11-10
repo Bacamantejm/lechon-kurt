@@ -147,7 +147,7 @@ function fetchSuperAdminAlerts($conn): array {
                     'status' => (string)$row['status'],
                     'created_at' => (string)$row['created_at'],
                     'time_ago' => saTimeElapsedString($row['created_at']),
-                    'link' => 'reports_complaints.php?status=' . urlencode($row['status']) . '&search=' . urlencode((string)$row['id'])
+                    'link' => '../admin/alerts.php?alert=' . urlencode('complaint_' . $row['id'])
                 ];
             }
             mysqli_free_result($res);
@@ -185,7 +185,7 @@ function fetchSuperAdminAlerts($conn): array {
                     'status' => 'logged',
                     'created_at' => (string)$row['created_at'],
                     'time_ago' => saTimeElapsedString($row['created_at']),
-                    'link' => 'activity_logs.php?source=audit&action=' . urlencode((string)$row['action'])
+                    'link' => '../admin/activity_logs.php?source=audit&action=' . urlencode((string)$row['action'])
                 ];
             }
             mysqli_free_result($res);
@@ -216,7 +216,7 @@ function fetchSuperAdminAlerts($conn): array {
                     'status' => 'unresolved',
                     'created_at' => (string)$row['created_at'],
                     'time_ago' => saTimeElapsedString($row['created_at']),
-                    'link' => 'system_monitoring.php'
+                    'link' => '../super_admin/system_monitoring.php'
                 ];
             }
             mysqli_free_result($res);
@@ -246,7 +246,7 @@ function fetchSuperAdminAlerts($conn): array {
                     'status' => (string)$row['status'],
                     'created_at' => (string)$row['detected_at'],
                     'time_ago' => saTimeElapsedString($row['detected_at']),
-                    'link' => 'operations_incidents.php'
+                    'link' => '../super_admin/operations_incidents.php'
                 ];
             }
             mysqli_free_result($res);
@@ -279,7 +279,7 @@ function fetchSuperAdminAlerts($conn): array {
                     'status' => 'active',
                     'created_at' => (string)$row['issued_at'],
                     'time_ago' => saTimeElapsedString($row['issued_at']),
-                    'link' => 'user_business_management.php'
+                    'link' => '../super_admin/user_business_management.php'
                 ];
             }
             mysqli_free_result($res);
@@ -324,14 +324,18 @@ function fetchSuperAdminNotifications($conn, int $userId): array {
             $rel_id = (int)($row['related_id'] ?? 0);
             $type = strtolower(trim((string)($row['type'] ?? '')));
 
-            if ($rel_type === 'franchise_application' || strpos($type, 'franchise') !== false) {
+            if (
+                in_array($rel_type, ['franchise_application', 'business_application', 'application'], true)
+                || strpos($type, 'franchise') !== false
+                || strpos($type, 'business_application') !== false
+            ) {
                 $row['link'] = 'franchise_applications.php' . ($rel_id > 0 ? '?search=' . $rel_id : '');
             } elseif ($rel_type === 'order' || strpos($type, 'order') !== false) {
                 $row['link'] = 'transactions_financial.php';
             } elseif ($rel_type === 'user') {
                 $row['link'] = 'user_business_management.php';
             } else {
-                $row['link'] = 'notification_center.php';
+                $row['link'] = 'notifications.php?id=' . (int)$row['id'];
             }
 
             $notifications[] = $row;
