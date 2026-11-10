@@ -39,6 +39,13 @@ if (function_exists('ensureProductMultipleImagesSchema')) {
     ensureProductMultipleImagesSchema($conn);
 }
 
+// Ensure sizes column exists for weight-based options
+$check_sizes_col = mysqli_query($conn, "SHOW COLUMNS FROM products LIKE 'sizes'");
+if ($check_sizes_col && mysqli_num_rows($check_sizes_col) == 0) {
+    mysqli_query($conn, "ALTER TABLE products ADD COLUMN sizes TEXT NULL DEFAULT NULL COMMENT 'JSON array of weight and size options' AFTER image");
+}
+if ($check_sizes_col) mysqli_free_result($check_sizes_col);
+
 /**
  * Generate a unique product code for the products.product_id column.
  */
@@ -54,6 +61,56 @@ function generateProductCode(mysqli $conn): string {
     } while ($exists);
 
     return $candidate;
+}
+
+/**
+ * Process weight-based pricing tiers from form submission.
+ */
+function processProductWeightTiers(array &$uploaded_images): ?string {
+    $sizes_array = [];
+    if (!empty($_POST['weight_tiers']) && is_array($_POST['weight_tiers'])) {
+        foreach ($_POST['weight_tiers'] as $idx => $tier) {
+            $tier_name = trim((string)($tier['name'] ?? ''));
+            $tier_price = floatval($tier['price'] ?? 0);
+            $tier_good_for = trim((string)($tier['good_for'] ?? ''));
+            $tier_img = trim((string)($tier['existing_image'] ?? ''));
+
+            if (!empty($_FILES['weight_tier_images']['name'][$idx])) {
+                $f_name = $_FILES['weight_tier_images']['name'][$idx];
+                $f_tmp = $_FILES['weight_tier_images']['tmp_name'][$idx];
+                $f_size = (int)($_FILES['weight_tier_images']['size'][$idx] ?? 0);
+                $f_err = $_FILES['weight_tier_images']['error'][$idx] ?? UPLOAD_ERR_NO_FILE;
+
+                if ($f_err === UPLOAD_ERR_OK && $f_size > 0 && is_uploaded_file($f_tmp)) {
+                    $ext = strtolower(pathinfo((string)$f_name, PATHINFO_EXTENSION));
+                    if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+                        $target_dir = dirname(__DIR__) . '/uploads/products/';
+                        if (!is_dir($target_dir)) {
+                            @mkdir($target_dir, 0755, true);
+                        }
+                        $new_fn = time() . '_' . uniqid('wt_') . '.' . $ext;
+                        if (move_uploaded_file($f_tmp, $target_dir . $new_fn)) {
+                            $tier_img = 'uploads/products/' . $new_fn;
+                            if (!in_array($tier_img, $uploaded_images, true)) {
+                                $uploaded_images[] = $tier_img;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if ($tier_name !== '' && $tier_price > 0) {
+                $sizes_array[] = [
+                    'name' => $tier_name,
+                    'weight' => $tier_name,
+                    'price' => $tier_price,
+                    'good_for' => $tier_good_for,
+                    'image' => $tier_img
+                ];
+            }
+        }
+    }
+    return !empty($sizes_array) ? json_encode(array_values($sizes_array)) : null;
 }
 
 // Handle product status update
@@ -110,6 +167,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_new_product'])) {
         }
     }
 
+    // Process weight-based pricing tiers (if any) and merge tier images
+    $sizes_json = processProductWeightTiers($uploaded_images);
+    if ($sizes_json !== null) {
+        $tmp_sizes = json_decode($sizes_json, true);
+        if (!empty($tmp_sizes)) {
+            if ($price <= 0) {
+                $price = min(array_column($tmp_sizes, 'price'));
+            }
+            if ($weight_info === '' && !empty($tmp_sizes[0]['weight'])) {
+                $weight_info = $tmp_sizes[0]['weight'];
+            }
+            if ($pax_info === '' && !empty($tmp_sizes[0]['good_for'])) {
+                $pax_info = $tmp_sizes[0]['good_for'];
+            }
+        }
+    }
+
     $image_path = $uploaded_images[0] ?? '';
     $additional_images = array_slice($uploaded_images, 1);
     $additional_images_json = !empty($additional_images) ? json_encode(array_values($additional_images)) : null;
@@ -117,31 +191,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_new_product'])) {
     if (empty($errors)) {
         $product_code = generateProductCode($conn);
 
-        if (!empty($image_path) || $additional_images_json !== null) {
-            if ($seller_scope_id !== null) {
-                $insert_query = "INSERT INTO products (seller_id, product_id, name, category, price, description, weight_info, pax_info, lead_time_hours, image, additional_images, is_active, created_at) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())";
-                $stmt = mysqli_prepare($conn, $insert_query);
-                mysqli_stmt_bind_param($stmt, "isssdsssiss", $seller_scope_id, $product_code, $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours, $image_path, $additional_images_json);
-            } else {
-                $insert_query = "INSERT INTO products (product_id, name, category, price, description, weight_info, pax_info, lead_time_hours, image, additional_images, is_active, created_at) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())";
-                $stmt = mysqli_prepare($conn, $insert_query);
-                mysqli_stmt_bind_param($stmt, "sssdsssiss", $product_code, $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours, $image_path, $additional_images_json);
-            }
+        if ($seller_scope_id !== null) {
+            $insert_query = "INSERT INTO products (seller_id, product_id, name, category, price, description, weight_info, pax_info, lead_time_hours, image, additional_images, sizes, is_active, created_at) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())";
+            $stmt = mysqli_prepare($conn, $insert_query);
+            mysqli_stmt_bind_param($stmt, "isssdsssisss", $seller_scope_id, $product_code, $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours, $image_path, $additional_images_json, $sizes_json);
         } else {
-            if ($seller_scope_id !== null) {
-                $insert_query = "INSERT INTO products (seller_id, product_id, name, category, price, description, weight_info, pax_info, lead_time_hours, is_active, created_at) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())";
-                $stmt = mysqli_prepare($conn, $insert_query);
-                mysqli_stmt_bind_param($stmt, "isssdsssi", $seller_scope_id, $product_code, $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours);
-            } else {
-                // Query without image
-                $insert_query = "INSERT INTO products (product_id, name, category, price, description, weight_info, pax_info, lead_time_hours, is_active, created_at) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())";
-                $stmt = mysqli_prepare($conn, $insert_query);
-                mysqli_stmt_bind_param($stmt, "sssdsssi", $product_code, $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours);
-            }
+            $insert_query = "INSERT INTO products (product_id, name, category, price, description, weight_info, pax_info, lead_time_hours, image, additional_images, sizes, is_active, created_at) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())";
+            $stmt = mysqli_prepare($conn, $insert_query);
+            mysqli_stmt_bind_param($stmt, "sssdsssisss", $product_code, $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours, $image_path, $additional_images_json, $sizes_json);
         }
         
         if (mysqli_stmt_execute($stmt)) {
@@ -172,7 +231,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_product'])) {
     
     if (empty($name)) $errors[] = "Product name is required";
     if (empty($category)) $errors[] = "Category is required";
-    if ($price <= 0) $errors[] = "Price must be greater than 0";
     
     // Handle image upload (supports multiple images and legacy single input)
     $uploaded_images = [];
@@ -186,34 +244,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_product'])) {
         }
     }
 
+    // Process weight-based pricing tiers
+    $sizes_json = processProductWeightTiers($uploaded_images);
+    if ($sizes_json !== null) {
+        $tmp_sizes = json_decode($sizes_json, true);
+        if (!empty($tmp_sizes)) {
+            if ($price <= 0) {
+                $price = min(array_column($tmp_sizes, 'price'));
+            }
+            if ($weight_info === '' && !empty($tmp_sizes[0]['weight'])) {
+                $weight_info = $tmp_sizes[0]['weight'];
+            }
+            if ($pax_info === '' && !empty($tmp_sizes[0]['good_for'])) {
+                $pax_info = $tmp_sizes[0]['good_for'];
+            }
+        }
+    }
+    if ($price <= 0) $errors[] = "Price must be greater than 0";
+
     if (empty($errors)) {
-        if (!empty($uploaded_images)) {
-            // Append newly uploaded images to existing ones
-            $curr_q = mysqli_query($conn, "SELECT image, additional_images FROM products WHERE id = " . intval($id));
-            $curr_row = $curr_q ? mysqli_fetch_assoc($curr_q) : null;
-            if ($curr_q) mysqli_free_result($curr_q);
+        // Fetch current product images
+        $curr_q = mysqli_query($conn, "SELECT image, additional_images FROM products WHERE id = " . intval($id));
+        $curr_row = $curr_q ? mysqli_fetch_assoc($curr_q) : null;
+        if ($curr_q) mysqli_free_result($curr_q);
 
-            $existing_imgs = $curr_row && function_exists('getProductAllImages') ? getProductAllImages($curr_row) : array_filter([$curr_row['image'] ?? '']);
-            $merged_imgs = array_merge($existing_imgs, $uploaded_images);
-            $new_primary = $merged_imgs[0] ?? '';
-            $new_additional = array_slice($merged_imgs, 1);
-            $new_additional_json = !empty($new_additional) ? json_encode(array_values($new_additional)) : null;
+        $existing_imgs = $curr_row && function_exists('getProductAllImages') ? getProductAllImages($curr_row) : array_filter([$curr_row['image'] ?? '']);
+        $merged_imgs = array_merge($existing_imgs, $uploaded_images);
+        $new_primary = !empty($merged_imgs) ? $merged_imgs[0] : ($curr_row['image'] ?? '');
+        $new_additional = array_slice($merged_imgs, 1);
+        $new_additional_json = !empty($new_additional) ? json_encode(array_values($new_additional)) : null;
 
-            $update_query = "UPDATE products SET name=?, category=?, price=?, description=?, weight_info=?, pax_info=?, lead_time_hours=?, image=?, additional_images=? WHERE id=?" . ($seller_scope_id !== null ? " AND seller_id=?" : "");
-            $stmt = mysqli_prepare($conn, $update_query);
-            if ($seller_scope_id !== null) {
-                mysqli_stmt_bind_param($stmt, "ssdsssissii", $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours, $new_primary, $new_additional_json, $id, $seller_scope_id);
-            } else {
-                mysqli_stmt_bind_param($stmt, "ssdsssissi", $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours, $new_primary, $new_additional_json, $id);
-            }
+        $update_query = "UPDATE products SET name=?, category=?, price=?, description=?, weight_info=?, pax_info=?, lead_time_hours=?, image=?, additional_images=?, sizes=? WHERE id=?" . ($seller_scope_id !== null ? " AND seller_id=?" : "");
+        $stmt = mysqli_prepare($conn, $update_query);
+        if ($seller_scope_id !== null) {
+            mysqli_stmt_bind_param($stmt, "ssdsssisssii", $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours, $new_primary, $new_additional_json, $sizes_json, $id, $seller_scope_id);
         } else {
-            $update_query = "UPDATE products SET name=?, category=?, price=?, description=?, weight_info=?, pax_info=?, lead_time_hours=? WHERE id=?" . ($seller_scope_id !== null ? " AND seller_id=?" : "");
-            $stmt = mysqli_prepare($conn, $update_query);
-            if ($seller_scope_id !== null) {
-                mysqli_stmt_bind_param($stmt, "ssdsssiii", $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours, $id, $seller_scope_id);
-            } else {
-                mysqli_stmt_bind_param($stmt, "ssdsssii", $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours, $id);
-            }
+            mysqli_stmt_bind_param($stmt, "ssdsssisssi", $name, $category, $price, $description, $weight_info, $pax_info, $lead_time_hours, $new_primary, $new_additional_json, $sizes_json, $id);
         }
         
         if (mysqli_stmt_execute($stmt)) {
@@ -1154,6 +1220,25 @@ if (empty($product_decisions)) {
                                 <textarea class="form-control" id="product_description" name="product_description" rows="3" placeholder="Enter culinary details, flavor profile, and special instructions..."></textarea>
                             </div>
                         </div>
+
+                        <!-- Section 4: Weight & Size Pricing Options -->
+                        <div class="form-section-card">
+                            <div class="form-section-head d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="form-section-title"><i class="fas fa-weight-hanging"></i> Weight & Size Pricing Options</span>
+                                    <span class="form-opt-pill ms-2">Optional</span>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="addWeightTierRow('add')">
+                                    <i class="fas fa-plus"></i> Add Weight Tier
+                                </button>
+                            </div>
+                            <p class="text-muted small mb-2" style="font-size: 12px;">
+                                Optional: Define multiple weight/size options (e.g. 500g, 1 kg, 8-11 kg) with custom prices and photos. If left empty, customers will order at the single base price above.
+                            </p>
+                            <div id="add_weight_tiers_container" class="weight-tiers-list">
+                                <!-- Dynamic weight rows appear here -->
+                            </div>
+                        </div>
                     </form>
                 </div>
                 <div class="modal-footer">
@@ -1306,6 +1391,25 @@ if (empty($product_decisions)) {
                                 <textarea class="form-control" id="edit_product_description" name="product_description" rows="3"></textarea>
                             </div>
                         </div>
+
+                        <!-- Section 4: Weight & Size Pricing Options -->
+                        <div class="form-section-card">
+                            <div class="form-section-head d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="form-section-title"><i class="fas fa-weight-hanging"></i> Weight & Size Pricing Options</span>
+                                    <span class="form-opt-pill ms-2">Optional</span>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="addWeightTierRow('edit')">
+                                    <i class="fas fa-plus"></i> Add Weight Tier
+                                </button>
+                            </div>
+                            <p class="text-muted small mb-2" style="font-size: 12px;">
+                                Optional: Define multiple weight/size options (e.g. 500g, 1 kg, 8-11 kg) with custom prices and photos. If left empty, customers will order at the single base price above.
+                            </p>
+                            <div id="edit_weight_tiers_container" class="weight-tiers-list">
+                                <!-- Populated dynamically by openEditModal() -->
+                            </div>
+                        </div>
                     </form>
                 </div>
                 <div class="modal-footer">
@@ -1377,6 +1481,70 @@ if (empty($product_decisions)) {
             })
         }
 
+        let weightTierGlobalIndex = 100;
+        function escapeTierHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        function addWeightTierRow(prefix, data = null) {
+            const container = document.getElementById(prefix + '_weight_tiers_container');
+            if (!container) return;
+
+            const idx = weightTierGlobalIndex++;
+            const nameVal = data && (data.name || data.weight) ? escapeTierHtml(data.name || data.weight) : '';
+            const priceVal = data && data.price !== undefined ? parseFloat(data.price).toFixed(2) : '';
+            const goodForVal = data && (data.good_for || data.pax) ? escapeTierHtml(data.good_for || data.pax) : '';
+            const imgVal = data && data.image ? data.image : '';
+
+            const row = document.createElement('div');
+            row.className = 'weight-tier-row mb-2 p-2 border rounded-3 bg-light position-relative';
+            row.style.background = '#fafbfc';
+            row.style.border = '1px solid #eaecf0';
+
+            let imgPreviewHtml = '';
+            if (imgVal) {
+                const fullImgSrc = imgVal.startsWith('http') || imgVal.startsWith('/') ? imgVal : ('../' + imgVal);
+                imgPreviewHtml = `
+                    <div class="d-flex align-items-center gap-2 mt-1">
+                        <img src="${fullImgSrc}" alt="Tier Photo" style="width: 32px; height: 32px; object-fit: cover; border-radius: 4px; border: 1px solid #d0d5dd;">
+                        <span class="text-muted" style="font-size: 11px;">Current Photo</span>
+                        <input type="hidden" name="weight_tiers[${idx}][existing_image]" value="${escapeTierHtml(imgVal)}">
+                    </div>
+                `;
+            }
+
+            row.innerHTML = `
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold mb-1" style="font-size: 11px; color: #344054;">Weight / Option <span class="text-danger">*</span></label>
+                        <input type="text" name="weight_tiers[${idx}][name]" class="form-control form-control-sm" placeholder="e.g. 500g, 1 kg, 8-11 kg" value="${nameVal}" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold mb-1" style="font-size: 11px; color: #344054;">Price (₱) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" min="0" name="weight_tiers[${idx}][price]" class="form-control form-control-sm" placeholder="0.00" value="${priceVal}" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold mb-1" style="font-size: 11px; color: #344054;">Pax / Serves</label>
+                        <input type="text" name="weight_tiers[${idx}][good_for]" class="form-control form-control-sm" placeholder="e.g. 4-6 pax" value="${goodForVal}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold mb-1" style="font-size: 11px; color: #344054;">Photo for this Weight</label>
+                        <input type="file" name="weight_tier_images[${idx}]" class="form-control form-control-sm" accept="image/*">
+                        ${imgPreviewHtml}
+                    </div>
+                    <div class="col-md-1 text-end">
+                        <label class="form-label small d-block mb-1">&nbsp;</label>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.weight-tier-row').remove();" title="Remove Option">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            container.appendChild(row);
+        }
+
         function openEditModal(product) {
             document.getElementById('edit_product_id').value = product.id;
             document.getElementById('edit_product_name').value = product.name;
@@ -1387,6 +1555,25 @@ if (empty($product_decisions)) {
             document.getElementById('edit_lead_time_hours').value = product.lead_time_hours || '24';
             document.getElementById('edit_product_description').value = product.description || '';
             
+            // Populate weight tiers in Edit Modal
+            const editTiersContainer = document.getElementById('edit_weight_tiers_container');
+            if (editTiersContainer) {
+                editTiersContainer.innerHTML = '';
+                let sizesData = [];
+                if (product.sizes) {
+                    try {
+                        sizesData = typeof product.sizes === 'string' ? JSON.parse(product.sizes) : product.sizes;
+                    } catch(e) {
+                        sizesData = [];
+                    }
+                }
+                if (Array.isArray(sizesData) && sizesData.length > 0) {
+                    sizesData.forEach(tier => {
+                        addWeightTierRow('edit', tier);
+                    });
+                }
+            }
+
             var myModal = new bootstrap.Modal(document.getElementById('editProductModal'));
             myModal.show();
         }

@@ -104,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         if ($product = mysqli_fetch_assoc($result)) {
             $product_name = $product['name'];
-            $product_image = $product['image'];
+            $product_image = !empty($_POST['size_image']) ? trim($_POST['size_image']) : $product['image'];
             $string_product_id = $product['product_id'];
             $product_seller_id = (int)($product['seller_id'] ?? 0);
             $available_stock = max(0, (int)$product['available_stock']);
