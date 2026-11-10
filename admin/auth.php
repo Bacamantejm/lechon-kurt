@@ -175,8 +175,23 @@ function denyAdminAccess($message = 'Access Denied: You do not have permission t
         exit;
     }
 
+    $user_id = isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : 0;
+    $conn = (isset($GLOBALS['conn']) && $GLOBALS['conn']) ? $GLOBALS['conn'] : null;
+
+    // If user has no backoffice access at all (e.g. customer), immediately show custom access denied page
+    if ($user_id > 0 && $conn && !hasBackofficeAccess($conn, $user_id) && !isApprovedFranchiseSellerAccount($conn, $user_id)) {
+        denyAdminBackofficeEntry($message);
+    }
+
     $_SESSION['error'] = $message;
     $redirect_target = resolveDeniedAdminRedirectTarget();
+
+    // Prevent redirect loops if redirecting to current script or if user lacks dashboard permission
+    $current_script = basename($_SERVER['PHP_SELF'] ?? '');
+    if ($redirect_target === $current_script || ($redirect_target === 'index.php' && $conn && !hasPermission($conn, $user_id, 'dashboard.view') && !isApprovedFranchiseSellerAccount($conn, $user_id))) {
+        denyAdminBackofficeEntry($message);
+    }
+
     header('Location: ' . $redirect_target);
     exit;
 }
@@ -187,18 +202,33 @@ function denyAdminAccess($message = 'Access Denied: You do not have permission t
  * @return void
  */
 function denyAdminBackofficeEntry($message = 'Access Denied: Unauthorized access.') {
+    ensureAdminSessionStarted();
+
     if (isAjaxRequest()) {
         http_response_code(403);
         header('Content-Type: application/json');
         echo json_encode([
             'success' => false,
             'message' => $message,
-            'redirect' => '../index.php?error=unauthorized'
+            'redirect' => '../access_denied.php'
         ]);
         exit;
     }
 
-    header("Location: index.php?error=unauthorized");
+    if (!headers_sent()) {
+        http_response_code(403);
+    }
+    $_SESSION['access_denied_message'] = $message;
+    $_SESSION['access_denied_requested_url'] = $_SERVER['REQUEST_URI'] ?? '';
+
+    // Directly render the custom error page to eliminate redirect hops and browser loops
+    $error_page = __DIR__ . '/../access_denied.php';
+    if (file_exists($error_page)) {
+        require $error_page;
+        exit;
+    }
+
+    header("Location: ../access_denied.php");
     exit;
 }
 
@@ -1228,6 +1258,10 @@ function enforcePartnerRoleScopedPageAccess($conn, $user_id, $current_page) {
 
     $message = 'Access denied: Your assigned role does not include permission for this department module.';
     $redirect_target = (function_exists('isCashierUser') && isCashierUser($conn, $user_id)) ? 'kiosk.php' : 'index.php';
+    if ($current_page === $redirect_target || ($redirect_target === 'index.php' && !hasPermission($conn, $user_id, 'dashboard.view') && !isApprovedFranchiseSellerAccount($conn, $user_id))) {
+        denyAdminBackofficeEntry($message);
+    }
+
     if (isAjaxRequest()) {
         http_response_code(403);
         header('Content-Type: application/json');
@@ -1709,6 +1743,10 @@ function checkAdminAccess() {
 
         if (!$is_super_admin_session_user && (!$is_allowed_partner_page || $is_super_admin_page)) {
             $fallback_redirect = (strpos($_SERVER['PHP_SELF'] ?? '', '/admin/') !== false) ? 'index.php' : 'admin/index.php';
+            if ($current_page === 'index.php' || $current_page === basename($fallback_redirect)) {
+                denyAdminBackofficeEntry('This module is not available for partner admin accounts.');
+            }
+
             if (isAjaxRequest()) {
                 http_response_code(403);
                 header('Content-Type: application/json');
@@ -1761,6 +1799,10 @@ function checkAdminAccess() {
                         'redirect' => 'index.php'
                     ]);
                     exit;
+                }
+
+                if ($current_page === 'index.php') {
+                    denyAdminBackofficeEntry($restricted_message);
                 }
 
                 $_SESSION['error'] = $restricted_message;
