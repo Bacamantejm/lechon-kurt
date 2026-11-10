@@ -1921,11 +1921,11 @@ $curr_store_status_note = $curr_store_avail ? ($curr_store_avail['note'] ?? '') 
                                 $review_count = intval($item['review_count']);
                                 for ($i = 1; $i <= 5; $i++) {
                                     if ($i <= $rating) {
-                                        echo '<i class="fas fa-star"></i>';
+                                        echo '<i class="fas fa-star" style="color: #f59e0b;"></i>';
                                     } elseif ($i - 0.5 <= $rating) {
-                                        echo '<i class="fas fa-star-half-alt"></i>';
+                                        echo '<i class="fas fa-star-half-alt" style="color: #f59e0b;"></i>';
                                     } else {
-                                        echo '<i class="far fa-star"></i>';
+                                        echo '<i class="far fa-star" style="color: #fedf89;"></i>';
                                     }
                                 }
                                 ?>
@@ -5788,9 +5788,36 @@ body {
     color: #932d1f;
 }
 
-.item-content h3,
-.item-rating {
+.item-content h3 {
     color: var(--menu-ink);
+}
+
+.item-rating {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+    line-height: 1;
+}
+
+.item-rating i,
+.item-rating .fa-star,
+.item-rating .fa-star-half-alt,
+.item-rating .fas.fa-star,
+.item-rating .fas.fa-star-half-alt {
+    color: #f59e0b !important;
+}
+
+.item-rating .far.fa-star {
+    color: #fedf89 !important;
+}
+
+.item-rating .review-count {
+    color: #667085 !important;
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-left: 3px;
 }
 
 .item-description,
@@ -7892,6 +7919,20 @@ body.dark-mode .size-preview-btn.active .size-price {
 
 body.dark-mode .size-preview-btn.active .size-info {
     color: rgba(255, 255, 255, 0.9) !important;
+}
+
+body.dark-mode .item-rating i,
+body.dark-mode .item-rating .fas.fa-star,
+body.dark-mode .item-rating .fas.fa-star-half-alt {
+    color: #f59e0b !important;
+}
+
+body.dark-mode .item-rating .far.fa-star {
+    color: #b45309 !important;
+}
+
+body.dark-mode .item-rating .review-count {
+    color: #94a3b8 !important;
 }
 
 body.dark-mode .addon-checkbox {
