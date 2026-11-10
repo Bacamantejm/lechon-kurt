@@ -62,6 +62,21 @@ function saCheckColumnExists($conn, string $tableName, string $columnName): bool
     return $cache[$key] = $exists;
 }
 
+function saFetchRows($conn, string $query): array {
+    $result = mysqli_query($conn, $query);
+    if (!$result) {
+        error_log('Super admin alerts query failed: ' . mysqli_error($conn));
+        return [];
+    }
+
+    $rows = [];
+    while ($row = mysqli_fetch_assoc($result)) {
+        $rows[] = $row;
+    }
+    mysqli_free_result($result);
+    return $rows;
+}
+
 function saTimeElapsedString($datetime, $full = false): string {
     if (!$datetime) return 'recently';
     try {
@@ -115,42 +130,104 @@ function fetchSuperAdminAlerts($conn): array {
 
     // A. Client Complaints & Feedback from chat_conversations
     if (saCheckTableExists($conn, 'chat_conversations')) {
-        $complaint_sql = "
-            SELECT c.id, c.customer_id, c.subject, c.status, c.priority, c.is_escalated, c.created_at, c.last_message_time,
-                   " . ($has_users ? "u.full_name AS customer_name, u.email AS customer_email" : "'' AS customer_name, '' AS customer_email") . "
-            FROM chat_conversations c
-            " . ($has_users ? "LEFT JOIN users u ON u.id = c.customer_id" : "") . "
-            WHERE (c.conversation_type = 'complaint' 
-               OR c.subject LIKE '%complaint%' 
-               OR c.subject LIKE '%[BUSINESS]%' 
-               OR c.subject LIKE '%[ABUSE]%' 
-               OR c.is_escalated = 1)
-              AND c.status IN ('open', 'in_progress')
-            ORDER BY (c.priority = 'urgent') DESC, (c.priority = 'high') DESC, c.updated_at DESC
-            LIMIT 15
-        ";
-        $res = mysqli_query($conn, $complaint_sql);
-        if ($res) {
-            while ($row = mysqli_fetch_assoc($res)) {
-                $priority = strtolower((string)($row['priority'] ?? 'medium'));
-                $severity = ($priority === 'urgent' || (int)$row['is_escalated'] === 1) ? 'critical' : ($priority === 'high' ? 'high' : 'medium');
-                $customer = !empty($row['customer_name']) ? $row['customer_name'] : 'Customer #' . $row['customer_id'];
-                
-                $alerts[] = [
-                    'id' => 'complaint_' . $row['id'],
-                    'category' => 'complaint',
-                    'category_label' => 'Shop Complaint',
-                    'icon' => 'fa-comments-dollar',
-                    'title' => (string)($row['subject'] ?: 'Customer Complaint'),
-                    'message' => "Filed by {$customer} (Status: " . ucfirst($row['status']) . ")",
-                    'severity' => $severity,
-                    'status' => (string)$row['status'],
-                    'created_at' => (string)$row['created_at'],
-                    'time_ago' => saTimeElapsedString($row['created_at']),
-                    'link' => '../admin/alerts.php?alert=' . urlencode('complaint_' . $row['id'])
-                ];
-            }
-            mysqli_free_result($res);
+        $chat_columns = [];
+        foreach ([
+            'customer_id',
+            'conversation_type',
+            'subject',
+            'status',
+            'priority',
+            'is_escalated',
+            'created_at',
+            'updated_at',
+            'last_message_time'
+        ] as $column_name) {
+            $chat_columns[$column_name] = saCheckColumnExists($conn, 'chat_conversations', $column_name);
+        }
+
+        $complaint_conditions = [];
+        if ($chat_columns['conversation_type']) {
+            $complaint_conditions[] = "c.conversation_type = 'complaint'";
+        }
+        if ($chat_columns['subject']) {
+            $complaint_conditions[] = "LOWER(c.subject) LIKE '%complaint%'";
+            $complaint_conditions[] = "c.subject LIKE '%[BUSINESS]%'";
+            $complaint_conditions[] = "c.subject LIKE '%[ABUSE]%'";
+        }
+        if ($chat_columns['is_escalated']) {
+            $complaint_conditions[] = "c.is_escalated = 1";
+        }
+
+        $status_condition = '';
+        if ($chat_columns['status']) {
+            $status_condition = " AND c.status IN ('open', 'in_progress')";
+        }
+
+        $order_parts = [];
+        if ($chat_columns['priority']) {
+            $order_parts[] = "(c.priority = 'urgent') DESC";
+            $order_parts[] = "(c.priority = 'high') DESC";
+        }
+        if ($chat_columns['updated_at']) {
+            $order_parts[] = "c.updated_at DESC";
+        } elseif ($chat_columns['last_message_time']) {
+            $order_parts[] = "c.last_message_time DESC";
+        } elseif ($chat_columns['created_at']) {
+            $order_parts[] = "c.created_at DESC";
+        } else {
+            $order_parts[] = "c.id DESC";
+        }
+
+        $select_fields = [
+            'c.id',
+            $chat_columns['customer_id'] ? 'c.customer_id' : '0 AS customer_id',
+            $chat_columns['subject'] ? "c.subject" : "'' AS subject",
+            $chat_columns['status'] ? "c.status" : "'open' AS status",
+            $chat_columns['priority'] ? "c.priority" : "'medium' AS priority",
+            $chat_columns['is_escalated'] ? "c.is_escalated" : "0 AS is_escalated",
+            $chat_columns['created_at'] ? "c.created_at" : "NULL AS created_at",
+            $chat_columns['last_message_time'] ? "c.last_message_time" : "NULL AS last_message_time",
+        ];
+        $customer_join = '';
+        if ($has_users && $chat_columns['customer_id']) {
+            $select_fields[] = 'u.full_name AS customer_name';
+            $select_fields[] = 'u.email AS customer_email';
+            $customer_join = 'LEFT JOIN users u ON u.id = c.customer_id';
+        } else {
+            $select_fields[] = "'' AS customer_name";
+            $select_fields[] = "'' AS customer_email";
+        }
+
+        if (empty($complaint_conditions)) {
+            $complaint_sql = '';
+        } else {
+            $complaint_sql = "SELECT " . implode(', ', $select_fields) . "
+                FROM chat_conversations c
+                {$customer_join}
+                WHERE (" . implode(' OR ', $complaint_conditions) . ")
+                {$status_condition}
+                ORDER BY " . implode(', ', $order_parts) . "
+                LIMIT 15";
+        }
+        $complaint_rows = $complaint_sql !== '' ? saFetchRows($conn, $complaint_sql) : [];
+        foreach ($complaint_rows as $row) {
+            $priority = strtolower((string)($row['priority'] ?? 'medium'));
+            $severity = ($priority === 'urgent' || (int)$row['is_escalated'] === 1) ? 'critical' : ($priority === 'high' ? 'high' : 'medium');
+            $customer = !empty($row['customer_name']) ? $row['customer_name'] : 'Customer #' . $row['customer_id'];
+
+            $alerts[] = [
+                'id' => 'complaint_' . $row['id'],
+                'category' => 'complaint',
+                'category_label' => 'Shop Complaint',
+                'icon' => 'fa-comments-dollar',
+                'title' => (string)($row['subject'] ?: 'Customer Complaint'),
+                'message' => "Filed by {$customer} (Status: " . ucfirst($row['status']) . ")",
+                'severity' => $severity,
+                'status' => (string)$row['status'],
+                'created_at' => (string)($row['created_at'] ?? ''),
+                'time_ago' => saTimeElapsedString($row['created_at'] ?? null),
+                'link' => '../admin/alerts.php?alert=' . urlencode('complaint_' . $row['id'])
+            ];
         }
     }
 
