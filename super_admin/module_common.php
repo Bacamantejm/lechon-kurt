@@ -498,7 +498,7 @@ function saRenderModuleFooter($extra_scripts = '') {
                 pageItems.forEach(item => {
                     const el = document.createElement('a');
                     el.className = 'sa-item';
-                    el.href = item.link || 'alerts.php?alert=' + encodeURIComponent(item.id || '');
+                    el.href = item.link || ('../super_admin/alerts.php?alert=' + encodeURIComponent(item.id || ''));
                     const tagClass = item.category ? item.category : 'default';
                     el.innerHTML = `
                         <div class="sa-item-header">
@@ -611,7 +611,7 @@ function saRenderModuleFooter($extra_scripts = '') {
 
                     const item = document.createElement('a');
                     item.className = `sa-item ${isUnread ? 'unread' : ''}`;
-                    item.href = notification.link || 'notifications.php?id=' + encodeURIComponent(notification.id || '');
+                    item.href = notification.link || ('../super_admin/notifications.php?id=' + encodeURIComponent(notification.id || ''));
                     item.innerHTML = `
                         <div class="sa-item-header">
                             <span class="sa-tag ${statusTag}">${escapeHtml(statusTag.toUpperCase())}</span>

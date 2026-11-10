@@ -8,6 +8,16 @@ checkAdminAccess();
 
 $user_id = (int)($_SESSION['user_id'] ?? 0);
 $notification_id = (int)($_GET['id'] ?? 0);
+
+if (function_exists('sessionIsSuperAdmin') && sessionIsSuperAdmin($conn, $user_id)) {
+    $redirect = '../super_admin/notifications.php';
+    if ($notification_id > 0) {
+        $redirect .= '?id=' . $notification_id;
+    }
+    header('Location: ' . $redirect);
+    exit;
+}
+
 $has_notifications = adminAuthTableExists($conn, 'notifications');
 $csrf_token = generateCSRFToken();
 

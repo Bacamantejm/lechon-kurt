@@ -329,13 +329,13 @@ function fetchSuperAdminNotifications($conn, int $userId): array {
                 || strpos($type, 'franchise') !== false
                 || strpos($type, 'business_application') !== false
             ) {
-                $row['link'] = 'franchise_applications.php' . ($rel_id > 0 ? '?search=' . $rel_id : '');
+                $row['link'] = '../super_admin/franchise_applications.php' . ($rel_id > 0 ? '?search=' . $rel_id : '');
             } elseif ($rel_type === 'order' || strpos($type, 'order') !== false) {
-                $row['link'] = 'transactions_financial.php';
+                $row['link'] = '../super_admin/transactions_financial.php';
             } elseif ($rel_type === 'user') {
-                $row['link'] = 'user_business_management.php';
+                $row['link'] = '../super_admin/user_business_management.php';
             } else {
-                $row['link'] = 'notifications.php?id=' . (int)$row['id'];
+                $row['link'] = '../super_admin/notifications.php?id=' . (int)$row['id'];
             }
 
             $notifications[] = $row;
