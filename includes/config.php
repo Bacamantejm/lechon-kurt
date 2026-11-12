@@ -548,6 +548,18 @@ if (!function_exists('ensureOnlyJmLechonStoreAndMenu')) {
             if (appTableExists($conn, 'cart') && appTableExists($conn, 'products')) {
                 @mysqli_query($conn, "DELETE FROM cart WHERE product_id NOT IN (SELECT id FROM products)");
             }
+
+            // 10. Clean legacy sample, dummy, and test promotional vouchers
+            if (appTableExists($conn, 'partner_vouchers')) {
+                $sample_voucher_codes = "'RBINMINIVOUCHER', 'LYDIA20', 'DELIGHT25', 'MAIN10', 'JUSTINE50', 'JANNA15', 'JAKOL10'";
+                if (appTableExists($conn, 'partner_voucher_redemptions')) {
+                    @mysqli_query($conn, "DELETE FROM partner_voucher_redemptions WHERE voucher_code IN ({$sample_voucher_codes}) OR voucher_id IN (SELECT id FROM partner_vouchers WHERE code IN ({$sample_voucher_codes}))");
+                }
+                @mysqli_query($conn, "DELETE FROM partner_vouchers WHERE code IN ({$sample_voucher_codes}) OR name LIKE '%sample%' OR code LIKE '%sample%'");
+                if (appTableExists($conn, 'users')) {
+                    @mysqli_query($conn, "DELETE FROM partner_vouchers WHERE seller_id > 0 AND seller_id NOT IN (SELECT id FROM users WHERE is_active = 1 AND (account_type = 'organization' OR role = 'seller' OR role = 'admin'))");
+                }
+            }
         } catch (Throwable $e) {
             // Guard clause to avoid breaking page requests
         }
