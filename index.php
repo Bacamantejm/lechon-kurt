@@ -4590,6 +4590,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             JOIN users u ON pv.seller_id = u.id
                             WHERE pv.is_active = 1
                               AND pv.seller_id > 0
+                              AND pv.code NOT IN ('RBINMINIVOUCHER', 'LYDIA20', 'DELIGHT25', 'MAIN10', 'JUSTINE50', 'JANNA15', 'JAKOL10')
+                              AND u.is_active = 1
                               AND (pv.start_at IS NULL OR pv.start_at <= NOW())
                               AND (pv.end_at IS NULL OR pv.end_at >= NOW())
                             ORDER BY pv.id DESC

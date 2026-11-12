@@ -156,6 +156,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_voucher'])) {
     exit();
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_voucher'])) {
+    $voucher_id = (int)($_POST['voucher_id'] ?? 0);
+    if ($voucher_id > 0) {
+        if ($is_full_admin) {
+            @mysqli_query($conn, "DELETE FROM partner_voucher_redemptions WHERE voucher_id = {$voucher_id}");
+            $del_stmt = mysqli_prepare($conn, "DELETE FROM partner_vouchers WHERE id = ?");
+            if ($del_stmt) {
+                mysqli_stmt_bind_param($del_stmt, "i", $voucher_id);
+                mysqli_stmt_execute($del_stmt);
+                $_SESSION['success'] = 'Voucher deleted permanently.';
+                mysqli_stmt_close($del_stmt);
+            }
+        } else {
+            @mysqli_query($conn, "DELETE FROM partner_voucher_redemptions WHERE voucher_id = {$voucher_id} AND seller_id = {$seller_scope_id}");
+            $del_stmt = mysqli_prepare($conn, "DELETE FROM partner_vouchers WHERE id = ? AND seller_id = ?");
+            if ($del_stmt) {
+                mysqli_stmt_bind_param($del_stmt, "ii", $voucher_id, $seller_scope_id);
+                mysqli_stmt_execute($del_stmt);
+                $_SESSION['success'] = 'Voucher deleted permanently.';
+                mysqli_stmt_close($del_stmt);
+            }
+        }
+    } else {
+        $_SESSION['error'] = 'Invalid voucher selection.';
+    }
+
+    header('Location: vouchers.php');
+    exit();
+}
+
 $vouchers = [];
 $total_redemptions = 0;
 if ($is_full_admin) {
@@ -1298,9 +1328,17 @@ unset($_SESSION['success'], $_SESSION['error']);
                                     <form method="POST" id="<?php echo htmlspecialchars($form_id); ?>" class="d-inline">
                                         <input type="hidden" name="toggle_voucher" value="1">
                                         <input type="hidden" name="voucher_id" value="<?php echo (int)$v['id']; ?>">
-                                        <button type="button" class="btn btn-sm <?php echo $active ? 'btn-outline-danger' : 'btn-outline-success'; ?>" data-form-id="<?php echo htmlspecialchars($form_id); ?>" data-code="<?php echo htmlspecialchars((string)$v['code']); ?>" data-is-active="<?php echo $active ? '1' : '0'; ?>" onclick="confirmVoucherToggle(this)" style="font-size: 12px; font-weight: 600; padding: 4px 12px;">
+                                        <button type="button" class="btn btn-sm <?php echo $active ? 'btn-outline-warning' : 'btn-outline-success'; ?>" data-form-id="<?php echo htmlspecialchars($form_id); ?>" data-code="<?php echo htmlspecialchars((string)$v['code']); ?>" data-is-active="<?php echo $active ? '1' : '0'; ?>" onclick="confirmVoucherToggle(this)" style="font-size: 12px; font-weight: 600; padding: 4px 10px;">
                                             <i class="fas <?php echo $active ? 'fa-pause' : 'fa-play'; ?> me-1"></i>
                                             <?php echo $active ? 'Deactivate' : 'Activate'; ?>
+                                        </button>
+                                    </form>
+                                    <form method="POST" id="del_<?php echo htmlspecialchars($form_id); ?>" class="d-inline ms-1">
+                                        <input type="hidden" name="delete_voucher" value="1">
+                                        <input type="hidden" name="voucher_id" value="<?php echo (int)$v['id']; ?>">
+                                        <button type="button" class="btn btn-sm btn-outline-danger" data-form-id="del_<?php echo htmlspecialchars($form_id); ?>" data-code="<?php echo htmlspecialchars((string)$v['code']); ?>" onclick="confirmVoucherDelete(this)" style="font-size: 12px; font-weight: 600; padding: 4px 10px;">
+                                            <i class="fas fa-trash-alt me-1"></i>
+                                            Delete
                                         </button>
                                     </form>
                                 </td>
@@ -1608,6 +1646,27 @@ function confirmVoucherToggle(button) {
         confirmButtonText: 'Yes, ' + action + ' it',
         cancelButtonText: 'Cancel',
         confirmButtonColor: isActive ? '#dc2626' : '#16a34a',
+        cancelButtonColor: '#6b7280'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const form = document.getElementById(formId);
+            if (form) form.submit();
+        }
+    });
+}
+
+// Delete Voucher Confirmation
+function confirmVoucherDelete(button) {
+    const formId = button.getAttribute('data-form-id');
+    const code = button.getAttribute('data-code') || 'voucher';
+    Swal.fire({
+        title: 'Delete voucher?',
+        text: 'Are you sure you want to permanently delete ' + code + '? This action cannot be undone.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, delete it',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#b3261e',
         cancelButtonColor: '#6b7280'
     }).then((result) => {
         if (result.isConfirmed) {

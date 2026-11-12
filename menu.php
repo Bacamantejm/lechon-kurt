@@ -962,6 +962,7 @@ if ($lookup_seller_id > 0 && isset($conn) && $conn instanceof mysqli) {
         SELECT id, seller_id, code, name, description, discount_type, discount_value, min_order_amount, max_discount_amount 
         FROM partner_vouchers 
         WHERE (seller_id = ? OR seller_id = 0) AND is_active = 1 
+          AND code NOT IN ('RBINMINIVOUCHER', 'LYDIA20', 'DELIGHT25', 'MAIN10', 'JUSTINE50', 'JANNA15', 'JAKOL10')
           AND (start_at IS NULL OR start_at <= NOW()) 
           AND (end_at IS NULL OR end_at >= NOW()) 
         ORDER BY (seller_id = ?) DESC, id DESC 

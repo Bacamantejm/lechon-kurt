@@ -211,6 +211,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_voucher'])) {
     exit;
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_voucher'])) {
+    $voucher_id = (int)($_POST['voucher_id'] ?? 0);
+    if ($voucher_id > 0) {
+        @mysqli_query($conn, "DELETE FROM partner_voucher_redemptions WHERE voucher_id = {$voucher_id} AND seller_id = {$user_id}");
+        $del_sql = "DELETE FROM partner_vouchers WHERE id = ? AND seller_id = ?";
+        $del_stmt = mysqli_prepare($conn, $del_sql);
+        if ($del_stmt) {
+            mysqli_stmt_bind_param($del_stmt, "ii", $voucher_id, $user_id);
+            mysqli_stmt_execute($del_stmt);
+            if (mysqli_stmt_affected_rows($del_stmt) > 0) {
+                $_SESSION['success'] = 'Voucher deleted permanently.';
+            } else {
+                $_SESSION['error'] = 'Voucher not found or unauthorized.';
+            }
+            mysqli_stmt_close($del_stmt);
+        } else {
+            $_SESSION['error'] = 'Unable to delete voucher right now.';
+        }
+    }
+
+    header('Location: seller_vouchers.php');
+    exit;
+}
+
 $vouchers = [];
 $list_stmt = mysqli_prepare($conn, "
     SELECT
@@ -427,12 +451,20 @@ include __DIR__ . '/includes/header.php';
                                     </span>
                                 </td>
                                 <td>
-                                    <form method="POST">
-                                        <input type="hidden" name="voucher_id" value="<?php echo (int)$voucher['id']; ?>">
-                                        <button type="submit" name="toggle_voucher" class="btn-pill <?php echo $is_active ? 'btn-secondary-lite' : 'btn-primary-lite'; ?>">
-                                            <?php echo $is_active ? 'Deactivate' : 'Activate'; ?>
-                                        </button>
-                                    </form>
+                                    <div style="display:flex; gap:6px;">
+                                        <form method="POST">
+                                            <input type="hidden" name="voucher_id" value="<?php echo (int)$voucher['id']; ?>">
+                                            <button type="submit" name="toggle_voucher" class="btn-pill <?php echo $is_active ? 'btn-secondary-lite' : 'btn-primary-lite'; ?>">
+                                                <?php echo $is_active ? 'Deactivate' : 'Activate'; ?>
+                                            </button>
+                                        </form>
+                                        <form method="POST" onsubmit="return confirm('Permanently delete this voucher?');">
+                                            <input type="hidden" name="voucher_id" value="<?php echo (int)$voucher['id']; ?>">
+                                            <button type="submit" name="delete_voucher" class="btn-pill btn-secondary-lite" style="color:#b3261e; border-color:#fee4e2;">
+                                                Delete
+                                            </button>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>

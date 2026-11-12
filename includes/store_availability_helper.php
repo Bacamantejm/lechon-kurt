@@ -133,14 +133,15 @@ function sahEnsureStoreLocationAvailabilitySchema($conn): void
             ensureMojibakeEncodingRepaired($conn);
         }
 
-        // 3. Partner Vouchers (Replace Γé▒50, â‚±, ré50 with clean ₱50)
+        // 3. Partner Vouchers (Replace Γé▒50, â‚±, ré50 with clean ₱50 & purge legacy sample vouchers)
         @mysqli_query($conn, "UPDATE partner_vouchers SET name = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(name, 'Ã¢â€šÂ±', '₱'), 'Γé▒', '₱'), 'â‚±', '₱'), 'â‚', '₱'), 'ré50', '₱50'), 'ré25', '₱25') WHERE name LIKE '%Γé▒%' OR name LIKE '%â‚%' OR name LIKE '%ré%'");
         @mysqli_query($conn, "UPDATE partner_vouchers SET description = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(description, 'Ã¢â€šÂ±', '₱'), 'Γé▒', '₱'), 'â‚±', '₱'), 'â‚', '₱'), 'ré50', '₱50'), 'ré25', '₱25') WHERE description LIKE '%Γé▒%' OR description LIKE '%â‚%' OR description LIKE '%ré%'");
         @mysqli_query($conn, "UPDATE partner_vouchers SET name = 'New User Welcome ₱100 OFF', description = 'Get ₱100 flat discount on your first order.' WHERE code = 'WELCOME100'");
         @mysqli_query($conn, "UPDATE partner_vouchers SET name = '₱50 OFF Crispy Lechon Belly', description = 'Save ₱50 on lechon belly rolls and meal boxes.' WHERE code = 'BELLY50'");
-        @mysqli_query($conn, "UPDATE partner_vouchers SET name = '₱25 OFF Daily Special', description = 'Direct ₱25 discount on lechon meals and extra rice packages.' WHERE code = 'DELIGHT25'");
-        @mysqli_query($conn, "UPDATE partner_vouchers SET name = '₱50 OFF Justine Specialty', description = 'Enjoy ₱50 flat store discount on all specialty lechon packages.' WHERE code = 'JUSTINE50'");
         @mysqli_query($conn, "UPDATE partner_vouchers SET name = '15% OFF Celebration Pre-order', description = 'Save 15% on advance celebrations up to ₱300.' WHERE code = 'LECHON15'");
+        $sah_sample_codes = "'RBINMINIVOUCHER', 'LYDIA20', 'DELIGHT25', 'MAIN10', 'JUSTINE50', 'JANNA15', 'JAKOL10'";
+        @mysqli_query($conn, "DELETE FROM partner_voucher_redemptions WHERE voucher_code IN ({$sah_sample_codes})");
+        @mysqli_query($conn, "DELETE FROM partner_vouchers WHERE code IN ({$sah_sample_codes}) OR name LIKE '%sample%'");
 
         // 4. Partner Advertisements
         @mysqli_query($conn, "UPDATE partner_advertisements SET title = REPLACE(REPLACE(REPLACE(title, 'Γé▒', '₱'), 'â‚±', '₱'), 'â‚', '₱'), description = REPLACE(REPLACE(REPLACE(REPLACE(description, 'Ã¢â€šÂ±', '₱'), 'Γé▒', '₱'), 'â‚±', '₱'), 'â‚', '₱') WHERE title LIKE '%Γé▒%' OR title LIKE '%â‚%' OR description LIKE '%Γé▒%' OR description LIKE '%â‚%'");
