@@ -125,7 +125,7 @@ if (!function_exists('pvEnsureVoucherSchema')) {
 
         $sample_codes = "'RBINMINIVOUCHER', 'LYDIA20', 'DELIGHT25', 'MAIN10', 'JUSTINE50', 'JANNA15', 'JAKOL10'";
         @mysqli_query($conn, "DELETE FROM `partner_voucher_redemptions` WHERE `voucher_code` IN ({$sample_codes})");
-        @mysqli_query($conn, "DELETE FROM `partner_vouchers` WHERE `code` IN ({$sample_codes}) OR `name` LIKE '%sample%'");
+        @mysqli_query($conn, "DELETE FROM `partner_vouchers` WHERE `code` IN ({$sample_codes})");
     }
 }
 
@@ -907,7 +907,7 @@ if (!function_exists('pvFetchAvailableVouchersForCart')) {
                 WHERE pv.is_active = 1 
                   AND pv.code NOT IN ('RBINMINIVOUCHER', 'LYDIA20', 'DELIGHT25', 'MAIN10', 'JUSTINE50', 'JANNA15', 'JAKOL10')
                   AND (pv.seller_id = 0 OR pv.seller_id = {$cart_seller_id})
-                  AND (pv.start_at IS NULL OR pv.start_at <= NOW())
+                  AND (pv.start_at IS NULL OR pv.start_at <= DATE_ADD(NOW(), INTERVAL 1 DAY))
                   AND (pv.end_at IS NULL OR pv.end_at >= NOW())
                 ORDER BY pv.seller_id DESC, pv.discount_value DESC";
         $res = @mysqli_query($conn, $sql);

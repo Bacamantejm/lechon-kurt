@@ -141,7 +141,7 @@ function sahEnsureStoreLocationAvailabilitySchema($conn): void
         @mysqli_query($conn, "UPDATE partner_vouchers SET name = '15% OFF Celebration Pre-order', description = 'Save 15% on advance celebrations up to ₱300.' WHERE code = 'LECHON15'");
         $sah_sample_codes = "'RBINMINIVOUCHER', 'LYDIA20', 'DELIGHT25', 'MAIN10', 'JUSTINE50', 'JANNA15', 'JAKOL10'";
         @mysqli_query($conn, "DELETE FROM partner_voucher_redemptions WHERE voucher_code IN ({$sah_sample_codes})");
-        @mysqli_query($conn, "DELETE FROM partner_vouchers WHERE code IN ({$sah_sample_codes}) OR name LIKE '%sample%'");
+        @mysqli_query($conn, "DELETE FROM partner_vouchers WHERE code IN ({$sah_sample_codes})");
 
         // 4. Partner Advertisements
         @mysqli_query($conn, "UPDATE partner_advertisements SET title = REPLACE(REPLACE(REPLACE(title, 'Γé▒', '₱'), 'â‚±', '₱'), 'â‚', '₱'), description = REPLACE(REPLACE(REPLACE(REPLACE(description, 'Ã¢â€šÂ±', '₱'), 'Γé▒', '₱'), 'â‚±', '₱'), 'â‚', '₱') WHERE title LIKE '%Γé▒%' OR title LIKE '%â‚%' OR description LIKE '%Γé▒%' OR description LIKE '%â‚%'");

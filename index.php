@@ -4584,18 +4584,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (isset($conn) && $conn instanceof mysqli) {
                         $sp_sql = "
                             SELECT pv.*, 
-                                   COALESCE(NULLIF(TRIM(u.business_name), ''), u.full_name, 'Partner Shop') AS shop_name,
+                                   COALESCE(
+                                       NULLIF(TRIM(sl.store_name), ''), 
+                                       NULLIF(TRIM(u.business_name), ''), 
+                                       NULLIF(TRIM(u.full_name), ''), 
+                                       'JM Lechon'
+                                   ) AS shop_name,
+                                   COALESCE(NULLIF(sl.store_id, 0), NULLIF(pv.seller_id, 0), 7) AS resolved_store_id,
                                    u.id AS seller_user_id
                             FROM partner_vouchers pv
-                            JOIN users u ON pv.seller_id = u.id
+                            LEFT JOIN users u ON pv.seller_id = u.id
+                            LEFT JOIN store_locations sl ON (sl.owner_user_id = pv.seller_id OR sl.store_id = pv.seller_id)
                             WHERE pv.is_active = 1
-                              AND pv.seller_id > 0
                               AND pv.code NOT IN ('RBINMINIVOUCHER', 'LYDIA20', 'DELIGHT25', 'MAIN10', 'JUSTINE50', 'JANNA15', 'JAKOL10')
-                              AND u.is_active = 1
-                              AND (pv.start_at IS NULL OR pv.start_at <= NOW())
+                              AND (pv.start_at IS NULL OR pv.start_at <= DATE_ADD(NOW(), INTERVAL 1 DAY))
                               AND (pv.end_at IS NULL OR pv.end_at >= NOW())
                             ORDER BY pv.id DESC
-                            LIMIT 6
+                            LIMIT 12
                         ";
                         $sp_res = @mysqli_query($conn, $sp_sql);
                         if ($sp_res) {
@@ -4626,9 +4631,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                     $sp_min = (float)$sp['min_order_amount'];
                                     $sp_min_label = $sp_min > 0 ? ('*Min. spend ₱' . number_format($sp_min, 2)) : '*Terms & conditions apply';
                                     $sp_code = htmlspecialchars((string)$sp['code']);
-                                    $sp_seller_id = (int)$sp['seller_id'];
+                                    $sp_seller_id = (int)($sp['resolved_store_id'] ?? $sp['seller_id']);
                                     $sp_shop_name = htmlspecialchars((string)$sp['shop_name']);
-                                    $sp_target_url = 'menu.php?seller_id=' . $sp_seller_id;
+                                    $sp_target_url = $sp_seller_id > 0 ? ('menu.php?seller_id=' . $sp_seller_id) : 'shops.php';
                                 ?>
                                 <article class="deal-card voucher-deal-ticket">
                                     <div class="voucher-ticket-stub" style="background: linear-gradient(180deg, #175cd3 0%, #1e40af 100%);">
