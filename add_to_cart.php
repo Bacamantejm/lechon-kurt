@@ -35,7 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         sendJsonResponse(false, 'Missing required data');
     }
     
-    $product_id = intval($_POST['product_id']); // Use numeric ID
+    $product_id_input = trim((string)$_POST['product_id']);
+    $product_numeric_id = is_numeric($product_id_input) ? intval($product_id_input) : 0;
     $quantity = intval($_POST['quantity']);
     $size = isset($_POST['size']) ? trim($_POST['size']) : 'Regular';
     $price = isset($_POST['price']) ? floatval($_POST['price']) : 0;
@@ -74,13 +75,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     p.image,
                     p.price,
                     p.seller_id,
+                    COALESCE(NULLIF(TRIM(u.business_name), ''), NULLIF(TRIM(u.full_name), ''), 'Lechon Delights') AS store_name,
                     COALESCE(i.current_stock, p.stock, 0) AS available_stock
                   FROM products p
+                  LEFT JOIN users u ON p.seller_id = u.id
                   LEFT JOIN inventory i
                     ON p.id = i.product_id
                     AND i.inventory_date = CURDATE()
                     AND i.is_archived = 0
-                  WHERE p.id = ?
+                  WHERE (p.id = ? OR p.product_id = ?)
                     AND p.is_active = 1
                     AND p.is_archived = 0
                   LIMIT 1";
@@ -90,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('Database prepare failed: ' . mysqli_error($conn));
         }
         
-        mysqli_stmt_bind_param($stmt, "i", $product_id);
+        mysqli_stmt_bind_param($stmt, "is", $product_numeric_id, $product_id_input);
         
         if (!mysqli_stmt_execute($stmt)) {
             throw new Exception('Database execute failed: ' . mysqli_stmt_error($stmt));
@@ -103,10 +106,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         if ($product = mysqli_fetch_assoc($result)) {
+            $product_id = (int)$product['id'];
             $product_name = $product['name'];
             $product_image = !empty($_POST['size_image']) ? trim($_POST['size_image']) : $product['image'];
             $string_product_id = $product['product_id'];
             $product_seller_id = (int)($product['seller_id'] ?? 0);
+            $product_store_name = !empty($product['store_name']) ? (string)$product['store_name'] : 'Lechon Delights';
             $available_stock = max(0, (int)$product['available_stock']);
             
             // If price is 0, get from database
@@ -115,6 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             
             mysqli_stmt_close($stmt);
+            mysqli_close($conn);
         } else {
             mysqli_stmt_close($stmt);
             mysqli_close($conn);
@@ -123,16 +129,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } catch (Exception $e) {
         // Clean up any open connections
         if (isset($stmt)) mysqli_stmt_close($stmt);
-        if (isset($conn)) mysqli_close($conn);
+        if (isset($conn) && $conn instanceof mysqli) mysqli_close($conn);
         
         // Log error but don't show details to user
         error_log('Add to cart error: ' . $e->getMessage());
-            sendJsonResponse(false, 'Unable to process request. Please try again.');
+        sendJsonResponse(false, 'Unable to process request. Please try again.');
     }
 
     // Fallback unassigned product seller_id to 1 (main store)
     if (($product_seller_id ?? 0) <= 0) {
         $product_seller_id = 1;
+        $product_store_name = 'Lechon Delights';
     }
 
     $clear_and_add = !empty($_POST['clear_and_add']) || !empty($_POST['replace_cart']);
@@ -142,27 +149,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         unset($_SESSION['applied_voucher']);
     }
 
-    // Fetch store name for this product's seller
-    $product_store_name = 'Lechon Delights';
-    if ($product_seller_id > 0 && isset($conn) && $conn instanceof mysqli) {
-        $s_stmt = mysqli_prepare($conn, "SELECT COALESCE(NULLIF(TRIM(business_name), ''), full_name, 'Partner Store') AS store_name FROM users WHERE id = ?");
-        if ($s_stmt) {
-            mysqli_stmt_bind_param($s_stmt, "i", $product_seller_id);
-            mysqli_stmt_execute($s_stmt);
-            $s_res = mysqli_stmt_get_result($s_stmt);
-            if ($s_row = mysqli_fetch_assoc($s_res)) {
-                $product_store_name = (string)$s_row['store_name'];
-            }
-            mysqli_free_result($s_res);
-            mysqli_stmt_close($s_stmt);
-        }
-    }
-
     $_SESSION['storefront_seller_id'] = $product_seller_id;
-
-    if (isset($conn) && $conn instanceof mysqli) {
-        mysqli_close($conn);
-    }
 
     // Enforce stock-based maximum (not just hardcoded 20)
     $requested_quantity = $quantity;
