@@ -465,26 +465,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email = trim($_POST['email'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
         $employee_card_number = trim($_POST['employee_card_number'] ?? '');
-        if ($employee_card_number === '') {
-            $_SESSION['error'] = "Card Number / Employee ID is required.";
-            header("Location: employees.php");
-            exit();
-        }
-        $check_id = isset($id) ? (int)$id : 0;
-        $dup_chk_upd = mysqli_prepare($conn, "SELECT id FROM employees WHERE employee_id = ? AND (? = 0 OR id != ?) LIMIT 1");
-        if ($dup_chk_upd) {
-            mysqli_stmt_bind_param($dup_chk_upd, "sii", $employee_card_number, $check_id, $check_id);
-            mysqli_stmt_execute($dup_chk_upd);
-            mysqli_stmt_store_result($dup_chk_upd);
-            $has_dup = mysqli_stmt_num_rows($dup_chk_upd) > 0;
-            mysqli_stmt_close($dup_chk_upd);
-            if ($has_dup) {
-                $_SESSION['error'] = "Card Number / Employee ID '{$employee_card_number}' is already assigned to another employee.";
-                header("Location: employees.php");
-                exit();
+        if ($employee_card_number !== '') {
+            $dup_chk_upd = mysqli_prepare($conn, "SELECT id FROM employees WHERE employee_id = ? LIMIT 1");
+            if ($dup_chk_upd) {
+                mysqli_stmt_bind_param($dup_chk_upd, "s", $employee_card_number);
+                mysqli_stmt_execute($dup_chk_upd);
+                mysqli_stmt_store_result($dup_chk_upd);
+                $has_dup = mysqli_stmt_num_rows($dup_chk_upd) > 0;
+                mysqli_stmt_close($dup_chk_upd);
+                if ($has_dup) {
+                    $_SESSION['error'] = "Employee ID '{$employee_card_number}' is already assigned to another employee.";
+                    header("Location: employees.php");
+                    exit();
+                }
             }
+            $employee_id = $employee_card_number;
+        } else {
+            // Auto-generate unique EMP-YYYYMMDD-XXXX
+            do {
+                $candidate_emp_id = 'EMP-' . date('Ymd') . '-' . str_pad((string)rand(100, 9999), 4, '0', STR_PAD_LEFT);
+                $chk_stmt = mysqli_prepare($conn, "SELECT id FROM employees WHERE employee_id = ? LIMIT 1");
+                $is_unique = true;
+                if ($chk_stmt) {
+                    mysqli_stmt_bind_param($chk_stmt, "s", $candidate_emp_id);
+                    mysqli_stmt_execute($chk_stmt);
+                    mysqli_stmt_store_result($chk_stmt);
+                    if (mysqli_stmt_num_rows($chk_stmt) > 0) {
+                        $is_unique = false;
+                    }
+                    mysqli_stmt_close($chk_stmt);
+                }
+            } while (!$is_unique);
+            $employee_id = $candidate_emp_id;
         }
-        $employee_id = $employee_card_number;
         $department_id = isset($_POST['department_id']) && $_POST['department_id'] !== '' ? intval($_POST['department_id']) : 0;
         $store_id = isset($_POST['store_id']) && $_POST['store_id'] !== '' ? intval($_POST['store_id']) : 0;
         if ($store_id <= 0) {
@@ -615,25 +628,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['error'] = "Password and Role are required when creating a user account.";
         } elseif ($create_user && $user_check_has_rows) {
             $_SESSION['error'] = "Email is already registered to a user account.";
-        } elseif ($employee_card_number === '') {
-            $_SESSION['error'] = "Card Number / Employee ID is required.";
         } elseif ($first_name === '' || $last_name === '' || $email === '' || $phone === '') {
             $_SESSION['error'] = "Please fill in all required personal fields (First Name, Last Name, Email, and Phone).";
+        } elseif ($sss === '' || $philhealth === '' || $pagibig === '' || $tin === '') {
+            $_SESSION['error'] = "All Government Compliance IDs (SSS, PhilHealth, Pag-IBIG, and TIN) are required.";
         } else { // Proceed with adding employee
-            $dup_chk_stmt = mysqli_prepare($conn, "SELECT id FROM employees WHERE employee_id = ? LIMIT 1");
-            if ($dup_chk_stmt) {
-                mysqli_stmt_bind_param($dup_chk_stmt, "s", $employee_card_number);
-                mysqli_stmt_execute($dup_chk_stmt);
-                mysqli_stmt_store_result($dup_chk_stmt);
-                $has_dup = mysqli_stmt_num_rows($dup_chk_stmt) > 0;
-                mysqli_stmt_close($dup_chk_stmt);
-                if ($has_dup) {
-                    $_SESSION['error'] = "Card Number / Employee ID '{$employee_card_number}' is already assigned to another employee.";
-                    header("Location: employees.php");
-                    exit();
-                }
-            }
-            $employee_id = $employee_card_number;
             // Auto fallback defaults for optional attributes
             if ($department_id <= 0 && !empty($departments)) {
                 $department_id = (int)$departments[0]['id'];
@@ -875,26 +874,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email = trim($_POST['email'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
         $employee_card_number = trim($_POST['employee_card_number'] ?? '');
-        if ($employee_card_number === '') {
-            $_SESSION['error'] = "Card Number / Employee ID is required.";
-            header("Location: employees.php");
-            exit();
-        }
-        $check_id = isset($id) ? (int)$id : 0;
-        $dup_chk_upd = mysqli_prepare($conn, "SELECT id FROM employees WHERE employee_id = ? AND (? = 0 OR id != ?) LIMIT 1");
-        if ($dup_chk_upd) {
-            mysqli_stmt_bind_param($dup_chk_upd, "sii", $employee_card_number, $check_id, $check_id);
-            mysqli_stmt_execute($dup_chk_upd);
-            mysqli_stmt_store_result($dup_chk_upd);
-            $has_dup = mysqli_stmt_num_rows($dup_chk_upd) > 0;
-            mysqli_stmt_close($dup_chk_upd);
-            if ($has_dup) {
-                $_SESSION['error'] = "Card Number / Employee ID '{$employee_card_number}' is already assigned to another employee.";
-                header("Location: employees.php");
-                exit();
+        $curr_eid = '';
+        if ($id > 0) {
+            $curr_eid_q = mysqli_query($conn, "SELECT employee_id FROM employees WHERE id = {$id} LIMIT 1");
+            if ($curr_eid_q && ($curr_eid_r = mysqli_fetch_assoc($curr_eid_q))) {
+                $curr_eid = (string)$curr_eid_r['employee_id'];
             }
         }
-        $employee_id = $employee_card_number;
+        if ($employee_card_number === '') {
+            $employee_id = $curr_eid;
+        } else {
+            $check_id = isset($id) ? (int)$id : 0;
+            $dup_chk_upd = mysqli_prepare($conn, "SELECT id FROM employees WHERE employee_id = ? AND (? = 0 OR id != ?) LIMIT 1");
+            if ($dup_chk_upd) {
+                mysqli_stmt_bind_param($dup_chk_upd, "sii", $employee_card_number, $check_id, $check_id);
+                mysqli_stmt_execute($dup_chk_upd);
+                mysqli_stmt_store_result($dup_chk_upd);
+                $has_dup = mysqli_stmt_num_rows($dup_chk_upd) > 0;
+                mysqli_stmt_close($dup_chk_upd);
+                if ($has_dup) {
+                    $_SESSION['error'] = "Employee ID '{$employee_card_number}' is already assigned to another employee.";
+                    header("Location: employees.php");
+                    exit();
+                }
+            }
+            $employee_id = $employee_card_number;
+        }
         $department_id = isset($_POST['department_id']) && $_POST['department_id'] !== '' ? intval($_POST['department_id']) : 0;
         $store_id = isset($_POST['store_id']) && $_POST['store_id'] !== '' ? intval($_POST['store_id']) : 0;
         if ($store_id <= 0 && $id > 0) {
@@ -970,6 +975,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($first_name === '' || $last_name === '' || $email === '' || $phone === '') {
             $_SESSION['error'] = "Please fill in all required personal fields (First Name, Last Name, Email, and Phone).";
+            header("Location: employees.php");
+            exit();
+        }
+
+        if ($sss === '' || $philhealth === '' || $pagibig === '' || $tin === '') {
+            $_SESSION['error'] = "All Government Compliance IDs (SSS, PhilHealth, Pag-IBIG, and TIN) are required.";
             header("Location: employees.php");
             exit();
         }
@@ -2785,18 +2796,6 @@ if ($roles_query instanceof mysqli_result) {
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-12">
-                                    <div class="emp-form-group">
-                                        <label class="emp-label">Card Number / Employee ID <span class="emp-req-star">*</span></label>
-                                        <div class="emp-input-wrap">
-                                            <i class="fas fa-id-card emp-input-icon"></i>
-                                            <input type="text" name="employee_card_number" class="form-control" placeholder="e.g. EMP-1001 or RFID Card #" required>
-                                        </div>
-                                        <div class="emp-helper-text">
-                                            <i class="fas fa-info-circle"></i> Physical RFID card or employee badge number for attendance.
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
                         </div>
 
@@ -2804,42 +2803,42 @@ if ($roles_query instanceof mysqli_result) {
                         <div class="emp-section-card">
                             <div class="emp-section-head">
                                 <span class="emp-section-title"><i class="fas fa-id-card"></i> Government Compliance IDs</span>
-                                <span class="emp-req-pill" style="background: #f1f5f9; color: #475467; border: 1px solid #cbd5e1;">Optional</span>
+                                <span class="emp-req-pill">Required</span>
                             </div>
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">SSS Number <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
+                                        <label class="emp-label">SSS Number <span class="emp-req-star">*</span></label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-shield-alt emp-input-icon"></i>
-                                            <input type="text" name="sss_number" class="form-control" placeholder="XX-XXXXXXX-X">
+                                            <input type="text" name="sss_number" class="form-control" placeholder="XX-XXXXXXX-X" required>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">PhilHealth Number <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
+                                        <label class="emp-label">PhilHealth Number <span class="emp-req-star">*</span></label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-heartbeat emp-input-icon"></i>
-                                            <input type="text" name="philhealth_number" class="form-control" placeholder="XX-XXXXXXXXX-X">
+                                            <input type="text" name="philhealth_number" class="form-control" placeholder="XX-XXXXXXXXX-X" required>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">Pag-IBIG Number <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
+                                        <label class="emp-label">Pag-IBIG Number <span class="emp-req-star">*</span></label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-home emp-input-icon"></i>
-                                            <input type="text" name="pagibig_number" class="form-control" placeholder="XXXX-XXXX-XXXX">
+                                            <input type="text" name="pagibig_number" class="form-control" placeholder="XXXX-XXXX-XXXX" required>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">TIN (Tax Identification) <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
+                                        <label class="emp-label">TIN (Tax Identification) <span class="emp-req-star">*</span></label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-file-invoice-dollar emp-input-icon"></i>
-                                            <input type="text" name="tin_number" class="form-control" placeholder="XXX-XXX-XXX-XXX">
+                                            <input type="text" name="tin_number" class="form-control" placeholder="XXX-XXX-XXX-XXX" required>
                                         </div>
                                     </div>
                                 </div>
@@ -3093,10 +3092,10 @@ if ($roles_query instanceof mysqli_result) {
                                 </div>
                                 <div class="col-md-12">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">Card Number / Employee ID <span class="emp-req-star">*</span></label>
+                                        <label class="emp-label">Card Number / Employee ID</label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-id-card emp-input-icon"></i>
-                                            <input type="text" name="employee_card_number" id="edit_employee_card_number" class="form-control" placeholder="e.g. EMP-1001 or RFID Card #" required>
+                                            <input type="text" name="employee_card_number" id="edit_employee_card_number" class="form-control" placeholder="e.g. EMP-1001 or RFID Card #">
                                         </div>
                                         <div class="emp-helper-text">
                                             <i class="fas fa-info-circle"></i> Physical RFID card or employee badge number for attendance.
@@ -3110,42 +3109,42 @@ if ($roles_query instanceof mysqli_result) {
                         <div class="emp-section-card">
                             <div class="emp-section-head">
                                 <span class="emp-section-title"><i class="fas fa-id-card"></i> Government Compliance IDs</span>
-                                <span class="emp-req-pill" style="background: #f1f5f9; color: #475467; border: 1px solid #cbd5e1;">Optional</span>
+                                <span class="emp-req-pill">Required</span>
                             </div>
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">SSS Number <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
+                                        <label class="emp-label">SSS Number <span class="emp-req-star">*</span></label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-shield-alt emp-input-icon"></i>
-                                            <input type="text" name="sss_number" id="edit_sss" class="form-control" placeholder="XX-XXXXXXX-X">
+                                            <input type="text" name="sss_number" id="edit_sss" class="form-control" placeholder="XX-XXXXXXX-X" required>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">PhilHealth Number <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
+                                        <label class="emp-label">PhilHealth Number <span class="emp-req-star">*</span></label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-heartbeat emp-input-icon"></i>
-                                            <input type="text" name="philhealth_number" id="edit_philhealth" class="form-control" placeholder="XX-XXXXXXXXX-X">
+                                            <input type="text" name="philhealth_number" id="edit_philhealth" class="form-control" placeholder="XX-XXXXXXXXX-X" required>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">Pag-IBIG Number <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
+                                        <label class="emp-label">Pag-IBIG Number <span class="emp-req-star">*</span></label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-home emp-input-icon"></i>
-                                            <input type="text" name="pagibig_number" id="edit_pagibig" class="form-control" placeholder="XXXX-XXXX-XXXX">
+                                            <input type="text" name="pagibig_number" id="edit_pagibig" class="form-control" placeholder="XXXX-XXXX-XXXX" required>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">TIN (Tax Identification) <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
+                                        <label class="emp-label">TIN (Tax Identification) <span class="emp-req-star">*</span></label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-file-invoice-dollar emp-input-icon"></i>
-                                            <input type="text" name="tin_number" id="edit_tin" class="form-control" placeholder="XXX-XXX-XXX-XXX">
+                                            <input type="text" name="tin_number" id="edit_tin" class="form-control" placeholder="XXX-XXX-XXX-XXX" required>
                                         </div>
                                     </div>
                                 </div>
