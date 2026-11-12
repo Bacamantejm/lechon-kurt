@@ -6,6 +6,4 @@ WHERE `voucher_code` IN ('RBINMINIVOUCHER', 'LYDIA20', 'DELIGHT25', 'MAIN10', 'J
    OR `voucher_id` IN (SELECT `id` FROM `partner_vouchers` WHERE `code` IN ('RBINMINIVOUCHER', 'LYDIA20', 'DELIGHT25', 'MAIN10', 'JUSTINE50', 'JANNA15', 'JAKOL10'));
 
 DELETE FROM `partner_vouchers` 
-WHERE `code` IN ('RBINMINIVOUCHER', 'LYDIA20', 'DELIGHT25', 'MAIN10', 'JUSTINE50', 'JANNA15', 'JAKOL10')
-   OR `name` LIKE '%sample%' 
-   OR `code` LIKE '%sample%';
+WHERE `code` IN ('RBINMINIVOUCHER', 'LYDIA20', 'DELIGHT25', 'MAIN10', 'JUSTINE50', 'JANNA15', 'JAKOL10');

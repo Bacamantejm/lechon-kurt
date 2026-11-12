@@ -963,7 +963,7 @@ if ($lookup_seller_id > 0 && isset($conn) && $conn instanceof mysqli) {
         FROM partner_vouchers 
         WHERE (seller_id = ? OR seller_id = 0) AND is_active = 1 
           AND code NOT IN ('RBINMINIVOUCHER', 'LYDIA20', 'DELIGHT25', 'MAIN10', 'JUSTINE50', 'JANNA15', 'JAKOL10')
-          AND (start_at IS NULL OR start_at <= NOW()) 
+          AND (start_at IS NULL OR start_at <= DATE_ADD(NOW(), INTERVAL 1 DAY)) 
           AND (end_at IS NULL OR end_at >= NOW()) 
         ORDER BY (seller_id = ?) DESC, id DESC 
         LIMIT 6
