@@ -942,7 +942,7 @@ if (!empty($_GET['voucher'])) {
     }
 }
 
-// Fetch active store-specific deals/vouchers for this shop
+// Fetch active store-specific deals/vouchers for this shop only
 $store_deals = [];
 $lookup_seller_id = (int)($requested_seller_id ?: ($store_owner_id ?? 0));
 if ($lookup_seller_id <= 0) {
@@ -950,26 +950,34 @@ if ($lookup_seller_id <= 0) {
         $lookup_seller_id = (int)$selected_pickup_branch['owner_user_id'];
     } elseif (!empty($_SESSION['storefront_seller_id']) && (int)$_SESSION['storefront_seller_id'] > 0) {
         $lookup_seller_id = (int)$_SESSION['storefront_seller_id'];
-    } else {
-        $lookup_seller_id = 1;
     }
 }
+$lookup_branch_id = (int)($requested_branch_id ?: ($selected_pickup_branch['store_id'] ?? 0));
 
-if ($lookup_seller_id > 0 && isset($conn) && $conn instanceof mysqli) {
+if (($lookup_seller_id > 0 || $lookup_branch_id > 0) && isset($conn) && $conn instanceof mysqli) {
     require_once __DIR__ . '/includes/partner_voucher_helper.php';
     pvEnsureVoucherSchema($conn);
     $vd_stmt = mysqli_prepare($conn, "
         SELECT id, seller_id, code, name, description, discount_type, discount_value, min_order_amount, max_discount_amount 
         FROM partner_vouchers 
-        WHERE (seller_id = ? OR seller_id = 0) AND is_active = 1 
+        WHERE (
+            (? > 0 AND seller_id = ?) 
+            OR (? > 0 AND seller_id = ?)
+            OR (? > 0 AND seller_id IN (SELECT store_id FROM store_locations WHERE owner_user_id = ?))
+        )
+          AND is_active = 1 
           AND code NOT IN ('RBINMINIVOUCHER', 'LYDIA20', 'DELIGHT25', 'MAIN10', 'JUSTINE50', 'JANNA15', 'JAKOL10')
           AND (start_at IS NULL OR start_at <= DATE_ADD(NOW(), INTERVAL 1 DAY)) 
           AND (end_at IS NULL OR end_at >= NOW()) 
-        ORDER BY (seller_id = ?) DESC, id DESC 
+        ORDER BY id DESC 
         LIMIT 6
     ");
     if ($vd_stmt) {
-        mysqli_stmt_bind_param($vd_stmt, "ii", $lookup_seller_id, $lookup_seller_id);
+        mysqli_stmt_bind_param($vd_stmt, "iiiiii", 
+            $lookup_seller_id, $lookup_seller_id,
+            $lookup_branch_id, $lookup_branch_id,
+            $lookup_seller_id, $lookup_seller_id
+        );
         mysqli_stmt_execute($vd_stmt);
         $vd_res = mysqli_stmt_get_result($vd_stmt);
         if ($vd_res) {
