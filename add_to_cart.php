@@ -142,66 +142,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         unset($_SESSION['applied_voucher']);
     }
 
-    $current_cart_seller_id = 0;
-    if (!empty($_SESSION['cart']) && function_exists('pvGetCheckoutTenantScope')) {
-        $cart_scope = pvGetCheckoutTenantScope($conn, $_SESSION['cart']);
-        if (empty($cart_scope['is_valid'])) {
-            if (isset($conn) && $conn instanceof mysqli) {
-                mysqli_close($conn);
+    // Fetch store name for this product's seller
+    $product_store_name = 'Lechon Delights';
+    if ($product_seller_id > 0 && isset($conn) && $conn instanceof mysqli) {
+        $s_stmt = mysqli_prepare($conn, "SELECT COALESCE(NULLIF(TRIM(business_name), ''), full_name, 'Partner Store') AS store_name FROM users WHERE id = ?");
+        if ($s_stmt) {
+            mysqli_stmt_bind_param($s_stmt, "i", $product_seller_id);
+            mysqli_stmt_execute($s_stmt);
+            $s_res = mysqli_stmt_get_result($s_stmt);
+            if ($s_row = mysqli_fetch_assoc($s_res)) {
+                $product_store_name = (string)$s_row['store_name'];
             }
-            sendJsonResponse(
-                false,
-                (string)($cart_scope['message'] ?? 'Your cart has mixed store items. Please review your cart before adding new items.'),
-                [
-                    'code' => 'MIXED_TENANT_CART_EXISTING',
-                    'redirect_url' => 'cart.php'
-                ]
-            );
+            mysqli_free_result($s_res);
+            mysqli_stmt_close($s_stmt);
         }
-        $current_cart_seller_id = (int)($cart_scope['seller_id'] ?? 0);
     }
 
-    if ($current_cart_seller_id > 0 && $product_seller_id !== $current_cart_seller_id) {
-        $curr_store_name = 'current store';
-        $new_store_name = 'new store';
-
-        if (isset($conn) && $conn instanceof mysqli) {
-            $s_stmt = mysqli_prepare($conn, "SELECT id, COALESCE(NULLIF(TRIM(business_name), ''), full_name, 'Partner Store') AS store_name FROM users WHERE id IN (?, ?)");
-            if ($s_stmt) {
-                mysqli_stmt_bind_param($s_stmt, "ii", $current_cart_seller_id, $product_seller_id);
-                mysqli_stmt_execute($s_stmt);
-                $s_res = mysqli_stmt_get_result($s_stmt);
-                while ($s_row = mysqli_fetch_assoc($s_res)) {
-                    if ((int)$s_row['id'] === $current_cart_seller_id) {
-                        $curr_store_name = (string)$s_row['store_name'];
-                    }
-                    if ((int)$s_row['id'] === $product_seller_id) {
-                        $new_store_name = (string)$s_row['store_name'];
-                    }
-                }
-                mysqli_free_result($s_res);
-                mysqli_stmt_close($s_stmt);
-            }
-            mysqli_close($conn);
-        }
-
-        sendJsonResponse(
-            false,
-            "Your cart already contains items from {$curr_store_name}. Would you like to clear your cart and start an order from {$new_store_name}?",
-            [
-                'code' => 'MIXED_TENANT_ADD_BLOCKED',
-                'current_seller_id' => $current_cart_seller_id,
-                'current_store_name' => $curr_store_name,
-                'attempted_seller_id' => $product_seller_id,
-                'new_store_name' => $new_store_name,
-                'redirect_url' => 'cart.php'
-            ]
-        );
-    }
-
-    $_SESSION['storefront_seller_id'] = $current_cart_seller_id > 0
-        ? $current_cart_seller_id
-        : $product_seller_id;
+    $_SESSION['storefront_seller_id'] = $product_seller_id;
 
     if (isset($conn) && $conn instanceof mysqli) {
         mysqli_close($conn);
@@ -216,11 +173,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $response_message = 'Item added to cart';
     
-    // Check if product already exists in cart with same size and addons
+    // Check if product already exists in cart with same size, seller, and addons
     $found_index = -1;
     foreach ($_SESSION['cart'] as $index => $item) {
+        $item_seller = (int)($item['seller_id'] ?? 1);
         if ($item['id'] == $product_id && 
             $item['size'] == $size && 
+            $item_seller === $product_seller_id &&
             json_encode($item['addons']) == json_encode($addons)) {
             $found_index = $index;
             break;
@@ -241,6 +200,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $_SESSION['cart'][$found_index]['quantity'] = $new_quantity;
+        $_SESSION['cart'][$found_index]['selected'] = 1;
+        if (empty($_SESSION['cart'][$found_index]['store_name'])) {
+            $_SESSION['cart'][$found_index]['store_name'] = $product_store_name;
+        }
 
         if ($new_quantity < ($current_quantity + $requested_quantity)) {
             $response_message = 'Quantity adjusted to available stock (' . $max_allowed_by_stock . ').';
@@ -263,6 +226,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'quantity' => $final_quantity,
             'size' => $size,
             'addons' => $addons,
+            'seller_id' => $product_seller_id,
+            'store_name' => $product_store_name,
+            'selected' => 1,
             'added_at' => time()
         ];
         $_SESSION['cart'][] = $cart_item;

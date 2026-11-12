@@ -95,8 +95,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    $checkout_cart = [];
+    foreach ($_SESSION['cart'] as $k => $c_item) {
+        if (!isset($c_item['selected']) || !empty($c_item['selected'])) {
+            $checkout_cart[$k] = $c_item;
+        }
+    }
+    if (empty($checkout_cart)) {
+        $checkout_cart = $_SESSION['cart'];
+    }
+
     $cart_tenant_scope = function_exists('pvGetCheckoutTenantScope')
-        ? pvGetCheckoutTenantScope($conn, $_SESSION['cart'])
+        ? pvGetCheckoutTenantScope($conn, $checkout_cart)
         : ['is_valid' => true, 'seller_id' => 0, 'message' => ''];
     if (empty($cart_tenant_scope['is_valid'])) {
         if (function_exists('pvClearAppliedVoucherSession')) {
@@ -177,7 +187,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Calculate order totals
     $subtotal = 0;
-    foreach ($_SESSION['cart'] as $item) {
+    foreach ($checkout_cart as $item) {
         $subtotal += floatval($item['price']) * intval($item['quantity']);
     }
     
@@ -319,7 +329,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         error_log("Order created successfully - ID: $order_id");
         
         // Insert order items
-        foreach ($_SESSION['cart'] as $item) {
+        foreach ($checkout_cart as $item) {
             $product_id = $item['product_id'] ?? 'unknown-' . uniqid();
             $product_name = trim(mysqli_real_escape_string($conn, $item['name'] ?? ''));
             $price = floatval($item['price'] ?? 0);
@@ -415,7 +425,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         error_log("Email sending error: " . $e->getMessage());
                     }
 
-                    unset($_SESSION['cart']);
+                    $remaining_cart = [];
+                    if (!empty($_SESSION['cart']) && is_array($_SESSION['cart'])) {
+                        foreach ($_SESSION['cart'] as $k => $c_item) {
+                            if (!array_key_exists($k, $checkout_cart)) {
+                                $remaining_cart[] = $c_item;
+                            }
+                        }
+                    }
+                    if (!empty($remaining_cart)) {
+                        $_SESSION['cart'] = array_values($remaining_cart);
+                    } else {
+                        $remaining_cart = [];
+        if (!empty($_SESSION['cart']) && is_array($_SESSION['cart'])) {
+            foreach ($_SESSION['cart'] as $k => $c_item) {
+                if (!array_key_exists($k, $checkout_cart)) {
+                    $remaining_cart[] = $c_item;
+                }
+            }
+        }
+        if (!empty($remaining_cart)) {
+            $_SESSION['cart'] = array_values($remaining_cart);
+        } else {
+            unset($_SESSION['cart']);
+        }
+                    }
                     header('Location: ' . $result['checkout_url']);
                     exit;
                 }
@@ -432,7 +466,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             error_log("Email sending error: " . $e->getMessage());
         }
 
-        unset($_SESSION['cart']);
+        $remaining_cart = [];
+        if (!empty($_SESSION['cart']) && is_array($_SESSION['cart'])) {
+            foreach ($_SESSION['cart'] as $k => $c_item) {
+                if (!array_key_exists($k, $checkout_cart)) {
+                    $remaining_cart[] = $c_item;
+                }
+            }
+        }
+        if (!empty($remaining_cart)) {
+            $_SESSION['cart'] = array_values($remaining_cart);
+        } else {
+            unset($_SESSION['cart']);
+        }
         header('Location: paymongo_checkout.php?order_id=' . $order_id);
         exit;
         

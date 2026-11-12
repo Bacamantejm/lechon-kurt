@@ -25,19 +25,42 @@ function resolveCartImageSrc($imagePath) {
     return $imagePath;
 }
 
+require_once __DIR__ . '/includes/config.php';
+require_once __DIR__ . '/includes/partner_voucher_helper.php';
+require_once __DIR__ . '/includes/SubscriptionAccessService.php';
+
+if (function_exists('populateCartStoreMetadata')) {
+    populateCartStoreMetadata($_SESSION['cart'], $conn ?? null);
+}
+
+$cart_stores = [];
 $cart_items = [];
 $subtotal = 0;
+$total_subtotal = 0;
 $total_quantity = 0;
+$selected_quantity = 0;
+$selected_count = 0;
+$selected_sellers = [];
 
 foreach ($_SESSION['cart'] as $index => $item) {
     $price = (float)($item['price'] ?? 0);
     $quantity = (int)($item['quantity'] ?? 0);
     $item_total = $price * $quantity;
+    $is_selected = !isset($item['selected']) || !empty($item['selected']);
+    $seller_id = (int)($item['seller_id'] ?? 1);
+    $store_name = (string)($item['store_name'] ?? 'Lechon Delights');
 
-    $subtotal += $item_total;
+    $total_subtotal += $item_total;
     $total_quantity += $quantity;
 
-    $cart_items[] = [
+    if ($is_selected) {
+        $subtotal += $item_total;
+        $selected_quantity += $quantity;
+        $selected_count++;
+        $selected_sellers[$seller_id] = true;
+    }
+
+    $item_entry = [
         'index' => $index,
         'name' => $item['name'] ?? 'Unknown Item',
         'image' => resolveCartImageSrc($item['image'] ?? ''),
@@ -45,19 +68,43 @@ foreach ($_SESSION['cart'] as $index => $item) {
         'quantity' => $quantity,
         'size' => $item['size'] ?? 'Regular',
         'addons' => is_array($item['addons'] ?? null) ? $item['addons'] : [],
+        'seller_id' => $seller_id,
+        'store_name' => $store_name,
+        'selected' => $is_selected ? 1 : 0,
         'item_total' => $item_total
     ];
+
+    $cart_items[] = $item_entry;
+
+    if (!isset($cart_stores[$seller_id])) {
+        $cart_stores[$seller_id] = [
+            'seller_id' => $seller_id,
+            'store_name' => $store_name,
+            'item_count' => 0,
+            'selected_count' => 0,
+            'items' => []
+        ];
+    }
+    $cart_stores[$seller_id]['item_count']++;
+    if ($is_selected) {
+        $cart_stores[$seller_id]['selected_count']++;
+    }
+    $cart_stores[$seller_id]['items'][] = $item_entry;
 }
 
-require_once __DIR__ . '/includes/partner_voucher_helper.php';
-require_once __DIR__ . '/includes/SubscriptionAccessService.php';
+foreach ($cart_stores as &$s) {
+    $s['all_selected'] = ($s['selected_count'] > 0 && $s['selected_count'] === $s['item_count']);
+}
+unset($s);
 
-$cart_tenant = function_exists('pvGetCheckoutTenantScope') ? pvGetCheckoutTenantScope($conn, $_SESSION['cart'] ?? []) : null;
-$cart_seller_id = (int)($cart_tenant['seller_id'] ?? ($_SESSION['storefront_seller_id'] ?? 0));
+$distinct_sellers = array_keys($selected_sellers);
+$is_single_store_selected = (count($distinct_sellers) === 1);
+$active_checkout_seller_id = $is_single_store_selected ? (int)$distinct_sellers[0] : 0;
+
 $cart_shop_is_starter = false;
-if ($cart_seller_id > 0) {
-    $cart_sub = SubscriptionAccessService::getShopSubscriptionDetails($conn, $cart_seller_id);
-    if ((int)$cart_sub['tier_level'] < 2) {
+if ($active_checkout_seller_id > 0 && isset($conn) && $conn instanceof mysqli) {
+    $cart_sub = SubscriptionAccessService::getShopSubscriptionDetails($conn, $active_checkout_seller_id);
+    if ((int)($cart_sub['tier_level'] ?? 1) < 2) {
         $cart_shop_is_starter = true;
     }
 }
@@ -80,7 +127,7 @@ if ($delivery_option === 'delivery') {
 
 $vat_rate = 0.12;
 $vat_amount = round($subtotal * $vat_rate, 2);
-$grand_total = $subtotal + $delivery_fee + $vat_amount;
+$grand_total = $subtotal > 0 ? ($subtotal + $delivery_fee + $vat_amount) : 0;
 $downpayment = round($grand_total * 0.30, 2);
 
 include 'includes/header.php';
@@ -93,12 +140,12 @@ include 'includes/header.php';
             <p>Review your items and order summary before checkout.</p>
             <div class="cart-header-stats">
                 <div class="cart-header-stat">
-                    <span class="cart-header-stat-label">Items</span>
-                    <strong id="cartHeaderItemCount"><?php echo count($cart_items); ?></strong>
+                    <span class="cart-header-stat-label">Selected Items</span>
+                    <strong id="cartHeaderItemCount"><?php echo (int)$selected_count; ?></strong>
                 </div>
                 <div class="cart-header-stat">
-                    <span class="cart-header-stat-label">Quantity</span>
-                    <strong id="cartHeaderQtyCount"><?php echo (int)$total_quantity; ?></strong>
+                    <span class="cart-header-stat-label">Selected Qty</span>
+                    <strong id="cartHeaderQtyCount"><?php echo (int)$selected_quantity; ?></strong>
                 </div>
                 <div class="cart-header-stat">
                     <span class="cart-header-stat-label">Grand Total</span>
@@ -113,7 +160,7 @@ include 'includes/header.php';
                     <h2>Cart Items</h2>
                     <button type="button" class="btn-secondary" id="cartPageClearBtn">Clear Cart</button>
                 </div>
-                <p class="cart-panel-note">Quick tip: adjust quantities here and totals update instantly.</p>
+                <p class="cart-panel-note">Quick tip: check the store or items you want to checkout. You can add items from multiple stores and checkout one store at a time.</p>
 
                 <div id="cartPageEmptyState" class="cart-empty-state" <?php echo !empty($cart_items) ? 'style="display:none;"' : ''; ?>>
                     <i class="fas fa-shopping-cart"></i>
@@ -122,34 +169,51 @@ include 'includes/header.php';
                 </div>
 
                 <div id="cartPageItems" class="cart-page-items" <?php echo empty($cart_items) ? 'style="display:none;"' : ''; ?>>
-                    <?php foreach ($cart_items as $item): ?>
-                    <article class="cart-page-item" data-index="<?php echo (int)$item['index']; ?>">
-                        <img class="cart-page-item-image"
-                             src="<?php echo htmlspecialchars($item['image']); ?>"
-                             alt="<?php echo htmlspecialchars($item['name']); ?>"
-                             onerror="this.onerror=null;this.src='images/menu/whole-lechon.jpg';">
-                        <div class="cart-page-item-details">
-                            <h3><?php echo htmlspecialchars($item['name']); ?></h3>
-                            <?php if (!empty($item['size']) && $item['size'] !== 'Regular'): ?>
-                            <p><strong>Size:</strong> <?php echo htmlspecialchars($item['size']); ?></p>
-                            <?php endif; ?>
-                            <?php if (!empty($item['addons'])): ?>
-                            <p><strong>Add-ons:</strong> <?php echo htmlspecialchars(implode(', ', $item['addons'])); ?></p>
-                            <?php endif; ?>
-                            <p><strong>Unit Price:</strong> PHP <?php echo number_format($item['price'], 2); ?></p>
-                            <div class="cart-page-qty">
-                                <button type="button" class="qty-btn qty-minus" data-action="decrease" data-index="<?php echo (int)$item['index']; ?>">-</button>
-                                <span><?php echo (int)$item['quantity']; ?></span>
-                                <button type="button" class="qty-btn qty-plus" data-action="increase" data-index="<?php echo (int)$item['index']; ?>">+</button>
-                            </div>
+                    <?php foreach ($cart_stores as $store): ?>
+                    <div class="cart-store-group" data-seller-id="<?php echo (int)$store['seller_id']; ?>">
+                        <div class="cart-store-header">
+                            <label class="cart-store-check-label">
+                                <input type="checkbox" class="cart-store-check" data-seller-id="<?php echo (int)$store['seller_id']; ?>" <?php echo !empty($store['all_selected']) ? 'checked' : ''; ?>>
+                                <i class="fas fa-store"></i>
+                                <span class="cart-store-name"><?php echo htmlspecialchars($store['store_name']); ?></span>
+                                <span class="cart-store-badge"><?php echo count($store['items']); ?> item<?php echo count($store['items']) > 1 ? 's' : ''; ?></span>
+                            </label>
                         </div>
-                        <div class="cart-page-item-right">
-                            <div class="cart-page-item-total">PHP <?php echo number_format($item['item_total'], 2); ?></div>
-                            <button type="button" class="remove-btn" data-action="remove" data-index="<?php echo (int)$item['index']; ?>">
-                                <i class="fas fa-trash"></i> Remove
-                            </button>
+                        <div class="cart-store-items">
+                            <?php foreach ($store['items'] as $item): ?>
+                            <article class="cart-page-item" data-index="<?php echo (int)$item['index']; ?>">
+                                <div class="cart-item-check-col">
+                                    <input type="checkbox" class="cart-item-check" data-index="<?php echo (int)$item['index']; ?>" data-seller-id="<?php echo (int)$store['seller_id']; ?>" <?php echo !empty($item['selected']) ? 'checked' : ''; ?>>
+                                </div>
+                                <img class="cart-page-item-image"
+                                     src="<?php echo htmlspecialchars($item['image']); ?>"
+                                     alt="<?php echo htmlspecialchars($item['name']); ?>"
+                                     onerror="this.onerror=null;this.src='images/menu/whole-lechon.jpg';">
+                                <div class="cart-page-item-details">
+                                    <h3><?php echo htmlspecialchars($item['name']); ?></h3>
+                                    <?php if (!empty($item['size']) && $item['size'] !== 'Regular'): ?>
+                                    <p><strong>Size:</strong> <?php echo htmlspecialchars($item['size']); ?></p>
+                                    <?php endif; ?>
+                                    <?php if (!empty($item['addons'])): ?>
+                                    <p><strong>Add-ons:</strong> <?php echo htmlspecialchars(implode(', ', $item['addons'])); ?></p>
+                                    <?php endif; ?>
+                                    <p><strong>Unit Price:</strong> PHP <?php echo number_format($item['price'], 2); ?></p>
+                                    <div class="cart-page-qty">
+                                        <button type="button" class="qty-btn qty-minus" data-action="decrease" data-index="<?php echo (int)$item['index']; ?>">-</button>
+                                        <span><?php echo (int)$item['quantity']; ?></span>
+                                        <button type="button" class="qty-btn qty-plus" data-action="increase" data-index="<?php echo (int)$item['index']; ?>">+</button>
+                                    </div>
+                                </div>
+                                <div class="cart-page-item-right">
+                                    <div class="cart-page-item-total">PHP <?php echo number_format($item['item_total'], 2); ?></div>
+                                    <button type="button" class="remove-btn" data-action="remove" data-index="<?php echo (int)$item['index']; ?>">
+                                        <i class="fas fa-trash"></i> Remove
+                                    </button>
+                                </div>
+                            </article>
+                            <?php endforeach; ?>
                         </div>
-                    </article>
+                    </div>
                     <?php endforeach; ?>
                 </div>
             </div>
@@ -179,6 +243,14 @@ include 'includes/header.php';
 
                 <h2>Order Summary</h2>
                 
+                <div id="cartStoreNotice" class="cart-store-alert" style="<?php echo ($selected_count === 0 || !$is_single_store_selected) ? 'display:block;' : 'display:none;'; ?> margin-bottom: 14px; padding: 10px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; <?php echo ($selected_count === 0) ? 'background:#fff4e5; color:#b54708; border:1px solid #fedf89;' : 'background:#fef3f2; color:#b42318; border:1px solid #fee4e2;'; ?>">
+                    <?php if ($selected_count === 0): ?>
+                        <i class="fas fa-info-circle me-1"></i> Please check the store or items you want to checkout.
+                    <?php elseif (!$is_single_store_selected): ?>
+                        <i class="fas fa-exclamation-triangle me-1"></i> Multiple stores selected. Please select items from one store at a time.
+                    <?php endif; ?>
+                </div>
+
                 <!-- Promo Voucher Input Box (Reference Screen 3) -->
                 <div class="cart-promo-box">
                     <div class="cart-promo-input-wrap">
@@ -189,12 +261,12 @@ include 'includes/header.php';
                 </div>
 
                 <div class="summary-row">
-                    <span>Items</span>
-                    <span id="cartPageItemCount"><?php echo count($cart_items); ?></span>
+                    <span>Selected Items</span>
+                    <span id="cartPageItemCount"><?php echo (int)$selected_count; ?></span>
                 </div>
                 <div class="summary-row">
                     <span>Total Quantity</span>
-                    <span id="cartPageQtyCount"><?php echo (int)$total_quantity; ?></span>
+                    <span id="cartPageQtyCount"><?php echo (int)$selected_quantity; ?></span>
                 </div>
                 <div class="summary-row">
                     <span>Subtotal</span>
@@ -220,8 +292,19 @@ include 'includes/header.php';
                 <div class="summary-actions">
                     <a href="menu.php" class="btn-outline">Continue Shopping</a>
                     <div class="checkout-choice" style="margin-top: 12px;">
-                        <a href="checkout.php?mode=<?php echo htmlspecialchars($_SESSION['delivery_option'] ?? 'delivery'); ?>" class="btn-primary" id="cartPageOrderNowBtn" data-checkout-link="1" style="width: 100%; text-align: center; justify-content: center; display: inline-flex; align-items: center; gap: 8px;">
-                            <i class="fas fa-lock"></i> Proceed to Checkout
+                        <?php
+                            $can_checkout = ($selected_count > 0 && $is_single_store_selected);
+                            $btn_text = 'Proceed to Checkout';
+                            if ($selected_count === 0) {
+                                $btn_text = 'Select Items to Checkout';
+                            } elseif (!$is_single_store_selected) {
+                                $btn_text = 'Checkout 1 Store at a Time';
+                            } else {
+                                $btn_text = "Proceed to Checkout ({$selected_count})";
+                            }
+                        ?>
+                        <a href="checkout.php?mode=<?php echo htmlspecialchars($_SESSION['delivery_option'] ?? 'delivery'); ?>" class="btn-primary" id="cartPageOrderNowBtn" data-checkout-link="1" style="width: 100%; text-align: center; justify-content: center; display: inline-flex; align-items: center; gap: 8px; <?php echo !$can_checkout ? 'pointer-events: none; opacity: 0.6;' : ''; ?>">
+                            <i class="fas fa-lock"></i> <span id="cartCheckoutBtnText"><?php echo $btn_text; ?></span>
                         </a>
                     </div>
                     <p class="checkout-security-note">
@@ -240,7 +323,9 @@ include 'includes/header.php';
             <strong class="sticky-price" id="cartStickyTotal">PHP <?php echo number_format($grand_total, 2); ?></strong>
         </div>
         <div class="cart-sticky-actions">
-            <a href="checkout.php?mode=<?php echo htmlspecialchars($_SESSION['delivery_option'] ?? 'delivery'); ?>" class="cart-sticky-checkout-btn">
+            <a href="checkout.php?mode=<?php echo htmlspecialchars($_SESSION['delivery_option'] ?? 'delivery'); ?>" class="cart-sticky-checkout-btn" data-checkout-link="1" style="<?php echo !$can_checkout ? 'pointer-events: none; opacity: 0.6;' : ''; ?>">
+                Confirm Order <i class="fas fa-arrow-right"></i>
+            </a>
                 Confirm Order <i class="fas fa-arrow-right"></i>
             </a>
         </div>
@@ -336,8 +421,129 @@ include 'includes/header.php';
 }
 
 .cart-page-items {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.cart-store-group {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+
+.cart-store-header {
+    background: #f9fafb;
+    padding: 12px 16px;
+    border-bottom: 1px solid #eaecf0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.cart-store-check-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+    margin: 0;
+    width: 100%;
+}
+
+.cart-store-check-label i {
+    color: #b3261e;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+}
+
+.cart-store-check {
+    width: 18px;
+    height: 18px;
+    accent-color: #b3261e;
+    cursor: pointer;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.cart-store-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #101828;
+    flex: 1;
+}
+
+.cart-store-badge {
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #475467;
+    background: #f2f4f7;
+    padding: 2px 8px;
+    border-radius: 12px;
+}
+
+.cart-store-items {
+    display: flex;
+    flex-direction: column;
+}
+
+.cart-store-items .cart-page-item {
     display: grid;
-    gap: 12px;
+    grid-template-columns: 28px 88px minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: center;
+    border: none;
+    border-bottom: 1px solid #f2f4f7;
+    border-radius: 0;
+    padding: 14px 16px;
+    box-shadow: none;
+    transition: background 0.15s ease;
+}
+
+.cart-store-items .cart-page-item:last-child {
+    border-bottom: none;
+}
+
+.cart-store-items .cart-page-item:hover {
+    background: #fafafa;
+    transform: none;
+    box-shadow: none;
+}
+
+.cart-item-check-col {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cart-item-check {
+    width: 18px;
+    height: 18px;
+    accent-color: #b3261e;
+    cursor: pointer;
+    margin: 0;
+}
+
+@media (max-width: 640px) {
+    .cart-store-items .cart-page-item {
+        grid-template-columns: 24px 72px minmax(0, 1fr);
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px 10px;
+    }
+    .cart-store-items .cart-page-item-image {
+        width: 72px;
+        height: 72px;
+    }
+    .cart-store-items .cart-page-item-right {
+        grid-column: 2 / -1;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 6px;
+    }
 }
 
 .cart-page-item {
@@ -819,6 +1025,34 @@ body.dark-mode .cart-panel-note {
     color: #94a3b8 !important;
 }
 
+body.dark-mode .cart-store-group {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .cart-store-header {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .cart-store-name {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-store-badge {
+    background: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .cart-store-items .cart-page-item {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .cart-store-items .cart-page-item:hover {
+    background: #243247 !important;
+}
+
 body.dark-mode .cart-page-item {
     background: #111827 !important;
     border-color: #334155 !important;
@@ -933,14 +1167,22 @@ document.addEventListener('DOMContentLoaded', function() {
         const subtotal = Number(data.subtotal || 0);
         const delivery = Number(data.delivery_fee || 0);
         const vat = subtotal * 0.12;
-        const grandTotal = subtotal + delivery + vat;
+        const grandTotal = subtotal > 0 ? (subtotal + delivery + vat) : 0;
         const downpayment = grandTotal * 0.30;
-        const qtyCount = (data.items || []).reduce(function(sum, item) {
-            return sum + Number(item.quantity || 0);
-        }, 0);
+        const selectedCount = Number(data.selected_count ?? (data.items || []).filter(function(i) {
+            return i.selected === 1 || i.selected === '1' || i.selected === true;
+        }).length);
+        const isSingleStore = !!data.is_single_store_selected;
 
-        document.getElementById('cartPageItemCount').textContent = String((data.items || []).length);
-        document.getElementById('cartPageQtyCount').textContent = String(qtyCount);
+        let selectedQty = 0;
+        (data.items || []).forEach(function(item) {
+            if (item.selected === 1 || item.selected === '1' || item.selected === true) {
+                selectedQty += Number(item.quantity || 0);
+            }
+        });
+
+        document.getElementById('cartPageItemCount').textContent = String(selectedCount);
+        document.getElementById('cartPageQtyCount').textContent = String(selectedQty);
         document.getElementById('cartPageSubtotal').textContent = formatMoney(subtotal);
         document.getElementById('cartPageDelivery').textContent = formatMoney(delivery);
         document.getElementById('cartPageVat').textContent = formatMoney(vat);
@@ -953,15 +1195,46 @@ document.addEventListener('DOMContentLoaded', function() {
         const headerItemCount = document.getElementById('cartHeaderItemCount');
         const headerQtyCount = document.getElementById('cartHeaderQtyCount');
         const headerGrandTotal = document.getElementById('cartHeaderGrandTotal');
-        if (headerItemCount) headerItemCount.textContent = String((data.items || []).length);
-        if (headerQtyCount) headerQtyCount.textContent = String(qtyCount);
+        if (headerItemCount) headerItemCount.textContent = String(selectedCount);
+        if (headerQtyCount) headerQtyCount.textContent = String(selectedQty);
         if (headerGrandTotal) headerGrandTotal.textContent = formatMoney(grandTotal);
 
-        const hasItems = (data.items || []).length > 0;
+        const canCheckout = selectedCount > 0 && isSingleStore;
+        const noticeEl = document.getElementById('cartStoreNotice');
+        const btnTextEl = document.getElementById('cartCheckoutBtnText');
+
+        if (noticeEl) {
+            if (selectedCount === 0 && (data.items || []).length > 0) {
+                noticeEl.style.display = 'block';
+                noticeEl.style.background = '#fff4e5';
+                noticeEl.style.color = '#b54708';
+                noticeEl.style.border = '1px solid #fedf89';
+                noticeEl.innerHTML = '<i class="fas fa-info-circle me-1"></i> Please check the store or items you want to checkout.';
+            } else if (!isSingleStore && selectedCount > 0) {
+                noticeEl.style.display = 'block';
+                noticeEl.style.background = '#fef3f2';
+                noticeEl.style.color = '#b42318';
+                noticeEl.style.border = '1px solid #fee4e2';
+                noticeEl.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> Multiple stores selected. Please select items from one store at a time.';
+            } else {
+                noticeEl.style.display = 'none';
+            }
+        }
+
         checkoutBtns.forEach(function(btn) {
-            btn.style.pointerEvents = hasItems ? 'auto' : 'none';
-            btn.style.opacity = hasItems ? '1' : '0.6';
+            btn.style.pointerEvents = canCheckout ? 'auto' : 'none';
+            btn.style.opacity = canCheckout ? '1' : '0.6';
         });
+
+        if (btnTextEl) {
+            if (selectedCount === 0) {
+                btnTextEl.textContent = 'Select Items to Checkout';
+            } else if (!isSingleStore) {
+                btnTextEl.textContent = 'Checkout 1 Store at a Time';
+            } else {
+                btnTextEl.textContent = `Proceed to Checkout (${selectedCount})`;
+            }
+        }
 
         ['cartBadge', 'floatingCartBadge'].forEach(function(id) {
             const badge = document.getElementById(id);
@@ -983,45 +1256,86 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (emptyStateEl) emptyStateEl.style.display = 'none';
-        if (cartItemsEl) cartItemsEl.style.display = 'grid';
+        if (cartItemsEl) cartItemsEl.style.display = 'block';
 
-        const html = items.map(function(item) {
-            const addonsLine = item.addons && item.addons.length > 0
-                ? `<p><strong>Add-ons:</strong> ${escapeHtml(item.addons.join(', '))}</p>`
-                : '';
-            const sizeLine = item.size && item.size !== 'Regular'
-                ? `<p><strong>Size:</strong> ${escapeHtml(item.size)}</p>`
-                : '';
-            const availableStock = item.available_stock === null || typeof item.available_stock === 'undefined'
-                ? null
-                : Number(item.available_stock);
-            const canIncrease = availableStock === null ? Number(item.quantity || 0) < 20 : Number(item.quantity || 0) < Math.min(20, availableStock);
-            const plusDisabled = canIncrease ? '' : 'disabled';
+        let stores = data.stores;
+        if (!stores || stores.length === 0) {
+            const map = {};
+            items.forEach(function(item) {
+                const sid = item.seller_id || 1;
+                if (!map[sid]) {
+                    map[sid] = {
+                        seller_id: sid,
+                        store_name: item.store_name || 'Lechon Delights',
+                        items: [],
+                        all_selected: true
+                    };
+                }
+                map[sid].items.push(item);
+            });
+            stores = Object.values(map);
+        }
+
+        const html = stores.map(function(store) {
+            const isStoreChecked = !!store.all_selected;
+            const storeItemsHtml = (store.items || []).map(function(item) {
+                const addonsLine = item.addons && item.addons.length > 0
+                    ? `<p><strong>Add-ons:</strong> ${escapeHtml(item.addons.join(', '))}</p>`
+                    : '';
+                const sizeLine = item.size && item.size !== 'Regular'
+                    ? `<p><strong>Size:</strong> ${escapeHtml(item.size)}</p>`
+                    : '';
+                const availableStock = item.available_stock === null || typeof item.available_stock === 'undefined'
+                    ? null
+                    : Number(item.available_stock);
+                const canIncrease = availableStock === null ? Number(item.quantity || 0) < 20 : Number(item.quantity || 0) < Math.min(20, availableStock);
+                const plusDisabled = canIncrease ? '' : 'disabled';
+                const isItemChecked = item.selected === 1 || item.selected === '1' || item.selected === true;
+
+                return `
+                    <article class="cart-page-item" data-index="${item.index}">
+                        <div class="cart-item-check-col">
+                            <input type="checkbox" class="cart-item-check" data-index="${item.index}" data-seller-id="${store.seller_id}" ${isItemChecked ? 'checked' : ''}>
+                        </div>
+                        <img class="cart-page-item-image"
+                             src="${escapeHtml(resolveImageSrc(item.image))}"
+                             alt="${escapeHtml(item.name)}"
+                             onerror="this.onerror=null;this.src='images/menu/whole-lechon.jpg';">
+                        <div class="cart-page-item-details">
+                            <h3>${escapeHtml(item.name)}</h3>
+                            ${sizeLine}
+                            ${addonsLine}
+                            <p><strong>Unit Price:</strong> ${formatMoney(item.price)}</p>
+                            <div class="cart-page-qty">
+                                <button type="button" class="qty-btn qty-minus" data-action="decrease" data-index="${item.index}">-</button>
+                                <span>${Number(item.quantity || 0)}</span>
+                                <button type="button" class="qty-btn qty-plus" data-action="increase" data-index="${item.index}" ${plusDisabled}>+</button>
+                            </div>
+                        </div>
+                        <div class="cart-page-item-right">
+                            <div class="cart-page-item-total">${formatMoney((Number(item.price || 0) * Number(item.quantity || 0)))}</div>
+                            <button type="button" class="remove-btn" data-action="remove" data-index="${item.index}">
+                                <i class="fas fa-trash"></i> Remove
+                            </button>
+                        </div>
+                    </article>
+                `;
+            }).join('');
 
             return `
-                <article class="cart-page-item" data-index="${item.index}">
-                    <img class="cart-page-item-image"
-                         src="${escapeHtml(resolveImageSrc(item.image))}"
-                         alt="${escapeHtml(item.name)}"
-                         onerror="this.onerror=null;this.src='images/menu/whole-lechon.jpg';">
-                    <div class="cart-page-item-details">
-                        <h3>${escapeHtml(item.name)}</h3>
-                        ${sizeLine}
-                        ${addonsLine}
-                        <p><strong>Unit Price:</strong> ${formatMoney(item.price)}</p>
-                        <div class="cart-page-qty">
-                            <button type="button" class="qty-btn qty-minus" data-action="decrease" data-index="${item.index}">-</button>
-                            <span>${Number(item.quantity || 0)}</span>
-                            <button type="button" class="qty-btn qty-plus" data-action="increase" data-index="${item.index}" ${plusDisabled}>+</button>
-                        </div>
+                <div class="cart-store-group" data-seller-id="${store.seller_id}">
+                    <div class="cart-store-header">
+                        <label class="cart-store-check-label">
+                            <input type="checkbox" class="cart-store-check" data-seller-id="${store.seller_id}" ${isStoreChecked ? 'checked' : ''}>
+                            <i class="fas fa-store"></i>
+                            <span class="cart-store-name">${escapeHtml(store.store_name)}</span>
+                            <span class="cart-store-badge">${(store.items || []).length} item${(store.items || []).length > 1 ? 's' : ''}</span>
+                        </label>
                     </div>
-                    <div class="cart-page-item-right">
-                        <div class="cart-page-item-total">${formatMoney((Number(item.price || 0) * Number(item.quantity || 0)))}</div>
-                        <button type="button" class="remove-btn" data-action="remove" data-index="${item.index}">
-                            <i class="fas fa-trash"></i> Remove
-                        </button>
+                    <div class="cart-store-items">
+                        ${storeItemsHtml}
                     </div>
-                </article>
+                </div>
             `;
         }).join('');
 
@@ -1055,6 +1369,52 @@ document.addEventListener('DOMContentLoaded', function() {
         return response.json();
     }
 
+    // Checkbox toggles for store and individual items
+    document.addEventListener('change', async function(e) {
+        if (e.target.classList.contains('cart-store-check')) {
+            const checkbox = e.target;
+            const sellerId = checkbox.getAttribute('data-seller-id');
+            const isChecked = checkbox.checked ? 1 : 0;
+            try {
+                const response = await fetch('update_cart.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        'action': 'select_store',
+                        'seller_id': sellerId,
+                        'selected': isChecked,
+                        'exclusive': 1
+                    })
+                });
+                const res = await response.json();
+                renderItems(res);
+                document.dispatchEvent(new CustomEvent('cartUpdated'));
+            } catch (err) {
+                console.error('Error selecting store:', err);
+            }
+        } else if (e.target.classList.contains('cart-item-check')) {
+            const checkbox = e.target;
+            const index = checkbox.getAttribute('data-index');
+            const isChecked = checkbox.checked ? 1 : 0;
+            try {
+                const response = await fetch('update_cart.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        'action': 'toggle_select',
+                        'index': index,
+                        'selected': isChecked
+                    })
+                });
+                const res = await response.json();
+                renderItems(res);
+                document.dispatchEvent(new CustomEvent('cartUpdated'));
+            } catch (err) {
+                console.error('Error toggling item:', err);
+            }
+        }
+    });
+
     document.addEventListener('click', async function(e) {
         const actionBtn = e.target.closest('[data-action][data-index]');
         if (actionBtn && actionBtn.closest('.cart-page-item')) {
@@ -1062,7 +1422,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const index = actionBtn.getAttribute('data-index');
             try {
                 const result = await postCartAction(action, index);
-                await loadCart();
+                if (result.items) {
+                    renderItems(result);
+                } else {
+                    await loadCart();
+                }
                 if (result.success) {
                     document.dispatchEvent(new CustomEvent('cartUpdated'));
                     if (window.showToast) window.showToast('Cart updated', 'success');
@@ -1096,7 +1460,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             try {
                 const result = await postCartAction('clear');
-                await loadCart();
+                if (result.items) {
+                    renderItems(result);
+                } else {
+                    await loadCart();
+                }
                 if (result.success) {
                     document.dispatchEvent(new CustomEvent('cartUpdated'));
                     if (window.showToast) window.showToast('Cart cleared', 'success');
@@ -1112,6 +1480,38 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    checkoutBtns.forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            const selectedCount = parseInt(document.getElementById('cartPageItemCount')?.textContent || '0', 10);
+            const noticeEl = document.getElementById('cartStoreNotice');
+            if (selectedCount <= 0) {
+                e.preventDefault();
+                if (window.Swal) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'No items selected',
+                        text: 'Please check the store or items you want to checkout.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                } else {
+                    alert('Please select items to checkout.');
+                }
+            } else if (noticeEl && noticeEl.style.display !== 'none' && noticeEl.textContent.includes('Multiple stores')) {
+                e.preventDefault();
+                if (window.Swal) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Multiple Stores Selected',
+                        text: 'Please select items from one store at a time to proceed to checkout.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                } else {
+                    alert('Please select items from one store at a time.');
+                }
+            }
+        });
+    });
 
     window.applyCartPromoCode = function() {
         const input = document.getElementById('cartPromoCodeInput');

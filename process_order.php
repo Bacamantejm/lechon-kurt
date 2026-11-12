@@ -164,8 +164,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     caEnsureUserSavedAddressSchema($conn);
     tfEnsureOrderTransactionFeeSchema($conn);
 
+    $checkout_cart = [];
+    foreach ($_SESSION['cart'] as $k => $c_item) {
+        if (!isset($c_item['selected']) || !empty($c_item['selected'])) {
+            $checkout_cart[$k] = $c_item;
+        }
+    }
+    if (empty($checkout_cart)) {
+        $checkout_cart = $_SESSION['cart'];
+    }
+
     $cart_tenant_scope = function_exists('pvGetCheckoutTenantScope')
-        ? pvGetCheckoutTenantScope($conn, $_SESSION['cart'])
+        ? pvGetCheckoutTenantScope($conn, $checkout_cart)
         : ['is_valid' => true, 'seller_id' => 0, 'message' => ''];
     if (empty($cart_tenant_scope['is_valid'])) {
         if (function_exists('pvClearAppliedVoucherSession')) {
@@ -318,7 +328,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Calculate order totals
     $subtotal = 0;
-    foreach ($_SESSION['cart'] as $item) {
+    foreach ($checkout_cart as $item) {
         $subtotal += $item['price'] * $item['quantity'];
     }
     
@@ -434,14 +444,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $vat_rate = 0.12;
     $vat_amount = round($subtotal * $vat_rate, 2);
 
-    if (empty($_SESSION['applied_voucher']) && !empty($_SESSION['pending_welcome_voucher']) && $user_id > 0 && !empty($_SESSION['cart'])) {
-        $auto_pre = pvApplyVoucherCodeForSession($conn, (int)$user_id, (string)$_SESSION['pending_welcome_voucher'], $_SESSION['cart']);
+    if (empty($_SESSION['applied_voucher']) && !empty($_SESSION['pending_welcome_voucher']) && $user_id > 0 && !empty($checkout_cart)) {
+        $auto_pre = pvApplyVoucherCodeForSession($conn, (int)$user_id, (string)$_SESSION['pending_welcome_voucher'], $checkout_cart);
         if (!empty($auto_pre['success'])) {
             unset($_SESSION['pending_welcome_voucher']);
         }
     }
 
-    $voucher_state = pvResolveAppliedVoucherState($conn, (int)$user_id, $_SESSION['cart']);
+    $voucher_state = pvResolveAppliedVoucherState($conn, (int)$user_id, $checkout_cart);
     $voucher_discount = 0.0;
     $voucher_id = 0;
     $voucher_code = '';
@@ -726,7 +736,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         
         // Insert order items
-        foreach ($_SESSION['cart'] as $item) {
+        foreach ($checkout_cart as $item) {
             $product_id = $item['product_id'] ?? '';
             $product_name = $item['name'] ?? '';
             $price = floatval($item['price'] ?? 0);
@@ -1042,8 +1052,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'remaining_balance' => $total_amount
             ];
 
-            // Clear session cart and checkout states
-            unset($_SESSION['cart']);
+            // Clear ordered items from session cart, keeping any other stores' items
+            $remaining_cart = [];
+            if (!empty($_SESSION['cart']) && is_array($_SESSION['cart'])) {
+                foreach ($_SESSION['cart'] as $k => $c_item) {
+                    if (!array_key_exists($k, $checkout_cart)) {
+                        $remaining_cart[] = $c_item;
+                    }
+                }
+            }
+            if (!empty($remaining_cart)) {
+                $_SESSION['cart'] = array_values($remaining_cart);
+            } else {
+                unset($_SESSION['cart']);
+            }
             unset($_SESSION['pending_order']);
             unset($_SESSION['delivery_option']);
             unset($_SESSION['pickup_location']);

@@ -2672,27 +2672,48 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function handleCheckoutStart() {
-        if (window.cartData && Number(window.cartData.cart_count || 0) > 0) {
-            const activeDeliveryOption =
-                document.querySelector('.fp-toggle-pill.active')?.dataset.mode
-                || document.querySelector('.quick-order-tab.active')?.dataset.deliveryOption
-                || document.querySelector('.mobile-quick-order-tab.active')?.dataset.deliveryOption
-                || (window.cartData?.delivery_option || 'delivery');
-            try {
-                await setDeliveryOption(activeDeliveryOption);
-            } catch (error) {
-                console.error('Unable to sync delivery option before checkout:', error);
-            }
-            window.location.href = 'checkout.php?mode=' + encodeURIComponent(activeDeliveryOption);
+        if (!window.cartData || Number(window.cartData.cart_count || 0) <= 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Cart is empty',
+                text: 'Please add items to your cart before checkout.',
+                confirmButtonColor: '#b3261e'
+            });
             return;
         }
 
-        Swal.fire({
-            icon: 'warning',
-            title: 'Cart is empty',
-            text: 'Please add items to your cart before checkout.',
-            confirmButtonColor: '#b3261e'
-        });
+        if (Number(window.cartData.selected_count || 0) <= 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'No items selected',
+                text: 'Please check the items or store you want to checkout.',
+                confirmButtonColor: '#b3261e'
+            });
+            return;
+        }
+
+        if (!window.cartData.is_single_store_selected) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Multiple Stores Selected',
+                text: 'Please select items from one store at a time to proceed to checkout.',
+                confirmButtonColor: '#b3261e'
+            });
+            return;
+        }
+
+        const activeDeliveryOption =
+            document.querySelector('.fp-toggle-pill.active')?.dataset.mode
+            || document.querySelector('.quick-order-tab.active')?.dataset.deliveryOption
+            || document.querySelector('.mobile-quick-order-tab.active')?.dataset.deliveryOption
+            || (window.cartData?.delivery_option || 'delivery');
+        try {
+            await setDeliveryOption(activeDeliveryOption);
+        } catch (error) {
+            console.error('Unable to sync delivery option before checkout:', error);
+        }
+        window.location.href = 'checkout.php?mode=' + encodeURIComponent(activeDeliveryOption);
+        return;
     }
 
     function openDeliveryModal() {
@@ -3638,49 +3659,135 @@ document.addEventListener('click', function(e) {
                 // Clear existing items
                 cartItems.innerHTML = '';
                 
-                // Add items to cart
-                data.items.forEach((item, index) => {
-                    const cartItem = document.createElement('div');
-                    cartItem.className = 'cart-item';
-                    cartItem.dataset.index = index;
-                    const cartImageSrc = resolveCartItemImageSource(item);
-                    const cartImageFallback = resolveCartItemImageFallback(item);
-                    cartItem.innerHTML = `
-                        <div class="cart-item-quantity" style="display: flex; align-items: center; gap: 8px; margin-right: 12px;">
-                            <button class="qty-decrease" data-index="${index}" style="border: 1px solid #efddcd; background: #fff; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #667085; font-weight: bold; cursor: pointer; font-size: 0.85rem; padding: 0;">-</button>
-                            <span style="font-weight: 700; font-size: 0.95rem; color: #171922; min-width: 14px; text-align: center;">${item.quantity}</span>
-                            <button class="qty-increase" data-index="${index}" style="border: 1px solid #efddcd; background: #fff; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #667085; font-weight: bold; cursor: pointer; font-size: 0.85rem; padding: 0;">+</button>
-                        </div>
-                        <div class="cart-item-image" style="width: 48px; height: 48px; border-radius: 6px; overflow: hidden; flex-shrink: 0; margin-right: 12px; background-color: #f5f5f5;">
-                            <img src="${escapeHtml(cartImageSrc)}" alt="${escapeHtml(item.name || 'Lechon item')}" 
-                                 onerror="this.onerror=null;this.src='${escapeHtml(cartImageFallback)}'" style="width: 100%; height: 100%; object-fit: cover;">
-                        </div>
-                        <div class="cart-item-details" style="flex: 1; text-align: left; padding: 0;">
-                            <div class="cart-item-name" style="font-weight: 700; color: #171922; font-size: 0.92rem; margin-bottom: 2px;">${item.name}</div>
-                            ${item.size !== 'Regular' ? `<div class="cart-item-size" style="font-size: 0.78rem; color: #667085; margin: 0;">Size: ${item.size}</div>` : ''}
-                            ${item.addons && item.addons.length > 0 ? 
-                                `<div class="cart-item-addons" style="font-size: 0.78rem; color: #667085; margin: 0;">Add-ons: ${item.addons.join(', ')}</div>` : ''}
-                        </div>
-                        <div class="cart-item-price-col" style="text-align: right; margin-left: 12px; font-weight: 700; color: #171922; font-size: 0.92rem; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end;">
-                            <div>${formatCurrency(parseFloat(item.price) * item.quantity)}</div>
-                            <button class="cart-item-remove" data-index="${index}" style="background: none; border: none; color: #7b6d64; cursor: pointer; font-size: 0.8rem; display: block; margin-top: 4px; padding: 0;" title="Remove item">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
+                // Group items by store
+                const stores = (data.stores && data.stores.length > 0) ? data.stores : [{
+                    seller_id: 1,
+                    store_name: 'Lechon Delights',
+                    all_selected: true,
+                    items: data.items
+                }];
+
+                stores.forEach((store) => {
+                    const storeGroup = document.createElement('div');
+                    storeGroup.className = 'cart-store-group';
+                    storeGroup.dataset.sellerId = store.seller_id;
+                    storeGroup.style.cssText = 'margin-bottom: 14px; padding: 12px; background: #ffffff; border: 1px solid #eaecf0; border-radius: 12px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);';
+
+                    const isStoreChecked = !!store.all_selected;
+
+                    // Store Header with Checkbox & Name
+                    const storeHeader = document.createElement('div');
+                    storeHeader.className = 'cart-store-header';
+                    storeHeader.style.cssText = 'display: flex; align-items: center; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid #f2f4f7;';
+
+                    storeHeader.innerHTML = `
+                        <label class="cart-store-check-label" style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; margin: 0; width: 100%;">
+                            <input type="checkbox" class="cart-store-check" data-seller-id="${store.seller_id}" ${isStoreChecked ? 'checked' : ''} style="width: 17px; height: 17px; accent-color: #b3261e; cursor: pointer; margin: 0; flex-shrink: 0;">
+                            <i class="fas fa-store" style="color: #b3261e; font-size: 0.95rem; flex-shrink: 0;"></i>
+                            <span style="font-weight: 700; font-size: 0.92rem; color: #101828; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(store.store_name)}</span>
+                            <span style="font-size: 0.72rem; color: #667085; font-weight: 600; flex-shrink: 0;">${store.items.length} item${store.items.length > 1 ? 's' : ''}</span>
+                        </label>
                     `;
-                    cartItems.appendChild(cartItem);
+                    storeGroup.appendChild(storeHeader);
+
+                    const storeItemsContainer = document.createElement('div');
+                    storeItemsContainer.className = 'cart-store-items';
+                    storeItemsContainer.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
+
+                    store.items.forEach((item) => {
+                        const cartItem = document.createElement('div');
+                        cartItem.className = 'cart-item';
+                        cartItem.dataset.index = item.index;
+                        cartItem.dataset.sellerId = store.seller_id;
+                        cartItem.style.cssText = 'display: flex; align-items: center; padding: 6px 0; border-bottom: 1px dashed #f2f4f7;';
+
+                        const cartImageSrc = resolveCartItemImageSource(item);
+                        const cartImageFallback = resolveCartItemImageFallback(item);
+                        const isItemChecked = item.selected === 1 || item.selected === true || item.selected === '1';
+
+                        cartItem.innerHTML = `
+                            <div style="display: flex; align-items: center; margin-right: 8px; flex-shrink: 0;">
+                                <input type="checkbox" class="cart-item-check" data-index="${item.index}" data-seller-id="${store.seller_id}" ${isItemChecked ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: #b3261e; cursor: pointer; margin: 0;">
+                            </div>
+                            <div class="cart-item-quantity" style="display: flex; align-items: center; gap: 4px; margin-right: 8px; flex-shrink: 0;">
+                                <button class="qty-decrease" data-index="${item.index}" style="border: 1px solid #efddcd; background: #fff; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #667085; font-weight: bold; cursor: pointer; font-size: 0.8rem; padding: 0;">-</button>
+                                <span style="font-weight: 700; font-size: 0.88rem; color: #171922; min-width: 14px; text-align: center;">${item.quantity}</span>
+                                <button class="qty-increase" data-index="${item.index}" style="border: 1px solid #efddcd; background: #fff; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #667085; font-weight: bold; cursor: pointer; font-size: 0.8rem; padding: 0;">+</button>
+                            </div>
+                            <div class="cart-item-image" style="width: 44px; height: 44px; border-radius: 6px; overflow: hidden; flex-shrink: 0; margin-right: 8px; background-color: #f5f5f5;">
+                                <img src="${escapeHtml(cartImageSrc)}" alt="${escapeHtml(item.name || 'Lechon item')}" 
+                                     onerror="this.onerror=null;this.src='${escapeHtml(cartImageFallback)}'" style="width: 100%; height: 100%; object-fit: cover;">
+                            </div>
+                            <div class="cart-item-details" style="flex: 1; text-align: left; padding: 0; min-width: 0;">
+                                <div class="cart-item-name" style="font-weight: 700; color: #171922; font-size: 0.86rem; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(item.name)}</div>
+                                ${item.size !== 'Regular' ? `<div class="cart-item-size" style="font-size: 0.72rem; color: #667085; margin: 0;">Size: ${escapeHtml(item.size)}</div>` : ''}
+                                ${item.addons && item.addons.length > 0 ? 
+                                    `<div class="cart-item-addons" style="font-size: 0.72rem; color: #667085; margin: 0;">Add-ons: ${escapeHtml(item.addons.join(', '))}</div>` : ''}
+                            </div>
+                            <div class="cart-item-price-col" style="text-align: right; margin-left: 8px; font-weight: 700; color: #171922; font-size: 0.86rem; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; flex-shrink: 0;">
+                                <div>${formatCurrency(parseFloat(item.price) * item.quantity)}</div>
+                                <button class="cart-item-remove" data-index="${item.index}" style="background: none; border: none; color: #7b6d64; cursor: pointer; font-size: 0.78rem; display: block; margin-top: 4px; padding: 0;" title="Remove item">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        `;
+                        storeItemsContainer.appendChild(cartItem);
+                    });
+
+                    storeGroup.appendChild(storeItemsContainer);
+                    cartItems.appendChild(storeGroup);
                 });
                 
-                const deliveryFee = (data.delivery_option || 'pickup') === 'delivery' ? Number(data.delivery_fee || 0) : 0;
+                const selectedCount = Number(data.selected_count || 0);
+                const isSingleStore = data.is_single_store_selected;
+                const deliveryFee = (data.delivery_option || 'pickup') === 'delivery' && selectedCount > 0 ? Number(data.delivery_fee || 0) : 0;
                 const grandTotal = Number(data.subtotal || 0) + deliveryFee;
 
                 // Update totals
                 document.getElementById('cartSubtotal').textContent = formatCurrency(data.subtotal);
                 document.getElementById('cartTotal').textContent = formatCurrency(grandTotal);
 
-                // Enable checkout button
+                // Multi-store or selection notification notice
+                let multiNotice = document.getElementById('cartMultiStoreNotice');
+                if (!multiNotice) {
+                    multiNotice = document.createElement('div');
+                    multiNotice.id = 'cartMultiStoreNotice';
+                    multiNotice.style.cssText = 'padding: 8px 12px; border-radius: 8px; font-size: 0.78rem; font-weight: 600; margin-bottom: 12px; display: none;';
+                    const summaryWrap = document.querySelector('.cart-summary');
+                    if (summaryWrap) {
+                        summaryWrap.insertBefore(multiNotice, summaryWrap.firstChild);
+                    }
+                }
+
+                // Enable/disable checkout button
                 if (checkoutBtn) {
-                    checkoutBtn.disabled = false;
+                    if (selectedCount === 0) {
+                        checkoutBtn.disabled = true;
+                        checkoutBtn.textContent = 'Select Items to Checkout';
+                        if (multiNotice) {
+                            multiNotice.style.display = 'block';
+                            multiNotice.style.background = '#fff4e5';
+                            multiNotice.style.color = '#b54708';
+                            multiNotice.style.border = '1px solid #fedf89';
+                            multiNotice.innerHTML = '<i class="fas fa-info-circle me-1"></i> Please check the store or items you want to checkout.';
+                        }
+                    } else if (!isSingleStore) {
+                        checkoutBtn.disabled = true;
+                        checkoutBtn.textContent = 'Checkout 1 Store at a Time';
+                        if (multiNotice) {
+                            multiNotice.style.display = 'block';
+                            multiNotice.style.background = '#fef3f2';
+                            multiNotice.style.color = '#b42318';
+                            multiNotice.style.border = '1px solid #fee4e2';
+                            multiNotice.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> Multiple stores selected. Please select items from one store at a time.';
+                        }
+                    } else {
+                        checkoutBtn.disabled = false;
+                        checkoutBtn.textContent = `Review Order (${selectedCount})`;
+                        if (multiNotice) {
+                            multiNotice.style.display = 'none';
+                        }
+                    }
                 }
             } else {
                 // Empty cart
@@ -3696,10 +3803,65 @@ document.addEventListener('click', function(e) {
                 // Disable checkout button
                 if (checkoutBtn) {
                     checkoutBtn.disabled = true;
+                    checkoutBtn.textContent = 'Review Order';
                 }
             }
 
             updateQuickOrderSummary(data);
+        } catch (error) {
+            console.error('Error updating cart sidebar:', error);
+        }
+    }
+    
+    // Checkbox toggles for store and individual items
+    document.addEventListener('change', async function(e) {
+        if (e.target.classList.contains('cart-store-check')) {
+            const checkbox = e.target;
+            const sellerId = checkbox.getAttribute('data-seller-id');
+            const isChecked = checkbox.checked ? 1 : 0;
+            
+            try {
+                const response = await fetch('update_cart.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        'action': 'select_store',
+                        'seller_id': sellerId,
+                        'selected': isChecked,
+                        'exclusive': 1
+                    })
+                });
+                const res = await response.json();
+                if (res.success) {
+                    updateCartSidebar();
+                }
+            } catch (err) {
+                console.error('Error selecting store:', err);
+            }
+        } else if (e.target.classList.contains('cart-item-check')) {
+            const checkbox = e.target;
+            const index = checkbox.getAttribute('data-index');
+            const isChecked = checkbox.checked ? 1 : 0;
+            
+            try {
+                const response = await fetch('update_cart.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        'action': 'toggle_select',
+                        'index': index,
+                        'selected': isChecked
+                    })
+                });
+                const res = await response.json();
+                if (res.success) {
+                    updateCartSidebar();
+                }
+            } catch (err) {
+                console.error('Error toggling item:', err);
+            }
+        }
+    });
         } catch (error) {
             console.error('Error updating cart sidebar:', error);
         }
