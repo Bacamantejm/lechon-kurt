@@ -545,103 +545,7 @@ $remaining = $total - $downpayment;
 <section class="checkout-section">
     <div class="container">
         <div class="checkout-grid">
-            <!-- Order Summary -->
-            <div class="checkout-summary">
-                <h3>Order Summary</h3>
-                <div class="checkout-summary-kpis">
-                    <div class="checkout-kpi">
-                        <span class="checkout-kpi-label">Items</span>
-                        <strong><?php echo (int)$checkout_item_count; ?></strong>
-                    </div>
-                    <div class="checkout-kpi">
-                        <span class="checkout-kpi-label">Quantity</span>
-                        <strong><?php echo (int)$checkout_total_quantity; ?></strong>
-                    </div>
-                    <div class="checkout-kpi">
-                        <span class="checkout-kpi-label">Mode</span>
-                        <strong id="summaryModeValue"><?php echo $current_checkout_delivery_option === 'delivery' ? 'Delivery' : 'Pickup'; ?></strong>
-                    </div>
-                </div>
-                <div class="summary-items">
-                    <?php foreach ($checkout_cart_items as $item): ?>
-                    <div class="summary-item">
-                        <div class="item-info">
-                            <h4><?php echo htmlspecialchars($item['name']); ?></h4>
-                            <?php if (isset($item['size']) && $item['size'] != 'Regular'): ?>
-                            <p>Size: <?php echo htmlspecialchars($item['size']); ?></p>
-                            <?php endif; ?>
-                            <?php if (!empty($item['addons'])): ?>
-                            <p>Add-ons: <?php echo htmlspecialchars(implode(', ', $item['addons'])); ?></p>
-                            <?php endif; ?>
-                            <p>Quantity: <?php echo $item['quantity']; ?></p>
-                        </div>
-                        <div class="item-price">
-                            ₱<?php echo number_format($item['price'] * $item['quantity'], 2); ?>
-                        </div>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
-                
-                <div class="summary-totals">
-                    <div class="total-row">
-                        <span>Subtotal</span>
-                        <span id="summarySubtotal">₱<?php echo number_format($subtotal, 2); ?></span>
-                    </div>
-                    <div class="total-row">
-                        <span>Delivery Fee</span>
-                        <span id="summaryDeliveryFee">₱<?php echo number_format($delivery_fee, 2); ?></span>
-                    </div>
-                    <div class="total-row">
-                        <span>VAT (12%)</span>
-                        <span id="summaryVat">₱<?php echo number_format($vat_amount, 2); ?></span>
-                    </div>
-                    <div class="total-row voucher-row" id="voucherSummaryRow" style="<?php echo $voucher_discount > 0 ? '' : 'display:none;'; ?>">
-                        <span>Voucher <small id="summaryVoucherCode"><?php echo $applied_voucher_code !== '' ? '(' . htmlspecialchars($applied_voucher_code) . ')' : ''; ?></small></span>
-                        <span id="summaryVoucherDiscount">- ₱<?php echo number_format($voucher_discount, 2); ?></span>
-                    </div>
-                    <div class="total-row grand-total">
-                        <span>Total Amount</span>
-                        <span id="summaryTotal">₱<?php echo number_format($total, 2); ?></span>
-                    </div>
-                    
-                    <!-- Payment Breakdown -->
-                    <div class="payment-breakdown" style="background: #fffdfb; border: 1px solid #efddcd; border-radius: 14px; padding: 16px; margin-top: 18px;">
-                        <h4 style="font-family: 'Outfit', sans-serif; font-size: 0.95rem; font-weight: 800; color: #171922; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
-                            <span><i class="fas fa-wallet" style="color: #ef6b2e; margin-right: 6px;"></i> Payment Schedule</span>
-                            <span style="font-size: 0.72rem; background: #fff8ef; color: #ef6b2e; border: 1px solid #efddcd; padding: 2px 8px; border-radius: 999px; font-weight: 700;">30% Deposit</span>
-                        </h4>
-                        <div class="breakdown-row d-flex justify-content-between align-items-center mb-2" style="font-size: 0.88rem;">
-                            <span style="color: #667085; font-weight: 600;">Downpayment (30%):</span>
-                            <strong class="downpayment-amount" style="color: #ef6b2e; font-size: 1rem; font-weight: 800;">₱<?php echo number_format($downpayment, 2); ?></strong>
-                        </div>
-                        <div class="breakdown-row d-flex justify-content-between align-items-center mb-2" style="font-size: 0.88rem;">
-                            <span style="color: #667085; font-weight: 600;">Remaining Balance (70%):</span>
-                            <span class="remaining-amount" style="color: #2a211d; font-weight: 700;">₱<?php echo number_format($remaining, 2); ?></span>
-                        </div>
-                        <div class="breakdown-row d-flex justify-content-between align-items-center pt-2" style="font-size: 0.88rem; border-top: 1px dashed #efddcd;">
-                            <span style="color: #171922; font-weight: 700;">Full Payment (100%):</span>
-                            <span class="full-amount" style="color: #b3261e; font-weight: 800;">₱<?php echo number_format($total, 2); ?></span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="delivery-info" style="background: #ffffff; border: 1px solid #efddcd; border-radius: 14px; padding: 18px; margin-top: 18px; box-shadow: 0 4px 14px rgba(42, 33, 29, 0.04);">
-                    <h4 style="font-family: 'Outfit', sans-serif; font-size: 0.98rem; font-weight: 800; color: #171922; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
-                        <i class="fas fa-truck-fast" style="color: #b3261e;"></i> Delivery Information
-                    </h4>
-                    <p id="summaryDeliveryDetails" style="margin-bottom: 6px; font-weight: 700; color: #171922; font-size: 0.9rem;">
-                        <i class="fas fa-store" style="color: #ef6b2e; margin-right: 6px;"></i><?php echo htmlspecialchars($delivery_details); ?>
-                    </p>
-                    <p id="summaryDeliveryTime" style="font-weight: 700; color: #15803d; margin-bottom: 6px; font-size: 0.88rem; display: <?php echo !empty($estimated_delivery_text) ? 'inline-flex' : 'none'; ?>; align-items: center; gap: 6px; background: #f0fdf4; padding: 4px 10px; border-radius: 999px; border: 1px solid #bbf7d0;">
-                        <i class="fas fa-clock"></i> <?php echo htmlspecialchars($estimated_delivery_text); ?>
-                    </p>
-                    <p id="summaryStoreAddress" style="margin: 6px 0 0 0; font-size: 0.84rem; color: #667085; display: <?php echo !empty($selected_store_address) ? 'block' : 'none'; ?>;">
-                        <i class="fas fa-location-dot" style="color: #b3261e; margin-right: 4px;"></i><?php echo htmlspecialchars($selected_store_address); ?>
-                    </p>
-                </div>
-            </div>
-            
-            <!-- Checkout Form -->
+            <!-- Checkout Form (Left Column) -->
             <div class="checkout-form">
                 <?php if ($checkout_tenant_blocked): ?>
                     <div class="checkout-tenant-guard" role="alert" style="margin-bottom: 20px;">
@@ -1395,6 +1299,133 @@ $remaining = $total - $downpayment;
                     <input type="hidden" id="voucher_discount_hidden" name="voucher_discount" value="<?php echo number_format($voucher_discount, 2, '.', ''); ?>">
                 </form>
             </div>
+
+            <!-- Sticky Order Summary (Right Column) -->
+            <aside class="checkout-summary" id="checkoutStickySummary">
+                <div class="checkout-summary-card">
+                    <!-- Header -->
+                    <div class="summary-header">
+                        <div class="summary-title-wrap">
+                            <h3 class="summary-title">
+                                <i class="fas fa-receipt" style="color: #b3261e; font-size: 1.05rem;"></i> Order Summary
+                            </h3>
+                            <span class="summary-count-badge" id="summaryItemsBadge">
+                                <?php echo (int)$checkout_item_count; ?> <?php echo $checkout_item_count === 1 ? 'item' : 'items'; ?>
+                            </span>
+                        </div>
+                        <div class="summary-store-tag">
+                            <i class="fas fa-store" style="color: #667085; font-size: 0.8rem;"></i>
+                            <span id="summaryStoreNameDisplay"><?php echo htmlspecialchars($overview_store_name ?: $pickup_store_name); ?></span>
+                        </div>
+                    </div>
+
+                    <!-- Mode & ETA Quick Strip -->
+                    <div class="summary-mode-strip">
+                        <span class="summary-mode-chip" id="summaryModeChip">
+                            <i class="fas <?php echo ($current_checkout_delivery_option === 'pickup') ? 'fa-person-walking' : (($current_checkout_delivery_option === 'preorder') ? 'fa-calendar-alt' : 'fa-motorcycle'); ?>" id="summaryModeIcon"></i>
+                            <strong id="summaryModeValue"><?php echo ($current_checkout_delivery_option === 'preorder') ? 'Pre-Order' : (($current_checkout_delivery_option === 'pickup') ? 'Pick-up' : 'Delivery'); ?></strong>
+                        </span>
+                        <span class="summary-eta-chip" id="summaryEtaChip">
+                            <i class="fas fa-clock"></i>
+                            <span id="summaryDeliveryTimeDisplay"><?php echo !empty($estimated_delivery_text) ? htmlspecialchars($estimated_delivery_text) : ($current_checkout_delivery_option === 'pickup' ? '10–15 mins' : '30–45 mins'); ?></span>
+                        </span>
+                    </div>
+
+                    <!-- Cart Items List (Scrollable) -->
+                    <div class="summary-items-list" id="summaryItemsList">
+                        <?php foreach ($checkout_cart_items as $item): ?>
+                        <div class="summary-item-row">
+                            <div class="item-qty-badge"><?php echo (int)$item['quantity']; ?>x</div>
+                            <div class="item-details">
+                                <div class="item-name"><?php echo htmlspecialchars($item['name']); ?></div>
+                                <?php if (!empty($item['size']) && $item['size'] !== 'Regular'): ?>
+                                <div class="item-meta">Size: <?php echo htmlspecialchars($item['size']); ?></div>
+                                <?php endif; ?>
+                                <?php if (!empty($item['addons'])): ?>
+                                <div class="item-meta">+ <?php echo htmlspecialchars(implode(', ', $item['addons'])); ?></div>
+                                <?php endif; ?>
+                            </div>
+                            <div class="item-price">₱<?php echo number_format($item['price'] * $item['quantity'], 2); ?></div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <!-- Totals Breakdown -->
+                    <div class="summary-totals-box">
+                        <div class="summary-row">
+                            <span class="row-label">Subtotal</span>
+                            <span class="row-value" id="summarySubtotal">₱<?php echo number_format($subtotal, 2); ?></span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="row-label">Delivery Fee</span>
+                            <span class="row-value" id="summaryDeliveryFee">
+                                <?php 
+                                    if ($current_checkout_delivery_option === 'delivery') {
+                                        echo '₱' . number_format($delivery_fee, 2);
+                                    } else {
+                                        echo '<span style="color:#027a48; font-weight:700;">₱0.00 (Free)</span>';
+                                    }
+                                ?>
+                            </span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="row-label">VAT (12% incl.)</span>
+                            <span class="row-value" id="summaryVat">₱<?php echo number_format($vat_amount, 2); ?></span>
+                        </div>
+                        <div class="summary-row voucher-row" id="voucherSummaryRow" style="<?php echo $voucher_discount > 0 ? 'display:flex;' : 'display:none;'; ?>">
+                            <span class="row-label">Voucher Discount <small id="summaryVoucherCode"><?php echo $applied_voucher_code !== '' ? '(' . htmlspecialchars($applied_voucher_code) . ')' : ''; ?></small></span>
+                            <span class="row-value discount-text" id="summaryVoucherDiscount">- ₱<?php echo number_format($voucher_discount, 2); ?></span>
+                        </div>
+                        
+                        <div class="summary-divider"></div>
+
+                        <div class="summary-row grand-total-row">
+                            <span class="total-label">Total Amount</span>
+                            <span class="total-value" id="summaryTotal">₱<?php echo number_format($total, 2); ?></span>
+                        </div>
+
+                        <!-- Pre-order / Downpayment Breakdown -->
+                        <div class="preorder-downpayment-summary" id="fpPreorderDownpaymentSummaryRow" style="display: <?php echo ($current_checkout_delivery_option === 'preorder') ? 'block' : 'none'; ?>;">
+                            <div class="summary-row downpayment-row" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                                <span class="row-label" style="color: #b3261e; font-weight: 700; font-size: 13px;">
+                                    <i class="fas fa-wallet" style="margin-right: 4px;"></i> 30% Downpayment Due:
+                                </span>
+                                <strong class="row-value downpayment-amount" id="fpSummaryDownpaymentDue" style="color: #b3261e; font-weight: 800; font-size: 0.95rem;">
+                                    ₱<?php echo number_format($downpayment, 2); ?>
+                                </strong>
+                            </div>
+                            <div class="summary-row remaining-row" style="display:flex; justify-content:space-between; align-items:center;">
+                                <span class="row-label" style="color: #475467; font-size: 0.82rem;">Remaining Balance:</span>
+                                <span class="row-value remaining-amount" id="fpSummaryRemainingDue" style="color: #101828; font-weight: 700; font-size: 0.88rem;">
+                                    ₱<?php echo number_format($remaining, 2); ?>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sticky Primary CTA Button -->
+                    <div class="summary-action-area">
+                        <button type="button" class="btn-primary-checkout" id="stickyPlaceOrderBtn" onclick="submitFoodpandaCheckout()">
+                            <span class="btn-text" id="stickyPlaceOrderBtnText">
+                                <?php 
+                                    if ($current_checkout_delivery_option === 'preorder') {
+                                        echo 'Place Pre-Order';
+                                    } elseif ($current_checkout_delivery_option === 'pickup') {
+                                        echo 'Place Pick-Up order';
+                                    } else {
+                                        echo 'Place Delivery order';
+                                    }
+                                ?>
+                            </span>
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                        <div class="summary-trust-badge">
+                            <i class="fas fa-shield-halved" style="color: #027a48;"></i>
+                            <span>Guaranteed safe &amp; secure checkout powered by PayMongo</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
         </div>
     </div>
 <!-- Foodpanda Docked Bottom Bar (Unified for Pickup & Delivery) -->
@@ -1471,30 +1502,66 @@ $remaining = $total - $downpayment;
 }
 
 .checkout-section {
-    padding-bottom: 140px !important;
     background: #f8f9fa !important;
+    padding-top: 24px !important;
+    padding-bottom: 60px !important;
 }
 body {
     background: #f8f9fa !important;
 }
 
-.checkout-section .checkout-grid {
-    display: flex !important;
-    justify-content: center !important;
+.checkout-section .container {
+    max-width: 1240px !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+    box-sizing: border-box !important;
 }
 
-.checkout-section .checkout-summary {
-    display: none !important;
+.checkout-section .checkout-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 390px !important;
+    gap: 24px !important;
+    align-items: start !important;
+    max-width: 1240px !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
 }
 
 .checkout-section .checkout-form {
-    max-width: 640px !important;
+    max-width: 100% !important;
     width: 100% !important;
-    margin: 0 auto !important;
+    margin: 0 !important;
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
     padding: 0 !important;
+    grid-column: 1 !important;
+    order: 1 !important;
+    min-width: 0 !important;
+}
+
+.checkout-section .checkout-summary {
+    display: block !important;
+    grid-column: 2 !important;
+    order: 2 !important;
+    position: sticky !important;
+    top: 86px !important;
+    z-index: 20 !important;
+    max-height: calc(100vh - 105px) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Hide duplicate order summary cards inside left column views */
+.checkout-form .fp-order-summary-card {
+    display: none !important;
 }
 
 #foodpandaPickupView,
@@ -1503,6 +1570,293 @@ body {
     width: 100%;
     margin: 0 auto;
     box-sizing: border-box;
+}
+
+/* Sticky Summary Card Internal Styling */
+.checkout-summary-card {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 16px;
+    padding: 18px 20px;
+    box-shadow: 0 2px 6px rgba(16, 24, 40, 0.05);
+}
+
+.summary-header {
+    padding-bottom: 12px;
+    border-bottom: 1px solid #eaecf0;
+    margin-bottom: 12px;
+}
+.summary-title-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.summary-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #101828;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.summary-count-badge {
+    background: #eff8ff;
+    color: #175cd3;
+    border: 1px solid #b2ddff;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+}
+.summary-store-tag {
+    font-size: 12px;
+    color: #667085;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.summary-mode-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    border-radius: 10px;
+    padding: 7px 12px;
+    margin-bottom: 12px;
+    font-size: 12px;
+}
+.summary-mode-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #101828;
+    font-weight: 700;
+}
+.summary-mode-chip i {
+    color: #b3261e;
+}
+.summary-eta-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #027a48;
+    background: #ecfdf3;
+    border: 1px solid #abefc6;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 11.5px;
+}
+
+/* Items List */
+.summary-items-list {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 12px;
+    padding-right: 4px;
+}
+.summary-item-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px dashed #f2f4f7;
+    font-size: 13px;
+}
+.summary-item-row:last-child {
+    border-bottom: none;
+}
+.item-qty-badge {
+    background: #f2f4f7;
+    color: #101828;
+    font-weight: 800;
+    font-size: 11px;
+    border-radius: 6px;
+    padding: 2px 6px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+.item-details {
+    flex: 1;
+    min-width: 0;
+}
+.item-name {
+    font-weight: 700;
+    color: #101828;
+    line-height: 1.3;
+    word-break: break-word;
+}
+.item-meta {
+    font-size: 11.5px;
+    color: #667085;
+    margin-top: 2px;
+}
+.item-price {
+    font-weight: 800;
+    color: #101828;
+    white-space: nowrap;
+    text-align: right;
+    margin-top: 1px;
+}
+
+/* Totals Box */
+.summary-totals-box {
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+}
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 7px;
+    font-size: 13px;
+}
+.summary-row:last-child {
+    margin-bottom: 0;
+}
+.summary-row .row-label {
+    color: #475467;
+    font-weight: 500;
+}
+.summary-row .row-value {
+    color: #101828;
+    font-weight: 700;
+}
+.summary-row.voucher-row .row-label {
+    color: #027a48;
+}
+.summary-row.voucher-row .row-value {
+    color: #027a48;
+    font-weight: 800;
+}
+.summary-divider {
+    height: 1px;
+    background: #eaecf0;
+    margin: 8px 0;
+}
+.summary-row.grand-total-row {
+    margin-bottom: 0;
+    padding-top: 2px;
+}
+.summary-row.grand-total-row .total-label {
+    font-size: 14px;
+    font-weight: 800;
+    color: #101828;
+}
+.summary-row.grand-total-row .total-value {
+    font-size: 18px;
+    font-weight: 800;
+    color: #b3261e;
+}
+
+/* Pre-order Downpayment Box inside totals */
+.preorder-downpayment-summary {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed #d0d5dd;
+}
+
+/* Place Order CTA Button */
+.summary-action-area {
+    margin-top: 4px;
+}
+.btn-primary-checkout {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 13px 18px;
+    background: #b3261e;
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 800;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(179, 38, 30, 0.2);
+    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+}
+.btn-primary-checkout:hover {
+    background: #981b15;
+    box-shadow: 0 4px 10px rgba(179, 38, 30, 0.25);
+}
+.btn-primary-checkout:active {
+    transform: translateY(1px);
+}
+.summary-trust-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #667085;
+    margin-top: 8px;
+    text-align: center;
+}
+
+/* Custom sleek scrollbar for summary */
+.checkout-section .checkout-summary::-webkit-scrollbar,
+.summary-items-list::-webkit-scrollbar {
+    width: 5px;
+}
+.checkout-section .checkout-summary::-webkit-scrollbar-track,
+.summary-items-list::-webkit-scrollbar-track {
+    background: #f2f4f7;
+    border-radius: 10px;
+}
+.checkout-section .checkout-summary::-webkit-scrollbar-thumb,
+.summary-items-list::-webkit-scrollbar-thumb {
+    background: #d0d5dd;
+    border-radius: 10px;
+}
+.checkout-section .checkout-summary::-webkit-scrollbar-thumb:hover,
+.summary-items-list::-webkit-scrollbar-thumb:hover {
+    background: #98a2b3;
+}
+
+/* Responsive Rules for Desktop vs Mobile */
+@media (min-width: 992px) {
+    .fp-docked-bottom-bar {
+        display: none !important;
+    }
+    .checkout-section {
+        padding-bottom: 60px !important;
+    }
+}
+
+@media (max-width: 991px) {
+    .checkout-section .checkout-grid {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 16px !important;
+    }
+    .checkout-section .checkout-form {
+        max-width: 100% !important;
+        order: 1 !important;
+    }
+    .checkout-section .checkout-summary {
+        position: static !important;
+        max-height: none !important;
+        order: 2 !important;
+    }
+    .fp-docked-bottom-bar {
+        display: block !important;
+    }
+    .checkout-section {
+        padding-bottom: 140px !important;
+    }
+    .summary-action-area .btn-primary-checkout {
+        display: none;
+    }
 }
 
 /* Pre-Order Calendar & Time Slots Widget Styles */
@@ -1819,9 +2173,9 @@ body {
 .fp-card {
     background: #ffffff;
     border: 1px solid #eaecf0;
-    border-radius: 18px;
-    padding: 20px 22px;
-    margin-bottom: 16px;
+    border-radius: 14px;
+    padding: 16px 20px;
+    margin-bottom: 14px;
     box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
     transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
@@ -1830,11 +2184,11 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
 }
 
 .fp-section-title {
-    font-size: 1.15rem;
+    font-size: 1.05rem;
     font-weight: 800;
     color: #101828;
     margin: 0;
@@ -1960,8 +2314,8 @@ body {
 .fp-option-row {
     display: flex;
     align-items: center;
-    padding: 16px 18px;
-    border-radius: 16px;
+    padding: 12px 16px;
+    border-radius: 12px;
     border: 1.5px solid #eaecf0;
     background: #ffffff;
     cursor: pointer;
@@ -5343,6 +5697,37 @@ function applyFoodpandaPickupMode(modeOrIsPickup) {
         }
     }
 
+    const stickyPlaceBtn = document.getElementById('stickyPlaceOrderBtnText');
+    if (stickyPlaceBtn) {
+        if (currentMode === 'preorder') {
+            stickyPlaceBtn.textContent = 'Place Pre-Order';
+        } else if (currentMode === 'pickup') {
+            stickyPlaceBtn.textContent = 'Place Pick-Up order';
+        } else {
+            stickyPlaceBtn.textContent = 'Place Delivery order';
+        }
+    }
+    const stickyModeVal = document.getElementById('summaryModeValue');
+    if (stickyModeVal) {
+        stickyModeVal.textContent = (currentMode === 'preorder') ? 'Pre-Order' : (currentMode === 'pickup' ? 'Pick-up' : 'Delivery');
+    }
+    const stickyModeIcon = document.getElementById('summaryModeIcon');
+    if (stickyModeIcon) {
+        stickyModeIcon.className = (currentMode === 'pickup') ? 'fas fa-person-walking' : (currentMode === 'preorder' ? 'fas fa-calendar-alt' : 'fas fa-motorcycle');
+    }
+    const preorderDownRow = document.getElementById('fpPreorderDownpaymentSummaryRow');
+    if (preorderDownRow) {
+        preorderDownRow.style.display = (currentMode === 'preorder') ? 'block' : 'none';
+    }
+    const summaryDeliveryFee = document.getElementById('summaryDeliveryFee');
+    if (summaryDeliveryFee) {
+        if (currentMode === 'pickup' || currentMode === 'preorder') {
+            summaryDeliveryFee.innerHTML = '<span style="color:#027a48; font-weight:700;">₱0.00 (Free)</span>';
+        } else {
+            summaryDeliveryFee.textContent = (typeof moneyFormatter !== 'undefined') ? moneyFormatter.format(currentDeliveryFee) : '₱' + currentDeliveryFee.toFixed(2);
+        }
+    }
+
     const paymongoRadio = document.getElementById('radioPaymentMethodPaymongo');
     const codRadio = document.getElementById('radioPaymentMethodCod');
     const fullRadio = document.getElementById('radioPaymentTypeFull');
@@ -5439,6 +5824,8 @@ function selectPreorderPaymentType(type) {
         if (barLabel) barLabel.textContent = '30% Downpayment Due Today';
         if (barTotal) barTotal.textContent = formattedDown;
         if (payAmountDisplay) payAmountDisplay.textContent = formattedDown;
+        const stickyPlaceBtn = document.getElementById('stickyPlaceOrderBtnText');
+        if (stickyPlaceBtn) stickyPlaceBtn.textContent = 'Place Pre-Order (Deposit ' + formattedDown + ')';
     } else {
         if (fullCard) {
             fullCard.classList.add('is-active');
@@ -5462,6 +5849,8 @@ function selectPreorderPaymentType(type) {
         if (barLabel) barLabel.textContent = 'Total (incl. fees and tax)';
         if (barTotal) barTotal.textContent = formattedTotal;
         if (payAmountDisplay) payAmountDisplay.textContent = formattedTotal;
+        const stickyPlaceBtn = document.getElementById('stickyPlaceOrderBtnText');
+        if (stickyPlaceBtn) stickyPlaceBtn.textContent = 'Place Pre-Order (' + formattedTotal + ')';
     }
 }
 
@@ -5985,14 +6374,14 @@ function syncOrderNotes(val) {
 }
 
 function scrollToPickupSummary() {
-    let summaryCard = document.getElementById('fpDeliveryOrderSummaryCard');
-    if (activeCheckoutDeliveryOption === 'pickup') {
+    let summaryCard = document.getElementById('checkoutStickySummary') || document.querySelector('.checkout-summary') || document.getElementById('fpDeliveryOrderSummaryCard');
+    if (activeCheckoutDeliveryOption === 'pickup' && !summaryCard) {
         summaryCard = document.getElementById('fpOrderSummaryCard');
-    } else if (activeCheckoutDeliveryOption === 'preorder') {
+    } else if (activeCheckoutDeliveryOption === 'preorder' && !summaryCard) {
         summaryCard = document.getElementById('fpPreorderOrderSummaryCard');
     }
     if (summaryCard) {
-        summaryCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        summaryCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 }
 
@@ -6014,9 +6403,23 @@ function updateFoodpandaTotals() {
     if (fpDelFeeDisplay) {
         fpDelFeeDisplay.textContent = (currentDeliveryFee > 0 ? (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(currentDeliveryFee) : '₱' + currentDeliveryFee.toFixed(2)) : '₱0.00');
     }
+    const summaryTotalEl = document.getElementById('summaryTotal');
+    if (summaryTotalEl) summaryTotalEl.textContent = formatted;
+
+    const summaryFeeEl = document.getElementById('summaryDeliveryFee');
+    if (summaryFeeEl) {
+        if (activeCheckoutDeliveryOption === 'pickup' || activeCheckoutDeliveryOption === 'preorder') {
+            summaryFeeEl.innerHTML = '<span style="color:#027a48; font-weight:700;">₱0.00 (Free)</span>';
+        } else {
+            summaryFeeEl.textContent = (currentDeliveryFee > 0 ? (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(currentDeliveryFee) : '₱' + currentDeliveryFee.toFixed(2)) : '₱0.00');
+        }
+    }
+
     if (fpGuidanceText && document.getElementById('fpPaymentRowCod')?.classList.contains('is-active')) {
         fpGuidanceText.innerHTML = `Please prepare exact cash of <strong>${formatted}</strong> for the delivery rider upon food arrival.`;
     }
+
+    const stickyBtnText = document.getElementById('stickyPlaceOrderBtnText');
 
     if (activeCheckoutDeliveryOption === 'preorder') {
         const isDownpayment = (selectedPreorderPaymentType === 'downpayment');
@@ -6037,15 +6440,20 @@ function updateFoodpandaTotals() {
             if (fpBarTotal) fpBarTotal.textContent = formattedDown;
             if (preorderPayAmount) preorderPayAmount.textContent = formattedDown;
             if (barLabel) barLabel.textContent = '30% Downpayment Due Today';
+            if (stickyBtnText) stickyBtnText.textContent = `Place Pre-Order (Deposit ${formattedDown})`;
         } else {
             if (fpBarTotal) fpBarTotal.textContent = formatted;
             if (preorderPayAmount) preorderPayAmount.textContent = formatted;
             if (barLabel) barLabel.textContent = 'Total (incl. fees and tax)';
+            if (stickyBtnText) stickyBtnText.textContent = `Place Pre-Order (${formatted})`;
         }
     } else {
         if (fpBarTotal) fpBarTotal.textContent = formatted;
         const barLabel = document.getElementById('fpBarLabelDisplay');
         if (barLabel) barLabel.textContent = 'Total (incl. fees and tax)';
+        if (stickyBtnText) {
+            stickyBtnText.textContent = (activeCheckoutDeliveryOption === 'pickup') ? `Place Pick-Up order (${formatted})` : `Place Delivery order (${formatted})`;
+        }
     }
 }
 
