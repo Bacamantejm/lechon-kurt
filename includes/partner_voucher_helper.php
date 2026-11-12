@@ -227,11 +227,91 @@ if (!function_exists('pvAttachSellerIdsToCartItems')) {
                 'product_id' => $string_product_id,
                 'quantity' => $qty,
                 'price' => (float)($item['price'] ?? 0),
-                'seller_id' => $seller_id
+                'seller_id' => $seller_id,
+                'selected' => (!isset($item['selected']) || !empty($item['selected'])) ? 1 : 0
             ];
         }
 
         return $rows;
+    }
+}
+
+if (!function_exists('populateCartStoreMetadata')) {
+    function populateCartStoreMetadata(&$cart, $provided_conn = null) {
+        if (!is_array($cart) || empty($cart)) {
+            return;
+        }
+        $conn = $provided_conn;
+        if (!$conn && isset($GLOBALS['conn']) && $GLOBALS['conn'] instanceof mysqli) {
+            $conn = $GLOBALS['conn'];
+        }
+        if (!$conn && function_exists('getDbConnectionForCartSnapshot')) {
+            $conn = getDbConnectionForCartSnapshot();
+        }
+        if (!$conn && function_exists('getDbConnectionForCart')) {
+            $conn = getDbConnectionForCart();
+        }
+        $missing_seller_product_ids = [];
+        $needed_seller_ids = [];
+
+        foreach ($cart as &$item) {
+            if (!isset($item['selected'])) {
+                $item['selected'] = 1;
+            }
+            $seller_id = (int)($item['seller_id'] ?? 0);
+            if ($seller_id <= 0) {
+                $pid = (int)($item['id'] ?? 0);
+                if ($pid > 0) {
+                    $missing_seller_product_ids[] = $pid;
+                }
+            } else {
+                $needed_seller_ids[] = $seller_id;
+            }
+        }
+        unset($item);
+
+        if ($conn && !empty($missing_seller_product_ids)) {
+            $id_list = implode(',', array_map('intval', array_unique($missing_seller_product_ids)));
+            $res = mysqli_query($conn, "SELECT id, seller_id FROM products WHERE id IN ({$id_list})");
+            if ($res) {
+                $p_map = [];
+                while ($row = mysqli_fetch_assoc($res)) {
+                    $p_map[(int)$row['id']] = (int)($row['seller_id'] ?? 1);
+                }
+                mysqli_free_result($res);
+                foreach ($cart as &$item) {
+                    $pid = (int)($item['id'] ?? 0);
+                    if ((int)($item['seller_id'] ?? 0) <= 0 && isset($p_map[$pid])) {
+                        $item['seller_id'] = $p_map[$pid] > 0 ? $p_map[$pid] : 1;
+                        $needed_seller_ids[] = $item['seller_id'];
+                    }
+                }
+                unset($item);
+            }
+        }
+
+        $store_name_map = [];
+        if ($conn && !empty($needed_seller_ids)) {
+            $s_list = implode(',', array_map('intval', array_unique($needed_seller_ids)));
+            $s_res = mysqli_query($conn, "SELECT id, COALESCE(NULLIF(TRIM(business_name), ''), full_name, 'Partner Store') AS store_name FROM users WHERE id IN ({$s_list})");
+            if ($s_res) {
+                while ($s_row = mysqli_fetch_assoc($s_res)) {
+                    $store_name_map[(int)$s_row['id']] = (string)$s_row['store_name'];
+                }
+                mysqli_free_result($s_res);
+            }
+        }
+
+        foreach ($cart as &$item) {
+            if ((int)($item['seller_id'] ?? 0) <= 0) {
+                $item['seller_id'] = 1;
+            }
+            $sid = (int)$item['seller_id'];
+            if (empty($item['store_name'])) {
+                $item['store_name'] = $store_name_map[$sid] ?? ($sid === 1 ? 'Lechon Delights' : 'Store #' . $sid);
+            }
+        }
+        unset($item);
     }
 }
 
@@ -247,6 +327,23 @@ if (!function_exists('pvGetCartScope')) {
                 'item_count' => 0,
                 'message' => 'Your cart is empty.'
             ];
+        }
+
+        // Filter to only selected items if any selection state exists
+        $has_selection = false;
+        foreach ($items as $it) {
+            if (isset($it['selected'])) {
+                $has_selection = true;
+                break;
+            }
+        }
+        if ($has_selection) {
+            $selected_only = array_values(array_filter($items, static function($it) {
+                return !empty($it['selected']);
+            }));
+            if (!empty($selected_only)) {
+                $items = $selected_only;
+            }
         }
 
         $seller_set = [];

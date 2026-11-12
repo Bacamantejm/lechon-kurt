@@ -20,10 +20,22 @@ if (empty($_SESSION['cart']) || !is_array($_SESSION['cart'])) {
 // Get user information
 $user_id = (int)($_SESSION['user_id'] ?? 0);
 $storefront_seller_id = isset($_SESSION['storefront_seller_id']) ? (int)$_SESSION['storefront_seller_id'] : 0;
+
+// Resolve items selected for checkout
+$checkout_cart_items = [];
+foreach ($_SESSION['cart'] as $k => $c_item) {
+    if (!isset($c_item['selected']) || !empty($c_item['selected'])) {
+        $checkout_cart_items[$k] = $c_item;
+    }
+}
+if (empty($checkout_cart_items)) {
+    $checkout_cart_items = $_SESSION['cart'];
+}
+
 // Build compact cart prefill param: "id:qty,id:qty,..."
 $_co_prefill_parts = [];
-if (!empty($_SESSION['cart']) && is_array($_SESSION['cart'])) {
-    foreach ($_SESSION['cart'] as $_co_item) {
+if (!empty($checkout_cart_items) && is_array($checkout_cart_items)) {
+    foreach ($checkout_cart_items as $_co_item) {
         $pid = (int)($_co_item['id'] ?? 0);
         $qty = max(1, (int)($_co_item['quantity'] ?? 1));
         if ($pid > 0) {
@@ -352,7 +364,7 @@ require_once __DIR__ . '/includes/SubscriptionAccessService.php';
 // Resolve cart tenant / store owner early to evaluate plan tier restrictions
 if (!isset($checkout_tenant_scope)) {
     $checkout_tenant_scope = function_exists('pvGetCheckoutTenantScope')
-        ? pvGetCheckoutTenantScope($conn, $_SESSION['cart'])
+        ? pvGetCheckoutTenantScope($conn, $checkout_cart_items)
         : ['is_valid' => true, 'seller_id' => 0, 'message' => ''];
 }
 if (!empty($checkout_tenant_scope['seller_id'])) {
@@ -401,7 +413,7 @@ if (!isset($_SESSION['pickup_location']) && !empty($stores)) {
 $subtotal = 0;
 $checkout_item_count = 0;
 $checkout_total_quantity = 0;
-foreach ($_SESSION['cart'] as $item) {
+foreach ($checkout_cart_items as $item) {
     $subtotal += $item['price'] * $item['quantity'];
     $checkout_item_count++;
     $checkout_total_quantity += (int)($item['quantity'] ?? 0);
@@ -482,18 +494,18 @@ $pickup_store_address = (string)($pickup_store['address'] ?? 'General Luna, Metr
 $vat_rate = 0.12;
 $vat_amount = round($subtotal * $vat_rate, 2);
 
-if (!empty($_GET['voucher']) && $user_id > 0 && !empty($_SESSION['cart'])) {
-    pvApplyVoucherCodeForSession($conn, (int)$user_id, (string)$_GET['voucher'], $_SESSION['cart']);
+if (!empty($_GET['voucher']) && $user_id > 0 && !empty($checkout_cart_items)) {
+    pvApplyVoucherCodeForSession($conn, (int)$user_id, (string)$_GET['voucher'], $checkout_cart_items);
 }
 
-if (empty($_SESSION['applied_voucher']) && !empty($_SESSION['pending_welcome_voucher']) && $user_id > 0 && !empty($_SESSION['cart'])) {
-    $auto_pre = pvApplyVoucherCodeForSession($conn, (int)$user_id, (string)$_SESSION['pending_welcome_voucher'], $_SESSION['cart']);
+if (empty($_SESSION['applied_voucher']) && !empty($_SESSION['pending_welcome_voucher']) && $user_id > 0 && !empty($checkout_cart_items)) {
+    $auto_pre = pvApplyVoucherCodeForSession($conn, (int)$user_id, (string)$_SESSION['pending_welcome_voucher'], $checkout_cart_items);
     if (!empty($auto_pre['success'])) {
         unset($_SESSION['pending_welcome_voucher']);
     }
 }
 
-$applied_voucher_state = pvResolveAppliedVoucherState($conn, (int)$user_id, $_SESSION['cart']);
+$applied_voucher_state = pvResolveAppliedVoucherState($conn, (int)$user_id, $checkout_cart_items);
 $voucher_discount = (float)($applied_voucher_state['discount_amount'] ?? 0);
 $applied_voucher_code = (string)($applied_voucher_state['voucher_code'] ?? '');
 $prefill_voucher_code = $applied_voucher_code !== '' ? $applied_voucher_code : (!empty($_SESSION['pending_welcome_voucher']) ? (string)$_SESSION['pending_welcome_voucher'] : '');
@@ -502,9 +514,9 @@ $voucher_message = (string)($applied_voucher_state['message'] ?? '');
 $voucher_scope_label = (string)($applied_voucher_state['scope_label'] ?? '');
 $voucher_store_name = (string)($applied_voucher_state['store_name'] ?? '');
 $voucher_is_exclusive = !empty($applied_voucher_state['is_store_exclusive']);
-$available_vouchers = function_exists('pvFetchAvailableVouchersForCart') ? pvFetchAvailableVouchersForCart($conn, (int)$user_id, $_SESSION['cart']) : [];
+$available_vouchers = function_exists('pvFetchAvailableVouchersForCart') ? pvFetchAvailableVouchersForCart($conn, (int)$user_id, $checkout_cart_items) : [];
 $checkout_tenant_scope = function_exists('pvGetCheckoutTenantScope')
-    ? pvGetCheckoutTenantScope($conn, $_SESSION['cart'])
+    ? pvGetCheckoutTenantScope($conn, $checkout_cart_items)
     : ['is_valid' => true, 'seller_id' => 0, 'message' => ''];
 $checkout_tenant_blocked = empty($checkout_tenant_scope['is_valid']);
 $checkout_tenant_message = $checkout_tenant_blocked
@@ -551,7 +563,7 @@ $remaining = $total - $downpayment;
                     </div>
                 </div>
                 <div class="summary-items">
-                    <?php foreach ($_SESSION['cart'] as $item): ?>
+                    <?php foreach ($checkout_cart_items as $item): ?>
                     <div class="summary-item">
                         <div class="item-info">
                             <h4><?php echo htmlspecialchars($item['name']); ?></h4>
@@ -784,7 +796,7 @@ $remaining = $total - $downpayment;
                                 <span class="fp-items-count"><?php echo (int)$checkout_item_count; ?> <?php echo $checkout_item_count === 1 ? 'item' : 'items'; ?></span>
                             </div>
                             <div class="fp-summary-items-list">
-                                <?php foreach ($_SESSION['cart'] as $item): ?>
+                                <?php foreach ($checkout_cart_items as $item): ?>
                                 <div class="fp-summary-item-row">
                                     <span class="fp-item-qty"><?php echo (int)$item['quantity']; ?>x</span>
                                     <div class="fp-item-text">
@@ -1027,7 +1039,7 @@ $remaining = $total - $downpayment;
                                 <span class="fp-items-count"><?php echo (int)$checkout_item_count; ?> <?php echo $checkout_item_count === 1 ? 'item' : 'items'; ?></span>
                             </div>
                             <div class="fp-summary-items-list">
-                                <?php foreach ($_SESSION['cart'] as $item): ?>
+                                <?php foreach ($checkout_cart_items as $item): ?>
                                 <div class="fp-summary-item-row">
                                     <span class="fp-item-qty"><?php echo (int)$item['quantity']; ?>x</span>
                                     <div class="fp-item-text">
@@ -1274,7 +1286,7 @@ $remaining = $total - $downpayment;
                                 <span class="fp-items-count"><?php echo (int)$checkout_item_count; ?> <?php echo $checkout_item_count === 1 ? 'item' : 'items'; ?></span>
                             </div>
                             <div class="fp-summary-items-list">
-                                <?php foreach ($_SESSION['cart'] as $item): ?>
+                                <?php foreach ($checkout_cart_items as $item): ?>
                                 <div class="fp-summary-item-row">
                                     <span class="fp-item-qty"><?php echo (int)$item['quantity']; ?>x</span>
                                     <div class="fp-item-text">
