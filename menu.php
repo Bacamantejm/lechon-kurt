@@ -3862,10 +3862,6 @@ document.addEventListener('click', function(e) {
             }
         }
     });
-        } catch (error) {
-            console.error('Error updating cart sidebar:', error);
-        }
-    }
     
     // Cart item quantity controls
     document.addEventListener('click', async function(e) {
