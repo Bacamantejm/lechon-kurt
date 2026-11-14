@@ -13,7 +13,16 @@ function sendJsonResponse($success, $message = '', $data = []) {
     if (!empty($data)) {
         $response = array_merge($response, $data);
     }
-    echo json_encode($response);
+    $json_flags = 0;
+    if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+        $json_flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+    }
+    $json = json_encode($response, $json_flags);
+    if ($json === false) {
+        error_log('Add to cart JSON encoding error: ' . json_last_error_msg());
+        $json = '{"success":false,"message":"Unable to format cart response. Please try again."}';
+    }
+    echo $json;
     exit;
 }
 
@@ -67,6 +76,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('Database connection failed');
         }
         
+        $product_columns = [];
+        $product_columns_result = mysqli_query($conn, "SHOW COLUMNS FROM products");
+        if ($product_columns_result) {
+            while ($product_column = mysqli_fetch_assoc($product_columns_result)) {
+                $product_columns[] = (string)$product_column['Field'];
+            }
+            mysqli_free_result($product_columns_result);
+        }
+        $product_availability = in_array('is_available', $product_columns, true)
+            ? 'p.is_available'
+            : '1';
+
         // Use inventory when the optional table has the required columns. Older
         // production databases can still rely on products.stock.
         $inventory_join = '';
@@ -101,7 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     p.image,
                     p.price,
                     p.seller_id,
-                    p.is_available,
+                    {$product_availability} AS is_available,
                     COALESCE(NULLIF(TRIM(u.business_name), ''), NULLIF(TRIM(u.full_name), ''), 'Lechon Delights') AS store_name,
                     COALESCE({$inventory_stock}, p.stock, 0) AS available_stock
                   FROM products p
@@ -171,7 +192,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } catch (Throwable $e) {
         // Clean up any open connections
-        if (isset($stmt)) mysqli_stmt_close($stmt);
+        if (isset($stmt) && $stmt instanceof mysqli_stmt) {
+            mysqli_stmt_close($stmt);
+        }
         if (isset($conn) && $conn instanceof mysqli) mysqli_close($conn);
         
         // Log error but don't show details to user
