@@ -32,55 +32,57 @@ function getAvailableStockForSnapshotItem($item) {
 
     $numeric_id = (int)($item['id'] ?? 0);
     $string_product_id = trim((string)($item['product_id'] ?? ''));
-    $available_stock = null;
-
-    if ($numeric_id > 0) {
-        $query = "SELECT COALESCE(i.current_stock, p.stock, 0) AS available_stock
-                  FROM products p
-                  LEFT JOIN inventory i
-                    ON p.id = i.product_id
-                    AND i.inventory_date = CURDATE()
-                    AND i.is_archived = 0
-                  WHERE p.id = ?
-                    AND p.is_archived = 0
-                  LIMIT 1";
-        $stmt = mysqli_prepare($conn, $query);
-        if ($stmt) {
-            mysqli_stmt_bind_param($stmt, "i", $numeric_id);
-            mysqli_stmt_execute($stmt);
-            $result = mysqli_stmt_get_result($stmt);
-            if ($row = mysqli_fetch_assoc($result)) {
-                $available_stock = (int)$row['available_stock'];
-            }
-            mysqli_stmt_close($stmt);
-        }
-    } elseif ($string_product_id !== '') {
-        $query = "SELECT COALESCE(i.current_stock, p.stock, 0) AS available_stock
-                  FROM products p
-                  LEFT JOIN inventory i
-                    ON p.id = i.product_id
-                    AND i.inventory_date = CURDATE()
-                    AND i.is_archived = 0
-                  WHERE p.product_id = ?
-                    AND p.is_archived = 0
-                  LIMIT 1";
-        $stmt = mysqli_prepare($conn, $query);
-        if ($stmt) {
-            mysqli_stmt_bind_param($stmt, "s", $string_product_id);
-            mysqli_stmt_execute($stmt);
-            $result = mysqli_stmt_get_result($stmt);
-            if ($row = mysqli_fetch_assoc($result)) {
-                $available_stock = (int)$row['available_stock'];
-            }
-            mysqli_stmt_close($stmt);
-        }
-    }
-
-    if ($available_stock === null) {
+    if ($numeric_id <= 0 && $string_product_id === '') {
         return null;
     }
 
-    return max(0, $available_stock);
+    $inventory_join = '';
+    $inventory_stock = 'p.stock';
+    $inventory_columns = [];
+    $inventory_table_result = mysqli_query($conn, "SHOW TABLES LIKE 'inventory'");
+    if ($inventory_table_result && mysqli_num_rows($inventory_table_result) > 0) {
+        $inventory_columns_result = mysqli_query($conn, "SHOW COLUMNS FROM inventory");
+        if ($inventory_columns_result) {
+            while ($inventory_column = mysqli_fetch_assoc($inventory_columns_result)) {
+                $inventory_columns[] = (string)$inventory_column['Field'];
+            }
+            mysqli_free_result($inventory_columns_result);
+        }
+    }
+    if (in_array('product_id', $inventory_columns, true)
+        && in_array('current_stock', $inventory_columns, true)
+        && in_array('inventory_date', $inventory_columns, true)) {
+        $inventory_archive_filter = in_array('is_archived', $inventory_columns, true)
+            ? ' AND i.is_archived = 0'
+            : '';
+        $inventory_join = " LEFT JOIN inventory i
+                ON p.id = i.product_id
+                AND i.inventory_date = CURDATE(){$inventory_archive_filter}";
+        $inventory_stock = 'i.current_stock';
+    }
+
+    $query = "SELECT COALESCE({$inventory_stock}, p.stock, 0) AS available_stock
+              FROM products p
+              {$inventory_join}
+              WHERE (p.id = ? OR p.product_id = ?)
+                AND p.is_archived = 0
+              LIMIT 1";
+    $stmt = mysqli_prepare($conn, $query);
+    if (!$stmt) {
+        return null;
+    }
+
+    mysqli_stmt_bind_param($stmt, "is", $numeric_id, $string_product_id);
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return null;
+    }
+
+    mysqli_stmt_bind_result($stmt, $available_stock);
+    $found = mysqli_stmt_fetch($stmt);
+    mysqli_stmt_close($stmt);
+
+    return $found ? max(0, (int)$available_stock) : null;
 }
 
 function normalizeCartSnapshot() {

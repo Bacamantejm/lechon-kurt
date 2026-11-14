@@ -2788,180 +2788,32 @@ unset($_SESSION['success'], $_SESSION['error']);
                             </div>
                         <?php endif; ?>
 
-                        <!-- Collapsible Recipe & Raw Material Setup Tools Drawer -->
-                        <div class="card mb-4" style="border: 1px solid #eaecf0; border-radius: 12px; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
-                            <div class="card-header bg-white py-3 px-3 d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#setup-inputs" style="cursor: pointer;">
-                                <div class="d-flex align-items-center gap-2">
-                                    <i class="fas fa-sliders text-danger"></i>
-                                    <strong style="color: #101828; font-size: 0.95rem;">Recipe &amp; Raw Material Setup Tools (BOM)</strong>
-                                    <span class="badge bg-light text-muted border">Optional Menu &amp; Material Configuration</span>
+                        <!-- Dedicated Catalog Navigation Links -->
+                        <div class="card mb-4" style="border: 1px solid #eaecf0; border-radius: 12px; background: #ffffff; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
+                            <div class="card-body p-3 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div style="width: 38px; height: 38px; border-radius: 8px; background: #f8f9fa; border: 1px solid #eaecf0; display: flex; align-items: center; justify-content: center; color: #475467; font-size: 1.1rem;">
+                                        <i class="fas fa-sitemap"></i>
+                                    </div>
+                                    <div>
+                                        <strong style="color: #101828; font-size: 0.95rem;">Catalog &amp; Inventory Management Modules</strong>
+                                        <p class="text-muted small mb-0">Menu products, finished goods stock, and raw ingredient definitions are managed in their dedicated pages.</p>
+                                    </div>
                                 </div>
-                                <button class="btn btn-sm btn-outline-secondary py-1 px-3" type="button">
-                                    <i class="fas fa-chevron-down me-1"></i> Toggle Setup Forms
-                                </button>
-                            </div>
-                            <div id="setup-inputs" class="collapse">
-                                <div class="card-body p-3 border-top">
-                                    <div class="alert alert-warning border mb-3">
-                                        <strong>Quick Setup:</strong> Add your material, create a product, then link ingredient quantity per product.
-                                    </div>
-                                    <div class="setup-grid">
-                                        <div class="setup-card">
-                                            <h6><i class="fas fa-box-open text-danger"></i> Add Material</h6>
-                                            <p class="help">Define stock unit and costing so requisition estimates are accurate.</p>
-                                            <form method="POST">
-                                                <input type="hidden" name="action" value="quick_add_material">
-                                                <div class="mb-2">
-                                                    <label class="form-label">Material Name</label>
-                                                    <input type="text" name="setup_material_name" class="form-control" required>
-                                                </div>
-                                                <div class="row g-2">
-                                                    <div class="col-6">
-                                                        <label class="form-label">Unit</label>
-                                                        <input type="text" name="setup_material_unit" class="form-control" placeholder="kg, pcs, L" required>
-                                                    </div>
-                                                    <div class="col-6">
-                                                        <label class="form-label">Cost / Unit</label>
-                                                        <input type="number" name="setup_material_cost_per_unit" class="form-control" step="0.01" min="0" value="0">
-                                                    </div>
-                                                </div>
-                                                <div class="row g-2 mt-1">
-                                                    <div class="col-6">
-                                                        <label class="form-label">Current Stock</label>
-                                                        <input type="number" name="setup_material_current_stock" class="form-control" step="0.01" min="0" value="0">
-                                                    </div>
-                                                    <div class="col-6">
-                                                        <label class="form-label">Min Level</label>
-                                                        <input type="number" name="setup_material_min_level" class="form-control" step="0.01" min="0" value="10">
-                                                    </div>
-                                                </div>
-                                                <button type="submit" class="btn btn-sm btn-primary mt-3" <?php echo $can_manage_mrp ? '' : 'disabled'; ?>>
-                                                    Save Material
-                                                </button>
-                                            </form>
-                                        </div>
-
-                                        <div class="setup-card">
-                                            <h6><i class="fas fa-utensils text-danger"></i> Add Product</h6>
-                                            <p class="help">Quick-create a menu item. You can add image and advanced details later in Products.</p>
-                                            <form method="POST">
-                                                <input type="hidden" name="action" value="quick_add_product">
-                                                <div class="mb-2">
-                                                    <label class="form-label">Product Name</label>
-                                                    <input type="text" name="setup_product_name" class="form-control" required>
-                                                </div>
-                                                <div class="row g-2">
-                                                    <div class="col-7">
-                                                        <label class="form-label">Category</label>
-                                                        <input type="text" name="setup_product_category" class="form-control" placeholder="Whole Lechon, Platters, Sides" required>
-                                                    </div>
-                                                    <div class="col-5">
-                                                        <label class="form-label">Price (PHP)</label>
-                                                        <input type="number" name="setup_product_price" class="form-control" step="0.01" min="0.01" required>
-                                                    </div>
-                                                </div>
-                                                <div class="mt-2">
-                                                    <label class="form-label">Description (Optional)</label>
-                                                    <textarea name="setup_product_description" class="form-control" rows="2"></textarea>
-                                                </div>
-                                                <button type="submit" class="btn btn-sm btn-primary mt-3" <?php echo $can_manage_mrp ? '' : 'disabled'; ?>>
-                                                    Save Product
-                                                </button>
-                                            </form>
-                                        </div>
-
-                                        <div class="setup-card">
-                                            <h6><i class="fas fa-link text-danger"></i> Link Ingredient (BOM)</h6>
-                                            <p class="help">Connect one product to one material with quantity needed per order/unit.</p>
-                                            <form method="POST">
-                                                <input type="hidden" name="action" value="quick_add_ingredient">
-                                                <div class="mb-2">
-                                                    <label class="form-label">Product</label>
-                                                    <select name="setup_ingredient_product_id" class="form-select" required>
-                                                        <option value="">-- Select Product --</option>
-                                                        <?php foreach ($setup_products as $setup_product): ?>
-                                                            <option value="<?php echo (int)$setup_product['id']; ?>">
-                                                                <?php echo htmlspecialchars((string)$setup_product['name']); ?> (<?php echo htmlspecialchars((string)($setup_product['category'] ?? 'N/A')); ?>)
-                                                            </option>
-                                                        <?php endforeach; ?>
-                                                    </select>
-                                                </div>
-                                                <div class="mb-2">
-                                                    <label class="form-label">Material</label>
-                                                    <select name="setup_ingredient_material_id" class="form-select" required>
-                                                        <option value="">-- Select Material --</option>
-                                                        <?php foreach ($setup_materials as $setup_material): ?>
-                                                            <option value="<?php echo (int)$setup_material['id']; ?>">
-                                                                <?php echo htmlspecialchars((string)$setup_material['name']); ?> (<?php echo htmlspecialchars((string)$setup_material['unit']); ?>)
-                                                            </option>
-                                                        <?php endforeach; ?>
-                                                    </select>
-                                                </div>
-                                                <div class="mb-2">
-                                                    <label class="form-label">Quantity Needed</label>
-                                                    <input type="number" name="setup_ingredient_qty" class="form-control" step="0.01" min="0.01" placeholder="e.g. 0.35" required>
-                                                </div>
-                                                <button type="submit" class="btn btn-sm btn-primary mt-2" <?php echo ($can_manage_mrp && !empty($setup_products) && !empty($setup_materials)) ? '' : 'disabled'; ?>>
-                                                    Save Ingredient Link
-                                                </button>
-                                                <?php if (empty($setup_products)): ?>
-                                                    <div class="small text-danger mt-2">Create at least 1 product first.</div>
-                                                <?php elseif (empty($setup_materials)): ?>
-                                                    <div class="small text-danger mt-2">Add at least 1 material first.</div>
-                                                <?php endif; ?>
-                                            </form>
-                                        </div>
-                                    </div>
-                                    <div class="setup-summary">
-                                        <div class="title">Latest Ingredient Mappings</div>
-                                        <div class="table-responsive">
-                                            <table class="admin-table mb-0">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Product</th>
-                                                        <th>Material</th>
-                                                        <th>Qty Needed</th>
-                                                        <th>Actions</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    <?php if (!empty($setup_ingredient_rows)): ?>
-                                                        <?php foreach ($setup_ingredient_rows as $setup_ingredient): ?>
-                                                            <tr>
-                                                                <td><?php echo htmlspecialchars((string)$setup_ingredient['product_name']); ?></td>
-                                                                <td><?php echo htmlspecialchars((string)$setup_ingredient['material_name']); ?></td>
-                                                                <td><?php echo number_format((float)($setup_ingredient['quantity_needed'] ?? 0), 2) . ' ' . htmlspecialchars((string)($setup_ingredient['unit'] ?? '')); ?></td>
-                                                                <td>
-                                                                    <div class="setup-inline-actions">
-                                                                        <form method="POST" class="setup-inline-form">
-                                                                            <input type="hidden" name="action" value="quick_update_ingredient">
-                                                                            <input type="hidden" name="setup_bom_id" value="<?php echo (int)$setup_ingredient['id']; ?>">
-                                                                            <input type="number" name="setup_ingredient_qty_edit" class="form-control form-control-sm" step="0.01" min="0.01" value="<?php echo number_format((float)($setup_ingredient['quantity_needed'] ?? 0), 2, '.', ''); ?>" <?php echo $can_manage_mrp ? '' : 'disabled'; ?>>
-                                                                            <button type="submit" class="btn btn-sm btn-outline-primary" <?php echo $can_manage_mrp ? '' : 'disabled'; ?>>
-                                                                                Save
-                                                                            </button>
-                                                                        </form>
-                                                                        <form method="POST" onsubmit="return confirm('Remove this ingredient mapping?');">
-                                                                            <input type="hidden" name="action" value="quick_delete_ingredient">
-                                                                            <input type="hidden" name="setup_bom_id" value="<?php echo (int)$setup_ingredient['id']; ?>">
-                                                                            <button type="submit" class="btn btn-sm btn-outline-danger" <?php echo $can_manage_mrp ? '' : 'disabled'; ?>>
-                                                                                Delete
-                                                                            </button>
-                                                                        </form>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        <?php endforeach; ?>
-                                                    <?php else: ?>
-                                                        <tr><td colspan="4" class="text-center text-muted">No ingredient mapping yet.</td></tr>
-                                                    <?php endif; ?>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
+                                <div class="d-flex gap-2 flex-wrap">
+                                    <a href="materials.php" class="btn btn-sm btn-outline-secondary fw-semibold">
+                                        <i class="fas fa-cubes me-1 text-danger"></i> Raw Ingredients (Materials)
+                                    </a>
+                                    <a href="products.php" class="btn btn-sm btn-outline-secondary fw-semibold">
+                                        <i class="fas fa-utensils me-1 text-primary"></i> Menu Products
+                                    </a>
+                                    <a href="inventory.php" class="btn btn-sm btn-outline-secondary fw-semibold">
+                                        <i class="fas fa-warehouse me-1 text-success"></i> Finished Inventory
+                                    </a>
                                 </div>
                             </div>
                         </div>
+
                         <div class="sales-wire-grid">
                             <div class="sales-wire-card">
                                 <h6><i class="fas fa-chart-line text-danger me-1"></i> Sales Signals (7D / 30D / Best Seller)</h6>

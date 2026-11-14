@@ -233,14 +233,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_new_product'])) {
         if (mysqli_stmt_execute($stmt)) {
             $new_product_id = mysqli_insert_id($conn);
 
-            // Save Bill of Materials (BOM) recipe ingredients
-            if (!empty($_POST['ingredients']) && is_array($_POST['ingredients'])) {
-                $bom_ins = mysqli_prepare($conn, "INSERT INTO bill_of_materials (product_id, material_id, quantity_needed) VALUES (?, ?, ?)");
+            // Save Bill of Materials (BOM) recipe ingredients from checklist or dynamic rows
+            $recipe_items = [];
+            if (!empty($_POST['recipe_ingredients']) && is_array($_POST['recipe_ingredients'])) {
+                foreach ($_POST['recipe_ingredients'] as $m_id => $r_data) {
+                    if (!empty($r_data['selected'])) {
+                        $mat_id = intval($m_id);
+                        $qty = floatval($r_data['qty'] ?? 0);
+                        if ($mat_id > 0 && $qty > 0) {
+                            $recipe_items[] = ['material_id' => $mat_id, 'quantity_needed' => $qty];
+                        }
+                    }
+                }
+            } elseif (!empty($_POST['ingredients']) && is_array($_POST['ingredients'])) {
                 foreach ($_POST['ingredients'] as $ing) {
-                    $m_id = intval($ing['material_id'] ?? 0);
-                    $q_needed = floatval($ing['quantity_needed'] ?? 0);
-                    if ($m_id > 0 && $q_needed > 0 && $bom_ins) {
-                        mysqli_stmt_bind_param($bom_ins, "iid", $new_product_id, $m_id, $q_needed);
+                    $mat_id = intval($ing['material_id'] ?? 0);
+                    $qty = floatval($ing['quantity_needed'] ?? 0);
+                    if ($mat_id > 0 && $qty > 0) {
+                        $recipe_items[] = ['material_id' => $mat_id, 'quantity_needed' => $qty];
+                    }
+                }
+            }
+
+            if (!empty($recipe_items)) {
+                $bom_ins = mysqli_prepare($conn, "INSERT INTO bill_of_materials (product_id, material_id, quantity_needed) VALUES (?, ?, ?)");
+                foreach ($recipe_items as $ritem) {
+                    if ($bom_ins) {
+                        mysqli_stmt_bind_param($bom_ins, "iid", $new_product_id, $ritem['material_id'], $ritem['quantity_needed']);
                         mysqli_stmt_execute($bom_ins);
                     }
                 }
@@ -344,15 +363,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_product'])) {
         mysqli_stmt_bind_param($u_stmt, "ssdsssisssii", $name, $category, $price, $description, $weight_info, $pax_info, $stock, $final_primary, $final_additional_json, $sizes_json, $product_id, $user_id);
 
         if (mysqli_stmt_execute($u_stmt)) {
-            // Update Bill of Materials (BOM) recipe ingredients
+            // Update Bill of Materials (BOM) recipe ingredients from checklist or dynamic rows
             mysqli_query($conn, "DELETE FROM bill_of_materials WHERE product_id = " . intval($product_id));
-            if (!empty($_POST['ingredients']) && is_array($_POST['ingredients'])) {
-                $bom_ins = mysqli_prepare($conn, "INSERT INTO bill_of_materials (product_id, material_id, quantity_needed) VALUES (?, ?, ?)");
+            $recipe_items = [];
+            if (!empty($_POST['recipe_ingredients']) && is_array($_POST['recipe_ingredients'])) {
+                foreach ($_POST['recipe_ingredients'] as $m_id => $r_data) {
+                    if (!empty($r_data['selected'])) {
+                        $mat_id = intval($m_id);
+                        $qty = floatval($r_data['qty'] ?? 0);
+                        if ($mat_id > 0 && $qty > 0) {
+                            $recipe_items[] = ['material_id' => $mat_id, 'quantity_needed' => $qty];
+                        }
+                    }
+                }
+            } elseif (!empty($_POST['ingredients']) && is_array($_POST['ingredients'])) {
                 foreach ($_POST['ingredients'] as $ing) {
-                    $m_id = intval($ing['material_id'] ?? 0);
-                    $q_needed = floatval($ing['quantity_needed'] ?? 0);
-                    if ($m_id > 0 && $q_needed > 0 && $bom_ins) {
-                        mysqli_stmt_bind_param($bom_ins, "iid", $product_id, $m_id, $q_needed);
+                    $mat_id = intval($ing['material_id'] ?? 0);
+                    $qty = floatval($ing['quantity_needed'] ?? 0);
+                    if ($mat_id > 0 && $qty > 0) {
+                        $recipe_items[] = ['material_id' => $mat_id, 'quantity_needed' => $qty];
+                    }
+                }
+            }
+
+            if (!empty($recipe_items)) {
+                $bom_ins = mysqli_prepare($conn, "INSERT INTO bill_of_materials (product_id, material_id, quantity_needed) VALUES (?, ?, ?)");
+                foreach ($recipe_items as $ritem) {
+                    if ($bom_ins) {
+                        mysqli_stmt_bind_param($bom_ins, "iid", $product_id, $ritem['material_id'], $ritem['quantity_needed']);
                         mysqli_stmt_execute($bom_ins);
                     }
                 }
@@ -410,6 +448,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_material'])) {
         }
     } else {
         $_SESSION['error'] = "Ingredient name and unit of measurement are required.";
+    }
+    header("Location: seller_products.php?tab=ingredients");
+    exit();
+}
+
+// Handle editing existing ingredient
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_material'])) {
+    $mat_id = intval($_POST['material_id'] ?? 0);
+    $mat_name = trim($_POST['material_name'] ?? '');
+    $mat_unit = trim($_POST['material_unit'] ?? 'kg');
+    $reorder_level = floatval($_POST['reorder_level'] ?? 10);
+    $cost_per_unit = floatval($_POST['cost_per_unit'] ?? 0);
+
+    if ($mat_id > 0 && !empty($mat_name) && !empty($mat_unit)) {
+        $u_m = mysqli_prepare($conn, "UPDATE materials SET name = ?, unit = ?, min_level = ?, cost_per_unit = ?, last_updated = NOW() WHERE id = ?");
+        if ($u_m) {
+            mysqli_stmt_bind_param($u_m, "ssddi", $mat_name, $mat_unit, $reorder_level, $cost_per_unit, $mat_id);
+            mysqli_stmt_execute($u_m);
+            mysqli_stmt_close($u_m);
+        }
+        $u_smi = mysqli_prepare($conn, "UPDATE store_material_inventory SET reorder_level = ?, unit = ? WHERE material_id = ? AND store_id = ?");
+        if ($u_smi) {
+            mysqli_stmt_bind_param($u_smi, "dsii", $reorder_level, $mat_unit, $mat_id, $user_id);
+            mysqli_stmt_execute($u_smi);
+            mysqli_stmt_close($u_smi);
+        }
+        $_SESSION['success'] = "Ingredient '$mat_name' updated successfully!";
+    } else {
+        $_SESSION['error'] = "Valid ingredient name and unit are required.";
+    }
+    header("Location: seller_products.php?tab=ingredients");
+    exit();
+}
+
+// Handle deleting an ingredient
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_material'])) {
+    $mat_id = intval($_POST['material_id'] ?? 0);
+    if ($mat_id > 0) {
+        mysqli_query($conn, "DELETE FROM bill_of_materials WHERE material_id = $mat_id");
+        mysqli_query($conn, "DELETE FROM store_material_inventory WHERE material_id = $mat_id AND store_id = $user_id");
+        mysqli_query($conn, "DELETE FROM materials WHERE id = $mat_id");
+        $_SESSION['success'] = "Ingredient removed from catalog.";
     }
     header("Location: seller_products.php?tab=ingredients");
     exit();
@@ -626,7 +706,7 @@ if ($m_q) {
 // Fetch store-level ingredient stock for this store
 $store_ingredients = [];
 $smi_q = mysqli_prepare($conn, "
-    SELECT m.id, m.name, m.unit, 
+    SELECT m.id, m.name, m.unit, m.cost_per_unit, 
            COALESCE(smi.current_stock, m.current_stock, 0) as current_stock,
            COALESCE(smi.reorder_level, m.min_level, 10) as reorder_level,
            smi.last_restocked_at
@@ -698,7 +778,60 @@ $page_title = "My Products | Lechon Delights";
 include 'includes/header.php';
 ?>
 
+<link rel="stylesheet" href="css/bootstrap.min.css">
+
 <style>
+    /* Scoped Bootstrap adjustments for Seller Products & Ingredients */
+    .seller-products-page .btn.btn-sm {
+        padding: 6px 14px !important;
+        font-size: 13px !important;
+        border-radius: 8px !important;
+        line-height: 1.4 !important;
+    }
+    .seller-ingredients-table {
+        margin-bottom: 0;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    .seller-ingredients-table th {
+        font-size: 12px;
+        font-weight: 700;
+        color: #475467;
+        background: #f8f9fa;
+        border-bottom: 1px solid #eaecf0;
+        padding: 12px 16px;
+    }
+    .seller-ingredients-table td {
+        vertical-align: middle;
+        padding: 12px 16px;
+        border-bottom: 1px solid #f2f4f7;
+        font-size: 13.5px;
+    }
+    .seller-ingredients-table tr:last-child td {
+        border-bottom: none;
+    }
+    .seller-ingredients-table tr:hover td {
+        background-color: #fafbfc;
+    }
+    .ingredient-check-item {
+        transition: all 0.15s ease-in-out;
+    }
+    .ingredient-check-item:hover {
+        border-color: #b3261e !important;
+        background: #fff8f8 !important;
+    }
+    .metric-card-seller {
+        border: 1px solid #eaecf0;
+        border-radius: 12px;
+        background: #ffffff;
+        padding: 16px 20px;
+        box-shadow: 0 1px 3px rgba(16,24,40,0.04);
+    }
+    .metric-card-seller .metric-num {
+        font-size: 1.75rem;
+        font-weight: 800;
+        line-height: 1.1;
+    }
     .seller-products-page {
         min-height: calc(100vh - 200px);
         background: linear-gradient(135deg, #f5f5f5 0%, #fafafa 100%);
@@ -1277,49 +1410,119 @@ include 'includes/header.php';
 
         <?php if ($current_seller_tab === 'ingredients'): ?>
             <!-- RAW INGREDIENTS TAB -->
-            <div class="card p-4 border rounded-3 mb-4 bg-white" style="border-color:#eaecf0 !important;">
-                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+            <?php
+            $ing_total = count($store_ingredients);
+            $ing_low = 0;
+            $ing_empty = 0;
+            $ing_adequate = 0;
+            foreach ($store_ingredients as $si) {
+                $cs = floatval($si['current_stock'] ?? 0);
+                $rl = floatval($si['reorder_level'] ?? 10);
+                if ($cs <= 0) $ing_empty++;
+                elseif ($cs <= $rl) $ing_low++;
+                else $ing_adequate++;
+            }
+            ?>
+
+            <!-- Stock Health Overview Cards -->
+            <div class="row g-3 mb-4">
+                <div class="col-6 col-md-3">
+                    <div class="metric-card-seller">
+                        <div class="small text-muted fw-semibold mb-1">Total Ingredients</div>
+                        <div class="metric-num text-dark"><?php echo $ing_total; ?></div>
+                        <div class="small text-muted mt-1"><i class="fas fa-boxes-stacked me-1"></i> Registered raw materials</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="metric-card-seller">
+                        <div class="small text-muted fw-semibold mb-1">Adequate Stock</div>
+                        <div class="metric-num text-success"><?php echo $ing_adequate; ?></div>
+                        <div class="small text-success mt-1"><i class="fas fa-check-circle me-1"></i> Healthy inventory</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="metric-card-seller">
+                        <div class="small text-muted fw-semibold mb-1">Low Stock Warning</div>
+                        <div class="metric-num" style="color: #b54708;"><?php echo $ing_low; ?></div>
+                        <div class="small mt-1" style="color: #b54708;"><i class="fas fa-triangle-exclamation me-1"></i> Near reorder point</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="metric-card-seller">
+                        <div class="small text-muted fw-semibold mb-1">Out of Stock</div>
+                        <div class="metric-num text-danger"><?php echo $ing_empty; ?></div>
+                        <div class="small text-danger mt-1"><i class="fas fa-ban me-1"></i> Blocks customer orders</div>
+                    </div>
+                </div>
+            </div>
+
+            <?php if ($ing_empty > 0): ?>
+                <div class="alert alert-danger d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4" style="background:#fff1f0; border-color:#fee4e2; color:#b3261e; border-radius:12px;">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="fas fa-exclamation-triangle fs-4"></i>
+                        <div>
+                            <strong>Menu Deactivation Alert:</strong> You have <strong><?php echo $ing_empty; ?> ingredient(s)</strong> at 0 stock. Menu products that use these ingredients are automatically hidden from customers until replenished.
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-success fw-bold" data-bs-toggle="modal" data-bs-target="#logSelfProcureModal">
+                            <i class="fas fa-bolt me-1"></i> Instant Market Restock
+                        </button>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <div class="card p-4 border rounded-3 mb-4 bg-white" style="border-color:#eaecf0 !important; box-shadow:0 1px 3px rgba(16,24,40,0.04);">
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3 pb-3 border-bottom">
                     <div>
                         <h5 class="fw-bold m-0" style="color:#101828;">
                             <i class="fas fa-boxes-stacked text-danger me-2"></i> Raw Ingredients Inventory
                         </h5>
                         <p class="text-muted small m-0 mt-1">
-                            Choose between <strong>Self-Procurement</strong> (buying stock yourself at local markets/supermarkets) or <strong>Partner Supplier Refill</strong>. Both flows automatically integrate with the Finance Department.
+                            Register raw materials (Pork belly, Soy sauce, Garlic, Water, Spices) and keep track of actual shop stock levels.
                         </p>
                     </div>
                     <div class="d-flex gap-2 flex-wrap">
-                        <a href="shopping_list.php" class="btn btn-sm btn-outline-dark" style="font-weight:700;">
-                            <i class="fas fa-list-check text-danger"></i> Shopping List
+                        <button type="button" class="btn btn-sm btn-danger fw-bold" data-bs-toggle="modal" data-bs-target="#addMaterialModal" style="background:#b3261e; border-color:#b3261e;">
+                            <i class="fas fa-plus me-1"></i> Register Ingredient
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-success fw-bold" data-bs-toggle="modal" data-bs-target="#logSelfProcureModal">
+                            <i class="fas fa-receipt me-1"></i> Log Market Purchase
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger fw-bold" data-bs-toggle="modal" data-bs-target="#requestRefillModal">
+                            <i class="fas fa-truck-ramp-box me-1"></i> Order Supplier
+                        </button>
+                        <a href="shopping_list.php" class="btn btn-sm btn-outline-dark fw-bold">
+                            <i class="fas fa-list-check text-danger me-1"></i> Shopping List
                         </a>
-                        <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#logSelfProcureModal" style="font-weight:700;">
-                            <i class="fas fa-receipt"></i> Log Manual Purchase
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addMaterialModal" style="font-weight:700;">
-                            <i class="fas fa-plus"></i> Add Ingredient
-                        </button>
-                        <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#requestRefillModal" style="background:#b3261e; border-color:#b3261e; font-weight:700;">
-                            <i class="fas fa-truck-ramp-box"></i> Order Supplier
-                        </button>
                     </div>
                 </div>
 
-                <div class="table-responsive">
-                    <table class="table align-middle table-hover">
-                        <thead class="table-light small text-uppercase">
+                <div class="table-responsive rounded-3 border" style="border-color:#eaecf0 !important;">
+                    <table class="table seller-ingredients-table mb-0">
+                        <thead>
                             <tr>
                                 <th>Ingredient</th>
                                 <th>Current Store Stock</th>
                                 <th>Reorder Level</th>
                                 <th>Stock Status</th>
+                                <th>Est. Cost / Unit</th>
                                 <th>Last Restocked</th>
-                                <th class="text-end">Fulfillment Mode</th>
+                                <th class="text-end">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($store_ingredients)): ?>
                                 <tr>
-                                    <td colspan="6" class="text-center py-4 text-muted">
-                                        No raw ingredients found. Click "Add Ingredient" to register materials (Pork belly, Soy sauce, Garlic, etc.).
+                                    <td colspan="7" class="text-center py-5">
+                                        <div class="py-3">
+                                            <i class="fas fa-boxes-stacked text-muted mb-3" style="font-size: 2.5rem; opacity: 0.5;"></i>
+                                            <h6 class="fw-bold text-dark mb-1">No Raw Ingredients Registered Yet</h6>
+                                            <p class="text-muted small mb-3">Add the ingredients needed for your lechon recipes (pork belly, soy sauce, garlic, water, etc.) to start tracking stock & linking recipes.</p>
+                                            <button type="button" class="btn btn-danger btn-sm fw-bold px-3 py-2" data-bs-toggle="modal" data-bs-target="#addMaterialModal" style="background:#b3261e; border-color:#b3261e;">
+                                                <i class="fas fa-plus me-1"></i> Register Your First Ingredient
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php else: ?>
@@ -1328,37 +1531,72 @@ include 'includes/header.php';
                                     $reorder = floatval($ing['reorder_level']);
                                     $is_low = $stk <= $reorder;
                                     $is_empty = $stk <= 0;
+                                    $cost_val = floatval($ing['cost_per_unit'] ?? 0);
                                 ?>
                                     <tr>
-                                        <td class="fw-bold">
-                                            <i class="fas fa-cube text-secondary me-2"></i>
-                                            <?php echo htmlspecialchars($ing['name']); ?>
-                                        </td>
-                                        <td class="fw-bold" style="font-size:1.05rem; color:<?php echo $is_empty ? '#b3261e' : ($is_low ? '#b54708' : '#027a48'); ?>;">
-                                            <?php echo number_format($stk, 2) . ' ' . htmlspecialchars($ing['unit']); ?>
-                                        </td>
-                                        <td class="text-muted">
-                                            <?php echo number_format($reorder, 2) . ' ' . htmlspecialchars($ing['unit']); ?>
+                                        <td>
+                                            <div class="fw-bold text-dark d-flex align-items-center">
+                                                <i class="fas fa-cube text-secondary me-2"></i>
+                                                <?php echo htmlspecialchars($ing['name']); ?>
+                                            </div>
+                                            <span class="small text-muted">Unit: <?php echo htmlspecialchars($ing['unit']); ?></span>
                                         </td>
                                         <td>
                                             <?php if ($is_empty): ?>
-                                                <span class="badge bg-danger">Out of Stock</span>
+                                                <span class="fw-bold text-danger" style="font-size:1.05rem;">
+                                                    <i class="fas fa-triangle-exclamation me-1"></i>0.00 <?php echo htmlspecialchars($ing['unit']); ?>
+                                                </span>
                                             <?php elseif ($is_low): ?>
-                                                <span class="badge bg-warning text-dark">Low Stock</span>
+                                                <span class="fw-bold" style="font-size:1.05rem; color:#b54708;">
+                                                    <i class="fas fa-circle-exclamation me-1"></i><?php echo number_format($stk, 2) . ' ' . htmlspecialchars($ing['unit']); ?>
+                                                </span>
                                             <?php else: ?>
-                                                <span class="badge bg-success">Adequate</span>
+                                                <span class="fw-bold text-success" style="font-size:1.05rem;">
+                                                    <i class="fas fa-circle-check me-1"></i><?php echo number_format($stk, 2) . ' ' . htmlspecialchars($ing['unit']); ?>
+                                                </span>
                                             <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <span class="text-secondary fw-semibold">
+                                                <?php echo number_format($reorder, 2) . ' ' . htmlspecialchars($ing['unit']); ?>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <?php if ($is_empty): ?>
+                                                <span class="badge" style="background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-weight:600; padding:5px 9px;">Out of Stock</span>
+                                            <?php elseif ($is_low): ?>
+                                                <span class="badge" style="background:#fffaeb; color:#b54708; border:1px solid #fedf89; font-weight:600; padding:5px 9px;">Low Stock</span>
+                                            <?php else: ?>
+                                                <span class="badge" style="background:#ecfdf3; color:#027a48; border:1px solid #abefc6; font-weight:600; padding:5px 9px;">Adequate</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <span class="text-muted">
+                                                &#8369;<?php echo number_format($cost_val, 2); ?> / <?php echo htmlspecialchars($ing['unit']); ?>
+                                            </span>
                                         </td>
                                         <td class="text-muted small">
                                             <?php echo !empty($ing['last_restocked_at']) ? date('M d, Y h:i A', strtotime($ing['last_restocked_at'])) : 'Initial Setup'; ?>
                                         </td>
                                         <td class="text-end">
-                                            <button type="button" class="btn btn-sm btn-outline-success me-1" onclick="preselectSelfProcure(<?php echo (int)$ing['id']; ?>)" title="Shop myself and log receipt">
-                                                <i class="fas fa-shopping-basket"></i> Buy Myself
-                                            </button>
-                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="preselectRefillIngredient(<?php echo (int)$ing['id']; ?>)" title="Order from partner supplier">
-                                                <i class="fas fa-truck"></i> Order Supplier
-                                            </button>
+                                            <div class="d-inline-flex gap-1 align-items-center">
+                                                <button type="button" class="btn btn-sm btn-outline-success" onclick="preselectSelfProcure(<?php echo (int)$ing['id']; ?>)" title="Buy myself and log receipt">
+                                                    <i class="fas fa-cart-shopping"></i> Market Buy
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="preselectRefillIngredient(<?php echo (int)$ing['id']; ?>)" title="Order wholesale refill from supplier">
+                                                    <i class="fas fa-truck-fast"></i> Refill
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick='openEditMaterialModal(<?php echo htmlspecialchars(json_encode($ing), ENT_QUOTES, "UTF-8"); ?>)' title="Edit ingredient details">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <form method="POST" style="display:inline;" onsubmit="return confirm('Remove ingredient \'<?php echo htmlspecialchars(addslashes($ing['name'])); ?>\' from catalog? This will unlink it from any associated recipes.');">
+                                                    <input type="hidden" name="delete_material" value="1">
+                                                    <input type="hidden" name="material_id" value="<?php echo (int)$ing['id']; ?>">
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete ingredient">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -1611,7 +1849,6 @@ include 'includes/header.php';
                 ?>
             </div>
         <?php endif; ?>
-            ?>
         </div>
     </div>
 </div>
@@ -1688,21 +1925,49 @@ include 'includes/header.php';
                         <div id="seller_add_weight_tiers_container"></div>
                     </div>
 
-                    <!-- Bill of Materials (BOM) / Recipe Ingredients -->
+                    <!-- Bill of Materials (BOM) / Recipe Ingredients Checklist -->
                     <div class="card mb-3 p-3 border rounded-3 bg-white" style="border-color:#eaecf0 !important;">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <div>
-                                <strong style="color: #101828;"><i class="fas fa-boxes-packing text-danger"></i> Recipe &amp; Required Ingredients (BOM)</strong>
-                                <span class="badge bg-danger ms-2" style="font-size: 11px;">Automated Stock Deduction</span>
+                                <strong style="color: #101828;"><i class="fas fa-boxes-packing text-danger me-1"></i> Ingredients Needed (Recipe Checklist)</strong>
+                                <span class="badge bg-danger ms-2" style="font-size: 11px;">Auto Stock Deduction</span>
                             </div>
-                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="addIngredientRow('add')">
-                                <i class="fas fa-plus"></i> Add Ingredient
-                            </button>
+                            <a href="seller_products.php?tab=ingredients" target="_blank" class="btn btn-sm btn-outline-secondary" style="font-size:12px; font-weight:600;">
+                                <i class="fas fa-plus me-1"></i> Register New Ingredient
+                            </a>
                         </div>
-                        <p class="text-muted small mb-2" style="font-size: 12px;">
-                            Select ingredients and raw quantities needed to prepare 1 serving/unit of this product. When customer orders are placed, these ingredients are automatically deducted from your store stock. If any ingredient runs out, this product will automatically be disabled from the menu.
+                        <p class="text-muted small mb-3" style="font-size: 12px;">
+                            Check off the raw ingredients required to prepare 1 unit/serving of this product. When customer orders are placed, these ingredients are automatically deducted from your inventory. If any checked ingredient reaches 0 stock, this product will automatically be unavailable.
                         </p>
-                        <div id="seller_add_ingredients_container"></div>
+                        <div class="row g-2" id="seller_add_ingredients_checklist">
+                            <?php if (empty($materials_list)): ?>
+                                <div class="col-12 text-center py-3 text-muted border rounded-2 bg-light">
+                                    <i class="fas fa-exclamation-circle text-warning me-1"></i> No raw ingredients registered yet. 
+                                    <a href="seller_products.php?tab=ingredients" class="text-danger fw-bold">Click here to add your ingredients first</a> (e.g. Pork belly, soy sauce, garlic, water).
+                                </div>
+                            <?php else: ?>
+                                <?php foreach ($materials_list as $m): 
+                                    $mid = (int)$m['id'];
+                                    $mname = htmlspecialchars($m['name']);
+                                    $munit = htmlspecialchars($m['unit']);
+                                ?>
+                                    <div class="col-md-6">
+                                        <div class="border rounded-2 p-2 h-100 d-flex align-items-center justify-content-between ingredient-check-item" style="background:#fcfcfd; border-color:#eaecf0 !important;">
+                                            <div class="form-check m-0 me-2 text-truncate" style="max-width: 170px;">
+                                                <input class="form-check-input ing-checkbox-add" type="checkbox" name="recipe_ingredients[<?php echo $mid; ?>][selected]" value="1" id="add_ing_check_<?php echo $mid; ?>" onchange="handleIngredientCheckToggle(this, 'add_qty_<?php echo $mid; ?>')">
+                                                <label class="form-check-label fw-bold text-dark small text-truncate" for="add_ing_check_<?php echo $mid; ?>" style="cursor:pointer;" title="<?php echo $mname; ?>">
+                                                    <?php echo $mname; ?>
+                                                </label>
+                                            </div>
+                                            <div class="d-flex align-items-center gap-1" style="width: 140px;">
+                                                <input type="number" step="0.001" min="0.001" name="recipe_ingredients[<?php echo $mid; ?>][qty]" id="add_qty_<?php echo $mid; ?>" class="form-control form-control-sm text-end" placeholder="0.00" disabled style="background:#f8f9fa;">
+                                                <span class="small text-muted fw-semibold" style="min-width: 34px; font-size:11px;"><?php echo $munit; ?></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </div>
                     </div>
                     
                     <div class="alert alert-info" role="alert">
@@ -1806,21 +2071,49 @@ include 'includes/header.php';
                         <div id="seller_edit_weight_tiers_container"></div>
                     </div>
 
-                    <!-- Bill of Materials (BOM) / Recipe Ingredients -->
+                    <!-- Bill of Materials (BOM) / Recipe Ingredients Checklist -->
                     <div class="card mb-3 p-3 border rounded-3 bg-white" style="border-color:#eaecf0 !important;">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <div>
-                                <strong style="color: #101828;"><i class="fas fa-boxes-packing text-danger"></i> Recipe &amp; Required Ingredients (BOM)</strong>
-                                <span class="badge bg-danger ms-2" style="font-size: 11px;">Automated Stock Deduction</span>
+                                <strong style="color: #101828;"><i class="fas fa-boxes-packing text-danger me-1"></i> Ingredients Needed (Recipe Checklist)</strong>
+                                <span class="badge bg-danger ms-2" style="font-size: 11px;">Auto Stock Deduction</span>
                             </div>
-                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="addIngredientRow('edit')">
-                                <i class="fas fa-plus"></i> Add Ingredient
-                            </button>
+                            <a href="seller_products.php?tab=ingredients" target="_blank" class="btn btn-sm btn-outline-secondary" style="font-size:12px; font-weight:600;">
+                                <i class="fas fa-plus me-1"></i> Register New Ingredient
+                            </a>
                         </div>
-                        <p class="text-muted small mb-2" style="font-size: 12px;">
-                            Ingredients and quantities required per unit. Real-time customer orders automatically decrement these ingredient stocks.
+                        <p class="text-muted small mb-3" style="font-size: 12px;">
+                            Check off the ingredients required to prepare this menu item. Checked ingredients are automatically deducted from stock when customer orders are placed.
                         </p>
-                        <div id="seller_edit_ingredients_container"></div>
+                        <div class="row g-2" id="seller_edit_ingredients_checklist">
+                            <?php if (empty($materials_list)): ?>
+                                <div class="col-12 text-center py-3 text-muted border rounded-2 bg-light">
+                                    <i class="fas fa-exclamation-circle text-warning me-1"></i> No raw ingredients registered yet. 
+                                    <a href="seller_products.php?tab=ingredients" class="text-danger fw-bold">Register ingredients first</a>.
+                                </div>
+                            <?php else: ?>
+                                <?php foreach ($materials_list as $m): 
+                                    $mid = (int)$m['id'];
+                                    $mname = htmlspecialchars($m['name']);
+                                    $munit = htmlspecialchars($m['unit']);
+                                ?>
+                                    <div class="col-md-6">
+                                        <div class="border rounded-2 p-2 h-100 d-flex align-items-center justify-content-between ingredient-check-item" style="background:#fcfcfd; border-color:#eaecf0 !important;">
+                                            <div class="form-check m-0 me-2 text-truncate" style="max-width: 170px;">
+                                                <input class="form-check-input ing-checkbox-edit" type="checkbox" name="recipe_ingredients[<?php echo $mid; ?>][selected]" value="1" id="edit_ing_check_<?php echo $mid; ?>" onchange="handleIngredientCheckToggle(this, 'edit_qty_<?php echo $mid; ?>')">
+                                                <label class="form-check-label fw-bold text-dark small text-truncate" for="edit_ing_check_<?php echo $mid; ?>" style="cursor:pointer;" title="<?php echo $mname; ?>">
+                                                    <?php echo $mname; ?>
+                                                </label>
+                                            </div>
+                                            <div class="d-flex align-items-center gap-1" style="width: 140px;">
+                                                <input type="number" step="0.001" min="0.001" name="recipe_ingredients[<?php echo $mid; ?>][qty]" id="edit_qty_<?php echo $mid; ?>" class="form-control form-control-sm text-end" placeholder="0.00" disabled style="background:#f8f9fa;">
+                                                <span class="small text-muted fw-semibold" style="min-width: 34px; font-size:11px;"><?php echo $munit; ?></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -1857,7 +2150,15 @@ include 'includes/header.php';
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
                             <label for="material_unit" class="form-label fw-bold">Unit of Measure *</label>
-                            <input type="text" name="material_unit" id="material_unit" class="form-control" placeholder="e.g. kg, liter, pcs, sack" required>
+                            <input type="text" name="material_unit" id="material_unit" class="form-control" placeholder="e.g. kg, liter, pcs" required>
+                            <div class="d-flex gap-1 mt-1 flex-wrap">
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:11px;" onclick="document.getElementById('material_unit').value='kg'">kg</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:11px;" onclick="document.getElementById('material_unit').value='g'">g</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:11px;" onclick="document.getElementById('material_unit').value='liter'">liter</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:11px;" onclick="document.getElementById('material_unit').value='ml'">ml</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:11px;" onclick="document.getElementById('material_unit').value='pcs'">pcs</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:11px;" onclick="document.getElementById('material_unit').value='pack'">pack</button>
+                            </div>
                         </div>
                         <div class="col-md-6">
                             <label for="initial_stock" class="form-label fw-bold">Initial Current Stock</label>
@@ -1870,7 +2171,7 @@ include 'includes/header.php';
                             <input type="number" step="0.01" min="0" name="reorder_level" id="reorder_level" value="10.00" class="form-control text-end">
                         </div>
                         <div class="col-md-6">
-                            <label for="cost_per_unit" class="form-label fw-bold">Est. Cost Per Unit (₱)</label>
+                            <label for="cost_per_unit" class="form-label fw-bold">Est. Cost Per Unit (&#8369;)</label>
                             <input type="number" step="0.01" min="0" name="cost_per_unit" id="cost_per_unit" value="0.00" class="form-control text-end">
                         </div>
                     </div>
@@ -1878,6 +2179,48 @@ include 'includes/header.php';
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-danger" style="background:#b3261e; border-color:#b3261e;">Save Ingredient</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Edit Existing Raw Ingredient -->
+<div class="modal fade" id="editMaterialModal" tabindex="-1" aria-labelledby="editMaterialModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content" style="border-radius:16px;">
+            <form method="POST">
+                <input type="hidden" name="edit_material" value="1">
+                <input type="hidden" name="material_id" id="edit_mat_id">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold" id="editMaterialModalLabel">
+                        <i class="fas fa-edit text-danger me-2"></i> Edit Raw Ingredient
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label for="edit_mat_name" class="form-label fw-bold small text-secondary">Ingredient Name *</label>
+                        <input type="text" name="material_name" id="edit_mat_name" class="form-control" required>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="edit_mat_unit" class="form-label fw-bold small text-secondary">Unit of Measure *</label>
+                            <input type="text" name="material_unit" id="edit_mat_unit" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_mat_cost" class="form-label fw-bold small text-secondary">Est. Cost Per Unit (&#8369;)</label>
+                            <input type="number" step="0.01" min="0" name="cost_per_unit" id="edit_mat_cost" class="form-control text-end">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_mat_reorder" class="form-label fw-bold small text-secondary">Low Stock Warning Level</label>
+                        <input type="number" step="0.01" min="0" name="reorder_level" id="edit_mat_reorder" class="form-control text-end">
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger" style="background:#b3261e; border-color:#b3261e;">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -2265,6 +2608,34 @@ function addSellerWeightTierRow(prefix, data = null) {
     container.appendChild(row);
 }
 
+function handleIngredientCheckToggle(chk, qtyInputId) {
+    const qtyInput = document.getElementById(qtyInputId);
+    if (!qtyInput) return;
+    if (chk.checked) {
+        qtyInput.disabled = false;
+        qtyInput.style.background = '#ffffff';
+        if (!qtyInput.value || Number(qtyInput.value) <= 0) {
+            qtyInput.value = '1.0';
+        }
+        qtyInput.focus();
+        qtyInput.select();
+    } else {
+        qtyInput.disabled = true;
+        qtyInput.style.background = '#f8f9fa';
+        qtyInput.value = '';
+    }
+}
+
+function openEditMaterialModal(data) {
+    if (!data) return;
+    document.getElementById('edit_mat_id').value = data.id || '';
+    document.getElementById('edit_mat_name').value = data.name || '';
+    document.getElementById('edit_mat_unit').value = data.unit || '';
+    document.getElementById('edit_mat_reorder').value = Number(data.reorder_level || 10);
+    document.getElementById('edit_mat_cost').value = Number(data.cost_per_unit || 0).toFixed(2);
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('editMaterialModal')).show();
+}
+
 // Dynamic Bill of Materials (BOM) Recipe Row Generator
 function addIngredientRow(mode, existingData = null) {
     const container = document.getElementById(mode === 'add' ? 'seller_add_ingredients_container' : 'seller_edit_ingredients_container');
@@ -2550,16 +2921,33 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
 
-                // Populate BOM ingredients in Edit Modal
-                const editIngredientsContainer = document.getElementById('seller_edit_ingredients_container');
-                if (editIngredientsContainer) {
-                    editIngredientsContainer.innerHTML = '';
-                    let ingredientsData = prod.ingredients || [];
-                    if (Array.isArray(ingredientsData) && ingredientsData.length > 0) {
-                        ingredientsData.forEach(ing => {
-                            addIngredientRow('edit', ing);
-                        });
+                // Reset and populate recipe ingredient checkboxes in Edit Modal
+                document.querySelectorAll('.ing-checkbox-edit').forEach(chk => {
+                    chk.checked = false;
+                    const mid = chk.id.replace('edit_ing_check_', '');
+                    const qtyInput = document.getElementById('edit_qty_' + mid);
+                    if (qtyInput) {
+                        qtyInput.value = '';
+                        qtyInput.disabled = true;
+                        qtyInput.style.background = '#f8f9fa';
                     }
+                });
+
+                let ingredientsData = prod.ingredients || [];
+                if (Array.isArray(ingredientsData) && ingredientsData.length > 0) {
+                    ingredientsData.forEach(ing => {
+                        const mid = ing.material_id;
+                        const chk = document.getElementById('edit_ing_check_' + mid);
+                        const qtyInput = document.getElementById('edit_qty_' + mid);
+                        if (chk) {
+                            chk.checked = true;
+                            if (qtyInput) {
+                                qtyInput.disabled = false;
+                                qtyInput.value = Number(ing.quantity_needed || 1);
+                                qtyInput.style.background = '#ffffff';
+                            }
+                        }
+                    });
                 }
 
                 var container = document.getElementById('editCurrentImagesContainer');

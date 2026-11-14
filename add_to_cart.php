@@ -13,7 +13,16 @@ function sendJsonResponse($success, $message = '', $data = []) {
     if (!empty($data)) {
         $response = array_merge($response, $data);
     }
-    echo json_encode($response);
+    $json_flags = 0;
+    if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+        $json_flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+    }
+    $json = json_encode($response, $json_flags);
+    if ($json === false) {
+        error_log('Add to cart JSON encoding error: ' . json_last_error_msg());
+        $json = '{"success":false,"message":"Unable to format cart response. Please try again."}';
+    }
+    echo $json;
     exit;
 }
 
@@ -67,7 +76,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('Database connection failed');
         }
         
-        // Fetch product with live available stock from inventory (today) fallback to products.stock
+        $product_columns = [];
+        $product_columns_result = mysqli_query($conn, "SHOW COLUMNS FROM products");
+        if ($product_columns_result) {
+            while ($product_column = mysqli_fetch_assoc($product_columns_result)) {
+                $product_columns[] = (string)$product_column['Field'];
+            }
+            mysqli_free_result($product_columns_result);
+        }
+        $product_availability = in_array('is_available', $product_columns, true)
+            ? 'p.is_available'
+            : '1';
+
+        // Use inventory when the optional table has the required columns. Older
+        // production databases can still rely on products.stock.
+        $inventory_join = '';
+        $inventory_stock = 'p.stock';
+        $inventory_columns = [];
+        $inventory_table_result = mysqli_query($conn, "SHOW TABLES LIKE 'inventory'");
+        if ($inventory_table_result && mysqli_num_rows($inventory_table_result) > 0) {
+            $inventory_columns_result = mysqli_query($conn, "SHOW COLUMNS FROM inventory");
+            if ($inventory_columns_result) {
+                while ($inventory_column = mysqli_fetch_assoc($inventory_columns_result)) {
+                    $inventory_columns[] = (string)$inventory_column['Field'];
+                }
+                mysqli_free_result($inventory_columns_result);
+            }
+        }
+        if (in_array('product_id', $inventory_columns, true)
+            && in_array('current_stock', $inventory_columns, true)
+            && in_array('inventory_date', $inventory_columns, true)) {
+            $inventory_archive_filter = in_array('is_archived', $inventory_columns, true)
+                ? ' AND i.is_archived = 0'
+                : '';
+            $inventory_join = " LEFT JOIN inventory i
+                    ON p.id = i.product_id
+                    AND i.inventory_date = CURDATE(){$inventory_archive_filter}";
+            $inventory_stock = 'i.current_stock';
+        }
+
         $query = "SELECT
                     p.id,
                     p.product_id,
@@ -75,15 +122,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     p.image,
                     p.price,
                     p.seller_id,
-                    p.is_available,
+                    {$product_availability} AS is_available,
                     COALESCE(NULLIF(TRIM(u.business_name), ''), NULLIF(TRIM(u.full_name), ''), 'Lechon Delights') AS store_name,
-                    COALESCE(i.current_stock, p.stock, 0) AS available_stock
+                    COALESCE({$inventory_stock}, p.stock, 0) AS available_stock
                   FROM products p
                   LEFT JOIN users u ON p.seller_id = u.id
-                  LEFT JOIN inventory i
-                    ON p.id = i.product_id
-                    AND i.inventory_date = CURDATE()
-                    AND i.is_archived = 0
+                  {$inventory_join}
                   WHERE (p.id = ? OR p.product_id = ?)
                     AND p.is_active = 1
                     AND p.is_archived = 0
@@ -100,13 +144,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('Database execute failed: ' . mysqli_stmt_error($stmt));
         }
         
-        $result = mysqli_stmt_get_result($stmt);
-        
-        if (!$result) {
-            throw new Exception('Database result failed: ' . mysqli_error($conn));
-        }
-        
-        if ($product = mysqli_fetch_assoc($result)) {
+        mysqli_stmt_bind_result(
+            $stmt,
+            $product_db_id,
+            $product_db_product_id,
+            $product_db_name,
+            $product_db_image,
+            $product_db_price,
+            $product_db_seller_id,
+            $product_db_is_available,
+            $product_db_store_name,
+            $product_db_available_stock
+        );
+
+        if (mysqli_stmt_fetch($stmt)) {
+            $product = [
+                'id' => $product_db_id,
+                'product_id' => $product_db_product_id,
+                'name' => $product_db_name,
+                'image' => $product_db_image,
+                'price' => $product_db_price,
+                'seller_id' => $product_db_seller_id,
+                'is_available' => $product_db_is_available,
+                'store_name' => $product_db_store_name,
+                'available_stock' => $product_db_available_stock
+            ];
             $product_id = (int)$product['id'];
             $product_name = $product['name'];
             $product_image = !empty($_POST['size_image']) ? trim($_POST['size_image']) : $product['image'];
@@ -128,9 +190,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             mysqli_close($conn);
             sendJsonResponse(false, 'Product not found or inactive');
         }
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         // Clean up any open connections
-        if (isset($stmt)) mysqli_stmt_close($stmt);
+        if (isset($stmt) && $stmt instanceof mysqli_stmt) {
+            mysqli_stmt_close($stmt);
+        }
         if (isset($conn) && $conn instanceof mysqli) mysqli_close($conn);
         
         // Log error but don't show details to user

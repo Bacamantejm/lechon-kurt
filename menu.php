@@ -3333,7 +3333,17 @@ document.addEventListener('click', function(e) {
                     body: formData
                 });
 
-                const data = await response.json();
+                const responseText = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (parseError) {
+                    console.error('Add to cart returned an invalid response:', {
+                        status: response.status,
+                        body: responseText
+                    });
+                    throw new Error(`Cart request failed (${response.status})`);
+                }
 
                 if (data.success) {
                     closeProductPreview();

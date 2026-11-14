@@ -204,6 +204,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_new_product'])) {
         }
         
         if (mysqli_stmt_execute($stmt)) {
+            $new_product_id = mysqli_insert_id($conn);
+
+            // Save Bill of Materials (BOM) recipe ingredients from checklist
+            if (!empty($_POST['recipe_ingredients']) && is_array($_POST['recipe_ingredients'])) {
+                $bom_ins = mysqli_prepare($conn, "INSERT INTO bill_of_materials (product_id, material_id, quantity_needed) VALUES (?, ?, ?)");
+                foreach ($_POST['recipe_ingredients'] as $m_id => $r_data) {
+                    if (!empty($r_data['selected'])) {
+                        $mat_id = intval($m_id);
+                        $qty = floatval($r_data['qty'] ?? 0);
+                        if ($mat_id > 0 && $qty > 0 && $bom_ins) {
+                            mysqli_stmt_bind_param($bom_ins, "iid", $new_product_id, $mat_id, $qty);
+                            mysqli_stmt_execute($bom_ins);
+                        }
+                    }
+                }
+                if ($bom_ins) mysqli_stmt_close($bom_ins);
+            }
+
+            // Sync product availability based on raw ingredient stock
+            require_once dirname(__DIR__) . '/includes/IngredientStockManager.php';
+            if ($seller_scope_id !== null) {
+                IngredientStockManager::syncProductAvailabilityForStore($conn, $seller_scope_id);
+            }
+
             $_SESSION['success'] = "Product '$name' added successfully! It will now appear on the menu.";
             header("Location: products.php");
             exit();
@@ -284,6 +308,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_product'])) {
         
         if (mysqli_stmt_execute($stmt)) {
             $affected = mysqli_stmt_affected_rows($stmt);
+
+            // Update Bill of Materials (BOM) recipe ingredients from checklist
+            mysqli_query($conn, "DELETE FROM bill_of_materials WHERE product_id = " . intval($id));
+            if (!empty($_POST['recipe_ingredients']) && is_array($_POST['recipe_ingredients'])) {
+                $bom_ins = mysqli_prepare($conn, "INSERT INTO bill_of_materials (product_id, material_id, quantity_needed) VALUES (?, ?, ?)");
+                foreach ($_POST['recipe_ingredients'] as $m_id => $r_data) {
+                    if (!empty($r_data['selected'])) {
+                        $mat_id = intval($m_id);
+                        $qty = floatval($r_data['qty'] ?? 0);
+                        if ($mat_id > 0 && $qty > 0 && $bom_ins) {
+                            mysqli_stmt_bind_param($bom_ins, "iid", $id, $mat_id, $qty);
+                            mysqli_stmt_execute($bom_ins);
+                        }
+                    }
+                }
+                if ($bom_ins) mysqli_stmt_close($bom_ins);
+            }
+
+            // Sync product availability based on raw ingredient stock
+            require_once dirname(__DIR__) . '/includes/IngredientStockManager.php';
+            if ($seller_scope_id !== null) {
+                IngredientStockManager::syncProductAvailabilityForStore($conn, $seller_scope_id);
+            }
+
             if ($seller_scope_id !== null && $affected === 0) {
                 $_SESSION['error'] = "No product was updated. It may not belong to your store.";
             } else {
@@ -369,6 +417,32 @@ if ($categories_stmt) {
     $categories_result = mysqli_stmt_get_result($categories_stmt);
 } else {
     $categories_result = mysqli_query($conn, "SELECT DISTINCT category FROM products ORDER BY category");
+}
+
+// Fetch all materials for BOM recipe checklist
+$materials_list = [];
+$m_q = mysqli_query($conn, "SELECT id, name, unit, cost_per_unit, current_stock FROM materials ORDER BY name ASC");
+if ($m_q) {
+    while ($mrow = mysqli_fetch_assoc($m_q)) {
+        $materials_list[] = $mrow;
+    }
+}
+
+// Fetch all product BOM links
+$product_boms = [];
+$boms_q = mysqli_query($conn, "
+    SELECT bom.product_id, bom.material_id, bom.quantity_needed, m.name as material_name, m.unit 
+    FROM bill_of_materials bom
+    INNER JOIN materials m ON m.id = bom.material_id
+");
+if ($boms_q) {
+    while ($brow = mysqli_fetch_assoc($boms_q)) {
+        $pid = (int)$brow['product_id'];
+        if (!isset($product_boms[$pid])) {
+            $product_boms[$pid] = [];
+        }
+        $product_boms[$pid][] = $brow;
+    }
 }
 
 // DSS-oriented product KPIs and operational guidance.
@@ -1020,6 +1094,7 @@ if (empty($product_decisions)) {
                     <?php
                     if (mysqli_num_rows($products_result) > 0) {
                         while ($product = mysqli_fetch_assoc($products_result)) {
+                            $product['ingredients'] = $product_boms[$product['id']] ?? [];
                             $status_class = $product['is_active'] ? 'badge-success' : 'badge-danger';
                             $status_text = $product['is_active'] ? 'Active' : 'Inactive';
                             
@@ -1239,6 +1314,46 @@ if (empty($product_decisions)) {
                                 <!-- Dynamic weight rows appear here -->
                             </div>
                         </div>
+
+                        <!-- Section 5: Recipe Ingredients (BOM Checklist) -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-layer-group"></i> Recipe Ingredients (Bill of Materials)</span>
+                                <span class="form-req-pill">Automated Stock Sync</span>
+                            </div>
+                            <p class="text-muted small mb-3" style="font-size: 12px;">
+                                Check off the raw ingredients required to prepare 1 unit/serving of this product. When customer orders are placed, these ingredients are automatically deducted from your inventory. If any checked ingredient reaches 0 stock, this product will automatically be marked unavailable.
+                            </p>
+                            <div class="row g-2" id="adm_add_ingredients_checklist">
+                                <?php if (empty($materials_list)): ?>
+                                    <div class="col-12 text-center py-3 text-muted border rounded-2 bg-light">
+                                        <i class="fas fa-exclamation-circle text-warning me-1"></i> No raw ingredients registered yet.
+                                        <a href="materials.php" class="text-danger fw-bold">Click here to add raw materials first</a> (e.g. Pork belly, soy sauce, garlic, water).
+                                    </div>
+                                <?php else: ?>
+                                    <?php foreach ($materials_list as $m): 
+                                        $mid = (int)$m['id'];
+                                        $mname = htmlspecialchars($m['name']);
+                                        $munit = htmlspecialchars($m['unit']);
+                                    ?>
+                                        <div class="col-md-6">
+                                            <div class="border rounded-2 p-2 h-100 d-flex align-items-center justify-content-between ingredient-check-item" style="background:#fcfcfd; border-color:#eaecf0 !important;">
+                                                <div class="form-check m-0 me-2 text-truncate" style="max-width: 170px;">
+                                                    <input class="form-check-input ing-checkbox-add" type="checkbox" name="recipe_ingredients[<?php echo $mid; ?>][selected]" value="1" id="adm_add_ing_check_<?php echo $mid; ?>" onchange="handleAdminIngToggle(this, 'adm_add_qty_<?php echo $mid; ?>')">
+                                                    <label class="form-check-label fw-bold text-dark small text-truncate" for="adm_add_ing_check_<?php echo $mid; ?>" style="cursor:pointer;" title="<?php echo $mname; ?>">
+                                                        <?php echo $mname; ?>
+                                                    </label>
+                                                </div>
+                                                <div class="d-flex align-items-center gap-1" style="width: 140px;">
+                                                    <input type="number" step="0.001" min="0.001" name="recipe_ingredients[<?php echo $mid; ?>][qty]" id="adm_add_qty_<?php echo $mid; ?>" class="form-control form-control-sm text-end" placeholder="0.00" disabled style="background:#f8f9fa;">
+                                                    <span class="small text-muted fw-semibold" style="min-width: 34px; font-size:11px;"><?php echo $munit; ?></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
+                        </div>
                     </form>
                 </div>
                 <div class="modal-footer">
@@ -1410,6 +1525,46 @@ if (empty($product_decisions)) {
                                 <!-- Populated dynamically by openEditModal() -->
                             </div>
                         </div>
+
+                        <!-- Section 5: Recipe Ingredients (BOM Checklist) -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-layer-group"></i> Recipe Ingredients (Bill of Materials)</span>
+                                <span class="form-req-pill">Automated Stock Sync</span>
+                            </div>
+                            <p class="text-muted small mb-3" style="font-size: 12px;">
+                                Check off the raw ingredients required to prepare 1 unit/serving of this product. When customer orders are placed, these ingredients are automatically deducted from your inventory. If any checked ingredient reaches 0 stock, this product will automatically be marked unavailable.
+                            </p>
+                            <div class="row g-2" id="adm_edit_ingredients_checklist">
+                                <?php if (empty($materials_list)): ?>
+                                    <div class="col-12 text-center py-3 text-muted border rounded-2 bg-light">
+                                        <i class="fas fa-exclamation-circle text-warning me-1"></i> No raw ingredients registered yet.
+                                        <a href="materials.php" class="text-danger fw-bold">Click here to add raw materials first</a>.
+                                    </div>
+                                <?php else: ?>
+                                    <?php foreach ($materials_list as $m): 
+                                        $mid = (int)$m['id'];
+                                        $mname = htmlspecialchars($m['name']);
+                                        $munit = htmlspecialchars($m['unit']);
+                                    ?>
+                                        <div class="col-md-6">
+                                            <div class="border rounded-2 p-2 h-100 d-flex align-items-center justify-content-between ingredient-check-item" style="background:#fcfcfd; border-color:#eaecf0 !important;">
+                                                <div class="form-check m-0 me-2 text-truncate" style="max-width: 170px;">
+                                                    <input class="form-check-input ing-checkbox-edit" type="checkbox" name="recipe_ingredients[<?php echo $mid; ?>][selected]" value="1" id="adm_edit_ing_check_<?php echo $mid; ?>" onchange="handleAdminIngToggle(this, 'adm_edit_qty_<?php echo $mid; ?>')">
+                                                    <label class="form-check-label fw-bold text-dark small text-truncate" for="adm_edit_ing_check_<?php echo $mid; ?>" style="cursor:pointer;" title="<?php echo $mname; ?>">
+                                                        <?php echo $mname; ?>
+                                                    </label>
+                                                </div>
+                                                <div class="d-flex align-items-center gap-1" style="width: 140px;">
+                                                    <input type="number" step="0.001" min="0.001" name="recipe_ingredients[<?php echo $mid; ?>][qty]" id="adm_edit_qty_<?php echo $mid; ?>" class="form-control form-control-sm text-end" placeholder="0.00" disabled style="background:#f8f9fa;">
+                                                    <span class="small text-muted fw-semibold" style="min-width: 34px; font-size:11px;"><?php echo $munit; ?></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
+                        </div>
                     </form>
                 </div>
                 <div class="modal-footer">
@@ -1545,6 +1700,23 @@ if (empty($product_decisions)) {
             container.appendChild(row);
         }
 
+        function handleAdminIngToggle(chk, qtyId) {
+            const qtyInput = document.getElementById(qtyId);
+            if (!qtyInput) return;
+            if (chk.checked) {
+                qtyInput.disabled = false;
+                qtyInput.style.background = '#ffffff';
+                if (!qtyInput.value || parseFloat(qtyInput.value) <= 0) {
+                    qtyInput.value = '1.00';
+                }
+                qtyInput.focus();
+            } else {
+                qtyInput.disabled = true;
+                qtyInput.style.background = '#f8f9fa';
+                qtyInput.value = '';
+            }
+        }
+
         function openEditModal(product) {
             document.getElementById('edit_product_id').value = product.id;
             document.getElementById('edit_product_name').value = product.name;
@@ -1572,6 +1744,30 @@ if (empty($product_decisions)) {
                         addWeightTierRow('edit', tier);
                     });
                 }
+            }
+
+            // Reset recipe ingredients checklist in Edit Modal
+            document.querySelectorAll('#adm_edit_ingredients_checklist .ing-checkbox-edit').forEach(chk => {
+                chk.checked = false;
+            });
+            document.querySelectorAll('#adm_edit_ingredients_checklist input[type="number"]').forEach(inp => {
+                inp.disabled = true;
+                inp.style.background = '#f8f9fa';
+                inp.value = '';
+            });
+
+            // Populate checked recipe ingredients
+            if (product.ingredients && Array.isArray(product.ingredients)) {
+                product.ingredients.forEach(ing => {
+                    const chk = document.getElementById('adm_edit_ing_check_' + ing.material_id);
+                    const qty = document.getElementById('adm_edit_qty_' + ing.material_id);
+                    if (chk && qty) {
+                        chk.checked = true;
+                        qty.disabled = false;
+                        qty.style.background = '#ffffff';
+                        qty.value = parseFloat(ing.quantity_needed || 0);
+                    }
+                });
             }
 
             var myModal = new bootstrap.Modal(document.getElementById('editProductModal'));
