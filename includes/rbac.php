@@ -776,9 +776,33 @@ function getUserDashboardRoute($conn, $user_id, $user_type = '') {
         if (function_exists('isDeliveryDriverUser') && isDeliveryDriverUser($conn, $user_id)) {
             return 'rider/index.php';
         }
-        $r_chk = mysqli_query($conn, "SELECT id FROM riders WHERE user_id = $user_id AND verification_status = 'verified' LIMIT 1");
-        if ($r_chk && mysqli_num_rows($r_chk) > 0) {
-            return 'rider/index.php';
+    }
+
+    // Check if user is an employee (exists in employees table or user_type == 'employee')
+    $normalized_user_type = strtolower(trim((string)$user_type));
+    $is_employee = ($normalized_user_type === 'employee');
+    if (!$is_employee && $conn && $user_id > 0) {
+        $chk_emp = mysqli_query($conn, "SELECT id FROM employees WHERE user_id = $user_id LIMIT 1");
+        if ($chk_emp && mysqli_num_rows($chk_emp) > 0) {
+            $is_employee = true;
+        }
+    }
+
+    if ($is_employee) {
+        // Super admins and business owners go to admin portal; all regular employees go to employee dashboard!
+        $is_owner_admin = false;
+        if ($conn && $user_id > 0) {
+            $u_role_q = mysqli_query($conn, "SELECT u.user_type, r.name AS role_name FROM users u LEFT JOIN roles r ON u.role_id = r.id WHERE u.id = $user_id LIMIT 1");
+            if ($u_role_q && ($ur = mysqli_fetch_assoc($u_role_q))) {
+                $r_name = strtolower(trim((string)($ur['role_name'] ?? '')));
+                $u_t = strtolower(trim((string)($ur['user_type'] ?? '')));
+                if (in_array($r_name, ['super_admin', 'business_owner'], true) || in_array($u_t, ['admin', 'partner'], true)) {
+                    $is_owner_admin = true;
+                }
+            }
+        }
+        if (!$is_owner_admin) {
+            return 'employee/dashboard.php';
         }
     }
 

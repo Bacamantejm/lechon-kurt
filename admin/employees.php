@@ -306,7 +306,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 // If user record doesn't exist yet, create one
                 $full_name = formatEmployeeFullName($emp_row['first_name'] ?? '', $emp_row['middle_initial'] ?? '', $emp_row['last_name'] ?? '', $emp_row['suffix'] ?? '');
-                $role_id = 7; // default employee/driver role
+                
+                // Resolve appropriate non-driver role: match department or fallback to operational_staff/viewer
+                $emp_dept_id = (int)($emp_row['department_id'] ?? 0);
+                $emp_pos_str = strtolower(trim((string)($emp_row['position'] ?? '')));
+                $is_driver_emp = false;
+                foreach (['driver', 'rider', 'courier', 'delivery'] as $dkw) {
+                    if (strpos($emp_pos_str, $dkw) !== false) {
+                        $is_driver_emp = true;
+                        break;
+                    }
+                }
+                $role_id = 0;
+                if ($is_driver_emp) {
+                    $r_driver_q = mysqli_query($conn, "SELECT id FROM roles WHERE name = 'driver' LIMIT 1");
+                    if ($r_driver_q && ($r_dr = mysqli_fetch_assoc($r_driver_q))) {
+                        $role_id = (int)$r_dr['id'];
+                    }
+                } elseif ($emp_dept_id > 0) {
+                    $r_dept_q = mysqli_query($conn, "SELECT id FROM roles WHERE department_id = $emp_dept_id AND name NOT IN ('super_admin', 'business_owner', 'driver', 'dept_delivery_riders') LIMIT 1");
+                    if ($r_dept_q && ($r_dr = mysqli_fetch_assoc($r_dept_q))) {
+                        $role_id = (int)$r_dr['id'];
+                    }
+                }
+                if ($role_id <= 0) {
+                    $r_def_q = mysqli_query($conn, "SELECT id FROM roles WHERE name IN ('operational_staff', 'employee', 'staff', 'viewer') AND name NOT IN ('driver', 'dept_delivery_riders') ORDER BY FIELD(name, 'operational_staff', 'employee', 'staff', 'viewer') LIMIT 1");
+                    if ($r_def_q && ($r_dr = mysqli_fetch_assoc($r_def_q))) {
+                        $role_id = (int)$r_dr['id'];
+                    } else {
+                        $role_id = 8; // fallback to viewer
+                    }
+                }
+
                 $ins_u = mysqli_prepare($conn, "INSERT INTO users (full_name, email, phone, password, user_type, role_id, is_active) VALUES (?, ?, ?, ?, 'employee', ?, 1)");
                 mysqli_stmt_bind_param($ins_u, "ssssi", $full_name, $emp_row['email'], $emp_row['phone'], $hashed, $role_id);
                 mysqli_stmt_execute($ins_u);
@@ -316,7 +347,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             // Auto sync driver if applicable
             require_once __DIR__ . '/../includes/rider_helper.php';
-            isDeliveryDriverUser($conn, $user_id);
+            if (!empty($is_driver_emp)) {
+                isDeliveryDriverUser($conn, $user_id);
+            } else {
+                mysqli_query($conn, "DELETE FROM riders WHERE user_id = $user_id OR employee_id = $emp_id");
+            }
             $_SESSION['success'] = "Password for " . htmlspecialchars($emp_row['first_name'] . ' ' . $emp_row['last_name']) . " has been updated successfully! They can now log in using email: " . htmlspecialchars($emp_row['email']) . " or mobile phone.";
         } else {
             $_SESSION['error'] = "Employee record not found.";
@@ -433,7 +468,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         mysqli_stmt_bind_param($stmt_link, "ii", $new_user_id, $employee_id_to_link);
                         if (mysqli_stmt_execute($stmt_link)) {
                             require_once __DIR__ . '/../includes/rider_helper.php';
-                            isDeliveryDriverUser($conn, $new_user_id);
+                            $emp_pos_chk = strtolower(trim((string)($employee['position'] ?? '')));
+                            $emp_is_driver = (strpos($emp_pos_chk, 'driver') !== false || strpos($emp_pos_chk, 'rider') !== false || strpos($emp_pos_chk, 'courier') !== false);
+                            if ($emp_is_driver) {
+                                isDeliveryDriverUser($conn, $new_user_id);
+                            } else {
+                                mysqli_query($conn, "DELETE FROM riders WHERE user_id = " . (int)$new_user_id . " OR employee_id = " . (int)$employee_id_to_link);
+                            }
                             $_SESSION['success'] = "User account created and linked to employee successfully.";
                         } else {
                             $_SESSION['error'] = "Account created, but failed to link to employee record.";
@@ -842,8 +883,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($photo_db_path) {
                             mysqli_query($conn, "UPDATE users SET profile_image = '" . mysqli_real_escape_string($conn, $photo_db_path) . "' WHERE id = " . (int)$user_id_for_employee);
                         }
+                        // Ensure rider profile only if position, department, or role is Delivery / Driver / Rider
+                        $is_driver_emp = false;
+                        $check_pos = strtolower(trim((string)$position));
+                        foreach (['driver', 'rider', 'courier', 'delivery'] as $dkw) {
+                            if (strpos($check_pos, $dkw) !== false) {
+                                $is_driver_emp = true;
+                                break;
+                            }
+                        }
+                        if (!$is_driver_emp && $department_id > 0) {
+                            $dept_chk = mysqli_query($conn, "SELECT department_name FROM departments WHERE id = " . (int)$department_id . " LIMIT 1");
+                            if ($dept_chk && ($dr = mysqli_fetch_assoc($dept_chk))) {
+                                $d_name_low = strtolower(trim((string)$dr['department_name']));
+                                if (strpos($d_name_low, 'delivery') !== false || strpos($d_name_low, 'rider') !== false || strpos($d_name_low, 'courier') !== false) {
+                                    $is_driver_emp = true;
+                                }
+                            }
+                        }
+                        if (!$is_driver_emp && isset($user_role_id) && $user_role_id > 0) {
+                            $r_chk = mysqli_query($conn, "SELECT name FROM roles WHERE id = " . (int)$user_role_id . " LIMIT 1");
+                            if ($r_chk && ($rr = mysqli_fetch_assoc($r_chk))) {
+                                $r_name_low = strtolower(trim((string)$rr['name']));
+                                if (in_array($r_name_low, ['driver', 'rider', 'delivery_driver', 'dept_delivery_riders'], true)) {
+                                    $is_driver_emp = true;
+                                }
+                            }
+                        }
                         require_once __DIR__ . '/../includes/rider_helper.php';
-                        isDeliveryDriverUser($conn, $user_id_for_employee, $store_id);
+                        if ($is_driver_emp) {
+                            isDeliveryDriverUser($conn, $user_id_for_employee, $store_id);
+                        } else {
+                            mysqli_query($conn, "DELETE FROM riders WHERE user_id = " . (int)$user_id_for_employee . " OR employee_id = " . (int)$new_emp_pk);
+                        }
 
                         // Ensure supplier profile exists if position, department, or role is Supplier
                         $is_supplier_emp = (stripos($position, 'supplier') !== false);
@@ -1164,8 +1236,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             if ($sync_user_id > 0) {
+                // Ensure rider profile only if position, department, or role is Delivery / Driver / Rider
+                $is_driver_emp = false;
+                $check_pos = strtolower(trim((string)$position));
+                foreach (['driver', 'rider', 'courier', 'delivery'] as $dkw) {
+                    if (strpos($check_pos, $dkw) !== false) {
+                        $is_driver_emp = true;
+                        break;
+                    }
+                }
+                if (!$is_driver_emp && $department_id > 0) {
+                    $dept_chk = mysqli_query($conn, "SELECT department_name FROM departments WHERE id = " . (int)$department_id . " LIMIT 1");
+                    if ($dept_chk && ($dr = mysqli_fetch_assoc($dept_chk))) {
+                        $d_name_low = strtolower(trim((string)$dr['department_name']));
+                        if (strpos($d_name_low, 'delivery') !== false || strpos($d_name_low, 'rider') !== false || strpos($d_name_low, 'courier') !== false) {
+                            $is_driver_emp = true;
+                        }
+                    }
+                }
+                if (!$is_driver_emp && isset($user_role_id) && $user_role_id > 0) {
+                    $r_chk = mysqli_query($conn, "SELECT name FROM roles WHERE id = " . (int)$user_role_id . " LIMIT 1");
+                    if ($r_chk && ($rr = mysqli_fetch_assoc($r_chk))) {
+                        $r_name_low = strtolower(trim((string)$rr['name']));
+                        if (in_array($r_name_low, ['driver', 'rider', 'delivery_driver', 'dept_delivery_riders'], true)) {
+                            $is_driver_emp = true;
+                        }
+                    }
+                }
                 require_once __DIR__ . '/../includes/rider_helper.php';
-                isDeliveryDriverUser($conn, $sync_user_id, $store_id);
+                if ($is_driver_emp) {
+                    isDeliveryDriverUser($conn, $sync_user_id, $store_id);
+                } else {
+                    mysqli_query($conn, "DELETE FROM riders WHERE user_id = " . (int)$sync_user_id . " OR employee_id = " . (int)$id);
+                }
 
                 // Ensure supplier profile exists if position, department, or role is Supplier
                 $is_supplier_emp = (stripos($position, 'supplier') !== false);
