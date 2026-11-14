@@ -4535,3 +4535,125 @@ UNLOCK TABLES;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2026-09-25  0:56:16
+
+
+-- --------------------------------------------------------
+-- Supplier Procurement & Ingredient Inventory Schema Additions
+-- --------------------------------------------------------
+
+ALTER TABLE `suppliers` 
+ADD COLUMN IF NOT EXISTS `user_id` INT NULL AFTER `id`,
+ADD COLUMN IF NOT EXISTS `is_active` TINYINT(1) NOT NULL DEFAULT 1 AFTER `address`;
+
+CREATE TABLE IF NOT EXISTS `store_material_inventory` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `store_id` INT NOT NULL,
+  `material_id` INT NOT NULL,
+  `current_stock` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `reorder_level` DECIMAL(10,2) NOT NULL DEFAULT 10.00,
+  `unit` VARCHAR(20) NOT NULL,
+  `last_restocked_at` TIMESTAMP NULL,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_store_material` (`store_id`, `material_id`),
+  KEY `idx_material` (`material_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `supplier_catalog` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `supplier_id` INT NOT NULL,
+  `material_id` INT NOT NULL,
+  `wholesale_price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `packaging_unit` VARCHAR(50) NOT NULL DEFAULT 'kg',
+  `min_order_qty` DECIMAL(10,2) NOT NULL DEFAULT 1.00,
+  `lead_time_hours` INT NOT NULL DEFAULT 24,
+  `is_available` TINYINT(1) NOT NULL DEFAULT 1,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_supplier_material` (`supplier_id`, `material_id`),
+  KEY `idx_supplier` (`supplier_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `supplier_orders` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `order_code` VARCHAR(50) NOT NULL UNIQUE,
+  `supplier_id` INT NOT NULL,
+  `store_id` INT NOT NULL,
+  `requested_by` INT NOT NULL,
+  `status` ENUM('pending', 'modified', 'accepted', 'processing', 'packed', 'in_transit', 'completed', 'rejected', 'cancelled') NOT NULL DEFAULT 'pending',
+  `urgency_level` ENUM('normal', 'urgent', 'critical') NOT NULL DEFAULT 'normal',
+  `subtotal_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `delivery_fee` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `total_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `payment_status` ENUM('pending', 'partial', 'paid') NOT NULL DEFAULT 'pending',
+  `store_notes` TEXT NULL,
+  `supplier_notes` TEXT NULL,
+  `requested_delivery_date` DATE NULL,
+  `dispatched_at` DATETIME NULL,
+  `completed_at` DATETIME NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_supplier_status` (`supplier_id`, `status`),
+  KEY `idx_store_status` (`store_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `supplier_order_items` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `order_id` INT NOT NULL,
+  `material_id` INT NOT NULL,
+  `quantity_requested` DECIMAL(10,2) NOT NULL,
+  `quantity_supplied` DECIMAL(10,2) NOT NULL,
+  `unit` VARCHAR(20) NOT NULL,
+  `locked_unit_price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `line_total` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `is_modified` TINYINT(1) NOT NULL DEFAULT 0,
+  `modification_reason` VARCHAR(255) NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_order_id` (`order_id`),
+  KEY `idx_material_id` (`material_id`),
+  CONSTRAINT `fk_supp_order_items` FOREIGN KEY (`order_id`) REFERENCES `supplier_orders`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `supplier_order_status_logs` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `order_id` INT NOT NULL,
+  `previous_status` VARCHAR(50) NULL,
+  `new_status` VARCHAR(50) NOT NULL,
+  `action_by_user_id` INT NOT NULL,
+  `notes` VARCHAR(255) NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_order_log` (`order_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
+-- --------------------------------------------------------
+-- Procurement Finance Approval & Self-Procurement Additions
+-- --------------------------------------------------------
+
+ALTER TABLE `supplier_orders` 
+ADD COLUMN IF NOT EXISTS `procurement_type` ENUM('supplier', 'self_procured') NOT NULL DEFAULT 'supplier' AFTER `store_id`,
+ADD COLUMN IF NOT EXISTS `vendor_name` VARCHAR(255) NULL AFTER `procurement_type`,
+ADD COLUMN IF NOT EXISTS `receipt_image` VARCHAR(255) NULL AFTER `vendor_name`,
+ADD COLUMN IF NOT EXISTS `invoice_number` VARCHAR(100) NULL AFTER `receipt_image`,
+ADD COLUMN IF NOT EXISTS `finance_status` ENUM('not_required', 'pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending' AFTER `payment_status`,
+ADD COLUMN IF NOT EXISTS `finance_approved_by` INT NULL AFTER `finance_status`,
+ADD COLUMN IF NOT EXISTS `finance_approved_at` DATETIME NULL AFTER `finance_approved_by`,
+ADD COLUMN IF NOT EXISTS `finance_notes` TEXT NULL AFTER `finance_approved_at`,
+ADD COLUMN IF NOT EXISTS `received_by_store_at` DATETIME NULL AFTER `completed_at`;
+
+CREATE TABLE IF NOT EXISTS `procurement_shopping_lists` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `store_id` INT NOT NULL,
+  `title` VARCHAR(150) NOT NULL DEFAULT 'Market Shopping List',
+  `status` ENUM('active', 'completed', 'cancelled') NOT NULL DEFAULT 'active',
+  `items_json` JSON NOT NULL,
+  `target_budget` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `actual_spent` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `notes` TEXT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_store_shopping` (`store_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

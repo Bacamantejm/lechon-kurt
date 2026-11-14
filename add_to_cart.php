@@ -75,6 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     p.image,
                     p.price,
                     p.seller_id,
+                    p.is_available,
                     COALESCE(NULLIF(TRIM(u.business_name), ''), NULLIF(TRIM(u.full_name), ''), 'Lechon Delights') AS store_name,
                     COALESCE(i.current_stock, p.stock, 0) AS available_stock
                   FROM products p
@@ -113,6 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $product_seller_id = (int)($product['seller_id'] ?? 0);
             $product_store_name = !empty($product['store_name']) ? (string)$product['store_name'] : 'Lechon Delights';
             $available_stock = max(0, (int)$product['available_stock']);
+            $product_is_available = isset($product['is_available']) ? (int)$product['is_available'] : 1;
             
             // If price is 0, get from database
             if ($price == 0) {
@@ -150,6 +152,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $_SESSION['storefront_seller_id'] = $product_seller_id;
+
+    // Guard: Block if marked unavailable due to ingredient stock depletion
+    if (isset($product_is_available) && (int)$product_is_available === 0) {
+        sendJsonResponse(false, 'This item is currently unavailable because required ingredients are depleted.');
+    }
 
     // Enforce stock-based maximum (not just hardcoded 20)
     $requested_quantity = $quantity;

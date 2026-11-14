@@ -648,7 +648,8 @@ if (mysqli_num_rows($result) > 0) {
             'category' => $category,
             'general_weight' => $product['weight_info'],
             'general_pax' => $product['pax_info'],
-            'stock' => $product['stock'] ?? 0,
+            'stock' => (isset($product['is_available']) && (int)$product['is_available'] === 0) ? 0 : ($product['stock'] ?? 0),
+            'is_available' => isset($product['is_available']) ? (int)$product['is_available'] : 1,
             'avg_rating' => $product['avg_rating'] ?? 0,
             'review_count' => $product['review_count'] ?? 0,
             'total_sold' => $total_sold_map[(int)$product['id']] ?? 0

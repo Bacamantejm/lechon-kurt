@@ -1002,6 +1002,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 mysqli_stmt_close($items_stmt);
             }
 
+            // Auto-deduct Bill of Materials (BOM) ingredients & trigger out-of-stock menu deactivation
+            require_once 'includes/IngredientStockManager.php';
+            IngredientStockManager::deductOrderIngredients($conn, $order_id);
+
             // 2. Initialize Logistics Tracking for Home Delivery (so rider sees request)
             if (($delivery_option ?? 'pickup') === 'delivery') {
                 try {
