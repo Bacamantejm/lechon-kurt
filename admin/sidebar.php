@@ -89,7 +89,8 @@ $show_sales_logistics = $can_orders || $can_order_policy || $can_store_availabil
 $can_products = $canPermission('products.view') || $canModule('products');
 $can_inventory = $canPermission('inventory.view') || $canModule('inventory');
 $can_mrp = $canPermission('mrp.view') || $canModule('mrp');
-$show_inventory = $can_products || $can_inventory || $can_mrp;
+$can_suppliers = $can_mrp || $can_inventory || $is_partner_scoped_admin || $is_super_admin_user || $canModule('procurement');
+$show_inventory = $can_products || $can_inventory || $can_mrp || $can_suppliers;
 $can_vouchers = $is_partner_scoped_admin || $canPermission('products.edit') || $canModule('products');
 
 $can_finance = $canPermission('finance.view') || $canModule('finance');
@@ -757,6 +758,15 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                     <a href="mrp.php" class="menu-item <?php echo (in_array($current_page, ['mrp.php', 'materials.php', 'bom.php', 'purchase_order.php'])) ? 'active' : ''; ?>">
                         <i class="fas fa-dolly"></i>
                         <span>Procurement</span>
+                    </a>
+                </li>
+            <?php endif; ?>
+
+            <?php if ($can_suppliers): ?>
+                <li>
+                    <a href="add_supplier.php" class="menu-item <?php echo (in_array($current_page, ['add_supplier.php', 'suppliers.php'])) ? 'active' : ''; ?>">
+                        <i class="fas fa-truck-loading"></i>
+                        <span>Add Supplier</span>
                     </a>
                 </li>
             <?php endif; ?>
