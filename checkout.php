@@ -370,6 +370,26 @@ if (!isset($checkout_tenant_scope)) {
 if (!empty($checkout_tenant_scope['seller_id'])) {
     $storefront_seller_id = (int)$checkout_tenant_scope['seller_id'];
     $_SESSION['storefront_seller_id'] = $storefront_seller_id;
+
+    $seller_store_stmt = mysqli_prepare(
+        $conn,
+        "SELECT store_id
+         FROM store_locations
+         WHERE owner_user_id = ? AND is_active = 1
+         ORDER BY store_id ASC
+         LIMIT 1"
+    );
+    if ($seller_store_stmt) {
+        mysqli_stmt_bind_param($seller_store_stmt, "i", $storefront_seller_id);
+        mysqli_stmt_execute($seller_store_stmt);
+        $seller_store_result = mysqli_stmt_get_result($seller_store_stmt);
+        $seller_store = $seller_store_result ? mysqli_fetch_assoc($seller_store_result) : null;
+        mysqli_stmt_close($seller_store_stmt);
+        if ($seller_store) {
+            $pickup_store_id = (int)$seller_store['store_id'];
+            $_SESSION['pickup_location'] = $pickup_store_id;
+        }
+    }
 }
 if ($storefront_seller_id <= 0 && !empty($_SESSION['storefront_seller_id'])) {
     $storefront_seller_id = (int)$_SESSION['storefront_seller_id'];
@@ -1290,7 +1310,7 @@ $remaining = $total - $downpayment;
 
                     <!-- Hidden fields for delivery option -->
                     <input type="hidden" id="delivery_option_hidden" name="delivery_option" value="<?php echo htmlspecialchars($current_checkout_delivery_option); ?>">
-                    <input type="hidden" id="pickup_location_hidden" name="pickup_location" value="<?php echo $_SESSION['pickup_location'] ?? 1; ?>">
+                    <input type="hidden" id="pickup_location_hidden" name="pickup_location" value="<?php echo (int)($_SESSION['pickup_location'] ?? 0); ?>">
                     <input type="hidden" id="delivery_location_hidden" name="delivery_location" value="<?php echo $_SESSION['delivery_location'] ?? 'cavite'; ?>">
                     <input type="hidden" id="total_amount" name="total_amount" value="<?php echo $total; ?>">
                     <input type="hidden" id="downpayment_amount" name="downpayment_amount" value="<?php echo $downpayment; ?>">
@@ -6779,7 +6799,12 @@ async function switchCheckoutFulfillmentMode(mode) {
     const hiddenDeliveryInput = document.getElementById('delivery_option_hidden');
     if (hiddenDeliveryInput) hiddenDeliveryInput.value = normalizedMode;
     const hiddenPickupInput = document.getElementById('pickup_location_hidden');
-    if (hiddenPickupInput) hiddenPickupInput.value = document.getElementById('pickup_location')?.value || document.getElementById('pickup_location_step')?.value || '1';
+    if (hiddenPickupInput) {
+        hiddenPickupInput.value = document.getElementById('pickup_location')?.value
+            || document.getElementById('pickup_location_step')?.value
+            || hiddenPickupInput.value
+            || '';
+    }
 
     // 5. Update Delivery Field Requirements
     if (typeof setDeliveryAddressFieldRequirements === 'function') {
@@ -6797,7 +6822,10 @@ async function switchCheckoutFulfillmentMode(mode) {
         try {
             const bodyParams = {
                 delivery_option: normalizedMode,
-                pickup_location: document.getElementById('pickup_location')?.value || '1'
+                pickup_location: document.getElementById('pickup_location')?.value
+                    || document.getElementById('pickup_location_step')?.value
+                    || document.getElementById('pickup_location_hidden')?.value
+                    || ''
             };
             if (isDelivery) {
                 if (latVal && lngVal) {
@@ -7740,7 +7768,13 @@ const deliveryLocationHiddenInput = document.getElementById('delivery_location_h
 let shouldAutoPinFromMarketPayload = false;
 latestDeliveryQuoteRequestToken = 0;
 
-const normalizeDeliveryOption = (value) => (String(value || '').toLowerCase() === 'delivery' ? 'delivery' : 'pickup');
+const normalizeDeliveryOption = (value) => {
+    const normalized = String(value || '').toLowerCase();
+    if (normalized === 'preorder') {
+        return 'preorder';
+    }
+    return normalized === 'delivery' ? 'delivery' : 'pickup';
+};
 
 const applyCheckoutModeUI = (mode) => {
     const normalizedMode = normalizeDeliveryOption(mode);
@@ -7751,10 +7785,14 @@ const applyCheckoutModeUI = (mode) => {
         checkoutModeCard.classList.toggle('mode-pickup', !isDelivery);
     }
     if (activeModeLabel) {
-        activeModeLabel.textContent = isDelivery ? 'Home Delivery' : 'Pickup from Store';
+        activeModeLabel.textContent = isDelivery
+            ? 'Home Delivery'
+            : (normalizedMode === 'preorder' ? 'Pre-Order from Store' : 'Pickup from Store');
     }
     if (summaryModeValue) {
-        summaryModeValue.textContent = isDelivery ? 'Delivery' : 'Pickup';
+        summaryModeValue.textContent = isDelivery
+            ? 'Delivery'
+            : (normalizedMode === 'preorder' ? 'Pre-Order' : 'Pickup');
     }
     if (modePickupBtn) {
         modePickupBtn.classList.toggle('is-active', !isDelivery);
@@ -9099,7 +9137,9 @@ if (pickupSelectMain) {
 
 function initializePage() {
     // Initialize store info
-    const storeId = document.getElementById('pickup_location')?.value || '1';
+    const storeId = document.getElementById('pickup_location')?.value
+        || document.getElementById('pickup_location_hidden')?.value
+        || '';
     const storeInfo = document.getElementById('storeInfo');
     if (storeInfo) {
         const stores = <?php echo json_encode($stores); ?>;
@@ -9576,7 +9616,9 @@ document.getElementById('checkoutForm').addEventListener('submit', function(e) {
 });
 
 async function updateDeliveryOption() {
-    const deliveryOption = activeCheckoutDeliveryOption === 'delivery' ? 'delivery' : 'pickup';
+    const deliveryOption = activeCheckoutDeliveryOption === 'preorder'
+        ? 'preorder'
+        : (activeCheckoutDeliveryOption === 'delivery' ? 'delivery' : 'pickup');
     // Clear ETA when switching to pickup
     if (deliveryOption === 'pickup') {
         const timeEl = document.getElementById('summaryDeliveryTime');
@@ -9586,7 +9628,15 @@ async function updateDeliveryOption() {
     let data = { delivery_option: deliveryOption };
 
     if (deliveryOption === 'pickup') {
-        data.pickup_location = document.getElementById('pickup_location')?.value || '1';
+        data.pickup_location = document.getElementById('pickup_location')?.value
+            || document.getElementById('pickup_location_step')?.value
+            || document.getElementById('pickup_location_hidden')?.value
+            || '';
+    } else if (deliveryOption === 'preorder') {
+        data.pickup_location = document.getElementById('pickup_location')?.value
+            || document.getElementById('pickup_location_step')?.value
+            || document.getElementById('pickup_location_hidden')?.value
+            || '';
     } else {
         const latitudeValue = (document.getElementById('latitude')?.value || '').trim();
         const longitudeValue = (document.getElementById('longitude')?.value || '').trim();
@@ -9608,7 +9658,10 @@ async function updateDeliveryOption() {
         });
         const result = await response.json();
         if (result.success) {
-            activeCheckoutDeliveryOption = normalizeDeliveryOption(result.delivery_option || deliveryOption);
+            const returnedDeliveryOption = String(result.delivery_option || deliveryOption).toLowerCase();
+            activeCheckoutDeliveryOption = returnedDeliveryOption === 'preorder'
+                ? 'preorder'
+                : normalizeDeliveryOption(returnedDeliveryOption);
             applyCheckoutModeUI(activeCheckoutDeliveryOption);
             if (result.customer_lat && result.customer_lng) {
                 const latInput = document.getElementById('latitude');
@@ -11047,6 +11100,3 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <?php include 'includes/footer.php'; ?>
-
-
-

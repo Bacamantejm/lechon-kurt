@@ -295,34 +295,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
         }
     } else {
-        // Pickup option
-        $pickup_location = isset($_POST['pickup_location']) ? intval($_POST['pickup_location']) : 1;
+        // Pickup and pre-order options must use an active branch belonging to the cart seller.
+        $requested_pickup_location = (int)($_POST['pickup_location'] ?? ($_SESSION['pickup_location'] ?? 0));
+        $pickup_location = 0;
         $delivery_location = null;
         $latitude = null;
         $longitude = null;
         $delivery_instructions = '';
         
-        // Get store address for pickup
-        $store_query = "SELECT store_name, address FROM store_locations WHERE store_id = ?";
+        $store_query = "SELECT store_id, store_name, address
+                        FROM store_locations
+                        WHERE store_id = ?
+                          AND is_active = 1
+                          AND (? <= 0 OR owner_user_id = ?)
+                        LIMIT 1";
         $store_stmt = mysqli_prepare($conn, $store_query);
         if (!$store_stmt) {
             checkoutFail('Checkout Error', 'Unable to load pickup location details right now.', 500);
         }
-        mysqli_stmt_bind_param($store_stmt, "i", $pickup_location);
+        mysqli_stmt_bind_param($store_stmt, "iii", $requested_pickup_location, $checkout_seller_owner_id, $checkout_seller_owner_id);
         mysqli_stmt_execute($store_stmt);
         $store_result = mysqli_stmt_get_result($store_stmt);
         $store = mysqli_fetch_assoc($store_result);
         mysqli_stmt_close($store_stmt);
 
         if (!$store) {
+            $fallback_store_stmt = mysqli_prepare(
+                $conn,
+                "SELECT store_id, store_name, address
+                 FROM store_locations
+                 WHERE owner_user_id = ? AND is_active = 1
+                 ORDER BY store_id ASC
+                 LIMIT 1"
+            );
+            if ($fallback_store_stmt) {
+                mysqli_stmt_bind_param($fallback_store_stmt, "i", $checkout_seller_owner_id);
+                mysqli_stmt_execute($fallback_store_stmt);
+                $fallback_store_result = mysqli_stmt_get_result($fallback_store_stmt);
+                $store = $fallback_store_result ? mysqli_fetch_assoc($fallback_store_result) : null;
+                mysqli_stmt_close($fallback_store_stmt);
+            }
+        }
+
+        if (!$store) {
             checkoutFail(
                 'Checkout Error',
-                'Selected pickup location was not found. Please choose another branch.',
+                'No active pickup branch is configured for this shop.',
                 422,
                 ['field' => 'pickup_location']
             );
         }
-        
+
+        $pickup_location = (int)$store['store_id'];
+        $_SESSION['pickup_location'] = $pickup_location;
         $delivery_address = $store['store_name'] . ', ' . $store['address'];
     }
     
