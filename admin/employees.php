@@ -49,19 +49,29 @@ if (!function_exists('employeesRoleInPartnerScope')) {
     function employeesRoleInPartnerScope($conn, $role_id, $owner_user_id) {
         $role_id = intval($role_id);
         $owner_user_id = intval($owner_user_id);
-        if ($role_id <= 0 || $owner_user_id <= 0 || !employeesRoleOwnerColumnExists($conn)) {
+        if ($role_id <= 0) {
             return false;
         }
-        $stmt = mysqli_prepare($conn, "SELECT id FROM roles WHERE id = ? AND owner_user_id = ? LIMIT 1");
+        $has_col = employeesRoleOwnerColumnExists($conn);
+        $query = $has_col ? "SELECT id, name, owner_user_id FROM roles WHERE id = ? LIMIT 1" : "SELECT id, name, NULL AS owner_user_id FROM roles WHERE id = ? LIMIT 1";
+        $stmt = mysqli_prepare($conn, $query);
         if (!$stmt) {
             return false;
         }
-        mysqli_stmt_bind_param($stmt, "ii", $role_id, $owner_user_id);
+        mysqli_stmt_bind_param($stmt, "i", $role_id);
         mysqli_stmt_execute($stmt);
-        mysqli_stmt_store_result($stmt);
-        $ok = mysqli_stmt_num_rows($stmt) > 0;
+        $res = mysqli_stmt_get_result($stmt);
+        $role = mysqli_fetch_assoc($res);
         mysqli_stmt_close($stmt);
-        return $ok;
+
+        if (!$role || strtolower(trim((string)$role['name'])) === 'super_admin') {
+            return false;
+        }
+        $role_owner = isset($role['owner_user_id']) && $role['owner_user_id'] !== null ? (int)$role['owner_user_id'] : 0;
+        if ($role_owner > 0 && $owner_user_id > 0 && $role_owner !== $owner_user_id) {
+            return false;
+        }
+        return true;
     }
 }
 
@@ -1555,9 +1565,7 @@ if ($has_dept_table && $has_role_dept_col) {
 }
 if ($is_partner_scoped_hr) {
     if (employeesRoleOwnerColumnExists($conn) && $partner_scope_owner_id > 0) {
-        $roles_query_sql .= " AND r.owner_user_id = " . (int)$partner_scope_owner_id;
-    } else {
-        $roles_query_sql .= " AND 1=0";
+        $roles_query_sql .= " AND (r.owner_user_id = " . (int)$partner_scope_owner_id . " OR r.owner_user_id IS NULL OR r.owner_user_id = 0)";
     }
 }
 $roles_query_sql .= " ORDER BY " . ($has_dept_table && $has_role_dept_col ? "d.department_name, " : "") . "r.name";

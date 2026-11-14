@@ -8,18 +8,17 @@ checkAdminAccess();
 $current_user_id = (int)($_SESSION['user_id'] ?? 0);
 $is_partner_scoped_admin = isApprovedFranchiseSellerAccount($conn, $current_user_id);
 $partner_scope_owner_id = $is_partner_scoped_admin ? (int)(getFranchiseSellerScopeOwnerId($conn, $current_user_id) ?? 0) : 0;
-$is_partner_owner_admin = $is_partner_scoped_admin && $partner_scope_owner_id === $current_user_id;
 if ($is_partner_scoped_admin && $partner_scope_owner_id <= 0) {
-    $_SESSION['error'] = 'Unable to resolve partner ownership scope.';
-    header('Location: products.php');
-    exit();
+    $partner_scope_owner_id = $current_user_id;
 }
-if (!$is_partner_scoped_admin) {
-    requirePermission('roles.manage');
-}
+$is_partner_owner_admin = $is_partner_scoped_admin && ($partner_scope_owner_id === $current_user_id || $partner_scope_owner_id > 0);
 
 $admin_info = getAdminInfo($conn);
 $is_super_admin_user = $current_user_id > 0 && function_exists('isSuperAdmin') ? isSuperAdmin($conn, $current_user_id) : false;
+
+if (!$is_partner_scoped_admin && !$is_super_admin_user) {
+    requirePermission('roles.manage');
+}
 
 if (empty($_SESSION['csrf_token']) || !is_string($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = function_exists('generateCSRFToken') ? generateCSRFToken() : bin2hex(random_bytes(32));
@@ -39,40 +38,100 @@ function rbacColumnExists($conn, $table_name, $column_name) {
     return $res && mysqli_num_rows($res) > 0;
 }
 
+// Ensure schema columns & tables exist
+if (!rbacColumnExists($conn, 'roles', 'owner_user_id')) {
+    @mysqli_query($conn, "ALTER TABLE `roles` ADD COLUMN `owner_user_id` INT NULL DEFAULT NULL AFTER `department_id`");
+}
+if (!rbacTableExists($conn, 'partner_user_links')) {
+    @mysqli_query($conn, "CREATE TABLE IF NOT EXISTS `partner_user_links` (
+        `id` int(11) NOT NULL AUTO_INCREMENT,
+        `owner_user_id` int(11) NOT NULL,
+        `managed_user_id` int(11) NOT NULL,
+        `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+        PRIMARY KEY (`id`),
+        UNIQUE KEY `unique_owner_managed` (`owner_user_id`,`managed_user_id`),
+        KEY `idx_managed_user_id` (`managed_user_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+
 function rbacRoleBelongsToPartner($conn, $role_id, $owner_user_id) {
     $role_id = (int)$role_id;
     $owner_user_id = (int)$owner_user_id;
-    if ($role_id <= 0 || $owner_user_id <= 0 || !rbacColumnExists($conn, 'roles', 'owner_user_id')) {
+    if ($role_id <= 0) {
         return false;
     }
-    $stmt = mysqli_prepare($conn, "SELECT id FROM roles WHERE id = ? AND owner_user_id = ? LIMIT 1");
+    $has_owner_col = rbacColumnExists($conn, 'roles', 'owner_user_id');
+    $query = $has_owner_col
+        ? "SELECT id, name, owner_user_id FROM roles WHERE id = ? LIMIT 1"
+        : "SELECT id, name, NULL AS owner_user_id FROM roles WHERE id = ? LIMIT 1";
+    $stmt = mysqli_prepare($conn, $query);
     if (!$stmt) {
         return false;
     }
-    mysqli_stmt_bind_param($stmt, "ii", $role_id, $owner_user_id);
+    mysqli_stmt_bind_param($stmt, "i", $role_id);
     mysqli_stmt_execute($stmt);
-    mysqli_stmt_store_result($stmt);
-    $ok = mysqli_stmt_num_rows($stmt) > 0;
+    $res = mysqli_stmt_get_result($stmt);
+    $role = mysqli_fetch_assoc($res);
     mysqli_stmt_close($stmt);
-    return $ok;
+
+    if (!$role) {
+        return false;
+    }
+    // Super administrator role can only be modified by platform super admins
+    if (strtolower(trim((string)$role['name'])) === 'super_admin') {
+        return false;
+    }
+    // If the role is explicitly owned by a different partner, deny
+    $role_owner = isset($role['owner_user_id']) && $role['owner_user_id'] !== null ? (int)$role['owner_user_id'] : 0;
+    if ($role_owner > 0 && $owner_user_id > 0 && $role_owner !== $owner_user_id) {
+        return false;
+    }
+    // Template roles, department roles, and roles owned by this store partner are permitted
+    return true;
 }
 
 function rbacUserBelongsToPartner($conn, $user_id, $owner_user_id) {
     $user_id = (int)$user_id;
     $owner_user_id = (int)$owner_user_id;
-    if ($user_id <= 0 || $owner_user_id <= 0 || !rbacTableExists($conn, 'partner_user_links')) {
+    if ($user_id <= 0) {
         return false;
     }
-    $stmt = mysqli_prepare($conn, "SELECT managed_user_id FROM partner_user_links WHERE owner_user_id = ? AND managed_user_id = ? LIMIT 1");
-    if (!$stmt) {
-        return false;
+    if ($owner_user_id <= 0 || $user_id === $owner_user_id) {
+        return true;
     }
-    mysqli_stmt_bind_param($stmt, "ii", $owner_user_id, $user_id);
-    mysqli_stmt_execute($stmt);
-    mysqli_stmt_store_result($stmt);
-    $ok = mysqli_stmt_num_rows($stmt) > 0;
-    mysqli_stmt_close($stmt);
-    return $ok;
+    if (rbacTableExists($conn, 'partner_user_links')) {
+        $stmt = mysqli_prepare($conn, "SELECT managed_user_id FROM partner_user_links WHERE owner_user_id = ? AND managed_user_id = ? LIMIT 1");
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, "ii", $owner_user_id, $user_id);
+            mysqli_stmt_execute($stmt);
+            mysqli_stmt_store_result($stmt);
+            $linked = mysqli_stmt_num_rows($stmt) > 0;
+            mysqli_stmt_close($stmt);
+            if ($linked) {
+                return true;
+            }
+        }
+    }
+    if (function_exists('getFranchiseSellerScopeOwnerId')) {
+        $scoped_owner = (int)(getFranchiseSellerScopeOwnerId($conn, $user_id) ?? 0);
+        if ($scoped_owner > 0 && $scoped_owner === $owner_user_id) {
+            return true;
+        }
+    }
+    if (rbacTableExists($conn, 'employees')) {
+        $emp_stmt = mysqli_prepare($conn, "SELECT id FROM employees WHERE user_id = ? AND (created_by = ? OR store_id IN (SELECT store_id FROM store_locations WHERE owner_user_id = ?)) LIMIT 1");
+        if ($emp_stmt) {
+            mysqli_stmt_bind_param($emp_stmt, "iii", $user_id, $owner_user_id, $owner_user_id);
+            mysqli_stmt_execute($emp_stmt);
+            mysqli_stmt_store_result($emp_stmt);
+            $is_emp = mysqli_stmt_num_rows($emp_stmt) > 0;
+            mysqli_stmt_close($emp_stmt);
+            if ($is_emp) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 function rbacRoleDisplayName($role_name, $partner_owner_id = 0) {
@@ -107,24 +166,18 @@ function rbacIsReservedRoleName($role_name) {
     if ($role_name === '') {
         return true;
     }
-    if (in_array($role_name, ['super_admin'], true)) {
-        return true;
-    }
-    return preg_match('/^partner_[0-9]+_.+$/', $role_name) === 1;
+    return in_array($role_name, ['super_admin'], true);
 }
 
 $partner_roles_owner_column_exists = rbacColumnExists($conn, 'roles', 'owner_user_id');
 $partner_user_links_table_exists = rbacTableExists($conn, 'partner_user_links');
-$partner_scope_schema_ready = $partner_roles_owner_column_exists && $partner_user_links_table_exists;
+$partner_scope_schema_ready = true;
 
-// Determine active tab
+// Determine active tab - follows Super Admin flow (Role Permissions default)
 $allowed_tabs = ['permissions', 'users', 'create'];
-if ($is_partner_scoped_admin && !$is_partner_owner_admin) {
-    $allowed_tabs = ['users'];
-}
-$active_tab = isset($_GET['tab']) ? trim((string)$_GET['tab']) : ($is_partner_scoped_admin ? 'users' : 'permissions');
+$active_tab = isset($_GET['tab']) ? trim((string)$_GET['tab']) : 'permissions';
 if (!in_array($active_tab, $allowed_tabs, true)) {
-    $active_tab = $allowed_tabs[0] ?? 'users';
+    $active_tab = 'permissions';
 }
 
 function tabSafe($tab, $allowed_tabs) {
@@ -132,23 +185,17 @@ function tabSafe($tab, $allowed_tabs) {
     if (in_array($tab, $allowed_tabs, true)) {
         return $tab;
     }
-    return $allowed_tabs[0] ?? 'users';
+    return 'permissions';
 }
 
-$partner_permission_modules = ['dashboard', 'orders', 'preorders', 'logistics', 'inventory', 'products', 'mrp', 'finance', 'billing', 'forecasting', 'hr', 'payroll', 'deductions'];
+$partner_permission_modules = ['dashboard', 'orders', 'preorders', 'logistics', 'inventory', 'products', 'mrp', 'finance', 'billing', 'forecasting', 'hr', 'payroll', 'deductions', 'reports', 'operations'];
 $partner_permission_ids_allowed = [];
 if ($is_partner_scoped_admin) {
-    $perm_stmt = mysqli_prepare(
-        $conn,
-        "SELECT id FROM permissions WHERE module IN ('dashboard','orders','preorders','logistics','inventory','products','mrp','finance','billing','forecasting','hr','payroll','deductions')"
-    );
-    if ($perm_stmt) {
-        mysqli_stmt_execute($perm_stmt);
-        $perm_res = mysqli_stmt_get_result($perm_stmt);
+    $perm_res = mysqli_query($conn, "SELECT id FROM permissions WHERE module != 'franchise'");
+    if ($perm_res) {
         while ($perm_row = mysqli_fetch_assoc($perm_res)) {
             $partner_permission_ids_allowed[(int)$perm_row['id']] = true;
         }
-        mysqli_stmt_close($perm_stmt);
     }
 }
 
@@ -166,11 +213,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit();
         }
         $action = $_POST['action'];
-        if ($is_partner_scoped_admin && !$is_partner_owner_admin) {
-            $_SESSION['error'] = 'RBAC updates are restricted to the partner owner account.';
-            header("Location: rbac_management.php?tab=users");
-            exit();
-        }
 
         // Update role permissions
         if ($action === 'update_permissions') {
@@ -178,8 +220,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if ($role_id <= 0) {
                 $_SESSION['error'] = 'Invalid role selected';
-            } elseif ($is_partner_owner_admin && !rbacRoleBelongsToPartner($conn, $role_id, $partner_scope_owner_id)) {
-                $_SESSION['error'] = 'You can only update permissions for your own partner roles.';
+            } elseif ($is_partner_scoped_admin && !rbacRoleBelongsToPartner($conn, $role_id, $partner_scope_owner_id)) {
+                $_SESSION['error'] = 'You can only update permissions for your own store roles.';
             } else {
                 $target_role = getRoleById($conn, $role_id);
                 if (!$target_role) {
@@ -192,7 +234,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         foreach ($_POST['permissions'] as $permission_id) {
                             $permission_id = (int)$permission_id;
                             if ($permission_id > 0) {
-                                if ($is_partner_owner_admin && !isset($partner_permission_ids_allowed[$permission_id])) {
+                                if ($is_partner_scoped_admin && !isset($partner_permission_ids_allowed[$permission_id])) {
                                     continue;
                                 }
                                 $permission_ids[$permission_id] = true;
@@ -236,7 +278,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         logRBACAction($conn, $current_user_id, 'ROLE_UPDATED', 'roles', "Updated role {$target_role['name']} (ID {$role_id}) with {$permissions_added} permissions");
                     } catch (Throwable $e) {
                         mysqli_rollback($conn);
-                        $_SESSION['error'] = 'Failed to update role permissions safely.';
+                        $_SESSION['error'] = 'Failed to update role permissions safely: ' . $e->getMessage();
                     }
                 }
             }
@@ -264,65 +306,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif (rbacIsReservedRoleName($role_name)) {
                 $_SESSION['error'] = 'This role name is reserved. Please use a different name.';
             } else {
-                if ($is_partner_owner_admin && !rbacColumnExists($conn, 'roles', 'owner_user_id')) {
-                    $_SESSION['error'] = 'Role ownership schema is missing. Run tenant scope migration first.';
-                    header("Location: rbac_management.php?tab=create");
-                    exit();
-                }
-
                 $stored_role_name = $role_name;
-                if ($is_partner_owner_admin) {
-                    $stored_role_name = 'partner_' . (int)$partner_scope_owner_id . '_' . $role_name;
-                }
 
-                // Check if role exists
-                $check_query = "SELECT id FROM roles WHERE name = ?";
-                $check_stmt = mysqli_prepare($conn, $check_query);
-                mysqli_stmt_bind_param($check_stmt, "s", $stored_role_name);
+                // Check if role exists in store scope
+                $has_owner_col = rbacColumnExists($conn, 'roles', 'owner_user_id');
+                if ($is_partner_scoped_admin && $has_owner_col && $partner_scope_owner_id > 0) {
+                    $check_query = "SELECT id FROM roles WHERE name = ? AND (owner_user_id = ? OR owner_user_id IS NULL) LIMIT 1";
+                    $check_stmt = mysqli_prepare($conn, $check_query);
+                    mysqli_stmt_bind_param($check_stmt, "si", $stored_role_name, $partner_scope_owner_id);
+                } else {
+                    $check_query = "SELECT id FROM roles WHERE name = ? LIMIT 1";
+                    $check_stmt = mysqli_prepare($conn, $check_query);
+                    mysqli_stmt_bind_param($check_stmt, "s", $stored_role_name);
+                }
                 mysqli_stmt_execute($check_stmt);
                 mysqli_stmt_store_result($check_stmt);
                 
                 if (mysqli_stmt_num_rows($check_stmt) > 0) {
-                    $_SESSION['error'] = 'Role name already exists';
-                } else {
-                    // Insert new role
-                    $insert_query = $is_partner_owner_admin
-                        ? "INSERT INTO roles (name, description, is_active, owner_user_id) VALUES (?, ?, 1, ?)"
-                        : "INSERT INTO roles (name, description, is_active) VALUES (?, ?, 1)";
-                    $insert_stmt = mysqli_prepare($conn, $insert_query);
-                    if ($is_partner_owner_admin) {
-                        mysqli_stmt_bind_param($insert_stmt, "ssi", $stored_role_name, $role_description, $partner_scope_owner_id);
-                    } else {
-                        mysqli_stmt_bind_param($insert_stmt, "ss", $stored_role_name, $role_description);
-                    }
-                    
-                    if (mysqli_stmt_execute($insert_stmt)) {
-                        $new_role_id = mysqli_insert_id($conn);
-                        // If cashier role, auto-attach default POS terminal permissions
-                        if (strpos(strtolower($role_name), 'cashier') !== false && $new_role_id > 0) {
-                            $default_perms = ['orders.view', 'orders.create', 'products.view'];
-                            foreach ($default_perms as $p_slug) {
-                                $p_stmt = mysqli_prepare($conn, "SELECT id FROM permissions WHERE name = ? LIMIT 1");
-                                if ($p_stmt) {
-                                    mysqli_stmt_bind_param($p_stmt, "s", $p_slug);
-                                    mysqli_stmt_execute($p_stmt);
-                                    $p_res = mysqli_stmt_get_result($p_stmt);
-                                    if ($p_res && ($p_row = mysqli_fetch_assoc($p_res))) {
-                                        $pid = (int)$p_row['id'];
-                                        mysqli_query($conn, "INSERT IGNORE INTO role_permissions (role_id, permission_id) VALUES ($new_role_id, $pid)");
-                                    }
-                                    mysqli_stmt_close($p_stmt);
-                                }
-                            }
-                        }
-                        $_SESSION['success'] = "Role '" . rbacRoleDisplayName($stored_role_name, $is_partner_owner_admin ? $partner_scope_owner_id : 0) . "' created successfully.";
-                        logRBACAction($conn, $current_user_id, 'ROLE_CREATED', 'roles', "Created new role: $stored_role_name");
-                    } else {
-                        $_SESSION['error'] = 'Failed to create role: ' . mysqli_error($conn);
-                    }
-                    mysqli_stmt_close($insert_stmt);
+                    $_SESSION['error'] = "Role name '{$stored_role_name}' already exists in your store.";
+                    mysqli_stmt_close($check_stmt);
+                    header("Location: rbac_management.php?tab=create");
+                    exit();
                 }
                 mysqli_stmt_close($check_stmt);
+
+                // Insert new role with clean slug and owner reference
+                $insert_query = ($has_owner_col && $partner_scope_owner_id > 0)
+                    ? "INSERT INTO roles (name, description, is_active, owner_user_id) VALUES (?, ?, 1, ?)"
+                    : "INSERT INTO roles (name, description, is_active) VALUES (?, ?, 1)";
+                $insert_stmt = mysqli_prepare($conn, $insert_query);
+                if ($has_owner_col && $partner_scope_owner_id > 0) {
+                    mysqli_stmt_bind_param($insert_stmt, "ssi", $stored_role_name, $role_description, $partner_scope_owner_id);
+                } else {
+                    mysqli_stmt_bind_param($insert_stmt, "ss", $stored_role_name, $role_description);
+                }
+                
+                if (mysqli_stmt_execute($insert_stmt)) {
+                    $new_role_id = mysqli_insert_id($conn);
+                    // If cashier role, auto-attach default POS terminal permissions
+                    if (strpos(strtolower($role_name), 'cashier') !== false && $new_role_id > 0) {
+                        $default_perms = ['orders.view', 'orders.create', 'products.view'];
+                        foreach ($default_perms as $p_slug) {
+                            $p_stmt = mysqli_prepare($conn, "SELECT id FROM permissions WHERE name = ? LIMIT 1");
+                            if ($p_stmt) {
+                                mysqli_stmt_bind_param($p_stmt, "s", $p_slug);
+                                mysqli_stmt_execute($p_stmt);
+                                $p_res = mysqli_stmt_get_result($p_stmt);
+                                if ($p_res && ($p_row = mysqli_fetch_assoc($p_res))) {
+                                    $pid = (int)$p_row['id'];
+                                    mysqli_query($conn, "INSERT IGNORE INTO role_permissions (role_id, permission_id) VALUES ($new_role_id, $pid)");
+                                }
+                                mysqli_stmt_close($p_stmt);
+                            }
+                        }
+                    }
+                    $_SESSION['success'] = "Role '" . rbacRoleDisplayName($stored_role_name) . "' created successfully. Configure its permissions below.";
+                    logRBACAction($conn, $current_user_id, 'ROLE_CREATED', 'roles', "Created new role: $stored_role_name");
+                    mysqli_stmt_close($insert_stmt);
+
+                    // Redirect directly to permissions tab with new role selected (matching Super Admin process)
+                    header("Location: rbac_management.php?tab=permissions&role_id=" . $new_role_id);
+                    exit();
+                } else {
+                    $_SESSION['error'] = 'Failed to create role: ' . mysqli_error($conn);
+                    mysqli_stmt_close($insert_stmt);
+                    header("Location: rbac_management.php?tab=create");
+                    exit();
+                }
             }
             header("Location: rbac_management.php?tab=create");
             exit();
@@ -347,8 +397,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 header('Location: rbac_management.php?tab=permissions');
                 exit();
             }
-            if ($is_partner_owner_admin && !rbacRoleBelongsToPartner($conn, $source_role_id, $partner_scope_owner_id)) {
-                $_SESSION['error'] = 'You can only clone roles within your partner scope.';
+            if ($is_partner_scoped_admin && !rbacRoleBelongsToPartner($conn, $source_role_id, $partner_scope_owner_id)) {
+                $_SESSION['error'] = 'You can only clone roles within your store scope.';
                 header('Location: rbac_management.php?tab=permissions');
                 exit();
             }
@@ -390,42 +440,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $stored_clone_name = $clone_role_name;
-            if ($is_partner_owner_admin) {
-                if (!rbacColumnExists($conn, 'roles', 'owner_user_id')) {
-                    $_SESSION['error'] = 'Role ownership schema is missing. Run tenant scope migration first.';
-                    header('Location: rbac_management.php?tab=permissions&role_id=' . $source_role_id);
-                    exit();
-                }
-                $stored_clone_name = 'partner_' . (int)$partner_scope_owner_id . '_' . $clone_role_name;
-            }
 
-            $check_stmt = mysqli_prepare($conn, "SELECT id FROM roles WHERE name = ? LIMIT 1");
-            if (!$check_stmt) {
-                $_SESSION['error'] = 'Unable to validate role uniqueness.';
-                header('Location: rbac_management.php?tab=permissions&role_id=' . $source_role_id);
-                exit();
+            $has_owner_col = rbacColumnExists($conn, 'roles', 'owner_user_id');
+            if ($is_partner_scoped_admin && $has_owner_col && $partner_scope_owner_id > 0) {
+                $check_stmt = mysqli_prepare($conn, "SELECT id FROM roles WHERE name = ? AND (owner_user_id = ? OR owner_user_id IS NULL) LIMIT 1");
+                mysqli_stmt_bind_param($check_stmt, "si", $stored_clone_name, $partner_scope_owner_id);
+            } else {
+                $check_stmt = mysqli_prepare($conn, "SELECT id FROM roles WHERE name = ? LIMIT 1");
+                mysqli_stmt_bind_param($check_stmt, "s", $stored_clone_name);
             }
-            mysqli_stmt_bind_param($check_stmt, "s", $stored_clone_name);
             mysqli_stmt_execute($check_stmt);
             mysqli_stmt_store_result($check_stmt);
             $role_exists = mysqli_stmt_num_rows($check_stmt) > 0;
             mysqli_stmt_close($check_stmt);
             if ($role_exists) {
-                $_SESSION['error'] = 'Role name already exists.';
+                $_SESSION['error'] = "Role name '{$stored_clone_name}' already exists in your store.";
                 header('Location: rbac_management.php?tab=permissions&role_id=' . $source_role_id);
                 exit();
             }
 
             mysqli_begin_transaction($conn);
             try {
-                $insert_role_sql = $is_partner_owner_admin
+                $insert_role_sql = ($has_owner_col && $partner_scope_owner_id > 0)
                     ? "INSERT INTO roles (name, description, is_active, owner_user_id) VALUES (?, ?, 1, ?)"
                     : "INSERT INTO roles (name, description, is_active) VALUES (?, ?, 1)";
                 $insert_role_stmt = mysqli_prepare($conn, $insert_role_sql);
                 if (!$insert_role_stmt) {
                     throw new Exception('Unable to prepare clone role insert.');
                 }
-                if ($is_partner_owner_admin) {
+                if ($has_owner_col && $partner_scope_owner_id > 0) {
                     mysqli_stmt_bind_param($insert_role_stmt, "ssi", $stored_clone_name, $clone_role_description, $partner_scope_owner_id);
                 } else {
                     mysqli_stmt_bind_param($insert_role_stmt, "ss", $stored_clone_name, $clone_role_description);
@@ -449,7 +492,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($permission_id <= 0) {
                         continue;
                     }
-                    if ($is_partner_owner_admin && !isset($partner_permission_ids_allowed[$permission_id])) {
+                    if ($is_partner_scoped_admin && !isset($partner_permission_ids_allowed[$permission_id])) {
                         continue;
                     }
                     $source_perm_ids[$permission_id] = true;
@@ -479,7 +522,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit();
             } catch (Throwable $e) {
                 mysqli_rollback($conn);
-                $_SESSION['error'] = 'Failed to clone role safely.';
+                $_SESSION['error'] = 'Failed to clone role safely: ' . $e->getMessage();
                 header('Location: rbac_management.php?tab=permissions&role_id=' . $source_role_id);
                 exit();
             }
@@ -492,10 +535,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if ($user_id <= 0 || $role_id <= 0) {
                 $_SESSION['error'] = 'Invalid user or role selected';
-            } elseif ($is_partner_owner_admin && !rbacRoleBelongsToPartner($conn, $role_id, $partner_scope_owner_id)) {
-                $_SESSION['error'] = 'Selected role is not part of your partner scope.';
-            } elseif ($is_partner_owner_admin && !rbacUserBelongsToPartner($conn, $user_id, $partner_scope_owner_id)) {
-                $_SESSION['error'] = 'Selected user is not part of your partner team.';
+            } elseif ($is_partner_scoped_admin && !rbacRoleBelongsToPartner($conn, $role_id, $partner_scope_owner_id)) {
+                $_SESSION['error'] = 'Selected role is not part of your store scope.';
+            } elseif ($is_partner_scoped_admin && !rbacUserBelongsToPartner($conn, $user_id, $partner_scope_owner_id)) {
+                $_SESSION['error'] = 'Selected user is not part of your store team.';
             } else {
                 $target_role = getRoleById($conn, $role_id);
                 if (!$target_role || !(int)($target_role['is_active'] ?? 0)) {
@@ -518,7 +561,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         mysqli_stmt_bind_param($update_stmt, "ii", $role_id, $user_id);
                         
                         if (mysqli_stmt_execute($update_stmt)) {
-                            $_SESSION['success'] = "User role assigned successfully";
+                            $_SESSION['success'] = "User role assigned successfully.";
                             logRBACAction($conn, $current_user_id, 'USER_ROLE_ASSIGNED', 'users', "Assigned role {$target_role['name']} to user ID $user_id");
                             require_once __DIR__ . '/../includes/rider_helper.php';
                             isDeliveryDriverUser($conn, $user_id);
@@ -533,19 +576,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit();
         }
 
-        // Partner owner: create sub-user under this tenant scope
+        // Create sub-user under this store scope
         if ($action === 'create_partner_user') {
-            if (!$is_partner_owner_admin) {
-                $_SESSION['error'] = 'Only the partner owner can create sub-users.';
-                header("Location: rbac_management.php?tab=users");
-                exit();
-            }
-            if (!rbacTableExists($conn, 'partner_user_links')) {
-                $_SESSION['error'] = 'Partner user ownership schema is missing. Run tenant scope migration first.';
-                header("Location: rbac_management.php?tab=users");
-                exit();
-            }
-
             $full_name = trim((string)($_POST['sub_full_name'] ?? ''));
             $email_raw = trim((string)($_POST['sub_email'] ?? ''));
             $phone = trim((string)($_POST['sub_phone'] ?? ''));
@@ -583,8 +615,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 header("Location: rbac_management.php?tab=users");
                 exit();
             }
-            if ($sub_role_id <= 0 || !rbacRoleBelongsToPartner($conn, $sub_role_id, $partner_scope_owner_id)) {
-                $_SESSION['error'] = 'Please select a valid partner role.';
+            if ($sub_role_id <= 0 || ($is_partner_scoped_admin && !rbacRoleBelongsToPartner($conn, $sub_role_id, $partner_scope_owner_id))) {
+                $_SESSION['error'] = 'Please select a valid role.';
                 header("Location: rbac_management.php?tab=users");
                 exit();
             }
@@ -622,19 +654,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $new_user_id = (int)mysqli_insert_id($conn);
                 mysqli_stmt_close($create_stmt);
 
-                $link_stmt = mysqli_prepare(
-                    $conn,
-                    "INSERT INTO partner_user_links (owner_user_id, managed_user_id, created_at)
-                     VALUES (?, ?, NOW())"
-                );
-                if (!$link_stmt) {
-                    throw new Exception('Unable to prepare partner ownership link.');
+                if (rbacTableExists($conn, 'partner_user_links') && $partner_scope_owner_id > 0) {
+                    $link_stmt = mysqli_prepare(
+                        $conn,
+                        "INSERT INTO partner_user_links (owner_user_id, managed_user_id, created_at)
+                         VALUES (?, ?, NOW())"
+                    );
+                    if ($link_stmt) {
+                        mysqli_stmt_bind_param($link_stmt, "ii", $partner_scope_owner_id, $new_user_id);
+                        mysqli_stmt_execute($link_stmt);
+                        mysqli_stmt_close($link_stmt);
+                    }
                 }
-                mysqli_stmt_bind_param($link_stmt, "ii", $partner_scope_owner_id, $new_user_id);
-                if (!mysqli_stmt_execute($link_stmt)) {
-                    throw new Exception('Failed to link sub-user to partner owner.');
-                }
-                mysqli_stmt_close($link_stmt);
 
                 mysqli_commit($conn);
                 require_once __DIR__ . '/../includes/rider_helper.php';
@@ -643,7 +674,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 logRBACAction($conn, $current_user_id, 'PARTNER_SUBUSER_CREATED', 'users', "Created partner sub-user ID {$new_user_id}");
             } catch (Throwable $e) {
                 mysqli_rollback($conn);
-                $_SESSION['error'] = 'Sub-user creation failed.';
+                $_SESSION['error'] = 'Sub-user creation failed: ' . $e->getMessage();
             }
 
             header("Location: rbac_management.php?tab=users");
@@ -651,15 +682,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($action === 'toggle_partner_user_status') {
-            if (!$is_partner_owner_admin) {
-                $_SESSION['error'] = 'Only the partner owner can update sub-user status.';
-                header("Location: rbac_management.php?tab=users");
-                exit();
-            }
             $target_user_id = (int)($_POST['target_user_id'] ?? 0);
             $target_active = (int)($_POST['target_active'] ?? 0) === 1 ? 1 : 0;
-            if ($target_user_id <= 0 || !rbacUserBelongsToPartner($conn, $target_user_id, $partner_scope_owner_id)) {
-                $_SESSION['error'] = 'Selected user is not in your partner scope.';
+            if ($target_user_id <= 0 || ($is_partner_scoped_admin && !rbacUserBelongsToPartner($conn, $target_user_id, $partner_scope_owner_id))) {
+                $_SESSION['error'] = 'Selected user is not in your store scope.';
                 header("Location: rbac_management.php?tab=users");
                 exit();
             }
@@ -682,7 +708,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Tenant-aware data loading
+// Data loading: Super Admin & Partner/Store Admin
 $partner_role_schema_notice = null;
 $roles = [];
 $permissions_by_module = [];
@@ -692,15 +718,15 @@ $selected_role_permissions = [];
 $all_permissions = [];
 $selected_role_id = isset($_GET['role_id']) ? intval($_GET['role_id']) : 0;
 
-if ($is_partner_owner_admin) {
-    if (!$partner_roles_owner_column_exists) {
-        $partner_role_schema_notice = 'RBAC role ownership schema is missing (`roles.owner_user_id`). Run Tenant Scope Migration.';
-    } elseif (!$partner_user_links_table_exists) {
-        $partner_role_schema_notice = 'Partner user ownership schema is missing (`partner_user_links`). Run Tenant Scope Migration.';
-    }
-
-    if ($partner_roles_owner_column_exists) {
-        $roles_query = "SELECT * FROM roles WHERE is_active = 1 AND owner_user_id = ? ORDER BY name ASC";
+if ($is_partner_scoped_admin) {
+    // Partner-scoped / Shop Owner / Admin side:
+    // Load all active roles for this store (own created roles, department roles, store template roles)
+    if ($partner_roles_owner_column_exists && $partner_scope_owner_id > 0) {
+        $roles_query = "SELECT * FROM roles 
+                        WHERE is_active = 1 
+                          AND name != 'super_admin' 
+                          AND (owner_user_id = ? OR owner_user_id IS NULL OR owner_user_id = 0)
+                        ORDER BY name ASC";
         $roles_stmt = mysqli_prepare($conn, $roles_query);
         if ($roles_stmt) {
             mysqli_stmt_bind_param($roles_stmt, "i", $partner_scope_owner_id);
@@ -711,27 +737,56 @@ if ($is_partner_owner_admin) {
             }
             mysqli_stmt_close($roles_stmt);
         }
+    } else {
+        $roles_res = mysqli_query($conn, "SELECT * FROM roles WHERE is_active = 1 AND name != 'super_admin' ORDER BY name ASC");
+        while ($roles_res && ($role_row = mysqli_fetch_assoc($roles_res))) {
+            $roles[] = $role_row;
+        }
     }
 
     $permissions_by_module_all = getPermissionsByModule($conn);
     foreach ($permissions_by_module_all as $module => $module_perms) {
-        if (!in_array($module, $partner_permission_modules, true)) {
+        if ($module === 'franchise') {
             continue;
         }
-        $permissions_by_module[$module] = $module_perms;
+        $filtered_perms = [];
         foreach ($module_perms as $perm) {
+            if (in_array($perm['name'], ['franchise.view', 'franchise.manage'], true)) {
+                continue;
+            }
+            $filtered_perms[] = $perm;
             $all_permissions[] = $perm;
+        }
+        if (!empty($filtered_perms)) {
+            $permissions_by_module[$module] = $filtered_perms;
         }
     }
 
-    if ($selected_role_id <= 0 || !rbacRoleBelongsToPartner($conn, $selected_role_id, $partner_scope_owner_id)) {
-        $selected_role_id = (int)($roles[0]['id'] ?? 0);
+    // Role selection: default to requested role_id or first role
+    if ($selected_role_id <= 0) {
+        $selected_role_id = !empty($roles) ? (int)$roles[0]['id'] : 0;
+    } else {
+        $found = false;
+        foreach ($roles as $r) {
+            if ((int)$r['id'] === $selected_role_id) {
+                $found = true;
+                break;
+            }
+        }
+        if (!$found && !empty($roles)) {
+            $selected_role_id = (int)$roles[0]['id'];
+        }
     }
-    if ($selected_role_id > 0 && rbacRoleBelongsToPartner($conn, $selected_role_id, $partner_scope_owner_id)) {
+
+    if ($selected_role_id > 0) {
         $selected_role = getRoleById($conn, $selected_role_id);
+        if ($selected_role && ($selected_role['name'] ?? '') === 'super_admin' && !$is_super_admin_user) {
+            $selected_role = null;
+        }
         $selected_role_permissions = $selected_role ? getRolePermissions($conn, $selected_role_id) : [];
     }
 
+    // Load team users
     if ($partner_user_links_table_exists) {
         $admin_query = "SELECT u.id, u.full_name, u.email, u.user_type, u.is_active, r.name as role_name, r.id as role_id,
                                CASE WHEN u.id = ? THEN 1 ELSE 0 END AS is_owner
@@ -768,33 +823,32 @@ if ($is_partner_owner_admin) {
             mysqli_stmt_close($owner_stmt);
         }
     }
-} elseif ($is_partner_scoped_admin) {
-    $partner_role = $current_user_id > 0 ? getUserRole($conn, $current_user_id) : null;
-    $roles = $partner_role ? [$partner_role] : [];
 
-    $permissions_by_module = [];
-    $selected_role_id = (int)($roles[0]['id'] ?? 0);
-    $selected_role = $selected_role_id > 0 ? getRoleById($conn, $selected_role_id) : null;
-    $selected_role_permissions = $selected_role ? getRolePermissions($conn, $selected_role_id) : [];
-
-    $admin_query = "SELECT u.id, u.full_name, u.email, u.user_type, u.is_active, r.name as role_name, r.id as role_id, 0 AS is_owner
-                    FROM users u
-                    LEFT JOIN roles r ON u.role_id = r.id
-                    WHERE u.id = ?";
-    $admin_stmt = mysqli_prepare($conn, $admin_query);
-    if ($admin_stmt) {
-        mysqli_stmt_bind_param($admin_stmt, "i", $current_user_id);
-        mysqli_stmt_execute($admin_stmt);
-        $admin_result = mysqli_stmt_get_result($admin_stmt);
-        while ($admin_result && ($row = mysqli_fetch_assoc($admin_result))) {
-            $admin_users[] = $row;
-        }
-        mysqli_stmt_close($admin_stmt);
-    }
-
-    foreach ($selected_role_permissions as $module_perms) {
-        foreach ((array)$module_perms as $perm) {
-            $all_permissions[] = $perm;
+    // Also include store employees from employees table
+    if ($partner_scope_owner_id > 0 && rbacTableExists($conn, 'employees')) {
+        $existing_user_ids = array_column($admin_users, 'id');
+        $has_sl = rbacTableExists($conn, 'store_locations');
+        $emp_users_query = "SELECT DISTINCT u.id, u.full_name, u.email, u.user_type, u.is_active, r.name as role_name, r.id as role_id, 0 AS is_owner
+                            FROM employees e
+                            INNER JOIN users u ON (e.user_id = u.id OR (e.email IS NOT NULL AND e.email != '' AND u.email = e.email))
+                            LEFT JOIN roles r ON u.role_id = r.id
+                            WHERE e.created_by = ?" . ($has_sl ? " OR e.store_id IN (SELECT store_id FROM store_locations WHERE owner_user_id = ?)" : "");
+        $emp_u_stmt = mysqli_prepare($conn, $emp_users_query);
+        if ($emp_u_stmt) {
+            if ($has_sl) {
+                mysqli_stmt_bind_param($emp_u_stmt, "ii", $partner_scope_owner_id, $partner_scope_owner_id);
+            } else {
+                mysqli_stmt_bind_param($emp_u_stmt, "i", $partner_scope_owner_id);
+            }
+            mysqli_stmt_execute($emp_u_stmt);
+            $emp_u_res = mysqli_stmt_get_result($emp_u_stmt);
+            while ($emp_u_res && ($emp_u_row = mysqli_fetch_assoc($emp_u_res))) {
+                if (!in_array($emp_u_row['id'], $existing_user_ids)) {
+                    $admin_users[] = $emp_u_row;
+                    $existing_user_ids[] = $emp_u_row['id'];
+                }
+            }
+            mysqli_stmt_close($emp_u_stmt);
         }
     }
 } else {
@@ -1374,19 +1428,15 @@ unset($_SESSION['success'], $_SESSION['error']);
                 </div>
 
                 <ul class="nav nav-tabs mb-4" id="rbacTabs" role="tablist">
-                    <?php if (in_array('permissions', $allowed_tabs, true)): ?>
                     <li class="nav-item">
                         <a class="nav-link <?php echo $active_tab === 'permissions' ? 'active' : ''; ?>" id="permissions-tab" href="?tab=permissions" role="tab"><i class="fas fa-shield-alt me-2"></i>Role Permissions</a>
                     </li>
-                    <?php endif; ?>
                     <li class="nav-item">
                         <a class="nav-link <?php echo $active_tab === 'users' ? 'active' : ''; ?>" id="users-tab" href="?tab=users" role="tab"><i class="fas fa-users me-2"></i>User Roles</a>
                     </li>
-                    <?php if (in_array('create', $allowed_tabs, true)): ?>
                     <li class="nav-item">
                         <a class="nav-link <?php echo $active_tab === 'create' ? 'active' : ''; ?>" id="create-tab" href="?tab=create" role="tab"><i class="fas fa-plus-circle me-2"></i>Create Role</a>
                     </li>
-                    <?php endif; ?>
                 </ul>
                 
                 <!-- PERMISSIONS TAB -->
@@ -1395,11 +1445,6 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <div class="card mb-4"><div class="card-body">
                     <h2>Manage Role Permissions</h2>
                     <p class="text-muted mb-4">Select a role to configure its permissions.</p>
-                    <?php if ($is_partner_owner_admin): ?>
-                        <div class="alert alert-info">
-                            Partner roles are scoped to your own store operations modules only.
-                        </div>
-                    <?php endif; ?>
                     <div class="rbac-tools">
                         <input type="text" id="roleSearch" class="form-control" placeholder="Search role by name or description...">
                     </div>
@@ -1407,19 +1452,19 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <div class="role-selector">
                         <?php 
                         // Sort roles alphabetically by display name
-                        usort($roles, function($a, $b) use ($is_partner_owner_admin, $partner_scope_owner_id) {
-                            $name_a = rbacRoleDisplayName($a['name'] ?? '', $is_partner_owner_admin ? $partner_scope_owner_id : 0);
-                            $name_b = rbacRoleDisplayName($b['name'] ?? '', $is_partner_owner_admin ? $partner_scope_owner_id : 0);
+                        usort($roles, function($a, $b) use ($partner_scope_owner_id) {
+                            $name_a = rbacRoleDisplayName($a['name'] ?? '', $partner_scope_owner_id);
+                            $name_b = rbacRoleDisplayName($b['name'] ?? '', $partner_scope_owner_id);
                             return strcasecmp($name_a, $name_b);
                         });
                         
                         foreach ($roles as $role): 
                         ?>
-                            <div class="role-card <?php echo $role['id'] === $selected_role_id ? 'active' : ''; ?>" 
-                                 data-role-search="<?php echo htmlspecialchars(strtolower(rbacRoleDisplayName($role['name'] ?? '', $is_partner_owner_admin ? $partner_scope_owner_id : 0) . ' ' . ($role['description'] ?? ''))); ?>"
-                                 onclick="selectRole(<?php echo $role['id']; ?>)" style="cursor: pointer;">
+                            <div class="role-card <?php echo (int)($role['id'] ?? 0) === (int)$selected_role_id ? 'active' : ''; ?>" 
+                                 data-role-search="<?php echo htmlspecialchars(strtolower(rbacRoleDisplayName($role['name'] ?? '', $partner_scope_owner_id) . ' ' . ($role['description'] ?? ''))); ?>"
+                                 onclick="selectRole(<?php echo (int)$role['id']; ?>)" style="cursor: pointer;">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                                    <h3 style="margin: 0; flex: 1;"><?php echo rbacRoleDisplayName($role['name'], $is_partner_owner_admin ? $partner_scope_owner_id : 0); ?></h3>
+                                    <h3 style="margin: 0; flex: 1;"><?php echo rbacRoleDisplayName($role['name'], $partner_scope_owner_id); ?></h3>
                                     <span style="font-size: 15px; color: #6b7280;"><i class="fas fa-shield-alt"></i></span>
                                 </div>
                                 <p style="margin: 0 0 8px 0;"><?php echo htmlspecialchars($role['description'] ?? ''); ?></p>
@@ -1562,126 +1607,111 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <div class="card mb-4"><div class="card-body">
                     <h3 class="mb-4">
                         <?php
-                        if ($is_partner_owner_admin) {
-                            echo 'Manage Partner Team Roles';
-                        } elseif ($is_partner_scoped_admin) {
-                            echo 'My Role Access';
+                        if ($is_partner_scoped_admin) {
+                            echo 'Manage Store Team Roles';
                         } else {
                             echo 'Assign Roles to Users';
                         }
                         ?>
                     </h3>
 
-                    <?php if ($is_partner_scoped_admin && !$is_partner_owner_admin): ?>
-                        <div class="alert alert-info">
-                            This sub-user account can view role details. RBAC updates are handled by your partner owner account.
-                        </div>
-                    <?php elseif ($is_partner_owner_admin): ?>
-                        <div class="alert alert-info">
-                            You can manage your own partner roles and linked team users here without affecting other stores.
-                        </div>
-                        <?php if (!$partner_scope_schema_ready): ?>
-                            <div class="alert alert-error">
-                                Partner RBAC ownership schema is incomplete. Run Tenant Scope Migration before creating or assigning users.
+                    <?php if ($is_partner_scoped_admin): ?>
+                        <div class="row g-3 mb-4">
+                            <div class="col-lg-6">
+                                <form method="POST" class="create-role-form" style="max-width: none;">
+                                    <input type="hidden" name="action" value="create_partner_user">
+                                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                                    <input type="hidden" name="return_tab" value="users">
+                                    <h5 class="mb-3"><i class="fas fa-user-plus"></i> Create Sub-User</h5>
+
+                                    <div class="form-group">
+                                        <label for="sub_full_name">Full Name *</label>
+                                        <input type="text" id="sub_full_name" name="sub_full_name" class="form-control" minlength="3" maxlength="100" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sub_email">Email *</label>
+                                        <input type="email" id="sub_email" name="sub_email" class="form-control" maxlength="255" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sub_phone">Phone</label>
+                                        <input type="text" id="sub_phone" name="sub_phone" class="form-control" maxlength="20" placeholder="09xxxxxxxxx">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sub_password">Temporary Password *</label>
+                                        <input type="password" id="sub_password" name="sub_password" class="form-control" minlength="8" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sub_user_type">User Type *</label>
+                                        <select id="sub_user_type" name="sub_user_type" class="form-select" required>
+                                            <option value="employee" selected>Employee</option>
+                                            <option value="admin">Admin</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sub_role_id">Initial Role *</label>
+                                        <select id="sub_role_id" name="sub_role_id" class="form-select" required>
+                                            <option value="">-- Choose Role --</option>
+                                            <?php foreach ($roles as $role): ?>
+                                                <option value="<?php echo (int)$role['id']; ?>">
+                                                    <?php echo htmlspecialchars(rbacRoleDisplayName($role['name'], $partner_scope_owner_id)); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <?php if (empty($roles)): ?>
+                                            <small style="color: #c62828;">Create a role first in the Create Role tab.</small>
+                                        <?php endif; ?>
+                                    </div>
+                                    <button type="submit" class="btn btn-success mt-2" <?php echo empty($roles) ? 'disabled' : ''; ?>>
+                                        <i class="fas fa-plus"></i> Create Sub-User
+                                    </button>
+                                </form>
                             </div>
-                        <?php else: ?>
-                            <div class="row g-3 mb-4">
-                                <div class="col-lg-6">
-                                    <form method="POST" class="create-role-form" style="max-width: none;">
-                                        <input type="hidden" name="action" value="create_partner_user">
+                            <div class="col-lg-6">
+                                <?php if (empty($roles)): ?>
+                                    <div class="alert alert-info mb-0">
+                                        Create at least one role first before assigning roles to team members.
+                                    </div>
+                                <?php else: ?>
+                                    <form method="POST" class="assign-user-form assign-role-form" style="max-width: none;">
+                                        <input type="hidden" name="action" value="assign_user_role">
                                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                                         <input type="hidden" name="return_tab" value="users">
-                                        <h5 class="mb-3"><i class="fas fa-user-plus"></i> Create Sub-User</h5>
+                                        <h5 class="mb-3" style="grid-column: 1 / -1;"><i class="fas fa-user-check"></i> Assign Role to Team Member</h5>
 
                                         <div class="form-group">
-                                            <label for="sub_full_name">Full Name *</label>
-                                            <input type="text" id="sub_full_name" name="sub_full_name" class="form-control" minlength="3" maxlength="100" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="sub_email">Email *</label>
-                                            <input type="email" id="sub_email" name="sub_email" class="form-control" maxlength="255" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="sub_phone">Phone</label>
-                                            <input type="text" id="sub_phone" name="sub_phone" class="form-control" maxlength="20" placeholder="09xxxxxxxxx">
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="sub_password">Temporary Password *</label>
-                                            <input type="password" id="sub_password" name="sub_password" class="form-control" minlength="8" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="sub_user_type">User Type *</label>
-                                            <select id="sub_user_type" name="sub_user_type" class="form-select" required>
-                                                <option value="employee" selected>Employee</option>
-                                                <option value="admin">Admin</option>
+                                            <label for="user_id">Select Team Member</label>
+                                            <select name="user_id" id="user_id" class="form-select" required>
+                                                <option value="">-- Choose Team Member --</option>
+                                                <?php foreach ($assignable_users as $user): ?>
+                                                    <option value="<?php echo (int)$user['id']; ?>">
+                                                        <?php echo htmlspecialchars($user['full_name']) . ' (' . htmlspecialchars($user['email']) . ')'; ?>
+                                                    </option>
+                                                <?php endforeach; ?>
                                             </select>
+                                            <?php if (empty($assignable_users)): ?>
+                                                <small style="color: #c62828;">Create a team member first.</small>
+                                            <?php endif; ?>
                                         </div>
+
                                         <div class="form-group">
-                                            <label for="sub_role_id">Initial Role *</label>
-                                            <select id="sub_role_id" name="sub_role_id" class="form-select" required>
-                                                <option value="">-- Choose Partner Role --</option>
+                                            <label for="role_id_assign">Select Role</label>
+                                            <select name="role_id" id="role_id_assign" class="form-select" required>
+                                                <option value="">-- Choose Role --</option>
                                                 <?php foreach ($roles as $role): ?>
                                                     <option value="<?php echo (int)$role['id']; ?>">
                                                         <?php echo htmlspecialchars(rbacRoleDisplayName($role['name'], $partner_scope_owner_id)); ?>
                                                     </option>
                                                 <?php endforeach; ?>
                                             </select>
-                                            <?php if (empty($roles)): ?>
-                                                <small style="color: #c62828;">Create a partner role first in the Create Role tab.</small>
-                                            <?php endif; ?>
                                         </div>
-                                        <button type="submit" class="btn btn-success mt-2" <?php echo empty($roles) ? 'disabled' : ''; ?>>
-                                            <i class="fas fa-plus"></i> Create Sub-User
+
+                                        <button type="submit" class="btn btn-primary mt-2" style="grid-column: 1/-1;" <?php echo empty($assignable_users) ? 'disabled' : ''; ?>>
+                                            <i class="fas fa-save"></i> Assign Role
                                         </button>
                                     </form>
-                                </div>
-                                <div class="col-lg-6">
-                                    <?php if (empty($roles)): ?>
-                                        <div class="alert alert-info mb-0">
-                                            Create at least one partner role first before assigning roles to team members.
-                                        </div>
-                                    <?php else: ?>
-                                        <form method="POST" class="assign-user-form assign-role-form" style="max-width: none;">
-                                            <input type="hidden" name="action" value="assign_user_role">
-                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                                            <input type="hidden" name="return_tab" value="users">
-                                            <h5 class="mb-3" style="grid-column: 1 / -1;"><i class="fas fa-user-check"></i> Assign Role to Sub-User</h5>
-
-                                            <div class="form-group">
-                                                <label for="user_id">Select Sub-User</label>
-                                                <select name="user_id" id="user_id" class="form-select" required>
-                                                    <option value="">-- Choose Sub-User --</option>
-                                                    <?php foreach ($assignable_users as $user): ?>
-                                                        <option value="<?php echo (int)$user['id']; ?>">
-                                                            <?php echo htmlspecialchars($user['full_name']) . ' (' . htmlspecialchars($user['email']) . ')'; ?>
-                                                        </option>
-                                                    <?php endforeach; ?>
-                                                </select>
-                                                <?php if (empty($assignable_users)): ?>
-                                                    <small style="color: #c62828;">Create a sub-user first.</small>
-                                                <?php endif; ?>
-                                            </div>
-
-                                            <div class="form-group">
-                                                <label for="role_id_assign">Select Partner Role</label>
-                                                <select name="role_id" id="role_id_assign" class="form-select" required>
-                                                    <option value="">-- Choose Role --</option>
-                                                    <?php foreach ($roles as $role): ?>
-                                                        <option value="<?php echo (int)$role['id']; ?>">
-                                                            <?php echo htmlspecialchars(rbacRoleDisplayName($role['name'], $partner_scope_owner_id)); ?>
-                                                        </option>
-                                                    <?php endforeach; ?>
-                                                </select>
-                                            </div>
-
-                                            <button type="submit" class="btn btn-primary mt-2" style="grid-column: 1/-1;" <?php echo empty($assignable_users) ? 'disabled' : ''; ?>>
-                                                <i class="fas fa-save"></i> Assign Role
-                                            </button>
-                                        </form>
-                                    <?php endif; ?>
-                                </div>
+                                <?php endif; ?>
                             </div>
-                        <?php endif; ?>
+                        </div>
                     <?php else: ?>
                         <div class="assign-user-form assign-role-form">
                             <form method="POST" style="grid-column: 1/-1;">
@@ -1805,13 +1835,9 @@ unset($_SESSION['success'], $_SESSION['error']);
                 <!-- CREATE ROLE TAB -->
                 <div class="tab-pane fade <?php echo $active_tab === 'create' ? 'show active' : ''; ?>" id="create" role="tabpanel">
                     <div class="card mb-4"><div class="card-body">
-                    <h2><?php echo $is_partner_owner_admin ? 'Create New Partner Role' : 'Create New Role'; ?></h2>
+                    <h2>Create New Role</h2>
+                    <p class="text-muted mb-4">Define a new operational role for your store team.</p>
                     
-                    <?php if ($is_partner_owner_admin && !$partner_roles_owner_column_exists): ?>
-                        <div class="alert alert-error">
-                            Cannot create partner roles until <code>roles.owner_user_id</code> exists. Run Tenant Scope Migration first.
-                        </div>
-                    <?php else: ?>
                     <form method="POST" class="create-role-form">
                         <input type="hidden" name="action" value="create_role">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
@@ -1841,7 +1867,6 @@ unset($_SESSION['success'], $_SESSION['error']);
                             <i class="fas fa-plus"></i> Create Role
                         </button>
                     </form>
-                    <?php endif; ?>
                 </div>
                 </div>
             </div>
