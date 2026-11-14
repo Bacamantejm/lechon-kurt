@@ -4,8 +4,10 @@ include 'auth.php';
 include '../includes/config.php';
 include '../includes/DSSInsightsService.php';
 include '../includes/PartnerBusinessEconomicsService.php';
+require_once __DIR__ . '/../includes/IngredientStockManager.php';
 
 checkAdminAccess();
+IngredientStockManager::ensureProcurementSchema($conn);
 requirePermission('mrp.view');
 $admin_info = getAdminInfo($conn);
 $admin_id = (int)($_SESSION['user_id'] ?? 0);
@@ -305,7 +307,7 @@ mrpEnsureControlSchema($conn);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
-    $mrp_manage_actions = ['create_pr', 'approve_pr', 'reject_pr', 'save_supplier', 'receive_stock', 'submit_budget_request', 'quick_add_material', 'quick_add_product', 'quick_add_ingredient', 'quick_update_ingredient', 'quick_delete_ingredient', 'create_sales_pr_draft', 'commit_roast_batch_yield'];
+    $mrp_manage_actions = ['create_pr', 'approve_pr', 'reject_pr', 'save_supplier', 'receive_stock', 'submit_budget_request', 'quick_add_material', 'quick_add_product', 'quick_add_ingredient', 'quick_update_ingredient', 'quick_delete_ingredient', 'create_sales_pr_draft', 'commit_roast_batch_yield', 'log_self_procurement', 'request_supplier_refill', 'confirm_store_receipt'];
     $finance_control_actions = ['approve_budget_request', 'reject_budget_request', 'record_supplier_payment'];
     if (in_array($action, $mrp_manage_actions, true) && !$can_manage_mrp) {
         $_SESSION['error'] = 'You do not have permission to manage procurement workflow actions.';
@@ -316,6 +318,152 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['error'] = 'Finance approval is required for this procurement control action.';
         header("Location: mrp.php?tab=budget_payments");
         exit;
+    }
+
+    // Action: Log Self-Procured Purchase (Market Trip)
+    if ($action === 'log_self_procurement' || isset($_POST['log_self_procurement'])) {
+        $vendor_name = trim($_POST['vendor_name'] ?? '');
+        $invoice_number = trim($_POST['invoice_number'] ?? '');
+        $payment_method = trim($_POST['payment_method'] ?? 'Cash');
+        $store_notes = trim($_POST['store_notes'] ?? '');
+        $total_expenses = floatval($_POST['total_expenses'] ?? 0);
+        $self_items = isset($_POST['self_items']) && is_array($_POST['self_items']) ? $_POST['self_items'] : [];
+
+        // Optional receipt photo
+        $receipt_image_path = null;
+        if (!empty($_FILES['receipt_photo']['name']) && $_FILES['receipt_photo']['error'] === UPLOAD_ERR_OK) {
+            $allowed_exts = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
+            $ext = strtolower(pathinfo($_FILES['receipt_photo']['name'], PATHINFO_EXTENSION));
+            if (in_array($ext, $allowed_exts)) {
+                $fname = 'rec_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+                $tdir = __DIR__ . '/../uploads/procurement_receipts';
+                if (!is_dir($tdir)) @mkdir($tdir, 0777, true);
+                if (move_uploaded_file($_FILES['receipt_photo']['tmp_name'], $tdir . '/' . $fname)) {
+                    $receipt_image_path = 'uploads/procurement_receipts/' . $fname;
+                }
+            }
+        }
+
+        if (empty($self_items)) {
+            $_SESSION['error'] = "Please specify at least one purchased ingredient.";
+        } else {
+            $order_code = IngredientStockManager::logSelfProcuredPurchase(
+                $conn, 
+                $scope_owner_id, 
+                $vendor_name, 
+                $self_items, 
+                $total_expenses, 
+                $invoice_number, 
+                $receipt_image_path, 
+                $payment_method, 
+                $store_notes
+            );
+
+            if ($order_code) {
+                $_SESSION['success'] = "Purchase logged ($order_code)! Stock has been replenished, affected menu items are reactivated, and expense submitted to Finance for liquidation.";
+            } else {
+                $_SESSION['error'] = "Failed to record purchase. Please verify details.";
+            }
+        }
+        header("Location: mrp.php?tab=low_stock");
+        exit();
+    }
+
+    // Action: Request Supplier Refill
+    if ($action === 'request_supplier_refill' || isset($_POST['request_supplier_refill'])) {
+        $supplier_id = intval($_POST['supplier_id'] ?? 0);
+        $urgency_level = in_array($_POST['urgency_level'] ?? '', ['normal', 'urgent', 'critical']) ? $_POST['urgency_level'] : 'normal';
+        $req_delivery_date = !empty($_POST['requested_delivery_date']) ? $_POST['requested_delivery_date'] : null;
+        $store_notes = trim($_POST['store_notes'] ?? '');
+        $refill_items = isset($_POST['items']) && is_array($_POST['items']) ? $_POST['items'] : [];
+
+        if ($supplier_id <= 0 || empty($refill_items)) {
+            $_SESSION['error'] = "Please select a supplier and at least one ingredient to refill.";
+        } else {
+            $order_code = 'SUP-' . date('Ymd') . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 5));
+
+            $ins_po = mysqli_prepare($conn, "
+                INSERT INTO supplier_orders 
+                    (order_code, supplier_id, store_id, requested_by, procurement_type, status, urgency_level, requested_delivery_date, store_notes, created_at)
+                VALUES 
+                    (?, ?, ?, ?, 'supplier', 'pending', ?, ?, ?, NOW())
+            ");
+            if ($ins_po) {
+                mysqli_stmt_bind_param($ins_po, "siiisss", $order_code, $supplier_id, $scope_owner_id, $admin_id, $urgency_level, $req_delivery_date, $store_notes);
+                mysqli_stmt_execute($ins_po);
+                $new_ord_id = mysqli_insert_id($conn);
+                mysqli_stmt_close($ins_po);
+
+                if ($new_ord_id > 0) {
+                    $ins_item = mysqli_prepare($conn, "
+                        INSERT INTO supplier_order_items (order_id, material_id, quantity_requested, quantity_supplied, unit, locked_unit_price, line_total)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    $subtotal = 0.0;
+                    foreach ($refill_items as $k => $v) {
+                        if (is_array($v)) {
+                            $mat_id = intval($v['material_id'] ?? $k);
+                            $qty_req = floatval($v['quantity'] ?? $v['qty'] ?? 0);
+                        } else {
+                            $mat_id = intval($k);
+                            $qty_req = floatval($v);
+                        }
+                        if ($mat_id > 0 && $qty_req > 0) {
+                            $sc_q = mysqli_query($conn, "SELECT wholesale_unit_price, unit FROM supplier_catalog WHERE supplier_id = $supplier_id AND material_id = $mat_id LIMIT 1");
+                            $unit_price = 0.0;
+                            $unit = 'kg';
+                            if ($sc_q && ($sc_r = mysqli_fetch_assoc($sc_q))) {
+                                $unit_price = floatval($sc_r['wholesale_unit_price']);
+                                $unit = $sc_r['unit'];
+                            } else {
+                                $mat_q = mysqli_query($conn, "SELECT unit, cost_per_unit FROM materials WHERE id = $mat_id LIMIT 1");
+                                if ($mat_q && ($mr = mysqli_fetch_assoc($mat_q))) {
+                                    $unit_price = floatval($mr['cost_per_unit']);
+                                    $unit = $mr['unit'];
+                                }
+                            }
+                            $line_tot = $qty_req * $unit_price;
+                            $subtotal += $line_tot;
+                            if ($ins_item) {
+                                mysqli_stmt_bind_param($ins_item, "iiddsdd", $new_ord_id, $mat_id, $qty_req, $qty_req, $unit, $unit_price, $line_tot);
+                                mysqli_stmt_execute($ins_item);
+                            }
+                        }
+                    }
+                    if ($ins_item) mysqli_stmt_close($ins_item);
+
+                    // Update totals
+                    mysqli_query($conn, "UPDATE supplier_orders SET subtotal_amount = $subtotal, total_amount = $subtotal WHERE id = $new_ord_id");
+
+                    // Status audit log
+                    mysqli_query($conn, "INSERT INTO supplier_order_status_logs (order_id, previous_status, new_status, action_by_user_id, notes) 
+                                         VALUES ($new_ord_id, NULL, 'pending', $admin_id, 'Refill request submitted by store')");
+
+                    $_SESSION['success'] = "Refill request $order_code submitted to supplier! The supplier will quote and route invoice to Finance for approval.";
+                }
+            } else {
+                $_SESSION['error'] = "Failed to submit refill request: " . mysqli_error($conn);
+            }
+        }
+        header("Location: mrp.php?tab=procurement_orders");
+        exit();
+    }
+
+    // Action: Confirm Store Receipt of Supplier Delivery
+    if ($action === 'confirm_store_receipt' || isset($_POST['confirm_store_receipt'])) {
+        $order_id = intval($_POST['order_id'] ?? 0);
+        $delivery_notes = trim($_POST['delivery_notes'] ?? '');
+
+        if ($order_id > 0) {
+            $ok = IngredientStockManager::confirmStoreDeliveryReceipt($conn, $order_id, $scope_owner_id, $delivery_notes);
+            if ($ok) {
+                $_SESSION['success'] = "Delivery receipt confirmed! Your ingredient inventory has been automatically incremented and final invoice settled in Finance.";
+            } else {
+                $_SESSION['error'] = "Unable to confirm delivery receipt.";
+            }
+        }
+        header("Location: mrp.php?tab=procurement_orders");
+        exit();
     }
 
     if ($action === 'commit_roast_batch_yield') {
@@ -1760,66 +1908,113 @@ foreach ($workflow_steps as &$step) {
 }
 unset($step);
 
+// Fetch affected menu products disabled due to zero-stock BOM ingredients
+$affected_menu_products = [];
+$aff_q = mysqli_query($conn, "
+    SELECT p.id, p.name AS product_name, p.category, m.name AS ingredient_name, m.current_stock, m.unit, bom.quantity_needed
+    FROM products p
+    INNER JOIN bill_of_materials bom ON bom.product_id = p.id
+    INNER JOIN materials m ON m.id = bom.material_id
+    WHERE m.current_stock <= 0 AND p.is_archived = 0" . ($seller_scope_id !== null ? " AND p.seller_id = " . (int)$seller_scope_id : "") . "
+    ORDER BY p.name ASC
+");
+if ($aff_q) {
+    while ($arow = mysqli_fetch_assoc($aff_q)) {
+        $affected_menu_products[] = $arow;
+    }
+}
+
+// Fetch procurement orders (Self-procured & supplier refill requests)
+$procurement_orders_list = [];
+$proc_scope_sql = ($seller_scope_id !== null) ? " WHERE so.store_id = " . (int)$seller_scope_id : "";
+$proc_orders_q = mysqli_query($conn, "
+    SELECT so.*, 
+           s.name AS supplier_name,
+           COUNT(soi.id) AS total_items,
+           GROUP_CONCAT(CONCAT(m.name, ' (', soi.quantity_supplied, ' ', soi.unit, ')') SEPARATOR ', ') AS items_preview
+    FROM supplier_orders so
+    LEFT JOIN suppliers s ON s.id = so.supplier_id
+    LEFT JOIN supplier_order_items soi ON soi.order_id = so.id
+    LEFT JOIN materials m ON m.id = soi.material_id
+    $proc_scope_sql
+    GROUP BY so.id
+    ORDER BY so.created_at DESC
+    LIMIT 30
+");
+if ($proc_orders_q) {
+    while ($porow = mysqli_fetch_assoc($proc_orders_q)) {
+        $procurement_orders_list[] = $porow;
+    }
+}
+
+// Fetch suppliers list for modal
+$suppliers_for_modal = [];
+$sup_q = mysqli_query($conn, "SELECT id, name, contact_person, phone, email FROM suppliers WHERE status = 'active' ORDER BY name ASC");
+if ($sup_q) {
+    while ($srow = mysqli_fetch_assoc($sup_q)) {
+        $suppliers_for_modal[] = $srow;
+    }
+}
+
+// Fetch materials for modal
+$materials_for_modal = [];
+$mat_q = mysqli_query($conn, "SELECT id, name, unit, current_stock, min_level, cost_per_unit FROM materials ORDER BY name ASC");
+if ($mat_q) {
+    while ($mrow = mysqli_fetch_assoc($mat_q)) {
+        $materials_for_modal[] = $mrow;
+    }
+}
+
 $simple_flow_steps = [
     [
         'key' => 'need_plan',
-        'title' => '1. Needs Planner',
-        'description' => 'Review low stock and sales-driven shortage alerts.',
+        'title' => '1. Needs & Low Stock',
+        'description' => 'Review raw materials and ingredients under minimum safe stock.',
         'count' => max((int)$mrp_kpis['critical_materials'], (int)($procurement_health['at_risk_materials'] ?? 0)),
-        'count_label' => 'material(s) to review',
+        'count_label' => 'ingredient(s) at risk',
         'tab' => 'low_stock',
         'action_url' => '?tab=low_stock',
-        'action_label' => 'Open Needs Planner'
+        'action_label' => 'View Stock Needs'
     ],
     [
-        'key' => 'requisition',
-        'title' => '2. Requisitions (PR)',
-        'description' => 'Create and review purchase requisitions.',
-        'count' => (int)$mrp_kpis['pending_pr'],
-        'count_label' => 'pending PR approval',
-        'tab' => 'requisitions',
-        'action_url' => '?tab=requisitions',
-        'action_label' => 'Review PRs'
+        'key' => 'procure_choice',
+        'title' => '2. Buy / Refill',
+        'description' => 'Self-procure at local market or submit B2B partner supplier refill.',
+        'count' => count($procurement_orders_list),
+        'count_label' => 'active procurement order(s)',
+        'tab' => 'procurement_orders',
+        'action_url' => '?tab=procurement_orders',
+        'action_label' => 'Manage Orders'
     ],
     [
         'key' => 'budget_approval',
-        'title' => '3. Budget Clearance',
-        'description' => 'Authorize daily finance budget for purchasing.',
+        'title' => '3. Finance Clearance',
+        'description' => 'Finance reviews supplier quotes and market expense liquidations.',
         'count' => ($today_budget_summary['approved_total'] <= 0 ? 1 : 0),
-        'count_label' => $today_budget_summary['approved_total'] > 0 ? 'budget approved today' : 'budget action needed',
+        'count_label' => $today_budget_summary['approved_total'] > 0 ? 'budget approved today' : 'finance clearance',
         'tab' => 'budget_payments',
         'action_url' => '?tab=budget_payments',
-        'action_label' => 'Manage Budget'
-    ],
-    [
-        'key' => 'purchase_orders',
-        'title' => '4. Purchase Orders',
-        'description' => 'Convert approved PRs into official supplier POs.',
-        'count' => (int)$mrp_kpis['approved_pr'],
-        'count_label' => 'approved PR ready for PO',
-        'tab' => 'purchase_orders',
-        'action_url' => '?tab=purchase_orders',
-        'action_label' => 'Create / View POs'
+        'action_label' => 'Finance Approvals'
     ],
     [
         'key' => 'receiving',
-        'title' => '5. Receive Stock',
-        'description' => 'Inspect arrivals and increment warehouse inventory.',
+        'title' => '4. Receive & Restock',
+        'description' => 'Confirm receipt of goods to automatically increment ingredient stock.',
         'count' => (int)$mrp_kpis['open_po'],
-        'count_label' => 'open PO(s) to receive',
-        'tab' => 'purchase_orders',
-        'action_url' => '?tab=purchase_orders&focus=inspect',
-        'action_label' => 'Receive Deliveries'
+        'count_label' => 'pending confirmation',
+        'tab' => 'procurement_orders',
+        'action_url' => '?tab=procurement_orders',
+        'action_label' => 'Confirm Restock'
     ],
     [
-        'key' => 'payments',
-        'title' => '6. Supplier Payments',
-        'description' => 'Disburse payments against fulfilled purchase orders.',
-        'count' => (int)($payment_kpis['unpaid_po_count'] ?? 0),
-        'count_label' => 'order(s) with balance',
-        'tab' => 'budget_payments',
-        'action_url' => '?tab=budget_payments',
-        'action_label' => 'Record Payments'
+        'key' => 'roasting',
+        'title' => '5. Roasting & Yield',
+        'description' => 'Convert raw pork and spices into finished lechon platters on the menu.',
+        'count' => 0,
+        'count_label' => 'batch roasting log',
+        'tab' => 'batch_roasting',
+        'action_url' => '?tab=batch_roasting',
+        'action_label' => 'Batch Roasting'
     ]
 ];
 
@@ -1841,7 +2036,7 @@ foreach ($simple_flow_steps as &$simple_step) {
 }
 unset($simple_step);
 
-$valid_tabs = ['requisitions', 'purchase_orders', 'low_stock', 'suppliers', 'budget_payments', 'batch_roasting'];
+$valid_tabs = ['low_stock', 'procurement_orders', 'requisitions', 'purchase_orders', 'budget_payments', 'suppliers', 'batch_roasting'];
 $requested_tab = $_GET['tab'] ?? '';
 if (!in_array($requested_tab, $valid_tabs, true)) {
     $requested_tab = '';
@@ -1856,7 +2051,7 @@ if ($auto_receive_po_id > 0) {
 } elseif ($next_workflow_step) {
     $tab = $next_workflow_step['tab'];
 } else {
-    $tab = 'requisitions';
+    $tab = 'low_stock';
 }
 
 $mrp_roast_products = [];
@@ -2139,7 +2334,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                             <span class="badge bg-success">No urgent tasks right now</span>
                         <?php endif; ?>
                     </div>
-                    <p class="small text-muted mb-2">Follow the 6-step procurement lifecycle: <strong>1. Needs Planner &rarr; 2. Requisition &rarr; 3. Budget Clearance &rarr; 4. Purchase Order &rarr; 5. Receive Stock &rarr; 6. Supplier Payment</strong>.</p>
+                    <p class="small text-muted mb-2">Process flow: <strong>1. Needs &amp; Stock Depletion &rarr; 2. Buy at Market / Refill from Supplier &rarr; 3. Finance Review &amp; Clearance &rarr; 4. Receive Delivery &amp; Auto-Restock &rarr; 5. Batch Roasting &amp; Menu Supply</strong>.</p>
                     <div class="simple-flow-grid">
                         <?php foreach ($simple_flow_steps as $simple_step): ?>
                             <div class="simple-step-card <?php echo htmlspecialchars($simple_step['state']); ?>">
@@ -2154,25 +2349,45 @@ unset($_SESSION['success'], $_SESSION['error']);
                         <?php endforeach; ?>
                     </div>
                 </div>
-<div class="small text-muted mb-2">Process order: left to right. Finish one step before moving to the next.</div>
+                <div class="small text-muted mb-2">Process order: left to right. Select a section to manage procurement operations.</div>
                 <ul class="nav nav-tabs mb-4">
                     <li class="nav-item">
-                        <a class="nav-link <?php echo $tab === 'low_stock' ? 'active' : ''; ?>" href="?tab=low_stock">1. Needs Planner</a>
+                        <a class="nav-link <?php echo $tab === 'low_stock' ? 'active' : ''; ?>" href="?tab=low_stock">
+                            <i class="fas fa-boxes-stacked me-1"></i> 1. Needs Planner &amp; Stock
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo $tab === 'requisitions' ? 'active' : ''; ?>" href="?tab=requisitions">2. Requisitions</a>
+                        <a class="nav-link <?php echo $tab === 'procurement_orders' ? 'active' : ''; ?>" href="?tab=procurement_orders">
+                            <i class="fas fa-truck-ramp-box me-1"></i> 2. Refill &amp; Restock Orders
+                            <?php if (!empty($procurement_orders_list)): ?>
+                                <span class="badge rounded-pill bg-danger ms-1"><?= count($procurement_orders_list) ?></span>
+                            <?php endif; ?>
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo $tab === 'purchase_orders' ? 'active' : ''; ?>" href="?tab=purchase_orders">3. Delivery & Receiving</a>
+                        <a class="nav-link <?php echo $tab === 'requisitions' ? 'active' : ''; ?>" href="?tab=requisitions">
+                            3. Requisitions (PR)
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo $tab === 'budget_payments' ? 'active' : ''; ?>" href="?tab=budget_payments">4. Budget & Payments</a>
+                        <a class="nav-link <?php echo $tab === 'purchase_orders' ? 'active' : ''; ?>" href="?tab=purchase_orders">
+                            4. Purchase Orders (PO)
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo $tab === 'suppliers' ? 'active' : ''; ?>" href="?tab=suppliers">Optional: Suppliers</a>
+                        <a class="nav-link <?php echo $tab === 'budget_payments' ? 'active' : ''; ?>" href="?tab=budget_payments">
+                            5. Finance &amp; Budgets
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo $tab === 'batch_roasting' ? 'active' : ''; ?>" href="?tab=batch_roasting"><i class="fas fa-fire"></i> 5. Batch Roasting &amp; Yield</a>
+                        <a class="nav-link <?php echo $tab === 'suppliers' ? 'active' : ''; ?>" href="?tab=suppliers">
+                            Optional: Suppliers
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo $tab === 'batch_roasting' ? 'active' : ''; ?>" href="?tab=batch_roasting">
+                            <i class="fas fa-fire me-1"></i> 6. Batch Roasting &amp; Yield
+                        </a>
                     </li>
                 </ul>
 
@@ -2333,170 +2548,417 @@ unset($_SESSION['success'], $_SESSION['error']);
                         </table>
                     </div>
 
+                    <!-- Refill & Restock Orders Tab -->
+                    <div class="tab-pane fade <?php echo $tab === 'procurement_orders' ? 'show active' : ''; ?>" id="procurement_orders">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                            <div>
+                                <h4 class="fw-bold mb-1" style="font-family:'Outfit',sans-serif; color:#101828;">
+                                    Refill &amp; Restock Orders Tracker
+                                </h4>
+                                <p class="text-muted small mb-0">
+                                    Monitor incoming supplier deliveries, finance approval stages, and self-procured receipts.
+                                </p>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <button type="button" class="btn btn-sm btn-success fw-bold" data-bs-toggle="modal" data-bs-target="#logSelfProcureModal">
+                                    <i class="fas fa-receipt me-1"></i> Log Market Purchase
+                                </button>
+                                <button type="button" class="btn btn-sm btn-danger fw-bold" style="background:#b3261e; border-color:#b3261e;" data-bs-toggle="modal" data-bs-target="#supplierRefillModal">
+                                    <i class="fas fa-paper-plane me-1"></i> New Supplier Refill
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive bg-white rounded-3 border" style="box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
+                            <table class="admin-table table-hover mb-0 align-middle">
+                                <thead>
+                                    <tr style="background:#f8f9fa;">
+                                        <th>Order Code</th>
+                                        <th>Procurement Channel</th>
+                                        <th>Vendor / Supplier</th>
+                                        <th>Supplied Ingredients</th>
+                                        <th class="text-end">Total (₱)</th>
+                                        <th>Finance Status</th>
+                                        <th>Order Status</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($procurement_orders_list)): ?>
+                                        <tr>
+                                            <td colspan="8" class="text-center py-5 text-muted">
+                                                <i class="fas fa-clipboard-check fa-2x mb-2 text-secondary d-block"></i>
+                                                No procurement orders recorded yet. Request a supplier refill or log a market purchase to get started.
+                                            </td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($procurement_orders_list as $por): 
+                                            $is_self = ($por['procurement_type'] ?? '') === 'self_procured';
+                                            $st = $por['status'];
+                                            $f_st = $por['finance_status'] ?? 'pending';
+                                        ?>
+                                            <tr>
+                                                <td>
+                                                    <div class="fw-bold text-dark"><?= htmlspecialchars($por['order_code']) ?></div>
+                                                    <div class="small text-muted"><?= date('M d, Y h:i A', strtotime($por['created_at'])) ?></div>
+                                                </td>
+                                                <td>
+                                                    <?php if ($is_self): ?>
+                                                        <span class="badge bg-secondary mb-1">
+                                                            <i class="fas fa-basket-shopping me-1"></i> Self-Procured
+                                                        </span>
+                                                        <div class="small text-muted">Direct Market Purchase</div>
+                                                    <?php else: ?>
+                                                        <span class="badge bg-primary mb-1">
+                                                            <i class="fas fa-truck-ramp-box me-1"></i> Partner Supplier
+                                                        </span>
+                                                        <div class="small text-muted">B2B Refill Request</div>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <div class="fw-bold text-dark">
+                                                        <?= htmlspecialchars($is_self ? ($por['vendor_name'] ?: 'Local Market') : ($por['supplier_name'] ?: 'Wholesale Supplier')) ?>
+                                                    </div>
+                                                </td>
+                                                <td style="max-width: 260px;">
+                                                    <div class="small fw-semibold text-dark">
+                                                        <i class="fas fa-boxes-stacked me-1 text-secondary"></i> <?= (int)$por['total_items'] ?> line item(s)
+                                                    </div>
+                                                    <div class="text-truncate small text-muted" title="<?= htmlspecialchars($por['items_preview'] ?? '') ?>">
+                                                        <?= htmlspecialchars($por['items_preview'] ?? 'Custom items') ?>
+                                                    </div>
+                                                </td>
+                                                <td class="text-end fw-bold text-danger" style="font-size:1rem;">
+                                                    ₱<?= number_format((float)$por['total_amount'], 2) ?>
+                                                </td>
+                                                <td>
+                                                    <?php if ($f_st === 'approved'): ?>
+                                                        <span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Finance Approved</span>
+                                                    <?php elseif ($f_st === 'rejected'): ?>
+                                                        <span class="badge bg-danger"><i class="fas fa-times-circle me-1"></i> Rejected</span>
+                                                    <?php else: ?>
+                                                        <span class="badge bg-warning text-dark"><i class="fas fa-hourglass-half me-1"></i> Pending Review</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-<?php 
+                                                        echo match($st) {
+                                                            'pending' => 'warning text-dark',
+                                                            'awaiting_finance_approval' => 'warning text-dark',
+                                                            'finance_approved' => 'info text-dark',
+                                                            'accepted', 'processing' => 'info text-dark',
+                                                            'packed', 'in_transit' => 'primary',
+                                                            'completed' => 'success',
+                                                            default => 'secondary'
+                                                        }; 
+                                                    ?>">
+                                                        <?= ucfirst(str_replace('_', ' ', $st)) ?>
+                                                    </span>
+                                                </td>
+                                                <td class="text-end">
+                                                    <?php if (!$is_self && in_array($st, ['in_transit', 'packed', 'finance_approved', 'processing'])): ?>
+                                                        <form method="POST" style="margin:0; display:inline-block;" onsubmit="return confirm('Confirm that items for <?= htmlspecialchars($por['order_code']) ?> have arrived at your store? This will automatically increment your ingredient stock and unblock applicable menu items.');">
+                                                            <input type="hidden" name="action" value="confirm_store_receipt">
+                                                            <input type="hidden" name="order_id" value="<?= (int)$por['id'] ?>">
+                                                            <button type="submit" class="btn btn-sm btn-success fw-bold">
+                                                                <i class="fas fa-check-double me-1"></i> Confirm Received
+                                                            </button>
+                                                        </form>
+                                                    <?php elseif ($st === 'completed'): ?>
+                                                        <span class="badge bg-success p-2">
+                                                            <i class="fas fa-box-open me-1"></i> Restocked
+                                                        </span>
+                                                    <?php else: ?>
+                                                        <span class="text-muted small">In Process</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <!-- Low Stock Tab -->
                     <div class="tab-pane fade <?php echo $tab === 'low_stock' ? 'show active' : ''; ?>" id="low_stock">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h4>Inventory Needs (Low Stock)</h4>
-                            <?php if ($seller_scope_id === null): ?>
-                                <a href="materials.php" class="btn btn-outline-primary"><i class="fas fa-boxes"></i> Manage All Materials</a>
-                            <?php endif; ?>
+                        <!-- Top Header with Primary Actions -->
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                            <div>
+                                <h4 class="fw-bold mb-1" style="font-family:'Outfit',sans-serif; color:#101828;">
+                                    Inventory Needs &amp; Stock Depletion Monitor
+                                </h4>
+                                <p class="text-muted small mb-0">
+                                    Monitor live ingredient stocks, affected menu availability, and trigger procurement via local market purchase or partner supplier refill.
+                                </p>
+                            </div>
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <a href="../shopping_list.php" target="_blank" class="btn btn-outline-success btn-sm fw-bold">
+                                    <i class="fas fa-list-check me-1"></i> Mobile Shopping List
+                                </a>
+                                <button type="button" class="btn btn-success btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#logSelfProcureModal">
+                                    <i class="fas fa-receipt me-1"></i> Log Market Purchase
+                                </button>
+                                <button type="button" class="btn btn-danger btn-sm fw-bold" style="background:#b3261e; border-color:#b3261e;" data-bs-toggle="modal" data-bs-target="#supplierRefillModal">
+                                    <i class="fas fa-paper-plane me-1"></i> Refill from Supplier
+                                </button>
+                                <?php if ($seller_scope_id === null): ?>
+                                    <a href="materials.php" class="btn btn-outline-secondary btn-sm"><i class="fas fa-boxes me-1"></i> All Materials</a>
+                                <?php endif; ?>
+                            </div>
                         </div>
-                        <div id="setup-inputs" class="mb-3">
-                            <div class="alert alert-warning border mb-3">
-                                <strong>Quick Setup:</strong> Add your material, create a product, then link ingredient quantity per product.
-                            </div>
-                            <div class="setup-grid">
-                                <div class="setup-card">
-                                    <h6><i class="fas fa-box-open text-danger"></i> Add Material</h6>
-                                    <p class="help">Define stock unit and costing so requisition estimates are accurate.</p>
-                                    <form method="POST">
-                                        <input type="hidden" name="action" value="quick_add_material">
-                                        <div class="mb-2">
-                                            <label class="form-label">Material Name</label>
-                                            <input type="text" name="setup_material_name" class="form-control" required>
-                                        </div>
-                                        <div class="row g-2">
-                                            <div class="col-6">
-                                                <label class="form-label">Unit</label>
-                                                <input type="text" name="setup_material_unit" class="form-control" placeholder="kg, pcs, L" required>
-                                            </div>
-                                            <div class="col-6">
-                                                <label class="form-label">Cost / Unit</label>
-                                                <input type="number" name="setup_material_cost_per_unit" class="form-control" step="0.01" min="0" value="0">
-                                            </div>
-                                        </div>
-                                        <div class="row g-2 mt-1">
-                                            <div class="col-6">
-                                                <label class="form-label">Current Stock</label>
-                                                <input type="number" name="setup_material_current_stock" class="form-control" step="0.01" min="0" value="0">
-                                            </div>
-                                            <div class="col-6">
-                                                <label class="form-label">Min Level</label>
-                                                <input type="number" name="setup_material_min_level" class="form-control" step="0.01" min="0" value="10">
-                                            </div>
-                                        </div>
-                                        <button type="submit" class="btn btn-sm btn-primary mt-3" <?php echo $can_manage_mrp ? '' : 'disabled'; ?>>
-                                            Save Material
-                                        </button>
-                                    </form>
-                                </div>
 
-                                <div class="setup-card">
-                                    <h6><i class="fas fa-utensils text-danger"></i> Add Product</h6>
-                                    <p class="help">Quick-create a menu item. You can add image and advanced details later in Products.</p>
-                                    <form method="POST">
-                                        <input type="hidden" name="action" value="quick_add_product">
-                                        <div class="mb-2">
-                                            <label class="form-label">Product Name</label>
-                                            <input type="text" name="setup_product_name" class="form-control" required>
+                        <!-- Dual-Flow Procurement Pathway Cards -->
+                        <div class="row g-3 mb-4">
+                            <!-- Pathway 1: Self-Procurement -->
+                            <div class="col-md-6">
+                                <div class="card p-3 h-100" style="border: 1px solid #eaecf0; border-radius: 12px; background: #ffffff; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <div style="width:36px; height:36px; border-radius:8px; background:#ecfdf3; color:#027a48; display:flex; align-items:center; justify-content:center; font-size:1.1rem;">
+                                            <i class="fas fa-basket-shopping"></i>
                                         </div>
-                                        <div class="row g-2">
-                                            <div class="col-7">
-                                                <label class="form-label">Category</label>
-                                                <input type="text" name="setup_product_category" class="form-control" placeholder="Whole Lechon, Platters, Sides" required>
-                                            </div>
-                                            <div class="col-5">
-                                                <label class="form-label">Price (PHP)</label>
-                                                <input type="number" name="setup_product_price" class="form-control" step="0.01" min="0.01" required>
-                                            </div>
+                                        <div>
+                                            <h6 class="fw-bold mb-0 text-dark">Self-Procurement (Local Market Trip)</h6>
+                                            <span class="small text-muted">Shop owner buys stock directly at wet market or supermarket</span>
                                         </div>
-                                        <div class="mt-2">
-                                            <label class="form-label">Description (Optional)</label>
-                                            <textarea name="setup_product_description" class="form-control" rows="2"></textarea>
-                                        </div>
-                                        <button type="submit" class="btn btn-sm btn-primary mt-3" <?php echo $can_manage_mrp ? '' : 'disabled'; ?>>
-                                            Save Product
+                                    </div>
+                                    <p class="small text-secondary mb-3">
+                                        Take the interactive shopping checklist to the market on your phone, then log the purchase receipt to restock your ingredients immediately and route the expense to Finance.
+                                    </p>
+                                    <div class="d-flex gap-2 mt-auto">
+                                        <a href="../shopping_list.php" target="_blank" class="btn btn-sm btn-outline-success fw-bold">
+                                            <i class="fas fa-list-check me-1"></i> Open Shopping List
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-success fw-bold" data-bs-toggle="modal" data-bs-target="#logSelfProcureModal">
+                                            <i class="fas fa-receipt me-1"></i> Log Market Purchase
                                         </button>
-                                    </form>
-                                </div>
-
-                                <div class="setup-card">
-                                    <h6><i class="fas fa-link text-danger"></i> Link Ingredient (BOM)</h6>
-                                    <p class="help">Connect one product to one material with quantity needed per order/unit.</p>
-                                    <form method="POST">
-                                        <input type="hidden" name="action" value="quick_add_ingredient">
-                                        <div class="mb-2">
-                                            <label class="form-label">Product</label>
-                                            <select name="setup_ingredient_product_id" class="form-select" required>
-                                                <option value="">-- Select Product --</option>
-                                                <?php foreach ($setup_products as $setup_product): ?>
-                                                    <option value="<?php echo (int)$setup_product['id']; ?>">
-                                                        <?php echo htmlspecialchars((string)$setup_product['name']); ?> (<?php echo htmlspecialchars((string)($setup_product['category'] ?? 'N/A')); ?>)
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                        <div class="mb-2">
-                                            <label class="form-label">Material</label>
-                                            <select name="setup_ingredient_material_id" class="form-select" required>
-                                                <option value="">-- Select Material --</option>
-                                                <?php foreach ($setup_materials as $setup_material): ?>
-                                                    <option value="<?php echo (int)$setup_material['id']; ?>">
-                                                        <?php echo htmlspecialchars((string)$setup_material['name']); ?> (<?php echo htmlspecialchars((string)$setup_material['unit']); ?>)
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                        <div class="mb-2">
-                                            <label class="form-label">Quantity Needed</label>
-                                            <input type="number" name="setup_ingredient_qty" class="form-control" step="0.01" min="0.01" placeholder="e.g. 0.35" required>
-                                        </div>
-                                        <button type="submit" class="btn btn-sm btn-primary mt-2" <?php echo ($can_manage_mrp && !empty($setup_products) && !empty($setup_materials)) ? '' : 'disabled'; ?>>
-                                            Save Ingredient Link
-                                        </button>
-                                        <?php if (empty($setup_products)): ?>
-                                            <div class="small text-danger mt-2">Create at least 1 product first.</div>
-                                        <?php elseif (empty($setup_materials)): ?>
-                                            <div class="small text-danger mt-2">Add at least 1 material first.</div>
-                                        <?php endif; ?>
-                                    </form>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="setup-summary">
-                                <div class="title">Latest Ingredient Mappings</div>
-                                <div class="table-responsive">
-                                    <table class="admin-table mb-0">
-                                        <thead>
-                                            <tr>
-                                                <th>Product</th>
-                                                <th>Material</th>
-                                                <th>Qty Needed</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php if (!empty($setup_ingredient_rows)): ?>
-                                                <?php foreach ($setup_ingredient_rows as $setup_ingredient): ?>
+
+                            <!-- Pathway 2: Partner Supplier Refill -->
+                            <div class="col-md-6">
+                                <div class="card p-3 h-100" style="border: 1px solid #eaecf0; border-radius: 12px; background: #ffffff; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <div style="width:36px; height:36px; border-radius:8px; background:#eff8ff; color:#175cd3; display:flex; align-items:center; justify-content:center; font-size:1.1rem;">
+                                            <i class="fas fa-truck-ramp-box"></i>
+                                        </div>
+                                        <div>
+                                            <h6 class="fw-bold mb-0 text-dark">Supplier Procurement (Partner Wholesale Refill)</h6>
+                                            <span class="small text-muted">B2B procurement with quotes, finance approval &amp; dispatch</span>
+                                        </div>
+                                    </div>
+                                    <p class="small text-secondary mb-3">
+                                        Send a refill request to an accredited partner supplier. The supplier quotes and sends the invoice to Finance. Once approved, the supplier dispatches and you confirm receipt to restock.
+                                    </p>
+                                    <div class="d-flex gap-2 mt-auto">
+                                        <button type="button" class="btn btn-sm btn-danger fw-bold" style="background:#b3261e; border-color:#b3261e;" data-bs-toggle="modal" data-bs-target="#supplierRefillModal">
+                                            <i class="fas fa-paper-plane me-1"></i> Refill from Supplier
+                                        </button>
+                                        <a href="?tab=procurement_orders" class="btn btn-sm btn-outline-secondary fw-semibold">
+                                            <i class="fas fa-boxes-stacked me-1"></i> Track Refill Requests
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Menu Out-of-Stock Impact Alert -->
+                        <?php if (!empty($affected_menu_products)): ?>
+                            <div class="alert alert-danger d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 p-3 mb-4" style="background:#fff1f0; border:1px solid #fee4e2; border-radius:12px; color:#b3261e;">
+                                <div class="d-flex align-items-center gap-3">
+                                    <i class="fas fa-triangle-exclamation fa-2x"></i>
+                                    <div>
+                                        <strong style="font-size:0.95rem;">Menu Out-of-Stock Alert: <?= count($affected_menu_products) ?> item(s) currently deactivated on live menu</strong>
+                                        <div class="small">The following items cannot be ordered by customers because essential raw ingredients are at 0 stock:</div>
+                                        <div class="d-flex flex-wrap gap-2 mt-2">
+                                            <?php foreach (array_slice($affected_menu_products, 0, 8) as $aff): ?>
+                                                <span class="badge bg-white text-danger border border-danger-subtle px-2 py-1" style="font-size:0.8rem;">
+                                                    <i class="fas fa-ban me-1"></i> <?= htmlspecialchars($aff['product_name']) ?> <span class="text-muted">(Needs: <?= htmlspecialchars($aff['ingredient_name']) ?> 0 <?= htmlspecialchars($aff['unit']) ?>)</span>
+                                                </span>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2 flex-shrink-0">
+                                    <button type="button" class="btn btn-danger btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#logSelfProcureModal">
+                                        <i class="fas fa-bolt me-1"></i> Restock Now
+                                    </button>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+
+                        <!-- Collapsible Recipe & Raw Material Setup Tools Drawer -->
+                        <div class="card mb-4" style="border: 1px solid #eaecf0; border-radius: 12px; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
+                            <div class="card-header bg-white py-3 px-3 d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#setup-inputs" style="cursor: pointer;">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="fas fa-sliders text-danger"></i>
+                                    <strong style="color: #101828; font-size: 0.95rem;">Recipe &amp; Raw Material Setup Tools (BOM)</strong>
+                                    <span class="badge bg-light text-muted border">Optional Menu &amp; Material Configuration</span>
+                                </div>
+                                <button class="btn btn-sm btn-outline-secondary py-1 px-3" type="button">
+                                    <i class="fas fa-chevron-down me-1"></i> Toggle Setup Forms
+                                </button>
+                            </div>
+                            <div id="setup-inputs" class="collapse">
+                                <div class="card-body p-3 border-top">
+                                    <div class="alert alert-warning border mb-3">
+                                        <strong>Quick Setup:</strong> Add your material, create a product, then link ingredient quantity per product.
+                                    </div>
+                                    <div class="setup-grid">
+                                        <div class="setup-card">
+                                            <h6><i class="fas fa-box-open text-danger"></i> Add Material</h6>
+                                            <p class="help">Define stock unit and costing so requisition estimates are accurate.</p>
+                                            <form method="POST">
+                                                <input type="hidden" name="action" value="quick_add_material">
+                                                <div class="mb-2">
+                                                    <label class="form-label">Material Name</label>
+                                                    <input type="text" name="setup_material_name" class="form-control" required>
+                                                </div>
+                                                <div class="row g-2">
+                                                    <div class="col-6">
+                                                        <label class="form-label">Unit</label>
+                                                        <input type="text" name="setup_material_unit" class="form-control" placeholder="kg, pcs, L" required>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label class="form-label">Cost / Unit</label>
+                                                        <input type="number" name="setup_material_cost_per_unit" class="form-control" step="0.01" min="0" value="0">
+                                                    </div>
+                                                </div>
+                                                <div class="row g-2 mt-1">
+                                                    <div class="col-6">
+                                                        <label class="form-label">Current Stock</label>
+                                                        <input type="number" name="setup_material_current_stock" class="form-control" step="0.01" min="0" value="0">
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label class="form-label">Min Level</label>
+                                                        <input type="number" name="setup_material_min_level" class="form-control" step="0.01" min="0" value="10">
+                                                    </div>
+                                                </div>
+                                                <button type="submit" class="btn btn-sm btn-primary mt-3" <?php echo $can_manage_mrp ? '' : 'disabled'; ?>>
+                                                    Save Material
+                                                </button>
+                                            </form>
+                                        </div>
+
+                                        <div class="setup-card">
+                                            <h6><i class="fas fa-utensils text-danger"></i> Add Product</h6>
+                                            <p class="help">Quick-create a menu item. You can add image and advanced details later in Products.</p>
+                                            <form method="POST">
+                                                <input type="hidden" name="action" value="quick_add_product">
+                                                <div class="mb-2">
+                                                    <label class="form-label">Product Name</label>
+                                                    <input type="text" name="setup_product_name" class="form-control" required>
+                                                </div>
+                                                <div class="row g-2">
+                                                    <div class="col-7">
+                                                        <label class="form-label">Category</label>
+                                                        <input type="text" name="setup_product_category" class="form-control" placeholder="Whole Lechon, Platters, Sides" required>
+                                                    </div>
+                                                    <div class="col-5">
+                                                        <label class="form-label">Price (PHP)</label>
+                                                        <input type="number" name="setup_product_price" class="form-control" step="0.01" min="0.01" required>
+                                                    </div>
+                                                </div>
+                                                <div class="mt-2">
+                                                    <label class="form-label">Description (Optional)</label>
+                                                    <textarea name="setup_product_description" class="form-control" rows="2"></textarea>
+                                                </div>
+                                                <button type="submit" class="btn btn-sm btn-primary mt-3" <?php echo $can_manage_mrp ? '' : 'disabled'; ?>>
+                                                    Save Product
+                                                </button>
+                                            </form>
+                                        </div>
+
+                                        <div class="setup-card">
+                                            <h6><i class="fas fa-link text-danger"></i> Link Ingredient (BOM)</h6>
+                                            <p class="help">Connect one product to one material with quantity needed per order/unit.</p>
+                                            <form method="POST">
+                                                <input type="hidden" name="action" value="quick_add_ingredient">
+                                                <div class="mb-2">
+                                                    <label class="form-label">Product</label>
+                                                    <select name="setup_ingredient_product_id" class="form-select" required>
+                                                        <option value="">-- Select Product --</option>
+                                                        <?php foreach ($setup_products as $setup_product): ?>
+                                                            <option value="<?php echo (int)$setup_product['id']; ?>">
+                                                                <?php echo htmlspecialchars((string)$setup_product['name']); ?> (<?php echo htmlspecialchars((string)($setup_product['category'] ?? 'N/A')); ?>)
+                                                            </option>
+                                                        <?php endforeach; ?>
+                                                    </select>
+                                                </div>
+                                                <div class="mb-2">
+                                                    <label class="form-label">Material</label>
+                                                    <select name="setup_ingredient_material_id" class="form-select" required>
+                                                        <option value="">-- Select Material --</option>
+                                                        <?php foreach ($setup_materials as $setup_material): ?>
+                                                            <option value="<?php echo (int)$setup_material['id']; ?>">
+                                                                <?php echo htmlspecialchars((string)$setup_material['name']); ?> (<?php echo htmlspecialchars((string)$setup_material['unit']); ?>)
+                                                            </option>
+                                                        <?php endforeach; ?>
+                                                    </select>
+                                                </div>
+                                                <div class="mb-2">
+                                                    <label class="form-label">Quantity Needed</label>
+                                                    <input type="number" name="setup_ingredient_qty" class="form-control" step="0.01" min="0.01" placeholder="e.g. 0.35" required>
+                                                </div>
+                                                <button type="submit" class="btn btn-sm btn-primary mt-2" <?php echo ($can_manage_mrp && !empty($setup_products) && !empty($setup_materials)) ? '' : 'disabled'; ?>>
+                                                    Save Ingredient Link
+                                                </button>
+                                                <?php if (empty($setup_products)): ?>
+                                                    <div class="small text-danger mt-2">Create at least 1 product first.</div>
+                                                <?php elseif (empty($setup_materials)): ?>
+                                                    <div class="small text-danger mt-2">Add at least 1 material first.</div>
+                                                <?php endif; ?>
+                                            </form>
+                                        </div>
+                                    </div>
+                                    <div class="setup-summary">
+                                        <div class="title">Latest Ingredient Mappings</div>
+                                        <div class="table-responsive">
+                                            <table class="admin-table mb-0">
+                                                <thead>
                                                     <tr>
-                                                        <td><?php echo htmlspecialchars((string)$setup_ingredient['product_name']); ?></td>
-                                                        <td><?php echo htmlspecialchars((string)$setup_ingredient['material_name']); ?></td>
-                                                        <td><?php echo number_format((float)($setup_ingredient['quantity_needed'] ?? 0), 2) . ' ' . htmlspecialchars((string)($setup_ingredient['unit'] ?? '')); ?></td>
-                                                        <td>
-                                                            <div class="setup-inline-actions">
-                                                                <form method="POST" class="setup-inline-form">
-                                                                    <input type="hidden" name="action" value="quick_update_ingredient">
-                                                                    <input type="hidden" name="setup_bom_id" value="<?php echo (int)$setup_ingredient['id']; ?>">
-                                                                    <input type="number" name="setup_ingredient_qty_edit" class="form-control form-control-sm" step="0.01" min="0.01" value="<?php echo number_format((float)($setup_ingredient['quantity_needed'] ?? 0), 2, '.', ''); ?>" <?php echo $can_manage_mrp ? '' : 'disabled'; ?>>
-                                                                    <button type="submit" class="btn btn-sm btn-outline-primary" <?php echo $can_manage_mrp ? '' : 'disabled'; ?>>
-                                                                        Save
-                                                                    </button>
-                                                                </form>
-                                                                <form method="POST" onsubmit="return confirm('Remove this ingredient mapping?');">
-                                                                    <input type="hidden" name="action" value="quick_delete_ingredient">
-                                                                    <input type="hidden" name="setup_bom_id" value="<?php echo (int)$setup_ingredient['id']; ?>">
-                                                                    <button type="submit" class="btn btn-sm btn-outline-danger" <?php echo $can_manage_mrp ? '' : 'disabled'; ?>>
-                                                                        Delete
-                                                                    </button>
-                                                                </form>
-                                                            </div>
-                                                        </td>
+                                                        <th>Product</th>
+                                                        <th>Material</th>
+                                                        <th>Qty Needed</th>
+                                                        <th>Actions</th>
                                                     </tr>
-                                                <?php endforeach; ?>
-                                            <?php else: ?>
-                                                <tr><td colspan="4" class="text-center text-muted">No ingredient mapping yet.</td></tr>
-                                            <?php endif; ?>
-                                        </tbody>
-                                    </table>
+                                                </thead>
+                                                <tbody>
+                                                    <?php if (!empty($setup_ingredient_rows)): ?>
+                                                        <?php foreach ($setup_ingredient_rows as $setup_ingredient): ?>
+                                                            <tr>
+                                                                <td><?php echo htmlspecialchars((string)$setup_ingredient['product_name']); ?></td>
+                                                                <td><?php echo htmlspecialchars((string)$setup_ingredient['material_name']); ?></td>
+                                                                <td><?php echo number_format((float)($setup_ingredient['quantity_needed'] ?? 0), 2) . ' ' . htmlspecialchars((string)($setup_ingredient['unit'] ?? '')); ?></td>
+                                                                <td>
+                                                                    <div class="setup-inline-actions">
+                                                                        <form method="POST" class="setup-inline-form">
+                                                                            <input type="hidden" name="action" value="quick_update_ingredient">
+                                                                            <input type="hidden" name="setup_bom_id" value="<?php echo (int)$setup_ingredient['id']; ?>">
+                                                                            <input type="number" name="setup_ingredient_qty_edit" class="form-control form-control-sm" step="0.01" min="0.01" value="<?php echo number_format((float)($setup_ingredient['quantity_needed'] ?? 0), 2, '.', ''); ?>" <?php echo $can_manage_mrp ? '' : 'disabled'; ?>>
+                                                                            <button type="submit" class="btn btn-sm btn-outline-primary" <?php echo $can_manage_mrp ? '' : 'disabled'; ?>>
+                                                                                Save
+                                                                            </button>
+                                                                        </form>
+                                                                        <form method="POST" onsubmit="return confirm('Remove this ingredient mapping?');">
+                                                                            <input type="hidden" name="action" value="quick_delete_ingredient">
+                                                                            <input type="hidden" name="setup_bom_id" value="<?php echo (int)$setup_ingredient['id']; ?>">
+                                                                            <button type="submit" class="btn btn-sm btn-outline-danger" <?php echo $can_manage_mrp ? '' : 'disabled'; ?>>
+                                                                                Delete
+                                                                            </button>
+                                                                        </form>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        <?php endforeach; ?>
+                                                    <?php else: ?>
+                                                        <tr><td colspan="4" class="text-center text-muted">No ingredient mapping yet.</td></tr>
+                                                    <?php endif; ?>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -2724,13 +3186,29 @@ unset($_SESSION['success'], $_SESSION['error']);
                                                 </span>
                                             </td>
                                             <td>
-                                                <button
-                                                    class="btn btn-sm btn-warning"
-                                                    onclick="openPRModalWithItem(<?php echo (int)$plan['id']; ?>, <?php echo number_format($plan_suggested_qty > 0 ? $plan_suggested_qty : max(0.01, (float)($plan['min_level'] ?? 0)), 2, '.', ''); ?>)"
-                                                    <?php echo (!$can_manage_mrp || $plan_suggested_qty <= 0) ? 'disabled' : ''; ?>
-                                                >
-                                                    <i class="fas fa-file-alt"></i> Create PR
-                                                </button>
+                                                <div class="dropdown">
+                                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" <?php echo (!$can_manage_mrp || $plan_suggested_qty <= 0) ? 'disabled' : ''; ?>>
+                                                        <i class="fas fa-bolt me-1"></i> Restock
+                                                    </button>
+                                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm border" style="font-size: 13px;">
+                                                        <li>
+                                                            <a class="dropdown-item text-success fw-bold" href="javascript:void(0)" onclick="quickSelfProcure(<?php echo (int)$plan['id']; ?>, '<?php echo htmlspecialchars(addslashes((string)$plan['name'])); ?>', '<?php echo htmlspecialchars(addslashes($plan_unit)); ?>', <?php echo number_format($plan_suggested_qty > 0 ? $plan_suggested_qty : max(0.01, (float)($plan['min_level'] ?? 0)), 2, '.', ''); ?>, <?php echo (float)($plan['avg_unit_cost'] ?? 0); ?>)">
+                                                                <i class="fas fa-cart-shopping me-2"></i> Log Market Buy
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <a class="dropdown-item text-danger fw-bold" href="javascript:void(0)" onclick="quickSupplierRefill(<?php echo (int)$plan['id']; ?>, <?php echo number_format($plan_suggested_qty > 0 ? $plan_suggested_qty : max(0.01, (float)($plan['min_level'] ?? 0)), 2, '.', ''); ?>)">
+                                                                <i class="fas fa-truck-fast me-2"></i> Supplier Refill
+                                                            </a>
+                                                        </li>
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li>
+                                                            <a class="dropdown-item text-muted" href="javascript:void(0)" onclick="openPRModalWithItem(<?php echo (int)$plan['id']; ?>, <?php echo number_format($plan_suggested_qty > 0 ? $plan_suggested_qty : max(0.01, (float)($plan['min_level'] ?? 0)), 2, '.', ''); ?>)">
+                                                                <i class="fas fa-file-alt me-2"></i> Create Internal PR
+                                                            </a>
+                                                        </li>
+                                                    </ul>
+                                                </div>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -3504,6 +3982,260 @@ unset($_SESSION['success'], $_SESSION['error']);
         </div>
     </div>
 
+    <!-- Modal: Log Self-Procurement (Market / Grocery Trip) -->
+    <div class="modal fade modern-form-modal" id="logSelfProcureModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+                <form method="POST" enctype="multipart/form-data" id="selfProcureForm">
+                    <input type="hidden" name="action" value="log_self_procurement">
+                    <div class="modal-header bg-light border-bottom px-4 py-3">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="d-flex align-items-center justify-content-center bg-success text-white rounded-circle" style="width: 44px; height: 44px; font-size: 1.2rem;">
+                                <i class="fas fa-cart-shopping"></i>
+                            </div>
+                            <div>
+                                <h5 class="modal-title fw-bold mb-0 text-dark">Log Self-Procured Purchase</h5>
+                                <p class="modal-subtitle text-muted small mb-0">Record local market/grocery purchases to replenish inventory immediately & route expense to Finance.</p>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="alert alert-success d-flex align-items-center gap-2 mb-3" style="background:#ecfdf3; border-color:#abefc6; color:#027a48; font-size: 13px;">
+                            <i class="fas fa-bolt"></i>
+                            <div><strong>Instant Restock:</strong> Submitting this receipt immediately increments your ingredient stock on-hand and unblocks applicable menu items.</div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small text-secondary">Vendor / Market Name <span class="text-danger">*</span></label>
+                                <input type="text" name="vendor_name" class="form-control" placeholder="e.g. Mega Wholesale Market, Poblacion Wet Market" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small text-secondary">Official Receipt / Invoice # (Optional)</label>
+                                <input type="text" name="invoice_number" class="form-control" placeholder="e.g. OR-2026-9912">
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold small text-secondary">Payment Method</label>
+                                <select name="payment_method" class="form-select">
+                                    <option value="Cash" selected>Cash (Store / Petty Cash)</option>
+                                    <option value="GCash">GCash</option>
+                                    <option value="Maya">Maya</option>
+                                    <option value="Bank Transfer">Bank Transfer</option>
+                                    <option value="Personal Card">Personal Card / Out-of-Pocket</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold small text-secondary">Total Expenses Paid (&#8369;) <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">&#8369;</span>
+                                    <input type="number" step="0.01" min="0" name="total_expenses" id="selfProcureTotalExpenses" class="form-control fw-bold" placeholder="0.00" required>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold small text-secondary">Receipt Photo / Invoice</label>
+                                <input type="file" name="receipt_photo" accept="image/*,application/pdf" class="form-control">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label fw-semibold small text-secondary mb-0">Purchased Ingredients & Quantities <span class="text-danger">*</span></label>
+                                <button type="button" class="btn btn-sm btn-outline-success fw-bold" onclick="addSelfProcureRow()">
+                                    <i class="fas fa-plus me-1"></i> Add Ingredient
+                                </button>
+                            </div>
+                            <div class="table-responsive border rounded-3 bg-white">
+                                <table class="table table-sm align-middle mb-0" id="selfProcureTable" style="font-size: 13px;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="min-width: 220px;">Ingredient / Material</th>
+                                            <th style="width: 130px;">Qty Bought</th>
+                                            <th style="width: 80px;">Unit</th>
+                                            <th style="width: 130px;">Cost/Unit (&#8369;)</th>
+                                            <th style="width: 140px;">Line Total (&#8369;)</th>
+                                            <th style="width: 50px;" class="text-center">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="selfProcureItemsBody">
+                                        <tr>
+                                            <td>
+                                                <select name="self_items[0][material_id]" class="form-select form-select-sm self-mat-select" required onchange="handleSelfMatChange(this)">
+                                                    <option value="">-- Choose Ingredient --</option>
+                                                    <?php foreach ($materials_for_modal as $m): ?>
+                                                        <option value="<?php echo (int)$m['id']; ?>" data-unit="<?php echo htmlspecialchars((string)$m['unit']); ?>" data-cost="<?php echo (float)($m['cost_per_unit'] ?? 0); ?>" data-name="<?php echo htmlspecialchars((string)$m['name']); ?>">
+                                                            <?php echo htmlspecialchars((string)$m['name']); ?> (On-hand: <?php echo (float)$m['current_stock'] . ' ' . htmlspecialchars((string)$m['unit']); ?>)
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                                <input type="hidden" name="self_items[0][material_name]" class="self-mat-name">
+                                            </td>
+                                            <td>
+                                                <input type="number" step="0.01" min="0.01" name="self_items[0][quantity_bought]" class="form-control form-control-sm self-qty" placeholder="0.00" required oninput="recalcSelfProcureRow(this)">
+                                            </td>
+                                            <td>
+                                                <input type="text" name="self_items[0][unit]" class="form-control form-control-sm self-unit bg-light" placeholder="unit" readonly>
+                                            </td>
+                                            <td>
+                                                <input type="number" step="0.01" min="0" name="self_items[0][unit_cost]" class="form-control form-control-sm self-cost" placeholder="0.00" oninput="recalcSelfProcureRow(this)">
+                                            </td>
+                                            <td>
+                                                <input type="number" step="0.01" min="0" name="self_items[0][line_total]" class="form-control form-control-sm self-line-total bg-light" placeholder="0.00" readonly>
+                                            </td>
+                                            <td class="text-center">
+                                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeSelfRow(this)"><i class="fas fa-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="mb-0">
+                            <label class="form-label fw-semibold small text-secondary">Trip Notes / Justification</label>
+                            <textarea name="store_notes" class="form-control" rows="2" placeholder="e.g. Replenished 10kg pork belly for upcoming weekend orders. Stall #12 wet market."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light border-top px-4 py-3 d-flex justify-content-between align-items-center">
+                        <div class="small text-muted">
+                            <i class="fas fa-shield-alt text-success me-1"></i> Finance department will review for liquidation.
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-success fw-bold px-3">
+                                <i class="fas fa-boxes-packing me-1"></i> Save Purchase & Restock
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Request Partner Supplier Refill -->
+    <div class="modal fade modern-form-modal" id="supplierRefillModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+                <form method="POST" id="supplierRefillForm">
+                    <input type="hidden" name="action" value="request_supplier_refill">
+                    <div class="modal-header bg-light border-bottom px-4 py-3">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="d-flex align-items-center justify-content-center text-white rounded-circle" style="width: 44px; height: 44px; font-size: 1.2rem; background: #b3261e;">
+                                <i class="fas fa-truck-ramp-box"></i>
+                            </div>
+                            <div>
+                                <h5 class="modal-title fw-bold mb-0 text-dark">Request Partner Supplier Refill</h5>
+                                <p class="modal-subtitle text-muted small mb-0">Submit wholesale refill request to an accredited partner supplier with formal Finance Department quotation gate.</p>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="alert alert-danger d-flex align-items-center gap-2 mb-3" style="background:#fff1f0; border-color:#fee4e2; color:#b3261e; font-size: 13px;">
+                            <i class="fas fa-info-circle"></i>
+                            <div><strong>B2B Supplier Flow:</strong> Supplier will quote wholesale pricing and forward the invoice to Finance. Once Finance approves and items arrive, confirm receipt to auto-restock.</div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small text-secondary">Select Partner Supplier <span class="text-danger">*</span></label>
+                                <select name="supplier_id" id="refillSupplierSelect" class="form-select" required>
+                                    <option value="">-- Choose Partner Supplier --</option>
+                                    <?php foreach ($suppliers_for_modal as $s): ?>
+                                        <option value="<?php echo (int)$s['id']; ?>">
+                                            <?php echo htmlspecialchars((string)$s['name']); ?> <?php echo !empty($s['phone']) ? '(' . htmlspecialchars((string)$s['phone']) . ')' : ''; ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small text-secondary">Urgency Level</label>
+                                <select name="urgency_level" class="form-select">
+                                    <option value="normal" selected>Normal (Standard replenishment)</option>
+                                    <option value="urgent">Urgent (Stock near zero)</option>
+                                    <option value="critical">Critical (Menu item already blocked/offline!)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small text-secondary">Requested Delivery Date</label>
+                                <input type="date" name="requested_delivery_date" class="form-control" min="<?php echo date('Y-m-d'); ?>" value="<?php echo date('Y-m-d', strtotime('+1 day')); ?>">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small text-secondary">Store Special Instructions</label>
+                                <input type="text" name="store_notes" class="form-control" placeholder="e.g. Please deliver before 9:00 AM; enter via rear gate">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label fw-semibold small text-secondary mb-0">Ingredients to Refill <span class="text-danger">*</span></label>
+                                <button type="button" class="btn btn-sm btn-outline-danger fw-bold" onclick="addRefillItemRow()">
+                                    <i class="fas fa-plus me-1"></i> Add Ingredient
+                                </button>
+                            </div>
+                            <div class="table-responsive border rounded-3 bg-white">
+                                <table class="table table-sm align-middle mb-0" id="refillItemsTable" style="font-size: 13px;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="min-width: 240px;">Ingredient / Material</th>
+                                            <th style="width: 140px;">Quantity Needed</th>
+                                            <th style="width: 90px;">Unit</th>
+                                            <th style="width: 140px;">Current Stock</th>
+                                            <th style="width: 50px;" class="text-center">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="refillItemsBody">
+                                        <tr>
+                                            <td>
+                                                <select name="items[0][material_id]" class="form-select form-select-sm refill-mat-select" required onchange="handleRefillMatChange(this)">
+                                                    <option value="">-- Choose Ingredient --</option>
+                                                    <?php foreach ($materials_for_modal as $m): ?>
+                                                        <option value="<?php echo (int)$m['id']; ?>" data-unit="<?php echo htmlspecialchars((string)$m['unit']); ?>" data-stock="<?php echo (float)$m['current_stock']; ?>">
+                                                            <?php echo htmlspecialchars((string)$m['name']); ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <input type="number" step="0.01" min="0.01" name="items[0][quantity]" class="form-control form-control-sm refill-qty" placeholder="0.00" required>
+                                            </td>
+                                            <td>
+                                                <input type="text" class="form-control form-control-sm refill-unit bg-light" placeholder="unit" readonly>
+                                            </td>
+                                            <td>
+                                                <span class="refill-stock-badge badge bg-light text-dark border">--</span>
+                                            </td>
+                                            <td class="text-center">
+                                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRefillRow(this)"><i class="fas fa-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light border-top px-4 py-3 d-flex justify-content-between align-items-center">
+                        <div class="small text-muted">
+                            <i class="fas fa-file-invoice-dollar text-primary me-1"></i> Supplier quotes prices & sends invoice to Finance.
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-danger fw-bold px-3" style="background:#b3261e; border-color:#b3261e;">
+                                <i class="fas fa-paper-plane me-1"></i> Submit Refill Request
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script src="../js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="../js/jquery-3.7.1.min.js"></script>
@@ -3699,6 +4431,183 @@ unset($_SESSION['success'], $_SESSION['error']);
         });
 
         calculateRoastBatchEconomics();
+
+        // --- Dual-Pathway Procurement Scripts (Self-Procurement & Partner Supplier Refill) ---
+        const rawMaterialsList = <?php echo json_encode($materials_for_modal); ?>;
+        let selfProcureIndex = 1;
+        let refillItemIndex = 1;
+
+        function handleSelfMatChange(sel) {
+            const row = sel.closest('tr');
+            if (!row) return;
+            const opt = sel.options[sel.selectedIndex];
+            const unit = opt.getAttribute('data-unit') || '';
+            const cost = parseFloat(opt.getAttribute('data-cost')) || 0;
+            const name = opt.getAttribute('data-name') || '';
+
+            const unitInput = row.querySelector('.self-unit');
+            const costInput = row.querySelector('.self-cost');
+            const nameInput = row.querySelector('.self-mat-name');
+
+            if (unitInput) unitInput.value = unit;
+            if (costInput && (!costInput.value || parseFloat(costInput.value) === 0)) costInput.value = cost > 0 ? cost.toFixed(2) : '';
+            if (nameInput) nameInput.value = name;
+            recalcSelfProcureRow(sel);
+        }
+
+        function recalcSelfProcureRow(el) {
+            const row = el.closest('tr');
+            if (!row) return;
+            const qty = parseFloat(row.querySelector('.self-qty')?.value) || 0;
+            const cost = parseFloat(row.querySelector('.self-cost')?.value) || 0;
+            const lineTotInput = row.querySelector('.self-line-total');
+            const lineTot = qty * cost;
+            if (lineTotInput) lineTotInput.value = lineTot.toFixed(2);
+            recalcSelfProcureTotals();
+        }
+
+        function recalcSelfProcureTotals() {
+            let total = 0;
+            document.querySelectorAll('#selfProcureItemsBody tr').forEach(r => {
+                const lt = parseFloat(r.querySelector('.self-line-total')?.value) || 0;
+                total += lt;
+            });
+            const totalExpInput = document.getElementById('selfProcureTotalExpenses');
+            if (totalExpInput && (!totalExpInput.value || parseFloat(totalExpInput.value) === 0 || totalExpInput.getAttribute('data-auto') === 'true')) {
+                if (total > 0) {
+                    totalExpInput.value = total.toFixed(2);
+                    totalExpInput.setAttribute('data-auto', 'true');
+                }
+            }
+        }
+
+        function addSelfProcureRow(matId = '', qty = '', unit = '', cost = '', name = '') {
+            const tbody = document.getElementById('selfProcureItemsBody');
+            if (!tbody) return;
+            let optHtml = '<option value="">-- Choose Ingredient --</option>';
+            rawMaterialsList.forEach(m => {
+                const isSel = (matId && parseInt(m.id) === parseInt(matId)) ? 'selected' : '';
+                optHtml += `<option value="${m.id}" data-unit="${m.unit || ''}" data-cost="${m.cost_per_unit || 0}" data-name="${m.name}" ${isSel}>${m.name} (On-hand: ${m.current_stock} ${m.unit})</option>`;
+            });
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>
+                    <select name="self_items[${selfProcureIndex}][material_id]" class="form-select form-select-sm self-mat-select" required onchange="handleSelfMatChange(this)">
+                        ${optHtml}
+                    </select>
+                    <input type="hidden" name="self_items[${selfProcureIndex}][material_name]" class="self-mat-name" value="${name}">
+                </td>
+                <td>
+                    <input type="number" step="0.01" min="0.01" name="self_items[${selfProcureIndex}][quantity_bought]" class="form-control form-control-sm self-qty" placeholder="0.00" value="${qty}" required oninput="recalcSelfProcureRow(this)">
+                </td>
+                <td>
+                    <input type="text" name="self_items[${selfProcureIndex}][unit]" class="form-control form-control-sm self-unit bg-light" placeholder="unit" value="${unit}" readonly>
+                </td>
+                <td>
+                    <input type="number" step="0.01" min="0" name="self_items[${selfProcureIndex}][unit_cost]" class="form-control form-control-sm self-cost" placeholder="0.00" value="${cost}" oninput="recalcSelfProcureRow(this)">
+                </td>
+                <td>
+                    <input type="number" step="0.01" min="0" name="self_items[${selfProcureIndex}][line_total]" class="form-control form-control-sm self-line-total bg-light" placeholder="0.00" readonly>
+                </td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeSelfRow(this)"><i class="fas fa-trash"></i></button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+            selfProcureIndex++;
+            recalcSelfProcureRow(tr);
+        }
+
+        function removeSelfRow(btn) {
+            const tbody = document.getElementById('selfProcureItemsBody');
+            if (tbody.querySelectorAll('tr').length > 1) {
+                btn.closest('tr').remove();
+                recalcSelfProcureTotals();
+            } else {
+                Swal.fire({ icon: 'warning', title: 'Row Required', text: 'At least one ingredient must be logged.' });
+            }
+        }
+
+        function handleRefillMatChange(sel) {
+            const row = sel.closest('tr');
+            if (!row) return;
+            const opt = sel.options[sel.selectedIndex];
+            const unit = opt.getAttribute('data-unit') || '';
+            const stock = parseFloat(opt.getAttribute('data-stock')) || 0;
+
+            const unitInput = row.querySelector('.refill-unit');
+            const badge = row.querySelector('.refill-stock-badge');
+
+            if (unitInput) unitInput.value = unit;
+            if (badge) {
+                badge.textContent = stock.toFixed(1) + ' ' + unit;
+                badge.className = stock <= 0 ? 'badge bg-danger-subtle text-danger border border-danger' : 'badge bg-light text-dark border';
+            }
+        }
+
+        function addRefillItemRow(matId = '', qty = '', unit = '', stock = '') {
+            const tbody = document.getElementById('refillItemsBody');
+            if (!tbody) return;
+            let optHtml = '<option value="">-- Choose Ingredient --</option>';
+            rawMaterialsList.forEach(m => {
+                const isSel = (matId && parseInt(m.id) === parseInt(matId)) ? 'selected' : '';
+                optHtml += `<option value="${m.id}" data-unit="${m.unit || ''}" data-stock="${m.current_stock || 0}" ${isSel}>${m.name}</option>`;
+            });
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>
+                    <select name="items[${refillItemIndex}][material_id]" class="form-select form-select-sm refill-mat-select" required onchange="handleRefillMatChange(this)">
+                        ${optHtml}
+                    </select>
+                </td>
+                <td>
+                    <input type="number" step="0.01" min="0.01" name="items[${refillItemIndex}][quantity]" class="form-control form-control-sm refill-qty" placeholder="0.00" value="${qty}" required>
+                </td>
+                <td>
+                    <input type="text" class="form-control form-control-sm refill-unit bg-light" placeholder="unit" value="${unit}" readonly>
+                </td>
+                <td>
+                    <span class="refill-stock-badge badge ${parseFloat(stock) <= 0 ? 'bg-danger-subtle text-danger border border-danger' : 'bg-light text-dark border'}">${stock !== '' ? parseFloat(stock).toFixed(1) + ' ' + unit : '--'}</span>
+                </td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRefillRow(this)"><i class="fas fa-trash"></i></button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+            refillItemIndex++;
+        }
+
+        function removeRefillRow(btn) {
+            const tbody = document.getElementById('refillItemsBody');
+            if (tbody.querySelectorAll('tr').length > 1) {
+                btn.closest('tr').remove();
+            } else {
+                Swal.fire({ icon: 'warning', title: 'Row Required', text: 'At least one ingredient must be requested.' });
+            }
+        }
+
+        function quickSelfProcure(matId, matName, unit, suggestedQty, avgCost) {
+            const modalEl = document.getElementById('logSelfProcureModal');
+            if (!modalEl) return;
+            const tbody = document.getElementById('selfProcureItemsBody');
+            tbody.innerHTML = '';
+            selfProcureIndex = 0;
+            addSelfProcureRow(matId, suggestedQty > 0 ? suggestedQty : 1, unit, avgCost > 0 ? avgCost : '', matName);
+            new bootstrap.Modal(modalEl).show();
+        }
+
+        function quickSupplierRefill(matId, suggestedQty) {
+            const modalEl = document.getElementById('supplierRefillModal');
+            if (!modalEl) return;
+            const tbody = document.getElementById('refillItemsBody');
+            tbody.innerHTML = '';
+            refillItemIndex = 0;
+            const mat = rawMaterialsList.find(m => parseInt(m.id) === parseInt(matId));
+            addRefillItemRow(matId, suggestedQty > 0 ? suggestedQty : 1, mat ? mat.unit : '', mat ? mat.current_stock : 0);
+            new bootstrap.Modal(modalEl).show();
+        }
     </script>
 </body>
 </html>
