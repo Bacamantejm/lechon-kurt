@@ -259,6 +259,7 @@ if (!defined('TWILIO_PHONE_NUMBER')) {
 // Include RBAC functions
 require_once __DIR__ . '/rbac.php';
 require_once __DIR__ . '/email_verification_helper.php';
+require_once __DIR__ . '/supplier_helper.php';
 
 if (!function_exists('getGoogleMapsApiKey')) {
     function getGoogleMapsApiKey() {

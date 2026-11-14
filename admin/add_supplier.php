@@ -7,6 +7,7 @@
 session_start();
 include 'auth.php';
 include '../includes/config.php';
+require_once __DIR__ . '/../includes/supplier_helper.php';
 
 checkAdminAccess();
 $admin_info = getAdminInfo($conn);
@@ -112,8 +113,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // 2. Link & provision Supplier in suppliers table
                 $s_ins = mysqli_prepare($conn, "
-                    INSERT INTO suppliers (user_id, store_id, created_by, name, contact_person, email, phone, is_active)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+                    INSERT INTO suppliers (user_id, store_id, created_by, name, contact_person, email, phone, is_active, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'active')
                 ");
                 if ($s_ins) {
                     mysqli_stmt_bind_param($s_ins, "iiissss", $new_user_id, $scope_owner_id, $admin_id, $supplier_name, $staff_name, $email, $phone);
@@ -142,9 +143,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $supplier_id = (int)($_POST['supplier_id'] ?? 0);
         $new_status = (int)($_POST['status'] ?? 1);
 
-        $upd_stmt = mysqli_prepare($conn, "UPDATE suppliers SET is_active = ? WHERE id = ?");
+        $upd_stmt = mysqli_prepare($conn, "UPDATE suppliers SET is_active = ?, status = ? WHERE id = ?");
         if ($upd_stmt) {
-            mysqli_stmt_bind_param($upd_stmt, "ii", $new_status, $supplier_id);
+            $st_label = $new_status ? 'active' : 'inactive';
+            mysqli_stmt_bind_param($upd_stmt, "isi", $new_status, $st_label, $supplier_id);
             mysqli_stmt_execute($upd_stmt);
             mysqli_stmt_close($upd_stmt);
         }

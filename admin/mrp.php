@@ -45,18 +45,23 @@ if ($seller_scope_id !== null) {
         WHERE poi_scope.purchase_order_id = po.id
           AND p_scope.seller_id = " . (int)$seller_scope_id . "
     ))";
-    $partner_supplier_scope_sql = "EXISTS (
-        SELECT 1
-        FROM purchase_orders po_scope
-        WHERE po_scope.supplier_id = s.id
-          AND (po_scope.created_by = " . (int)$seller_scope_id . " OR EXISTS (
-              SELECT 1
-              FROM purchase_order_items poi_scope
-              INNER JOIN bill_of_materials bom_scope ON bom_scope.material_id = poi_scope.material_id
-              INNER JOIN products p_scope ON p_scope.id = bom_scope.product_id
-              WHERE poi_scope.purchase_order_id = po_scope.id
-                AND p_scope.seller_id = " . (int)$seller_scope_id . "
-          ))
+    $partner_supplier_scope_sql = "(
+        s.store_id = " . (int)$seller_scope_id . "
+        OR s.created_by = " . (int)$seller_scope_id . "
+        OR s.store_id IS NULL
+        OR EXISTS (
+            SELECT 1
+            FROM purchase_orders po_scope
+            WHERE po_scope.supplier_id = s.id
+              AND (po_scope.created_by = " . (int)$seller_scope_id . " OR EXISTS (
+                  SELECT 1
+                  FROM purchase_order_items poi_scope
+                  INNER JOIN bill_of_materials bom_scope ON bom_scope.material_id = poi_scope.material_id
+                  INNER JOIN products p_scope ON p_scope.id = bom_scope.product_id
+                  WHERE poi_scope.purchase_order_id = po_scope.id
+                    AND p_scope.seller_id = " . (int)$seller_scope_id . "
+              ))
+        )
     )";
 }
 
@@ -1948,11 +1953,15 @@ if ($proc_orders_q) {
 }
 
 // Fetch suppliers list for modal
-$suppliers_for_modal = [];
-$sup_q = mysqli_query($conn, "SELECT id, name, contact_person, phone, email FROM suppliers WHERE status = 'active' ORDER BY name ASC");
-if ($sup_q) {
-    while ($srow = mysqli_fetch_assoc($sup_q)) {
-        $suppliers_for_modal[] = $srow;
+$suppliers_for_modal = function_exists('getActiveSuppliersList')
+    ? getActiveSuppliersList($conn, $seller_scope_id)
+    : [];
+if (empty($suppliers_for_modal)) {
+    $sup_q = mysqli_query($conn, "SELECT id, name, contact_person, phone, email FROM suppliers ORDER BY name ASC");
+    if ($sup_q) {
+        while ($srow = mysqli_fetch_assoc($sup_q)) {
+            $suppliers_for_modal[] = $srow;
+        }
     }
 }
 
@@ -3997,8 +4006,23 @@ unset($_SESSION['success'], $_SESSION['error']);
                                 <select name="supplier_id" id="refillSupplierSelect" class="form-select" required>
                                     <option value="">-- Choose Partner Supplier --</option>
                                     <?php foreach ($suppliers_for_modal as $s): ?>
+                                        <?php 
+                                            $s_name = trim((string)$s['name']);
+                                            $s_contact = trim((string)($s['contact_person'] ?? ''));
+                                            $s_phone = trim((string)($s['phone'] ?? ''));
+                                            $s_email = trim((string)($s['email'] ?? ''));
+                                            $label = $s_name;
+                                            if ($s_contact !== '' && strcasecmp($s_contact, $s_name) !== 0) {
+                                                $label .= ' (' . $s_contact . ')';
+                                            }
+                                            if ($s_phone !== '') {
+                                                $label .= ' - ' . $s_phone;
+                                            } elseif ($s_email !== '') {
+                                                $label .= ' - ' . $s_email;
+                                            }
+                                        ?>
                                         <option value="<?php echo (int)$s['id']; ?>">
-                                            <?php echo htmlspecialchars((string)$s['name']); ?> <?php echo !empty($s['phone']) ? '(' . htmlspecialchars((string)$s['phone']) . ')' : ''; ?>
+                                            <?php echo htmlspecialchars($label); ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>

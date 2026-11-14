@@ -379,4 +379,30 @@ $current_page = basename($_SERVER['PHP_SELF']);
         </div>
     </div>
 </header>
+
+<?php if (strtolower((string)($_SESSION['user_type'] ?? '')) === 'admin'): ?>
+    <?php 
+        $all_suppliers_for_preview = function_exists('getActiveSuppliersList') ? getActiveSuppliersList($conn) : [];
+    ?>
+    <div style="background: #fff8eb; border-bottom: 1px solid #fedf89; padding: 10px 24px;">
+        <div class="container-fluid d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <div class="d-flex align-items-center gap-2" style="font-size: 13px; color: #b54708;">
+                <i class="fas fa-user-shield"></i>
+                <span><strong>Admin Preview Mode:</strong> Viewing Supplier Portal for <strong><?php echo htmlspecialchars($supplier_profile['name'] ?? 'Supplier'); ?></strong></span>
+            </div>
+            <form method="GET" class="d-flex align-items-center gap-2 mb-0">
+                <label class="small text-muted mb-0 fw-semibold">Switch Supplier Account:</label>
+                <select name="supplier_id" class="form-select form-select-sm" style="width: auto; font-size: 13px;" onchange="this.form.submit()">
+                    <?php foreach ($all_suppliers_for_preview as $asup): ?>
+                        <option value="<?php echo (int)$asup['id']; ?>" <?php echo ((int)$asup['id'] === (int)$current_supplier_id) ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($asup['name']); ?> <?php echo !empty($asup['phone']) ? '(' . htmlspecialchars($asup['phone']) . ')' : ''; ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <a href="../admin/mrp.php" class="btn btn-sm btn-outline-secondary" style="font-size: 12px; padding: 4px 10px;">Return to Admin</a>
+            </form>
+        </div>
+    </div>
+<?php endif; ?>
+
 <main class="content-wrapper">

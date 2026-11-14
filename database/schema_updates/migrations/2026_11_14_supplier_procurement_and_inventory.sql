@@ -4,7 +4,10 @@
 -- 1. Ensure user_id column exists on suppliers table
 ALTER TABLE `suppliers` 
 ADD COLUMN IF NOT EXISTS `user_id` INT NULL AFTER `id`,
-ADD COLUMN IF NOT EXISTS `is_active` TINYINT(1) NOT NULL DEFAULT 1 AFTER `address`;
+ADD COLUMN IF NOT EXISTS `store_id` INT NULL AFTER `user_id`,
+ADD COLUMN IF NOT EXISTS `created_by` INT NULL AFTER `store_id`,
+ADD COLUMN IF NOT EXISTS `is_active` TINYINT(1) NOT NULL DEFAULT 1 AFTER `address`,
+ADD COLUMN IF NOT EXISTS `status` VARCHAR(50) NOT NULL DEFAULT 'active' AFTER `is_active`;
 
 -- 2. Store-level material inventory (supports multi-store/franchisee ingredient stock)
 CREATE TABLE IF NOT EXISTS `store_material_inventory` (

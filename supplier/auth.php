@@ -9,6 +9,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../includes/supplier_helper.php';
 
 function checkSupplierAccess($conn) {
     if (!isset($_SESSION['user_id'])) {
@@ -19,14 +20,43 @@ function checkSupplierAccess($conn) {
     $user_id = (int)$_SESSION['user_id'];
     $user_type = strtolower((string)($_SESSION['user_type'] ?? ''));
 
-    // Admins have universal backoffice override
+    ensureSupplierSchema($conn);
+
+    // Admins have universal backoffice override and can switch preview
     if ($user_type === 'admin') {
-        // Return or create admin-scoped supplier record
-        $adm_supp = mysqli_query($conn, "SELECT id, name FROM suppliers LIMIT 1");
+        if (isset($_GET['supplier_id']) && (int)$_GET['supplier_id'] > 0) {
+            $req_s = (int)$_GET['supplier_id'];
+            $chk = mysqli_query($conn, "SELECT id FROM suppliers WHERE id = $req_s LIMIT 1");
+            if ($chk && mysqli_num_rows($chk) > 0) {
+                $_SESSION['admin_viewing_supplier_id'] = $req_s;
+                return $req_s;
+            }
+        }
+        if (isset($_SESSION['admin_viewing_supplier_id']) && (int)$_SESSION['admin_viewing_supplier_id'] > 0) {
+            $sess_s = (int)$_SESSION['admin_viewing_supplier_id'];
+            $chk = mysqli_query($conn, "SELECT id FROM suppliers WHERE id = $sess_s LIMIT 1");
+            if ($chk && mysqli_num_rows($chk) > 0) {
+                return $sess_s;
+            }
+        }
+        // Fallback: supplier with the latest order, or first active supplier
+        $lat_ord = mysqli_query($conn, "SELECT supplier_id FROM supplier_orders ORDER BY id DESC LIMIT 1");
+        if ($lat_ord && ($lo_r = mysqli_fetch_assoc($lat_ord)) && (int)$lo_r['supplier_id'] > 0) {
+            return (int)$lo_r['supplier_id'];
+        }
+        $adm_supp = mysqli_query($conn, "SELECT id, name FROM suppliers WHERE (is_active = 1 OR is_active IS NULL) ORDER BY id ASC LIMIT 1");
         if ($adm_supp && ($as_row = mysqli_fetch_assoc($adm_supp))) {
             return (int)$as_row['id'];
         }
         return 1;
+    }
+
+    // Resolve specific supplier ID for this logged-in user
+    if (function_exists('getSupplierIdForUser')) {
+        $supp_id = getSupplierIdForUser($conn, $user_id);
+        if ($supp_id > 0) {
+            return $supp_id;
+        }
     }
 
     // 1. Check if user is linked directly in suppliers table
@@ -42,11 +72,12 @@ function checkSupplierAccess($conn) {
         mysqli_stmt_close($supp_stmt);
     }
 
-    // 2. Check if user is an employee whose position is Supplier
+    // 2. Check if user is an employee whose position or department is Supplier
     $emp_stmt = mysqli_prepare($conn, "
-        SELECT e.id, e.first_name, e.last_name, e.email, e.phone, e.position, jp.position_title
+        SELECT e.id, e.first_name, e.last_name, e.email, e.phone, e.position, jp.position_title, d.name AS dept_name
         FROM employees e
         LEFT JOIN job_positions jp ON e.position_id = jp.id
+        LEFT JOIN departments d ON e.department_id = d.id
         WHERE e.user_id = ?
         LIMIT 1
     ");
@@ -56,7 +87,7 @@ function checkSupplierAccess($conn) {
         mysqli_stmt_execute($emp_stmt);
         $e_res = mysqli_stmt_get_result($emp_stmt);
         if ($e_row = mysqli_fetch_assoc($e_res)) {
-            $pos_str = strtolower(($e_row['position_title'] ?? '') . ' ' . ($e_row['position'] ?? ''));
+            $pos_str = strtolower(($e_row['position_title'] ?? '') . ' ' . ($e_row['position'] ?? '') . ' ' . ($e_row['dept_name'] ?? ''));
             if (strpos($pos_str, 'supplier') !== false) {
                 mysqli_stmt_close($emp_stmt);
 
@@ -65,7 +96,7 @@ function checkSupplierAccess($conn) {
                 $phone = $e_row['phone'] ?? '';
                 $email = $e_row['email'] ?? '';
 
-                $ins_stmt = mysqli_prepare($conn, "INSERT INTO suppliers (user_id, name, contact_person, phone, email, is_active) VALUES (?, ?, ?, ?, ?, 1)");
+                $ins_stmt = mysqli_prepare($conn, "INSERT INTO suppliers (user_id, name, contact_person, phone, email, is_active, status) VALUES (?, ?, ?, ?, ?, 1, 'active')");
                 if ($ins_stmt) {
                     mysqli_stmt_bind_param($ins_stmt, "issss", $user_id, $name, $name, $phone, $email);
                     mysqli_stmt_execute($ins_stmt);
@@ -80,18 +111,18 @@ function checkSupplierAccess($conn) {
 
     // 3. Check if user has user_type === 'supplier'
     if ($user_type === 'supplier') {
-        $u_stmt = mysqli_prepare($conn, "SELECT full_name, email, phone FROM users WHERE id = ? LIMIT 1");
+        $u_stmt = mysqli_prepare($conn, "SELECT full_name, business_name, email, phone FROM users WHERE id = ? LIMIT 1");
         if ($u_stmt) {
             mysqli_stmt_bind_param($u_stmt, "i", $user_id);
             mysqli_stmt_execute($u_stmt);
             $u_res = mysqli_stmt_get_result($u_stmt);
             if ($u_row = mysqli_fetch_assoc($u_res)) {
-                $name = $u_row['full_name'] ?: 'Supplier Partner';
+                $name = trim((string)($u_row['business_name'] ?: $u_row['full_name'])) ?: 'Supplier Partner';
                 $email = $u_row['email'] ?: '';
                 $phone = $u_row['phone'] ?: '';
                 mysqli_stmt_close($u_stmt);
 
-                $ins_stmt = mysqli_prepare($conn, "INSERT INTO suppliers (user_id, name, contact_person, phone, email, is_active) VALUES (?, ?, ?, ?, ?, 1)");
+                $ins_stmt = mysqli_prepare($conn, "INSERT INTO suppliers (user_id, name, contact_person, phone, email, is_active, status) VALUES (?, ?, ?, ?, ?, 1, 'active')");
                 if ($ins_stmt) {
                     mysqli_stmt_bind_param($ins_stmt, "issss", $user_id, $name, $name, $phone, $email);
                     mysqli_stmt_execute($ins_stmt);
