@@ -1315,44 +1315,8 @@ if (empty($product_decisions)) {
                             </div>
                         </div>
 
-                        <!-- Section 5: Recipe Ingredients (BOM Checklist) -->
-                        <div class="form-section-card">
-                            <div class="form-section-head">
-                                <span class="form-section-title"><i class="fas fa-layer-group"></i> Recipe Ingredients (Bill of Materials)</span>
-                                <span class="form-req-pill">Automated Stock Sync</span>
-                            </div>
-                            <p class="text-muted small mb-3" style="font-size: 12px;">
-                                Check off the raw ingredients required to prepare 1 unit/serving of this product. When customer orders are placed, these ingredients are automatically deducted from your inventory. If any checked ingredient reaches 0 stock, this product will automatically be marked unavailable.
-                            </p>
-                            <div class="row g-2" id="adm_add_ingredients_checklist">
-                                <?php if (empty($materials_list)): ?>
-                                    <div class="col-12 text-center py-3 text-muted border rounded-2 bg-light">
-                                        <i class="fas fa-exclamation-circle text-warning me-1"></i> No raw ingredients registered yet.
-                                        <a href="materials.php" class="text-danger fw-bold">Click here to add raw materials first</a> (e.g. Pork belly, soy sauce, garlic, water).
-                                    </div>
-                                <?php else: ?>
-                                    <?php foreach ($materials_list as $m): 
-                                        $mid = (int)$m['id'];
-                                        $mname = htmlspecialchars($m['name']);
-                                        $munit = htmlspecialchars($m['unit']);
-                                    ?>
-                                        <div class="col-md-6">
-                                            <div class="border rounded-2 p-2 h-100 d-flex align-items-center justify-content-between ingredient-check-item" style="background:#fcfcfd; border-color:#eaecf0 !important;">
-                                                <div class="form-check m-0 me-2 text-truncate" style="max-width: 170px;">
-                                                    <input class="form-check-input ing-checkbox-add" type="checkbox" name="recipe_ingredients[<?php echo $mid; ?>][selected]" value="1" id="adm_add_ing_check_<?php echo $mid; ?>" onchange="handleAdminIngToggle(this, 'adm_add_qty_<?php echo $mid; ?>')">
-                                                    <label class="form-check-label fw-bold text-dark small text-truncate" for="adm_add_ing_check_<?php echo $mid; ?>" style="cursor:pointer;" title="<?php echo $mname; ?>">
-                                                        <?php echo $mname; ?>
-                                                    </label>
-                                                </div>
-                                                <div class="d-flex align-items-center gap-1" style="width: 140px;">
-                                                    <input type="number" step="0.001" min="0.001" name="recipe_ingredients[<?php echo $mid; ?>][qty]" id="adm_add_qty_<?php echo $mid; ?>" class="form-control form-control-sm text-end" placeholder="0.00" disabled style="background:#f8f9fa;">
-                                                    <span class="small text-muted fw-semibold" style="min-width: 34px; font-size:11px;"><?php echo $munit; ?></span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </div>
+                        <div class="alert alert-light border small text-muted mb-0 mt-3" style="font-size: 12px; background: #fafbfc; border-radius: 8px;">
+                            <i class="fas fa-info-circle text-primary me-1"></i> Stock quantities are managed in <a href="inventory.php" class="text-danger fw-bold text-decoration-none">Inventory Management</a> based on raw ingredients availability.
                         </div>
                     </form>
                 </div>
@@ -1526,44 +1490,8 @@ if (empty($product_decisions)) {
                             </div>
                         </div>
 
-                        <!-- Section 5: Recipe Ingredients (BOM Checklist) -->
-                        <div class="form-section-card">
-                            <div class="form-section-head">
-                                <span class="form-section-title"><i class="fas fa-layer-group"></i> Recipe Ingredients (Bill of Materials)</span>
-                                <span class="form-req-pill">Automated Stock Sync</span>
-                            </div>
-                            <p class="text-muted small mb-3" style="font-size: 12px;">
-                                Check off the raw ingredients required to prepare 1 unit/serving of this product. When customer orders are placed, these ingredients are automatically deducted from your inventory. If any checked ingredient reaches 0 stock, this product will automatically be marked unavailable.
-                            </p>
-                            <div class="row g-2" id="adm_edit_ingredients_checklist">
-                                <?php if (empty($materials_list)): ?>
-                                    <div class="col-12 text-center py-3 text-muted border rounded-2 bg-light">
-                                        <i class="fas fa-exclamation-circle text-warning me-1"></i> No raw ingredients registered yet.
-                                        <a href="materials.php" class="text-danger fw-bold">Click here to add raw materials first</a>.
-                                    </div>
-                                <?php else: ?>
-                                    <?php foreach ($materials_list as $m): 
-                                        $mid = (int)$m['id'];
-                                        $mname = htmlspecialchars($m['name']);
-                                        $munit = htmlspecialchars($m['unit']);
-                                    ?>
-                                        <div class="col-md-6">
-                                            <div class="border rounded-2 p-2 h-100 d-flex align-items-center justify-content-between ingredient-check-item" style="background:#fcfcfd; border-color:#eaecf0 !important;">
-                                                <div class="form-check m-0 me-2 text-truncate" style="max-width: 170px;">
-                                                    <input class="form-check-input ing-checkbox-edit" type="checkbox" name="recipe_ingredients[<?php echo $mid; ?>][selected]" value="1" id="adm_edit_ing_check_<?php echo $mid; ?>" onchange="handleAdminIngToggle(this, 'adm_edit_qty_<?php echo $mid; ?>')">
-                                                    <label class="form-check-label fw-bold text-dark small text-truncate" for="adm_edit_ing_check_<?php echo $mid; ?>" style="cursor:pointer;" title="<?php echo $mname; ?>">
-                                                        <?php echo $mname; ?>
-                                                    </label>
-                                                </div>
-                                                <div class="d-flex align-items-center gap-1" style="width: 140px;">
-                                                    <input type="number" step="0.001" min="0.001" name="recipe_ingredients[<?php echo $mid; ?>][qty]" id="adm_edit_qty_<?php echo $mid; ?>" class="form-control form-control-sm text-end" placeholder="0.00" disabled style="background:#f8f9fa;">
-                                                    <span class="small text-muted fw-semibold" style="min-width: 34px; font-size:11px;"><?php echo $munit; ?></span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </div>
+                        <div class="alert alert-light border small text-muted mb-0 mt-3" style="font-size: 12px; background: #fafbfc; border-radius: 8px;">
+                            <i class="fas fa-info-circle text-primary me-1"></i> Stock quantities are managed in <a href="inventory.php" class="text-danger fw-bold text-decoration-none">Inventory Management</a> based on raw ingredients availability.
                         </div>
                     </form>
                 </div>

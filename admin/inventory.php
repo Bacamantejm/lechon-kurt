@@ -511,6 +511,120 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $selected_date)) {
     $selected_date = date('Y-m-d');
 }
 
+// Handle Recipe Ingredients Save (strictly whole numbers)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_product_recipe'])) {
+    $product_id = intval($_POST['product_id'] ?? 0);
+    $scope_target_store = $seller_scope_id !== null ? (int)$seller_scope_id : (int)($_SESSION['user_id'] ?? 0);
+
+    if (!inventoryPartnerOwnsProduct($conn, $product_id, $seller_scope_id)) {
+        $_SESSION['error'] = "You can only manage recipes for your own store products.";
+    } else {
+        // Delete existing BOM records for this product
+        mysqli_query($conn, "DELETE FROM bill_of_materials WHERE product_id = " . intval($product_id));
+
+        $ins_bom = mysqli_prepare($conn, "INSERT INTO bill_of_materials (product_id, material_id, quantity_needed) VALUES (?, ?, ?)");
+        if (!empty($_POST['recipe_ingredients']) && is_array($_POST['recipe_ingredients'])) {
+            foreach ($_POST['recipe_ingredients'] as $mat_id => $rdata) {
+                if (!empty($rdata['selected'])) {
+                    $m_id = intval($mat_id);
+                    // Strictly enforce whole numbers (integers >= 1)
+                    $qty = intval(round(floatval($rdata['qty'] ?? 1)));
+                    if ($m_id > 0 && $qty > 0 && $ins_bom) {
+                        mysqli_stmt_bind_param($ins_bom, "iid", $product_id, $m_id, $qty);
+                        mysqli_stmt_execute($ins_bom);
+                    }
+                }
+            }
+        }
+        if ($ins_bom) mysqli_stmt_close($ins_bom);
+
+        // Recalculate whole-number product stock capacity from available store materials
+        $chk_yield = mysqli_query($conn, "
+            SELECT bom.quantity_needed, 
+                   COALESCE(smi.current_stock, m.current_stock, 0) as stock
+            FROM bill_of_materials bom
+            INNER JOIN materials m ON m.id = bom.material_id
+            LEFT JOIN store_material_inventory smi ON smi.material_id = m.id AND smi.store_id = {$scope_target_store}
+            WHERE bom.product_id = " . intval($product_id)
+        );
+        $calc_yield = PHP_INT_MAX;
+        $has_items = false;
+        while ($chk_yield && ($cy = mysqli_fetch_assoc($chk_yield))) {
+            $has_items = true;
+            $need = max(1, (int)round((float)$cy['quantity_needed']));
+            $have = (int)floor((float)$cy['stock']);
+            $can_make = (int)floor($have / $need);
+            if ($can_make < $calc_yield) {
+                $calc_yield = $can_make;
+            }
+        }
+        if (!$has_items || $calc_yield === PHP_INT_MAX) {
+            $calc_yield = 0;
+        }
+        $calc_yield = max(0, $calc_yield);
+
+        // Update products table stock and availability
+        $is_avail = $calc_yield > 0 ? 1 : 0;
+        mysqli_query($conn, "UPDATE products SET stock = {$calc_yield}, is_available = {$is_avail} WHERE id = " . intval($product_id));
+
+        // Update or insert today's inventory row with this calculated stock
+        $today_str = date('Y-m-d');
+        $chk_inv = mysqli_query($conn, "SELECT id FROM inventory WHERE product_id = {$product_id} AND inventory_date = '{$today_str}' AND is_archived = 0 LIMIT 1");
+        if ($chk_inv && ($inv_r = mysqli_fetch_assoc($chk_inv))) {
+            mysqli_query($conn, "UPDATE inventory SET current_stock = {$calc_yield}, last_updated = NOW() WHERE id = " . (int)$inv_r['id']);
+        } else {
+            mysqli_query($conn, "INSERT INTO inventory (product_id, inventory_date, current_stock, min_stock_level, last_updated) VALUES ({$product_id}, '{$today_str}', {$calc_yield}, 5, NOW())");
+        }
+
+        // Trigger store-wide sync
+        require_once dirname(__DIR__) . '/includes/IngredientStockManager.php';
+        IngredientStockManager::syncProductAvailabilityForStore($conn, $scope_target_store);
+
+        $_SESSION['success'] = "Recipe saved! Stock quantity updated to {$calc_yield} units based on available raw ingredients.";
+        header("Location: inventory.php?date=" . urlencode($selected_date));
+        exit;
+    }
+}
+
+// Handle Raw Ingredient Stock Adjustment / Restock (strictly whole numbers)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['adjust_ingredient_stock'])) {
+    $material_id = intval($_POST['material_id'] ?? 0);
+    $quantity = intval($_POST['quantity'] ?? 0); // Strictly whole number
+    $adj_type = $_POST['adjustment_type'] ?? 'add'; // 'add' or 'set'
+    $scope_target_store = $seller_scope_id !== null ? (int)$seller_scope_id : (int)($_SESSION['user_id'] ?? 0);
+
+    // Get current stock
+    $cur_q = mysqli_query($conn, "SELECT current_stock FROM store_material_inventory WHERE store_id = {$scope_target_store} AND material_id = {$material_id} LIMIT 1");
+    $cur_stock = 0;
+    if ($cur_q && ($crow = mysqli_fetch_assoc($cur_q))) {
+        $cur_stock = (int)floor((float)$crow['current_stock']);
+    } else {
+        $m_q = mysqli_query($conn, "SELECT current_stock FROM materials WHERE id = {$material_id} LIMIT 1");
+        if ($m_q && ($mrow = mysqli_fetch_assoc($m_q))) {
+            $cur_stock = (int)floor((float)$mrow['current_stock']);
+        }
+    }
+
+    $new_stock = $adj_type === 'set' ? max(0, $quantity) : max(0, $cur_stock + $quantity);
+
+    // Update store_material_inventory
+    mysqli_query($conn, "
+        INSERT INTO store_material_inventory (store_id, material_id, current_stock, unit, last_restocked_at)
+        SELECT {$scope_target_store}, id, {$new_stock}, unit, NOW() FROM materials WHERE id = {$material_id}
+        ON DUPLICATE KEY UPDATE current_stock = {$new_stock}, last_restocked_at = NOW()
+    ");
+    // Also update master materials table
+    mysqli_query($conn, "UPDATE materials SET current_stock = {$new_stock}, last_updated = NOW() WHERE id = {$material_id}");
+
+    // Sync all dependent products in store
+    require_once dirname(__DIR__) . '/includes/IngredientStockManager.php';
+    IngredientStockManager::syncProductAvailabilityForStore($conn, $scope_target_store);
+
+    $_SESSION['success'] = "Raw ingredient stock updated to {$new_stock}! All dependent menu product quantities have been recalculated.";
+    header("Location: inventory.php?view=ingredients&date=" . urlencode($selected_date));
+    exit;
+}
+
 // Handle stock adjustment
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['adjust_stock'])) {
     $product_id = intval($_POST['product_id']);
@@ -1122,6 +1236,59 @@ foreach ($all_products as $prod_row_for_lookup) {
     }
 }
 
+// Active view mode: 'products' (default) or 'ingredients'
+$active_view = isset($_GET['view']) && $_GET['view'] === 'ingredients' ? 'ingredients' : 'products';
+$scope_store_id = $seller_scope_id !== null ? (int)$seller_scope_id : (int)($_SESSION['user_id'] ?? 0);
+
+// Fetch raw materials for recipe stock derivation and raw ingredients table
+$mat_q = mysqli_query($conn, "
+    SELECT m.id, m.name, m.unit, m.min_level, m.cost_per_unit,
+           COALESCE(smi.current_stock, m.current_stock, 0) as current_stock,
+           COALESCE(smi.reorder_level, m.min_level, 5) as effective_reorder_level
+    FROM materials m
+    LEFT JOIN store_material_inventory smi ON smi.material_id = m.id AND smi.store_id = {$scope_store_id}
+    ORDER BY m.name ASC
+");
+$all_materials = [];
+$materials_by_id = [];
+while ($mat_q && ($mrow = mysqli_fetch_assoc($mat_q))) {
+    $mrow['current_stock_int'] = (int)floor((float)$mrow['current_stock']);
+    $mrow['effective_reorder_int'] = (int)ceil((float)$mrow['effective_reorder_level']);
+    $all_materials[] = $mrow;
+    $materials_by_id[(int)$mrow['id']] = $mrow;
+}
+
+// Fetch all product recipes from bill_of_materials
+$bom_q = mysqli_query($conn, "
+    SELECT bom.product_id, bom.material_id, bom.quantity_needed,
+           m.name as material_name, m.unit as material_unit
+    FROM bill_of_materials bom
+    INNER JOIN materials m ON m.id = bom.material_id
+    ORDER BY bom.product_id, m.name
+");
+$product_recipes = [];
+$material_usage_map = [];
+while ($bom_q && ($brow = mysqli_fetch_assoc($bom_q))) {
+    $pid = (int)$brow['product_id'];
+    $mid = (int)$brow['material_id'];
+    if (!isset($product_recipes[$pid])) {
+        $product_recipes[$pid] = [];
+    }
+    $brow['quantity_needed_int'] = max(1, (int)round((float)$brow['quantity_needed']));
+    $brow['material_stock'] = (int)($materials_by_id[$mid]['current_stock_int'] ?? 0);
+    $product_recipes[$pid][] = $brow;
+
+    if (!isset($material_usage_map[$mid])) {
+        $material_usage_map[$mid] = [];
+    }
+    foreach ($all_products as $ap) {
+        if ((int)$ap['id'] === $pid) {
+            $material_usage_map[$mid][] = $ap['name'];
+            break;
+        }
+    }
+}
+
 // DSS inventory overview and planning recommendations for selected date.
 $inventory_overview = [
     'tracked_items' => 0,
@@ -1642,8 +1809,24 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
                     <?php endif; ?>
                 </div>
                 
+                <!-- View Switcher Tabs: Menu Products vs Raw Ingredients -->
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                    <div class="btn-group" role="group">
+                        <a href="?view=products&date=<?php echo urlencode($selected_date); ?>" class="btn btn-sm" style="<?php echo $active_view === 'products' ? 'background:#b3261e; border-color:#b3261e; color:#fff;' : 'background:#fff; border:1px solid #d0d5dd; color:#344054;'; ?> font-weight:600; padding:8px 16px;">
+                            <i class="fas fa-utensils me-1"></i> Menu Products Stock (<?php echo count($all_products); ?>)
+                        </a>
+                        <a href="?view=ingredients&date=<?php echo urlencode($selected_date); ?>" class="btn btn-sm" style="<?php echo $active_view === 'ingredients' ? 'background:#b3261e; border-color:#b3261e; color:#fff;' : 'background:#fff; border:1px solid #d0d5dd; color:#344054;'; ?> font-weight:600; padding:8px 16px;">
+                            <i class="fas fa-carrot me-1"></i> Raw Ingredients Inventory (<?php echo count($all_materials); ?>)
+                        </a>
+                    </div>
+                    <div class="text-muted small">
+                        <i class="fas fa-info-circle text-primary me-1"></i> Product stock is automatically derived from raw ingredient inventory availability (in whole numbers).
+                    </div>
+                </div>
+
+                <?php if ($active_view === 'products'): ?>
                 <div class="section-header">
-                    <h2>Stock Management</h2>
+                    <h2>Menu Products Stock Management</h2>
                     <div class="d-flex flex-wrap gap-2">
                         <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createInventoryModal" <?php echo count($all_products) === 0 ? 'disabled' : ''; ?>>
                             <i class="fas fa-plus"></i> Create Inventory
@@ -1662,6 +1845,7 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
                         <?php endif; ?>
                     </div>
                     <form method="GET" class="filter-form">
+                        <input type="hidden" name="view" value="products">
                         <input type="date" name="date" value="<?php echo $selected_date; ?>" class="form-control" onchange="this.form.submit()">
                         <input type="text" name="search" placeholder="Search products..." value="<?php echo htmlspecialchars($search); ?>" class="form-control">
                         <select name="stock_status" class="form-select" onchange="this.form.submit()">
@@ -1678,13 +1862,12 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
                         <thead>
                             <tr>
                                 <th>Product Name</th>
-                                <th>Product ID</th>
                                 <th>Category</th>
                                 <th>Price</th>
-                                <th>Today's Stock</th>
-                                <th>Min Level</th>
+                                <th>Available Stock (From Ingredients)</th>
+                                <th>Min Safe Level</th>
                                 <th>Status</th>
-                                <th>Last Updated</th>
+                                <th>Recipe Ingredients</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -1692,13 +1875,35 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
                             <?php
                             if ($inventory_result && mysqli_num_rows($inventory_result) > 0) {
                                 while ($inv = mysqli_fetch_assoc($inventory_result)) {
-                                    $daily_stock = $inv['daily_stock'];
-                                    $min_level = $inv['min_stock_level'];
+                                    $pid = (int)$inv['id'];
+                                    $recipe = $product_recipes[$pid] ?? [];
+                                    $has_recipe = !empty($recipe);
+
+                                    $calc_yield = PHP_INT_MAX;
+                                    $limiting_ingredient = '';
+                                    if ($has_recipe) {
+                                        foreach ($recipe as $ing) {
+                                            $mat_id = (int)$ing['material_id'];
+                                            $have = (int)($materials_by_id[$mat_id]['current_stock_int'] ?? 0);
+                                            $need = max(1, (int)$ing['quantity_needed_int']);
+                                            $can_make = (int)floor($have / $need);
+                                            if ($can_make < $calc_yield) {
+                                                $calc_yield = $can_make;
+                                                $limiting_ingredient = $ing['material_name'];
+                                            }
+                                        }
+                                        if ($calc_yield === PHP_INT_MAX) $calc_yield = 0;
+                                        $daily_stock = max(0, $calc_yield);
+                                    } else {
+                                        $daily_stock = (int)$inv['daily_stock'];
+                                    }
+
+                                    $min_level = (int)$inv['min_stock_level'];
                                     
-                                    // Status is based on the daily stock for the selected date
-                                    if (!$inv['has_inventory']) {
+                                    // Status is based on whole number daily stock
+                                    if (!$inv['has_inventory'] && !$has_recipe) {
                                         $status_badge = '<span class="status-badge badge-info">Not Tracked</span>';
-                                        $status_color = 'info'; // A neutral color
+                                        $status_color = 'info';
                                     } elseif ($daily_stock <= 0) {
                                         $status_badge = '<span class="status-badge badge-danger">Out of Stock</span>';
                                         $status_color = 'danger';
@@ -1709,23 +1914,47 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
                                         $status_badge = '<span class="status-badge badge-success">In Stock</span>';
                                         $status_color = 'success';
                                     }
-                                    
-                                    $inventory_status = $inv['has_inventory'] ? '<span class="badge bg-primary">Active</span>' : '<span class="badge bg-secondary">No Inventory</span>';
+
+                                    $recipe_json = htmlspecialchars(json_encode([
+                                        'id' => $inv['id'],
+                                        'name' => $inv['name'],
+                                        'category' => $inv['category'],
+                                        'price' => $inv['price'],
+                                        'recipe' => $recipe,
+                                        'calculated_yield' => $daily_stock,
+                                        'has_recipe' => $has_recipe
+                                    ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8');
                                     
                                     echo "
                                     <tr>
-                                        <td><strong>{$inv['name']}</strong></td>
-                                        <td>{$inv['product_id']}</td>
+                                        <td>
+                                            <strong>{$inv['name']}</strong>
+                                            <div class='text-muted small' style='font-size:11px;'>ID: #PROD-{$inv['product_id']}</div>
+                                        </td>
                                         <td>{$inv['category']}</td>
                                         <td>&#8369;" . number_format($inv['price'], 2) . "</td>
                                         <td>
-                                            <span class='stock-badge stock-{$status_color}'>" 
-                                                . ($inv['has_inventory'] ? $daily_stock . ' units' : 'N/A') . "
-                                            </span>
+                                            <span class='stock-badge stock-{$status_color}'><strong>{$daily_stock} units</strong></span>";
+                                    
+                                    if ($has_recipe) {
+                                        if ($daily_stock <= 0) {
+                                            echo "<small class='d-block text-danger mt-1' style='font-size:11px;'><i class='fas fa-exclamation-circle'></i> Depleted: {$limiting_ingredient}</small>";
+                                        } else {
+                                            echo "<small class='d-block text-success mt-1' style='font-size:11px;'><i class='fas fa-check-circle'></i> Limit: {$limiting_ingredient}</small>";
+                                        }
+                                    } else {
+                                        echo "<small class='d-block text-muted mt-1' style='font-size:11px;'><i class='fas fa-info-circle'></i> Manual Stock</small>";
+                                    }
+
+                                    echo "
                                         </td>
                                         <td>{$min_level} units</td>
                                         <td>$status_badge</td>
-                                        <td>" . ($inv['last_updated'] ? date('M d, Y H:i', strtotime($inv['last_updated'])) : 'Never') . "</td>
+                                        <td>
+                                            <button type='button' class='btn btn-sm " . ($has_recipe ? 'btn-outline-secondary' : 'btn-outline-danger') . "' onclick='openProductRecipeModal({$recipe_json})' style='font-size:12px; font-weight:600;'>
+                                                <i class='fas fa-layer-group me-1'></i> " . ($has_recipe ? "Recipe (" . count($recipe) . " items)" : "+ Link Ingredients") . "
+                                            </button>
+                                        </td>
                                         <td>";
                                     
                                     if ($inv['has_inventory']) {
@@ -1746,6 +1975,106 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
                                         echo "
                                             <button class='btn btn-sm btn-outline-primary' data-bs-toggle='modal' data-bs-target='#createInventoryModal' onclick=\"setProductId({$inv['id']})\" title='Create Inventory'>
                                                 <i class='fas fa-plus'></i> Create
+                                            </button>";
+                                    }
+                                    
+                                    echo "
+                                        </td>
+                                    </tr>
+                                    ";
+                                }
+                            } else {
+                                echo "<tr><td colspan='8' class='text-center text-muted'>No products found</td></tr>";
+                            }
+                            ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php else: ?>
+                <!-- Raw Ingredients Inventory View -->
+                <div class="section-header">
+                    <h2>Raw Ingredients Inventory &amp; Store Stock</h2>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#adjustIngredientModal" onclick="openIngredientAdjustModal(0, '', '', 0)" style="background:#b3261e; border-color:#b3261e; font-weight:600;">
+                            <i class="fas fa-plus"></i> Quick Restock / Adjust Ingredient
+                        </button>
+                        <a href="materials.php" class="btn btn-outline-secondary" style="font-weight:600;">
+                            <i class="fas fa-list"></i> Full Materials Catalog
+                        </a>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Raw Material / Ingredient</th>
+                                <th>Current Store Stock (Whole Numbers)</th>
+                                <th>Reorder Level</th>
+                                <th>Stock Status</th>
+                                <th>Used in Menu Products</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($all_materials)): ?>
+                                <tr>
+                                    <td colspan="6" class="text-center py-4 text-muted">
+                                        No raw materials registered yet. <a href="materials.php" class="text-danger fw-bold">Click here to register ingredients</a>.
+                                    </td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($all_materials as $mat): 
+                                    $mid = (int)$mat['id'];
+                                    $mname = htmlspecialchars($mat['name']);
+                                    $munit = htmlspecialchars($mat['unit']);
+                                    $mstock = (int)$mat['current_stock_int'];
+                                    $mreorder = (int)$mat['effective_reorder_int'];
+                                    $used_prods = $material_usage_map[$mid] ?? [];
+                                    
+                                    if ($mstock <= 0) {
+                                        $s_badge = '<span class="status-badge badge-danger">Depleted (0)</span>';
+                                    } elseif ($mstock <= $mreorder) {
+                                        $s_badge = '<span class="status-badge badge-warning">Low Stock</span>';
+                                    } else {
+                                        $s_badge = '<span class="status-badge badge-success">Safe Stock</span>';
+                                    }
+                                ?>
+                                    <tr>
+                                        <td>
+                                            <strong><?php echo $mname; ?></strong>
+                                            <div class="text-muted small" style="font-size:11px;">ID: #ING-<?php echo str_pad($mid, 4, '0', STR_PAD_LEFT); ?></div>
+                                        </td>
+                                        <td>
+                                            <span class="stock-badge <?php echo $mstock <= 0 ? 'stock-danger' : ($mstock <= $mreorder ? 'stock-warning' : 'stock-success'); ?>">
+                                                <strong><?php echo $mstock; ?> <?php echo $munit; ?></strong>
+                                            </span>
+                                        </td>
+                                        <td><?php echo $mreorder; ?> <?php echo $munit; ?></td>
+                                        <td><?php echo $s_badge; ?></td>
+                                        <td>
+                                            <?php if (empty($used_prods)): ?>
+                                                <span class="text-muted small">Not linked to any product</span>
+                                            <?php else: ?>
+                                                <div class="d-flex flex-wrap gap-1">
+                                                    <?php foreach ($used_prods as $upname): ?>
+                                                        <span class="badge bg-light text-dark border" style="font-size:11px;"><?php echo htmlspecialchars($upname); ?></span>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="text-end">
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick='openIngredientAdjustModal(<?php echo $mid; ?>, <?php echo json_encode($mname); ?>, <?php echo json_encode($munit); ?>, <?php echo $mstock; ?>)' style="font-weight:600; font-size:12px;">
+                                                <i class="fas fa-edit me-1"></i> Adjust / Restock
+                                            </button>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php endif; ?>
                                             </button>";
                                     }
                                     
@@ -1952,7 +2281,11 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-                                <div class="form-helper-text"><i class="fas fa-info-circle"></i> If inventory already exists for this date, submit will auto top-up stock.</div>
+                                <div id="createProductRecipeInfo" class="alert alert-info py-2 px-3 small mt-2 d-none" style="font-size: 12px; border-radius: 8px;">
+                                    <i class="fas fa-boxes-stacked me-1"></i> <span id="createRecipeYieldText">Calculated from raw ingredients.</span>
+                                    <button type="button" class="btn btn-sm btn-link p-0 ms-2 text-decoration-none fw-bold" id="btnUseCalcStock" onclick="applyCalculatedStockToModal()">Use This Stock</button>
+                                </div>
+                                <div class="form-helper-text"><i class="fas fa-info-circle"></i> Stock quantities are automatically calculated from raw ingredient inventory.</div>
                             </div>
                             <div class="form-group-modern">
                                 <label class="form-label-modern">Inventory Date</label>
@@ -1966,16 +2299,16 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
                         <!-- Section 2: Stock Levels -->
                         <div class="form-section-card">
                             <div class="form-section-head">
-                                <span class="form-section-title"><i class="fas fa-cubes"></i> Stock Quantities</span>
+                                <span class="form-section-title"><i class="fas fa-cubes"></i> Stock Quantities (Whole Numbers)</span>
                                 <span class="form-req-pill">Required</span>
                             </div>
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <div class="form-group-modern">
-                                        <label class="form-label-modern">Initial Stock <span class="form-req-star">*</span></label>
+                                        <label class="form-label-modern">Initial Stock (Whole Number) <span class="form-req-star">*</span></label>
                                         <div class="form-input-wrap">
                                             <i class="fas fa-layer-group form-input-icon"></i>
-                                            <input type="number" name="initial_stock" class="form-control" min="0" value="<?php echo (int)$default_inventory_seed_stock; ?>" required>
+                                            <input type="number" step="1" name="initial_stock" id="createInitialStock" class="form-control" min="0" value="<?php echo (int)$default_inventory_seed_stock; ?>" required>
                                         </div>
                                     </div>
                                 </div>
@@ -1984,7 +2317,7 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
                                         <label class="form-label-modern">Minimum Safety Level <span class="form-req-star">*</span></label>
                                         <div class="form-input-wrap">
                                             <i class="fas fa-bell form-input-icon"></i>
-                                            <input type="number" name="min_stock_level" class="form-control" min="1" value="5" required>
+                                            <input type="number" step="1" name="min_stock_level" class="form-control" min="1" value="5" required>
                                         </div>
                                     </div>
                                 </div>
@@ -2000,6 +2333,151 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
                     <div class="modal-footer">
                         <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
                         <button type="submit" class="btn-modal-primary"><i class="fas fa-plus"></i> Create Inventory</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Product Recipe Ingredients Modal -->
+    <div class="modal fade modern-form-modal" id="productRecipeModal" tabindex="-1" aria-labelledby="productRecipeModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-header-icon" style="background:#fff1f0; color:#b3261e;">
+                        <i class="fas fa-layer-group"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title" id="productRecipeModalLabel">Product Recipe &amp; Ingredients Setup</h5>
+                        <p class="modal-subtitle">Define raw ingredients required per 1 unit/serving in whole numbers.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form method="POST" action="inventory.php" id="productRecipeForm">
+                    <input type="hidden" name="save_product_recipe" value="1">
+                    <input type="hidden" name="product_id" id="recipe_modal_product_id">
+                    <input type="hidden" name="date" value="<?php echo htmlspecialchars($selected_date); ?>">
+                    
+                    <div class="modal-body">
+                        <!-- Product Info Header Card -->
+                        <div class="p-3 mb-3 border rounded-3 bg-light d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <div>
+                                <span class="text-muted small text-uppercase fw-semibold" style="font-size:11px;">Menu Product</span>
+                                <h5 class="mb-0 fw-bold text-dark" id="recipe_modal_product_name">—</h5>
+                                <span class="text-muted small" id="recipe_modal_product_meta">Category &bull; Price</span>
+                            </div>
+                            <div class="text-end">
+                                <span class="text-muted small d-block" style="font-size:11px;">Ingredient-Derived Capacity</span>
+                                <span class="badge bg-success fs-6" id="recipe_modal_live_yield" style="font-size: 1rem !important;">0 units</span>
+                            </div>
+                        </div>
+
+                        <!-- Whole Numbers Required Note -->
+                        <div class="alert alert-light border small text-muted mb-3" style="font-size:12px; background:#fff8ef; border-color:#fedf89 !important;">
+                            <i class="fas fa-info-circle text-warning me-1"></i> <strong>Whole Numbers Required:</strong> Enter the quantity needed of each raw ingredient in <strong>whole numbers</strong> (e.g. 1 kg, 2 pcs, 1 pack). Product stock quantities in Inventory will automatically be calculated based on your ingredient availability.
+                        </div>
+
+                        <!-- Ingredients Checklist -->
+                        <div class="form-section-card">
+                            <div class="form-section-head d-flex justify-content-between align-items-center">
+                                <span class="form-section-title"><i class="fas fa-carrot"></i> Select Ingredients &amp; Quantities</span>
+                                <span class="badge bg-light text-dark border">Step: 1 (Whole Numbers)</span>
+                            </div>
+
+                            <div class="table-responsive border rounded-2 bg-white">
+                                <table class="table table-sm align-middle mb-0" style="font-size: 13px;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width: 45px;" class="text-center">Use</th>
+                                            <th>Raw Material / Ingredient</th>
+                                            <th style="width: 140px;">Store Stock</th>
+                                            <th style="width: 180px;">Qty Needed / Unit</th>
+                                            <th style="width: 110px;" class="text-end">Max Yield</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="recipe_modal_ingredients_tbody">
+                                        <!-- Populated dynamically via JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Live Summary Alert -->
+                        <div id="recipe_modal_summary_alert" class="alert alert-secondary py-2 px-3 small mt-3 mb-0" style="font-size: 12px;">
+                            <i class="fas fa-calculator me-1"></i> Select at least 1 ingredient to calculate available stock.
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary" style="background:#b3261e; border-color:#b3261e;">
+                            <i class="fas fa-check"></i> Save Recipe &amp; Calculate Stock
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Restock / Adjust Raw Ingredient Modal -->
+    <div class="modal fade modern-form-modal" id="adjustIngredientModal" tabindex="-1" aria-labelledby="adjustIngredientModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-header-icon" style="background:#fff1f0; color:#b3261e;">
+                        <i class="fas fa-carrot"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title" id="adjustIngredientModalLabel">Adjust / Restock Raw Ingredient</h5>
+                        <p class="modal-subtitle">Update raw material stock in whole numbers. Dependent products will automatically recalculate.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form method="POST" action="inventory.php">
+                    <input type="hidden" name="adjust_ingredient_stock" value="1">
+                    <div class="modal-body">
+                        <div class="form-group-modern mb-3">
+                            <label class="form-label-modern">Select Ingredient <span class="form-req-star">*</span></label>
+                            <select name="material_id" id="adj_ing_material_id" class="form-select" required onchange="handleIngredientSelectChange(this)">
+                                <option value="">Select ingredient</option>
+                                <?php foreach ($all_materials as $m): ?>
+                                    <option value="<?php echo $m['id']; ?>" data-name="<?php echo htmlspecialchars($m['name']); ?>" data-unit="<?php echo htmlspecialchars($m['unit']); ?>" data-stock="<?php echo (int)$m['current_stock_int']; ?>">
+                                        <?php echo htmlspecialchars($m['name']); ?> (Current: <?php echo (int)$m['current_stock_int']; ?> <?php echo htmlspecialchars($m['unit']); ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div class="p-3 mb-3 border rounded-2 bg-light d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="text-muted small">Current Store Stock</span>
+                                <h6 class="mb-0 fw-bold text-dark" id="adj_ing_current_stock_text">—</h6>
+                            </div>
+                            <span class="badge bg-secondary" id="adj_ing_unit_badge">—</span>
+                        </div>
+
+                        <div class="form-group-modern mb-3">
+                            <label class="form-label-modern">Action Type <span class="form-req-star">*</span></label>
+                            <select name="adjustment_type" class="form-select" required>
+                                <option value="add">Add to Stock (Restocked trip / delivery)</option>
+                                <option value="set">Set Exact Stock Count (Physical count audit)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group-modern mb-3">
+                            <label class="form-label-modern">Quantity (Whole Number) <span class="form-req-star">*</span></label>
+                            <div class="form-input-wrap">
+                                <i class="fas fa-layer-group form-input-icon"></i>
+                                <input type="number" step="1" min="0" name="quantity" id="adj_ing_quantity" class="form-control" placeholder="e.g. 10" value="10" required>
+                            </div>
+                            <div class="form-helper-text"><i class="fas fa-info-circle"></i> Must be a whole number integer (no decimals).</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary" style="background:#b3261e; border-color:#b3261e;">
+                            <i class="fas fa-save"></i> Save Ingredient Stock
+                        </button>
                     </div>
                 </form>
             </div>
@@ -2203,6 +2681,208 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
         function setMinStockForm(productId, currentMinStock) {
             $('#minStockProductId').val(productId);
             $('#minStockValue').val(currentMinStock);
+        }
+
+        // Raw Materials & Recipe Ingredients Data for dynamic calculations
+        const allAvailableMaterials = <?php echo json_encode($all_materials, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+        const allProductRecipes = <?php echo json_encode($product_recipes, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+
+        function openProductRecipeModal(product) {
+            document.getElementById('recipe_modal_product_id').value = product.id;
+            document.getElementById('recipe_modal_product_name').textContent = product.name;
+            document.getElementById('recipe_modal_product_meta').textContent = product.category + ' • ₱' + parseFloat(product.price).toFixed(2);
+
+            const tbody = document.getElementById('recipe_modal_ingredients_tbody');
+            tbody.innerHTML = '';
+
+            const recipeMap = {};
+            if (product.recipe && Array.isArray(product.recipe)) {
+                product.recipe.forEach(r => {
+                    recipeMap[parseInt(r.material_id, 10)] = parseInt(r.quantity_needed_int, 10) || 1;
+                });
+            }
+
+            if (allAvailableMaterials && allAvailableMaterials.length > 0) {
+                allAvailableMaterials.forEach(mat => {
+                    const mid = parseInt(mat.id, 10);
+                    const isChecked = recipeMap.hasOwnProperty(mid);
+                    const qtyVal = isChecked ? Math.max(1, recipeMap[mid]) : 1;
+                    const stock = parseInt(mat.current_stock_int, 10) || 0;
+                    const reorder = parseInt(mat.effective_reorder_int, 10) || 5;
+
+                    const row = document.createElement('tr');
+                    row.className = 'recipe-ing-row';
+                    row.setAttribute('data-id', mid);
+                    row.setAttribute('data-name', mat.name);
+                    row.setAttribute('data-stock', stock);
+                    row.setAttribute('data-unit', mat.unit);
+
+                    let stockBadgeClass = stock <= 0 ? 'bg-danger' : (stock <= reorder ? 'bg-warning text-dark' : 'bg-light text-dark border');
+
+                    row.innerHTML = `
+                        <td class="text-center">
+                            <input type="checkbox" class="form-check-input recipe-chk" name="recipe_ingredients[${mid}][selected]" value="1" id="rec_chk_${mid}" ${isChecked ? 'checked' : ''} onchange="recalculateLiveRecipeYield()">
+                        </td>
+                        <td>
+                            <label for="rec_chk_${mid}" class="fw-bold mb-0 text-dark" style="cursor:pointer;">${mat.name}</label>
+                            <span class="text-muted small d-block" style="font-size:11px;">Unit: ${mat.unit}</span>
+                        </td>
+                        <td>
+                            <span class="badge ${stockBadgeClass}" style="font-size:11px;">
+                                ${stock} ${mat.unit}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center gap-1">
+                                <input type="number" step="1" min="1" name="recipe_ingredients[${mid}][qty]" class="form-control form-control-sm text-end recipe-qty" value="${qtyVal}" ${isChecked ? '' : 'disabled'} oninput="recalculateLiveRecipeYield()" style="width: 80px;">
+                                <span class="small text-muted fw-semibold" style="font-size:11px;">${mat.unit}</span>
+                            </div>
+                        </td>
+                        <td class="text-end">
+                            <span class="recipe-item-yield fw-bold text-muted" style="font-size:12px;">—</span>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted">No raw materials registered in system. <a href="materials.php" class="text-danger fw-bold">Register materials here</a>.</td></tr>';
+            }
+
+            recalculateLiveRecipeYield();
+            new bootstrap.Modal(document.getElementById('productRecipeModal')).show();
+        }
+
+        function recalculateLiveRecipeYield() {
+            let minYield = Infinity;
+            let limitingName = '';
+            let selectedCount = 0;
+
+            document.querySelectorAll('.recipe-ing-row').forEach(row => {
+                const chk = row.querySelector('.recipe-chk');
+                const qtyInput = row.querySelector('.recipe-qty');
+                const yieldCell = row.querySelector('.recipe-item-yield');
+                const stock = parseInt(row.getAttribute('data-stock'), 10) || 0;
+                const name = row.getAttribute('data-name') || '';
+
+                if (chk && chk.checked) {
+                    selectedCount++;
+                    qtyInput.disabled = false;
+                    let qty = parseInt(qtyInput.value, 10);
+                    if (isNaN(qty) || qty < 1) {
+                        qty = 1;
+                        qtyInput.value = 1;
+                    }
+                    const canMake = Math.floor(stock / qty);
+                    yieldCell.textContent = canMake + ' units';
+                    if (canMake < minYield) {
+                        minYield = canMake;
+                        limitingName = name;
+                    }
+                } else {
+                    qtyInput.disabled = true;
+                    yieldCell.textContent = '—';
+                }
+            });
+
+            const yieldBadge = document.getElementById('recipe_modal_live_yield');
+            const summaryAlert = document.getElementById('recipe_modal_summary_alert');
+
+            if (selectedCount === 0) {
+                yieldBadge.textContent = '0 units';
+                yieldBadge.className = 'badge bg-secondary fs-6';
+                summaryAlert.className = 'alert alert-secondary py-2 px-3 small mt-3 mb-0';
+                summaryAlert.innerHTML = '<i class="fas fa-info-circle me-1"></i> No ingredients selected. Check the ingredients required to prepare this product.';
+            } else {
+                const finalYield = (minYield === Infinity || minYield < 0) ? 0 : minYield;
+                yieldBadge.textContent = finalYield + ' units';
+                if (finalYield === 0) {
+                    yieldBadge.className = 'badge bg-danger fs-6';
+                    summaryAlert.className = 'alert alert-danger py-2 px-3 small mt-3 mb-0';
+                    summaryAlert.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i> <strong>Out of Stock:</strong> Raw material <strong>' + limitingName + '</strong> has insufficient stock. This menu item cannot be prepared.';
+                } else {
+                    yieldBadge.className = 'badge bg-success fs-6';
+                    summaryAlert.className = 'alert alert-success py-2 px-3 small mt-3 mb-0';
+                    summaryAlert.innerHTML = '<i class="fas fa-check-circle me-1"></i> Available ingredient stock allows up to <strong>' + finalYield + ' units</strong> of this product (limited by <strong>' + limitingName + '</strong>).';
+                }
+            }
+        }
+
+        function openIngredientAdjustModal(id = 0, name = '', unit = '', currentStock = 0) {
+            const selectEl = document.getElementById('adj_ing_material_id');
+            const stockText = document.getElementById('adj_ing_current_stock_text');
+            const unitBadge = document.getElementById('adj_ing_unit_badge');
+            const qtyInput = document.getElementById('adj_ing_quantity');
+
+            if (id > 0) {
+                selectEl.value = String(id);
+                stockText.textContent = currentStock + ' ' + unit;
+                unitBadge.textContent = unit;
+            } else {
+                selectEl.value = '';
+                stockText.textContent = '—';
+                unitBadge.textContent = '—';
+            }
+            qtyInput.value = 10;
+            new bootstrap.Modal(document.getElementById('adjustIngredientModal')).show();
+        }
+
+        function handleIngredientSelectChange(selectEl) {
+            const opt = selectEl.options[selectEl.selectedIndex];
+            const stockText = document.getElementById('adj_ing_current_stock_text');
+            const unitBadge = document.getElementById('adj_ing_unit_badge');
+            if (opt && opt.value) {
+                const stock = opt.getAttribute('data-stock') || '0';
+                const unit = opt.getAttribute('data-unit') || '';
+                stockText.textContent = stock + ' ' + unit;
+                unitBadge.textContent = unit;
+            } else {
+                stockText.textContent = '—';
+                unitBadge.textContent = '—';
+            }
+        }
+
+        // Live recipe yield preview on Create Inventory Modal
+        const createProdSelect = document.getElementById('createProductId');
+        if (createProdSelect) {
+            createProdSelect.addEventListener('change', function() {
+                const pid = parseInt(this.value, 10);
+                const infoBox = document.getElementById('createProductRecipeInfo');
+                const yieldText = document.getElementById('createRecipeYieldText');
+                const btnUse = document.getElementById('btnUseCalcStock');
+
+                if (allProductRecipes && allProductRecipes[pid] && allProductRecipes[pid].length > 0) {
+                    const recipe = allProductRecipes[pid];
+                    let minYield = Infinity;
+                    let limitingName = '';
+                    recipe.forEach(ing => {
+                        const have = parseInt(ing.material_stock, 10) || 0;
+                        const need = Math.max(1, parseInt(ing.quantity_needed_int, 10) || 1);
+                        const canMake = Math.floor(have / need);
+                        if (canMake < minYield) {
+                            minYield = canMake;
+                            limitingName = ing.material_name;
+                        }
+                    });
+                    const finalYield = (minYield === Infinity || minYield < 0) ? 0 : minYield;
+                    window._currentCalculatedStock = finalYield;
+                    infoBox.classList.remove('d-none');
+                    yieldText.innerHTML = '<strong>' + finalYield + ' units</strong> can be prepared based on raw ingredients (' + (finalYield <= 0 ? '<span class="text-danger">Limited by ' + limitingName + '</span>' : 'Limited by ' + limitingName) + ').';
+                    btnUse.classList.remove('d-none');
+                } else {
+                    infoBox.classList.remove('d-none');
+                    yieldText.innerHTML = 'No recipe linked yet. Click "+ Link Ingredients" in the table to set raw ingredients in whole numbers.';
+                    btnUse.classList.add('d-none');
+                }
+            });
+        }
+
+        function applyCalculatedStockToModal() {
+            if (window._currentCalculatedStock !== undefined) {
+                const input = document.getElementById('createInitialStock');
+                if (input) {
+                    input.value = window._currentCalculatedStock;
+                }
+            }
         }
 
         function deleteInventory(productId) {
