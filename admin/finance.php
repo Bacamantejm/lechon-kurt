@@ -8,6 +8,8 @@ require_once __DIR__ . '/hr_module_common.php';
 require_once '../includes/partner_order_policy_helper.php';
 
 checkAdminAccess();
+require_once __DIR__ . '/../includes/IngredientStockManager.php';
+IngredientStockManager::ensureProcurementSchema($conn);
 popEnsurePolicySchema($conn);
 $admin_info = getAdminInfo($conn);
 $csrf_token = generateCSRFToken();
@@ -1350,6 +1352,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['payroll_action']) ||
     financeDecisionRespondAndExit($is_payroll_ajax, 'finance.php');
 }
 
+// Handle Procurement Invoice & Expense Approvals by Finance Department
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['procurement_finance_action'])) {
+    financeEnforceManageAccess($can_manage_finance, false);
+    if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
+        $_SESSION['error'] = 'Invalid request token. Please refresh and try again.';
+        header('Location: finance.php#procurement-queue');
+        exit();
+    }
+
+    $p_action = trim((string)$_POST['procurement_finance_action']);
+    $order_id = intval($_POST['order_id'] ?? 0);
+    $finance_notes = trim((string)($_POST['finance_notes'] ?? ''));
+
+    if ($order_id <= 0) {
+        $_SESSION['error'] = 'Invalid procurement order ID.';
+        header('Location: finance.php#procurement-queue');
+        exit();
+    }
+
+    if ($p_action === 'approve') {
+        $approved = IngredientStockManager::approveProcurementByFinance($conn, $order_id, $admin_user_id, $finance_notes);
+        if ($approved) {
+            $_SESSION['success'] = "Procurement invoice #$order_id approved successfully! Supplier and franchise store have been notified to proceed.";
+        } else {
+            $_SESSION['error'] = "Failed to approve procurement invoice #$order_id.";
+        }
+    } elseif ($p_action === 'reject') {
+        $reject_notes = trim((string)($_POST['reject_reason'] ?? $finance_notes ?: 'Disapproved by Finance'));
+        // Reject supplier_orders
+        mysqli_query($conn, "UPDATE supplier_orders SET status = 'rejected', finance_status = 'rejected', finance_notes = '" . mysqli_real_escape_string($conn, $reject_notes) . "', updated_at = NOW() WHERE id = $order_id");
+        // Reject matching expense record
+        mysqli_query($conn, "UPDATE expenses SET status = 'rejected', updated_at = NOW() WHERE source_id = $order_id AND source_type IN ('supplier_procurement', 'self_procurement')");
+        // Audit log
+        mysqli_query($conn, "INSERT INTO supplier_order_status_logs (order_id, previous_status, new_status, action_by_user_id, notes) 
+                             VALUES ($order_id, 'awaiting_finance_approval', 'rejected', $admin_user_id, 'Finance Department rejected: " . mysqli_real_escape_string($conn, $reject_notes) . "')");
+        $_SESSION['success'] = "Procurement request #$order_id marked as rejected.";
+    }
+
+    header('Location: finance.php#procurement-queue');
+    exit();
+}
+
 // Financial Calculations with Filters
 $current_year = isset($_GET['year']) ? intval($_GET['year']) : date('Y');
 $current_month = isset($_GET['month']) ? intval($_GET['month']) : date('m');
@@ -1667,6 +1711,68 @@ if ($approval_result) {
     }
 }
 $pending_payroll_count = count($visible_payroll_rows);
+
+// Fetch Procurement Invoices for Finance Review
+$procurement_pending_items = [];
+$procurement_settled_items = [];
+$pending_procurement_count = 0;
+
+$proc_scope_sql = "";
+if ($seller_scope_id !== null) {
+    $proc_scope_sql = " AND so.store_id = " . (int)$seller_scope_id;
+}
+
+$proc_pending_q = "
+    SELECT so.*, 
+           COALESCE(NULLIF(TRIM(u.business_name), ''), NULLIF(TRIM(u.full_name), ''), 'Franchise Store') AS store_name,
+           u.phone AS store_phone,
+           u.email AS store_email,
+           s.name AS supplier_name,
+           COUNT(soi.id) AS total_items,
+           GROUP_CONCAT(CONCAT(m.name, ' (', soi.quantity_supplied, ' ', soi.unit, ')') SEPARATOR ', ') AS items_preview
+    FROM supplier_orders so
+    LEFT JOIN users u ON u.id = so.store_id
+    LEFT JOIN suppliers s ON s.id = so.supplier_id
+    LEFT JOIN supplier_order_items soi ON soi.order_id = so.id
+    LEFT JOIN materials m ON m.id = soi.material_id
+    WHERE (so.status = 'awaiting_finance_approval' OR (so.procurement_type = 'self_procured' AND so.finance_status = 'pending'))
+    $proc_scope_sql
+    GROUP BY so.id
+    ORDER BY so.created_at DESC
+";
+$proc_p_res = mysqli_query($conn, $proc_pending_q);
+if ($proc_p_res) {
+    while ($pr = mysqli_fetch_assoc($proc_p_res)) {
+        $procurement_pending_items[] = $pr;
+    }
+}
+$pending_procurement_count = count($procurement_pending_items);
+
+$proc_settled_q = "
+    SELECT so.*, 
+           COALESCE(NULLIF(TRIM(u.business_name), ''), NULLIF(TRIM(u.full_name), ''), 'Franchise Store') AS store_name,
+           s.name AS supplier_name,
+           u_fin.full_name AS approved_by_name,
+           COUNT(soi.id) AS total_items,
+           GROUP_CONCAT(CONCAT(m.name, ' (', soi.quantity_supplied, ' ', soi.unit, ')') SEPARATOR ', ') AS items_preview
+    FROM supplier_orders so
+    LEFT JOIN users u ON u.id = so.store_id
+    LEFT JOIN suppliers s ON s.id = so.supplier_id
+    LEFT JOIN users u_fin ON u_fin.id = so.finance_approved_by
+    LEFT JOIN supplier_order_items soi ON soi.order_id = so.id
+    LEFT JOIN materials m ON m.id = soi.material_id
+    WHERE so.finance_status = 'approved' AND so.status = 'completed'
+    $proc_scope_sql
+    GROUP BY so.id
+    ORDER BY COALESCE(so.received_by_store_at, so.completed_at, so.updated_at) DESC
+    LIMIT 50
+";
+$proc_s_res = mysqli_query($conn, $proc_settled_q);
+if ($proc_s_res) {
+    while ($sr = mysqli_fetch_assoc($proc_s_res)) {
+        $procurement_settled_items[] = $sr;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -2314,6 +2420,12 @@ $pending_payroll_count = count($visible_payroll_rows);
                                     <span class="badge bg-danger ms-1"><?= $pending_cancellations_count + $pending_refunds_count ?></span>
                                 <?php endif; ?>
                             </a>
+                            <a href="#procurement-queue" class="finance-quick-btn">
+                                <i class="fas fa-boxes-packing text-primary"></i> Procurement
+                                <?php if ($pending_procurement_count > 0): ?>
+                                    <span class="badge bg-danger ms-1"><?= $pending_procurement_count ?></span>
+                                <?php endif; ?>
+                            </a>
                             <a href="#audit-trail" class="finance-quick-btn">
                                 <i class="fas fa-signature text-secondary"></i> Audit Trail
                             </a>
@@ -2662,6 +2774,248 @@ $pending_payroll_count = count($visible_payroll_rows);
                                     <?php endif; ?>
                                 </tbody>
                             </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Procurement & Invoices Approval Queue -->
+                <div class="card mb-4" id="procurement-queue" style="border: 1px solid #eaecf0; border-radius: 12px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+                    <div class="card-header bg-white border-bottom py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div>
+                            <h5 class="mb-0 fw-bold d-flex align-items-center gap-2" style="font-family:'Outfit',sans-serif; color:#101828;">
+                                <i class="fas fa-boxes-packing text-primary"></i>
+                                <span>Procurement &amp; Inventory Restock Queue</span>
+                            </h5>
+                            <span class="text-muted small">Authorize wholesale supplier invoices and audit store-logged market procurement receipts.</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge <?= $pending_procurement_count > 0 ? 'bg-warning text-dark' : 'bg-success' ?> px-3 py-2 fw-bold" style="font-size:0.85rem;">
+                                <?= $pending_procurement_count ?> Awaiting Finance Action
+                            </span>
+                            <a href="expenses.php" class="btn btn-outline-secondary btn-sm fw-semibold">
+                                <i class="fas fa-receipt me-1"></i> Expenses Ledger
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <!-- Pending Procurement Section -->
+                        <div class="mb-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+                                    <i class="fas fa-file-invoice-dollar text-danger"></i>
+                                    <span>Pending Procurement Invoices &amp; Restock Approvals</span>
+                                </h6>
+                                <span class="badge bg-light text-muted border"><?= count($procurement_pending_items) ?> pending items</span>
+                            </div>
+
+                            <div class="table-responsive">
+                                <table class="admin-table table-hover mb-0 align-middle">
+                                    <thead>
+                                        <tr style="background:#f8f9fa;">
+                                            <th>Invoice / Order Code</th>
+                                            <th>Procurement Type</th>
+                                            <th>Franchise Store</th>
+                                            <th>Vendor / Supplier</th>
+                                            <th>Items Requested / Quoted</th>
+                                            <th class="text-end">Total Amount</th>
+                                            <th>Submission Date</th>
+                                            <th class="text-end">Finance Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php if (empty($procurement_pending_items)): ?>
+                                            <tr>
+                                                <td colspan="8" class="text-center py-4 text-muted">
+                                                    <i class="fas fa-clipboard-check fa-2x mb-2 text-secondary d-block"></i>
+                                                    No procurement invoices currently pending finance review.
+                                                </td>
+                                            </tr>
+                                        <?php else: ?>
+                                            <?php foreach ($procurement_pending_items as $p_item): 
+                                                $is_self = ($p_item['procurement_type'] ?? '') === 'self_procured';
+                                                $ord_id = (int)$p_item['id'];
+                                                $total_amt = (float)$p_item['total_amount'];
+                                            ?>
+                                                <tr>
+                                                    <td>
+                                                        <div class="fw-bold text-dark"><?= htmlspecialchars($p_item['order_code']) ?></div>
+                                                        <?php if (!empty($p_item['invoice_number'])): ?>
+                                                            <div class="small text-muted">Inv: <?= htmlspecialchars($p_item['invoice_number']) ?></div>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td>
+                                                        <?php if ($is_self): ?>
+                                                            <span class="badge bg-secondary mb-1">
+                                                                <i class="fas fa-store me-1"></i> Self-Procured
+                                                            </span>
+                                                            <div class="small text-muted">Direct Market Purchase</div>
+                                                        <?php else: ?>
+                                                            <span class="badge bg-primary mb-1">
+                                                                <i class="fas fa-truck-ramp-box me-1"></i> Partner Supplier
+                                                            </span>
+                                                            <div class="small text-muted">Wholesale Refill Order</div>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td>
+                                                        <div class="fw-bold text-dark"><?= htmlspecialchars($p_item['store_name']) ?></div>
+                                                        <div class="small text-muted"><?= htmlspecialchars($p_item['store_phone'] ?: $p_item['store_email']) ?></div>
+                                                    </td>
+                                                    <td>
+                                                        <?php if ($is_self): ?>
+                                                            <div class="fw-bold text-dark"><?= htmlspecialchars($p_item['vendor_name'] ?: 'Local Market / Wholesale Club') ?></div>
+                                                            <span class="badge bg-light text-secondary border">Market Vendor</span>
+                                                        <?php else: ?>
+                                                            <div class="fw-bold text-dark"><?= htmlspecialchars($p_item['supplier_name'] ?: 'Partner Supplier') ?></div>
+                                                            <span class="badge bg-light text-primary border">Accredited Supplier</span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td style="max-width: 250px;">
+                                                        <div class="fw-semibold text-dark small">
+                                                            <i class="fas fa-boxes-stacked me-1 text-secondary"></i> <?= (int)$p_item['total_items'] ?> ingredient line(s)
+                                                        </div>
+                                                        <div class="text-truncate small text-muted" title="<?= htmlspecialchars($p_item['items_preview'] ?? '') ?>">
+                                                            <?= htmlspecialchars($p_item['items_preview'] ?? 'Ingredients list') ?>
+                                                        </div>
+                                                    </td>
+                                                    <td class="text-end fw-bold text-danger" style="font-size:1.05rem;">
+                                                        ₱<?= number_format($total_amt, 2) ?>
+                                                    </td>
+                                                    <td class="small text-muted">
+                                                        <?= date('M d, Y', strtotime($p_item['created_at'])) ?><br>
+                                                        <?= date('h:i A', strtotime($p_item['created_at'])) ?>
+                                                    </td>
+                                                    <td class="text-end">
+                                                        <?php if (!$can_manage_finance): ?>
+                                                            <span class="badge bg-light text-muted border">View Only</span>
+                                                        <?php else: ?>
+                                                            <div class="d-flex justify-content-end gap-1 flex-wrap">
+                                                                <?php if (!empty($p_item['receipt_image'])): ?>
+                                                                    <a href="../<?= htmlspecialchars($p_item['receipt_image']) ?>" target="_blank" class="btn btn-sm btn-outline-secondary" title="View Receipt Proof">
+                                                                        <i class="fas fa-image"></i> Proof
+                                                                    </a>
+                                                                <?php endif; ?>
+                                                                
+                                                                <!-- Approve Form -->
+                                                                <form method="POST" style="margin:0; display:inline-block;" onsubmit="return confirm('Authorize budget release and approve procurement order <?= htmlspecialchars($p_item['order_code']) ?> for ₱<?= number_format($total_amt, 2) ?>?');">
+                                                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
+                                                                    <input type="hidden" name="procurement_finance_action" value="approve">
+                                                                    <input type="hidden" name="order_id" value="<?= $ord_id ?>">
+                                                                    <input type="hidden" name="finance_notes" value="Approved by Finance Dept">
+                                                                    <button type="submit" class="btn btn-sm btn-success fw-bold">
+                                                                        <i class="fas fa-check"></i> Approve
+                                                                    </button>
+                                                                </form>
+
+                                                                <!-- Reject Form -->
+                                                                <form method="POST" style="margin:0; display:inline-block;" onsubmit="return confirm('Reject this procurement transaction?');">
+                                                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
+                                                                    <input type="hidden" name="procurement_finance_action" value="reject">
+                                                                    <input type="hidden" name="order_id" value="<?= $ord_id ?>">
+                                                                    <input type="hidden" name="reject_reason" value="Budget or price rejected by Finance">
+                                                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                                        <i class="fas fa-times"></i> Reject
+                                                                    </button>
+                                                                </form>
+                                                            </div>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Final Settled Invoices Section -->
+                        <div class="pt-4 border-top">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <h6 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+                                        <i class="fas fa-check-double text-success"></i>
+                                        <span>Final Settled Procurement Invoices &amp; Restock History</span>
+                                    </h6>
+                                    <span class="small text-muted">Completed deliveries where store inventory has been automatically restocked.</span>
+                                </div>
+                                <span class="badge bg-light text-muted border"><?= count($procurement_settled_items) ?> settled invoices</span>
+                            </div>
+
+                            <div class="table-responsive">
+                                <table class="admin-table table-hover mb-0 align-middle">
+                                    <thead>
+                                        <tr style="background:#f8f9fa;">
+                                            <th>Invoice / Order Code</th>
+                                            <th>Store</th>
+                                            <th>Vendor / Supplier</th>
+                                            <th>Supplied Items</th>
+                                            <th class="text-end">Final Total</th>
+                                            <th>Finance Approved</th>
+                                            <th>Restocked At Store</th>
+                                            <th class="text-end">Settlement Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php if (empty($procurement_settled_items)): ?>
+                                            <tr>
+                                                <td colspan="8" class="text-center py-4 text-muted">
+                                                    No settled procurement invoices recorded yet.
+                                                </td>
+                                            </tr>
+                                        <?php else: ?>
+                                            <?php foreach ($procurement_settled_items as $s_item): 
+                                                $is_self = ($s_item['procurement_type'] ?? '') === 'self_procured';
+                                                $final_amt = (float)$s_item['total_amount'];
+                                            ?>
+                                                <tr>
+                                                    <td>
+                                                        <div class="fw-bold text-dark"><?= htmlspecialchars($s_item['order_code']) ?></div>
+                                                        <span class="badge <?= $is_self ? 'bg-secondary' : 'bg-primary' ?> small">
+                                                            <?= $is_self ? 'Self-Procured' : 'Supplier Refill' ?>
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <div class="fw-bold text-dark"><?= htmlspecialchars($s_item['store_name']) ?></div>
+                                                    </td>
+                                                    <td>
+                                                        <div class="fw-semibold text-dark">
+                                                            <?= htmlspecialchars($is_self ? ($s_item['vendor_name'] ?: 'Local Market') : ($s_item['supplier_name'] ?: 'Supplier')) ?>
+                                                        </div>
+                                                    </td>
+                                                    <td style="max-width: 240px;">
+                                                        <div class="text-truncate small text-muted" title="<?= htmlspecialchars($s_item['items_preview'] ?? '') ?>">
+                                                            <?= htmlspecialchars($s_item['items_preview'] ?? 'Ingredients list') ?>
+                                                        </div>
+                                                    </td>
+                                                    <td class="text-end fw-bold text-dark" style="font-size:1rem;">
+                                                        ₱<?= number_format($final_amt, 2) ?>
+                                                    </td>
+                                                    <td class="small text-muted">
+                                                        <?php if (!empty($s_item['finance_approved_at'])): ?>
+                                                            <i class="fas fa-check text-success me-1"></i> <?= date('M d, Y h:i A', strtotime($s_item['finance_approved_at'])) ?><br>
+                                                            <span class="text-secondary"><?= htmlspecialchars($s_item['approved_by_name'] ?: 'Finance Dept') ?></span>
+                                                        <?php else: ?>
+                                                            <span class="text-muted">Direct Settlement</span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td class="small text-muted">
+                                                        <?php if (!empty($s_item['received_by_store_at'])): ?>
+                                                            <i class="fas fa-box-open text-primary me-1"></i> <?= date('M d, Y h:i A', strtotime($s_item['received_by_store_at'])) ?>
+                                                        <?php else: ?>
+                                                            <?= date('M d, Y h:i A', strtotime($s_item['completed_at'] ?: $s_item['updated_at'])) ?>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td class="text-end">
+                                                        <span class="badge bg-success py-2 px-3 fw-bold" style="font-size:0.82rem;">
+                                                            <i class="fas fa-check-double me-1"></i> Settled &amp; Restocked
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>

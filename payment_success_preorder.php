@@ -224,6 +224,15 @@ if ($should_deduct) {
         }
 
         mysqli_commit($conn);
+
+        // Deduct raw ingredient stock according to recipe BOM
+        require_once __DIR__ . '/includes/IngredientStockManager.php';
+        foreach ($linked_preorders as $linked_po) {
+            $p_order_id = (int)($linked_po['id'] ?? 0);
+            if ($p_order_id > 0) {
+                IngredientStockManager::deductPreorderIngredients($conn, $p_order_id);
+            }
+        }
     } catch (Exception $e) {
         mysqli_rollback($conn);
         error_log("Inventory deduction failed for preorder #{$preorder_id}: " . $e->getMessage());

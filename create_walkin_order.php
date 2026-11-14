@@ -254,6 +254,10 @@ try {
         mysqli_stmt_close($hist);
     }
 
+    // Auto-deduct Bill of Materials (BOM) ingredients & trigger out-of-stock menu deactivation
+    require_once __DIR__ . '/includes/IngredientStockManager.php';
+    IngredientStockManager::deductOrderIngredients($conn, $order_id);
+
     mysqli_commit($conn);
 
     ob_end_clean(); // Clean any previous output

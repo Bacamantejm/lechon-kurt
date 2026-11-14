@@ -844,6 +844,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                         require_once __DIR__ . '/../includes/rider_helper.php';
                         isDeliveryDriverUser($conn, $user_id_for_employee, $store_id);
+
+                        // Ensure supplier profile exists if position is Supplier
+                        if (stripos($position, 'supplier') !== false) {
+                            $full_emp_name = formatEmployeeFullName($first_name, $middle_initial, $last_name, $suffix);
+                            $s_chk = mysqli_query($conn, "SELECT id FROM suppliers WHERE user_id = " . (int)$user_id_for_employee . " LIMIT 1");
+                            if ($s_chk && mysqli_num_rows($s_chk) === 0) {
+                                $e_name = mysqli_real_escape_string($conn, $full_emp_name);
+                                $e_phone = mysqli_real_escape_string($conn, $phone);
+                                $e_email = mysqli_real_escape_string($conn, $email);
+                                mysqli_query($conn, "INSERT INTO suppliers (user_id, name, contact_person, phone, email, is_active) 
+                                                     VALUES (" . (int)$user_id_for_employee . ", '$e_name', '$e_name', '$e_phone', '$e_email', 1)");
+                            }
+                        }
                     }
                     $_SESSION['success'] = (isset($_SESSION['success']) ? $_SESSION['success'] . " Employee added successfully." : "Employee added successfully.");
                 } else {
@@ -1139,6 +1152,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($sync_user_id > 0) {
                 require_once __DIR__ . '/../includes/rider_helper.php';
                 isDeliveryDriverUser($conn, $sync_user_id, $store_id);
+
+                // Ensure supplier profile exists if position is Supplier
+                if (stripos($position, 'supplier') !== false) {
+                    $full_emp_name = formatEmployeeFullName($first_name, $middle_initial, $last_name, $suffix);
+                    $s_chk = mysqli_query($conn, "SELECT id FROM suppliers WHERE user_id = " . (int)$sync_user_id . " LIMIT 1");
+                    if ($s_chk && mysqli_num_rows($s_chk) === 0) {
+                        $e_name = mysqli_real_escape_string($conn, $full_emp_name);
+                        $e_phone = mysqli_real_escape_string($conn, $phone);
+                        $e_email = mysqli_real_escape_string($conn, $email);
+                        mysqli_query($conn, "INSERT INTO suppliers (user_id, name, contact_person, phone, email, is_active) 
+                                             VALUES (" . (int)$sync_user_id . ", '$e_name', '$e_name', '$e_phone', '$e_email', 1)");
+                    }
+                }
             }
 
             $_SESSION['success'] = "Employee updated successfully.";
