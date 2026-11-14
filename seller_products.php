@@ -2,6 +2,10 @@
 session_start();
 require_once 'includes/config.php';
 require_once 'includes/SubscriptionAccessService.php';
+require_once 'includes/supplier_helper.php';
+
+ensureSupplierSchema($conn);
+ensureSupplierProcurementTables($conn);
 
 // Require login
 if (!isset($_SESSION['user_id'])) {
@@ -239,7 +243,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_new_product'])) {
                 foreach ($_POST['recipe_ingredients'] as $m_id => $r_data) {
                     if (!empty($r_data['selected'])) {
                         $mat_id = intval($m_id);
-                        $qty = floatval($r_data['qty'] ?? 0);
+                        $qty = max(1, intval(round(floatval($r_data['qty'] ?? 0))));
                         if ($mat_id > 0 && $qty > 0) {
                             $recipe_items[] = ['material_id' => $mat_id, 'quantity_needed' => $qty];
                         }
@@ -248,7 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_new_product'])) {
             } elseif (!empty($_POST['ingredients']) && is_array($_POST['ingredients'])) {
                 foreach ($_POST['ingredients'] as $ing) {
                     $mat_id = intval($ing['material_id'] ?? 0);
-                    $qty = floatval($ing['quantity_needed'] ?? 0);
+                    $qty = max(1, intval(round(floatval($ing['quantity_needed'] ?? 0))));
                     if ($mat_id > 0 && $qty > 0) {
                         $recipe_items[] = ['material_id' => $mat_id, 'quantity_needed' => $qty];
                     }
@@ -370,7 +374,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_product'])) {
                 foreach ($_POST['recipe_ingredients'] as $m_id => $r_data) {
                     if (!empty($r_data['selected'])) {
                         $mat_id = intval($m_id);
-                        $qty = floatval($r_data['qty'] ?? 0);
+                        $qty = max(1, intval(round(floatval($r_data['qty'] ?? 0))));
                         if ($mat_id > 0 && $qty > 0) {
                             $recipe_items[] = ['material_id' => $mat_id, 'quantity_needed' => $qty];
                         }
@@ -379,7 +383,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_product'])) {
             } elseif (!empty($_POST['ingredients']) && is_array($_POST['ingredients'])) {
                 foreach ($_POST['ingredients'] as $ing) {
                     $mat_id = intval($ing['material_id'] ?? 0);
-                    $qty = floatval($ing['quantity_needed'] ?? 0);
+                    $qty = max(1, intval(round(floatval($ing['quantity_needed'] ?? 0))));
                     if ($mat_id > 0 && $qty > 0) {
                         $recipe_items[] = ['material_id' => $mat_id, 'quantity_needed' => $qty];
                     }
@@ -463,7 +467,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_material'])) {
     $mat_id = intval($_POST['material_id'] ?? 0);
     $mat_name = trim($_POST['material_name'] ?? '');
     $mat_unit = trim($_POST['material_unit'] ?? 'kg');
-    $reorder_level = floatval($_POST['reorder_level'] ?? 10);
+    $reorder_level = max(0, intval(round(floatval($_POST['reorder_level'] ?? 10))));
     $cost_per_unit = floatval($_POST['cost_per_unit'] ?? 0);
 
     if ($mat_id > 0 && !empty($mat_name) && !empty($mat_unit)) {
@@ -531,7 +535,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_supplier_refi
 
                 foreach ($refill_items as $item) {
                     $mat_id = intval($item['material_id'] ?? 0);
-                    $qty_req = floatval($item['quantity_requested'] ?? 0);
+                    $qty_req = max(1, intval(round(floatval($item['quantity_requested'] ?? 0))));
                     if ($mat_id > 0 && $qty_req > 0) {
                         // Check wholesale catalog or fallback to material baseline cost
                         $price_chk = mysqli_prepare($conn, "SELECT wholesale_price, packaging_unit FROM supplier_catalog WHERE supplier_id = ? AND material_id = ? LIMIT 1");
@@ -785,26 +789,28 @@ if ($boms_q) {
 
 // Fetch recent procurement refill requests submitted by this store
 $procurement_requests = [];
-$po_hist_q = mysqli_prepare($conn, "
+$user_id = (int)($_SESSION['user_id'] ?? 0);
+$user_type = strtolower((string)($_SESSION['user_type'] ?? ''));
+$is_admin = in_array($user_type, ['admin', 'super_admin']);
+
+$store_where = $is_admin ? "1=1" : "(so.store_id = $user_id OR so.requested_by = $user_id)";
+
+$po_hist_res = @mysqli_query($conn, "
     SELECT so.*, s.name as supplier_name, COUNT(soi.id) as total_items,
-           GROUP_CONCAT(CONCAT(m.name, ' (', soi.quantity_requested, ' ', soi.unit, ')') SEPARATOR ', ') as items_summary
+           GROUP_CONCAT(CONCAT(m.name, ' (', COALESCE(NULLIF(soi.quantity_requested, 0), soi.quantity_supplied, 1), ' ', soi.unit, ')') SEPARATOR ', ') as items_summary
     FROM supplier_orders so
     LEFT JOIN suppliers s ON s.id = so.supplier_id
     LEFT JOIN supplier_order_items soi ON soi.order_id = so.id
     LEFT JOIN materials m ON m.id = soi.material_id
-    WHERE so.store_id = ?
+    WHERE $store_where
     GROUP BY so.id
     ORDER BY so.created_at DESC
-    LIMIT 15
+    LIMIT 25
 ");
-if ($po_hist_q) {
-    mysqli_stmt_bind_param($po_hist_q, "i", $user_id);
-    mysqli_stmt_execute($po_hist_q);
-    $po_hist_res = mysqli_stmt_get_result($po_hist_q);
+if ($po_hist_res) {
     while ($po_row = mysqli_fetch_assoc($po_hist_res)) {
         $procurement_requests[] = $po_row;
     }
-    mysqli_stmt_close($po_hist_q);
 }
 
 $page_title = "My Products | Lechon Delights";
@@ -1895,7 +1901,7 @@ include 'includes/header.php';
                         </div>
                         <div class="col-md-6">
                             <label for="edit_stock" class="form-label"><strong>Stock Quantity</strong></label>
-                            <input type="number" class="form-control" id="edit_stock" name="stock" min="0">
+                            <input type="number" class="form-control" id="edit_stock" name="stock" step="1" min="0" onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
                         </div>
                     </div>
 
@@ -1998,13 +2004,13 @@ include 'includes/header.php';
                         </div>
                         <div class="col-md-6">
                             <label for="initial_stock" class="form-label fw-bold">Initial Current Stock</label>
-                            <input type="number" step="1" min="0" name="initial_stock" id="initial_stock" value="0" class="form-control text-end">
+                            <input type="number" step="1" min="0" name="initial_stock" id="initial_stock" value="0" class="form-control text-end" onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
                         </div>
                     </div>
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label for="reorder_level" class="form-label fw-bold">Low Stock Warning Level</label>
-                            <input type="number" step="1" min="0" name="reorder_level" id="reorder_level" value="10" class="form-control text-end">
+                            <input type="number" step="1" min="0" name="reorder_level" id="reorder_level" value="10" class="form-control text-end" onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
                         </div>
                         <div class="col-md-6">
                             <label for="cost_per_unit" class="form-label fw-bold">Est. Cost Per Unit (&#8369;)</label>
@@ -2051,7 +2057,7 @@ include 'includes/header.php';
                     </div>
                     <div class="mb-3">
                         <label for="edit_mat_reorder" class="form-label fw-bold small text-secondary">Low Stock Warning Level</label>
-                        <input type="number" step="1" min="0" name="reorder_level" id="edit_mat_reorder" class="form-control text-end">
+                        <input type="number" step="1" min="0" name="reorder_level" id="edit_mat_reorder" class="form-control text-end" onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
                     </div>
                 </div>
                 <div class="modal-footer bg-light">
@@ -2503,7 +2509,7 @@ function addIngredientRow(mode, existingData = null) {
         matOptions += `<option value="${m.id}" data-unit="${m.unit}" ${isSel}>${escapeSellerHtml(m.name)} (${m.unit})</option>`;
     });
 
-    const qtyVal = existingData ? existingData.quantity_needed : '1.0';
+    const qtyVal = existingData ? Math.round(existingData.quantity_needed) : '1';
     const unitText = existingData ? (existingData.unit || 'unit') : 'unit';
 
     row.innerHTML = `
@@ -2517,7 +2523,7 @@ function addIngredientRow(mode, existingData = null) {
             <div class="col-md-5">
                 <label class="form-label small fw-bold mb-1">Qty per Serving/Unit</label>
                 <div class="input-group input-group-sm">
-                    <input type="number" step="0.01" min="0.01" name="ingredients[${rowId}][quantity_needed]" value="${qtyVal}" class="form-control text-end" required>
+                    <input type="number" step="1" min="1" name="ingredients[${rowId}][quantity_needed]" value="${qtyVal}" class="form-control text-end" required onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
                     <span class="input-group-text ing-unit-label" id="unit_label_${rowId}">${unitText}</span>
                 </div>
             </div>
@@ -2569,7 +2575,7 @@ function addRefillItemRow(preselectedId = null) {
             <div class="col-md-4">
                 <label class="form-label small fw-bold mb-1">Quantity Requested</label>
                 <div class="input-group input-group-sm">
-                    <input type="number" step="0.1" min="0.1" name="refill_items[${rowId}][quantity_requested]" value="10.0" class="form-control text-end" required>
+                    <input type="number" step="1" min="1" name="refill_items[${rowId}][quantity_requested]" value="10" class="form-control text-end" required onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
                     <span class="input-group-text refill-unit-label" id="refill_unit_${rowId}">kg</span>
                 </div>
             </div>
@@ -2635,7 +2641,7 @@ function addSelfProcureRow(preselectedId = null, preselectedQty = 10, preselecte
             <div class="col-md-3">
                 <label class="form-label small fw-bold mb-1">Actual Qty Bought</label>
                 <div class="input-group input-group-sm">
-                    <input type="number" step="0.1" min="0.1" name="self_items[${rowId}][quantity_bought]" value="${preselectedQty}" class="form-control text-end self-qty" required oninput="recalcSelfItemLine('${rowId}')">
+                    <input type="number" step="1" min="1" name="self_items[${rowId}][quantity_bought]" value="${Math.round(preselectedQty) || 10}" class="form-control text-end self-qty" required onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, ''); recalcSelfItemLine('${rowId}');">
                     <span class="input-group-text self-unit-label" id="self_unit_${rowId}">kg</span>
                 </div>
             </div>

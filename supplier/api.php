@@ -24,9 +24,11 @@ function jsonOutput($success, $message, $data = []) {
     exit;
 }
 
+$supp_id_filter = !empty($supp_id_in_str) ? $supp_id_in_str : (int)$current_supplier_id;
+
 if ($action === 'get_metrics') {
     $pending = 0;
-    $p_q = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM supplier_orders WHERE supplier_id = $current_supplier_id AND status = 'pending'");
+    $p_q = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM supplier_orders WHERE supplier_id IN ($supp_id_filter) AND status = 'pending'");
     if ($p_q && ($r = mysqli_fetch_assoc($p_q))) {
         $pending = (int)$r['cnt'];
     }
@@ -43,7 +45,7 @@ if ($action === 'quick_status_update') {
     }
 
     // Verify ownership
-    $chk = mysqli_query($conn, "SELECT id, store_id, order_code, status FROM supplier_orders WHERE id = $order_id AND supplier_id = $current_supplier_id LIMIT 1");
+    $chk = mysqli_query($conn, "SELECT id, store_id, order_code, status FROM supplier_orders WHERE id = $order_id AND supplier_id IN ($supp_id_filter) LIMIT 1");
     $ord = $chk ? mysqli_fetch_assoc($chk) : null;
     if (!$ord) {
         jsonOutput(false, 'Order not found');

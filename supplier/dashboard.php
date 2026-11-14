@@ -25,17 +25,16 @@ $metrics = [
     'total_revenue' => 0.00
 ];
 
-$m_stmt = mysqli_prepare($conn, "
+$supp_id_filter = !empty($supp_id_in_str) ? $supp_id_in_str : (int)$current_supplier_id;
+
+$m_q = @mysqli_query($conn, "
     SELECT status, COUNT(*) as cnt, SUM(total_amount) as total_val
     FROM supplier_orders 
-    WHERE supplier_id = ?
+    WHERE supplier_id IN ($supp_id_filter)
     GROUP BY status
 ");
-if ($m_stmt) {
-    mysqli_stmt_bind_param($m_stmt, "i", $current_supplier_id);
-    mysqli_stmt_execute($m_stmt);
-    $m_res = mysqli_stmt_get_result($m_stmt);
-    while ($m_row = mysqli_fetch_assoc($m_res)) {
+if ($m_q) {
+    while ($m_row = mysqli_fetch_assoc($m_q)) {
         $st = $m_row['status'];
         if ($st === 'awaiting_finance_approval') {
             $metrics['awaiting_finance'] = (int)$m_row['cnt'];
@@ -48,13 +47,10 @@ if ($m_stmt) {
             $metrics['total_revenue'] = (float)$m_row['total_val'];
         }
     }
-    mysqli_stmt_close($m_stmt);
 }
 
 // 2. Fetch Orders according to active tab
-$where_clauses = ["so.supplier_id = ?"];
-$param_types = "i";
-$param_values = [$current_supplier_id];
+$where_clauses = ["so.supplier_id IN ($supp_id_filter)"];
 
 if ($active_tab === 'pending') {
     $where_clauses[] = "so.status = 'pending'";
@@ -76,7 +72,7 @@ $orders_query = "
            u.phone AS store_phone,
            u.email AS store_email,
            COUNT(soi.id) AS total_items,
-           GROUP_CONCAT(CONCAT(m.name, ' (', soi.quantity_requested, ' ', soi.unit, ')') SEPARATOR ', ') AS items_preview
+           GROUP_CONCAT(CONCAT(m.name, ' (', COALESCE(NULLIF(soi.quantity_requested, 0), soi.quantity_supplied, 1), ' ', soi.unit, ')') SEPARATOR ', ') AS items_preview
     FROM supplier_orders so
     LEFT JOIN users u ON u.id = so.store_id
     LEFT JOIN supplier_order_items soi ON soi.order_id = so.id
@@ -92,16 +88,12 @@ $orders_query = "
         so.created_at DESC
 ";
 
-$orders_stmt = mysqli_prepare($conn, $orders_query);
+$orders_res = @mysqli_query($conn, $orders_query);
 $orders_list = [];
-if ($orders_stmt) {
-    mysqli_stmt_bind_param($orders_stmt, $param_types, ...$param_values);
-    mysqli_stmt_execute($orders_stmt);
-    $orders_res = mysqli_stmt_get_result($orders_stmt);
+if ($orders_res) {
     while ($row = mysqli_fetch_assoc($orders_res)) {
         $orders_list[] = $row;
     }
-    mysqli_stmt_close($orders_stmt);
 }
 ?>
 

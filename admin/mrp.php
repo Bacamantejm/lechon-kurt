@@ -333,6 +333,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $store_notes = trim($_POST['store_notes'] ?? '');
         $total_expenses = floatval($_POST['total_expenses'] ?? 0);
         $self_items = isset($_POST['self_items']) && is_array($_POST['self_items']) ? $_POST['self_items'] : [];
+        foreach ($self_items as &$si) {
+            if (isset($si['quantity_bought'])) {
+                $si['quantity_bought'] = max(1, intval(round(floatval($si['quantity_bought']))));
+            }
+        }
+        unset($si);
 
         // Optional receipt photo
         $receipt_image_path = null;
@@ -408,10 +414,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     foreach ($refill_items as $k => $v) {
                         if (is_array($v)) {
                             $mat_id = intval($v['material_id'] ?? $k);
-                            $qty_req = floatval($v['quantity'] ?? $v['qty'] ?? 0);
+                            $qty_req = max(1, intval(round(floatval($v['quantity'] ?? $v['qty'] ?? 0))));
                         } else {
                             $mat_id = intval($k);
-                            $qty_req = floatval($v);
+                            $qty_req = max(1, intval(round(floatval($v))));
                         }
                         if ($mat_id > 0 && $qty_req > 0) {
                             $sc_q = mysqli_query($conn, "SELECT wholesale_unit_price, unit FROM supplier_catalog WHERE supplier_id = $supplier_id AND material_id = $mat_id LIMIT 1");
@@ -641,8 +647,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'quick_add_material') {
         $name = trim((string)($_POST['setup_material_name'] ?? ''));
         $unit = trim((string)($_POST['setup_material_unit'] ?? ''));
-        $current_stock = round((float)($_POST['setup_material_current_stock'] ?? 0), 2);
-        $min_level = round((float)($_POST['setup_material_min_level'] ?? 0), 2);
+        $current_stock = max(0, intval(round((float)($_POST['setup_material_current_stock'] ?? 0))));
+        $min_level = max(0, intval(round((float)($_POST['setup_material_min_level'] ?? 0))));
         $cost_per_unit = round((float)($_POST['setup_material_cost_per_unit'] ?? 0), 2);
 
         if ($name === '' || $unit === '') {
@@ -716,7 +722,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'quick_add_ingredient') {
         $product_id = (int)($_POST['setup_ingredient_product_id'] ?? 0);
         $material_id = (int)($_POST['setup_ingredient_material_id'] ?? 0);
-        $quantity_needed = round((float)($_POST['setup_ingredient_qty'] ?? 0), 2);
+        $quantity_needed = max(1, intval(round((float)($_POST['setup_ingredient_qty'] ?? 0))));
         $recent_material_ids = array_values(array_unique(array_map('intval', (array)($_SESSION['mrp_recent_material_ids'] ?? []))));
 
         if ($product_id <= 0 || $material_id <= 0 || $quantity_needed <= 0) {
@@ -812,7 +818,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'quick_update_ingredient') {
         $bom_id = (int)($_POST['setup_bom_id'] ?? 0);
-        $quantity_needed = round((float)($_POST['setup_ingredient_qty_edit'] ?? 0), 2);
+        $quantity_needed = max(1, intval(round((float)($_POST['setup_ingredient_qty_edit'] ?? 0))));
         if ($bom_id <= 0 || $quantity_needed <= 0) {
             $_SESSION['error'] = 'Please enter a valid ingredient quantity.';
             header("Location: mrp.php?tab=low_stock#setup-inputs");
@@ -1931,12 +1937,12 @@ if ($aff_q) {
 
 // Fetch procurement orders (Self-procured & supplier refill requests)
 $procurement_orders_list = [];
-$proc_scope_sql = ($seller_scope_id !== null) ? " WHERE so.store_id = " . (int)$seller_scope_id : "";
+$proc_scope_sql = ($seller_scope_id !== null) ? " WHERE (so.store_id = " . (int)$seller_scope_id . " OR so.requested_by = " . (int)$admin_id . ")" : "";
 $proc_orders_q = mysqli_query($conn, "
     SELECT so.*, 
            s.name AS supplier_name,
            COUNT(soi.id) AS total_items,
-           GROUP_CONCAT(CONCAT(m.name, ' (', soi.quantity_supplied, ' ', soi.unit, ')') SEPARATOR ', ') AS items_preview
+           GROUP_CONCAT(CONCAT(m.name, ' (', COALESCE(NULLIF(soi.quantity_requested, 0), soi.quantity_supplied, 1), ' ', soi.unit, ')') SEPARATOR ', ') AS items_preview
     FROM supplier_orders so
     LEFT JOIN suppliers s ON s.id = so.supplier_id
     LEFT JOIN supplier_order_items soi ON soi.order_id = so.id
@@ -3553,7 +3559,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                                                 </select>
                                             </td>
                                             <td>
-                                                <input type="number" name="quantity[]" class="form-control" step="0.01" min="0.01" placeholder="0.00" required>
+                                                <input type="number" name="quantity[]" class="form-control" step="1" min="1" placeholder="1" required onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
                                             </td>
                                             <td class="text-center">
                                                 <button type="button" class="btn btn-sm btn-outline-danger remove-row" style="border-radius: 8px;"><i class="fas fa-times"></i></button>
@@ -3928,14 +3934,14 @@ unset($_SESSION['success'], $_SESSION['error']);
                                                     <option value="">-- Choose Ingredient --</option>
                                                     <?php foreach ($materials_for_modal as $m): ?>
                                                         <option value="<?php echo (int)$m['id']; ?>" data-unit="<?php echo htmlspecialchars((string)$m['unit']); ?>" data-cost="<?php echo (float)($m['cost_per_unit'] ?? 0); ?>" data-name="<?php echo htmlspecialchars((string)$m['name']); ?>">
-                                                            <?php echo htmlspecialchars((string)$m['name']); ?> (On-hand: <?php echo (float)$m['current_stock'] . ' ' . htmlspecialchars((string)$m['unit']); ?>)
+                                                            <?php echo htmlspecialchars((string)$m['name']); ?> (On-hand: <?php echo (int)round((float)$m['current_stock']) . ' ' . htmlspecialchars((string)$m['unit']); ?>)
                                                         </option>
                                                     <?php endforeach; ?>
                                                 </select>
                                                 <input type="hidden" name="self_items[0][material_name]" class="self-mat-name">
                                             </td>
                                             <td>
-                                                <input type="number" step="0.01" min="0.01" name="self_items[0][quantity_bought]" class="form-control form-control-sm self-qty" placeholder="0.00" required oninput="recalcSelfProcureRow(this)">
+                                                <input type="number" step="1" min="1" name="self_items[0][quantity_bought]" class="form-control form-control-sm self-qty" placeholder="1" required onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, ''); recalcSelfProcureRow(this);">
                                             </td>
                                             <td>
                                                 <input type="text" name="self_items[0][unit]" class="form-control form-control-sm self-unit bg-light" placeholder="unit" readonly>
@@ -4079,7 +4085,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                                                 </select>
                                             </td>
                                             <td>
-                                                <input type="number" step="0.01" min="0.01" name="items[0][quantity]" class="form-control form-control-sm refill-qty" placeholder="0.00" required>
+                                                <input type="number" step="1" min="1" name="items[0][quantity]" class="form-control form-control-sm refill-qty" placeholder="1" required onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
                                             </td>
                                             <td>
                                                 <input type="text" class="form-control form-control-sm refill-unit bg-light" placeholder="unit" readonly>
@@ -4363,7 +4369,7 @@ unset($_SESSION['success'], $_SESSION['error']);
             let optHtml = '<option value="">-- Choose Ingredient --</option>';
             rawMaterialsList.forEach(m => {
                 const isSel = (matId && parseInt(m.id) === parseInt(matId)) ? 'selected' : '';
-                optHtml += `<option value="${m.id}" data-unit="${m.unit || ''}" data-cost="${m.cost_per_unit || 0}" data-name="${m.name}" ${isSel}>${m.name} (On-hand: ${m.current_stock} ${m.unit})</option>`;
+                optHtml += `<option value="${m.id}" data-unit="${m.unit || ''}" data-cost="${m.cost_per_unit || 0}" data-name="${m.name}" ${isSel}>${m.name} (On-hand: ${Math.round(m.current_stock || 0)} ${m.unit})</option>`;
             });
 
             const tr = document.createElement('tr');
@@ -4375,7 +4381,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <input type="hidden" name="self_items[${selfProcureIndex}][material_name]" class="self-mat-name" value="${name}">
                 </td>
                 <td>
-                    <input type="number" step="0.01" min="0.01" name="self_items[${selfProcureIndex}][quantity_bought]" class="form-control form-control-sm self-qty" placeholder="0.00" value="${qty}" required oninput="recalcSelfProcureRow(this)">
+                    <input type="number" step="1" min="1" name="self_items[${selfProcureIndex}][quantity_bought]" class="form-control form-control-sm self-qty" placeholder="1" value="${qty ? Math.round(qty) : ''}" required onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, ''); recalcSelfProcureRow(this);">
                 </td>
                 <td>
                     <input type="text" name="self_items[${selfProcureIndex}][unit]" class="form-control form-control-sm self-unit bg-light" placeholder="unit" value="${unit}" readonly>
@@ -4417,7 +4423,7 @@ unset($_SESSION['success'], $_SESSION['error']);
 
             if (unitInput) unitInput.value = unit;
             if (badge) {
-                badge.textContent = stock.toFixed(1) + ' ' + unit;
+                badge.textContent = Math.round(stock) + (unit ? ' ' + unit : '');
                 badge.className = stock <= 0 ? 'badge bg-danger-subtle text-danger border border-danger' : 'badge bg-light text-dark border';
             }
         }
@@ -4439,13 +4445,13 @@ unset($_SESSION['success'], $_SESSION['error']);
                     </select>
                 </td>
                 <td>
-                    <input type="number" step="0.01" min="0.01" name="items[${refillItemIndex}][quantity]" class="form-control form-control-sm refill-qty" placeholder="0.00" value="${qty}" required>
+                    <input type="number" step="1" min="1" name="items[${refillItemIndex}][quantity]" class="form-control form-control-sm refill-qty" placeholder="1" value="${qty ? Math.round(qty) : ''}" required onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
                 </td>
                 <td>
                     <input type="text" class="form-control form-control-sm refill-unit bg-light" placeholder="unit" value="${unit}" readonly>
                 </td>
                 <td>
-                    <span class="refill-stock-badge badge ${parseFloat(stock) <= 0 ? 'bg-danger-subtle text-danger border border-danger' : 'bg-light text-dark border'}">${stock !== '' ? parseFloat(stock).toFixed(1) + ' ' + unit : '--'}</span>
+                    <span class="refill-stock-badge badge ${parseFloat(stock) <= 0 ? 'bg-danger-subtle text-danger border border-danger' : 'bg-light text-dark border'}">${stock !== '' ? (Math.round(parseFloat(stock)) + (unit ? ' ' + unit : '')) : '--'}</span>
                 </td>
                 <td class="text-center">
                     <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRefillRow(this)"><i class="fas fa-trash"></i></button>
@@ -4470,7 +4476,8 @@ unset($_SESSION['success'], $_SESSION['error']);
             const tbody = document.getElementById('selfProcureItemsBody');
             tbody.innerHTML = '';
             selfProcureIndex = 0;
-            addSelfProcureRow(matId, suggestedQty > 0 ? suggestedQty : 1, unit, avgCost > 0 ? avgCost : '', matName);
+            const cleanQty = suggestedQty > 0 ? Math.round(suggestedQty) : 1;
+            addSelfProcureRow(matId, cleanQty, unit, avgCost > 0 ? avgCost : '', matName);
             new bootstrap.Modal(modalEl).show();
         }
 
@@ -4480,8 +4487,9 @@ unset($_SESSION['success'], $_SESSION['error']);
             const tbody = document.getElementById('refillItemsBody');
             tbody.innerHTML = '';
             refillItemIndex = 0;
+            const cleanQty = suggestedQty > 0 ? Math.round(suggestedQty) : 1;
             const mat = rawMaterialsList.find(m => parseInt(m.id) === parseInt(matId));
-            addRefillItemRow(matId, suggestedQty > 0 ? suggestedQty : 1, mat ? mat.unit : '', mat ? mat.current_stock : 0);
+            addRefillItemRow(matId, cleanQty, mat ? mat.unit : '', mat ? mat.current_stock : 0);
             new bootstrap.Modal(modalEl).show();
         }
     </script>

@@ -154,3 +154,53 @@ if ($sp_stmt) {
     $supplier_profile = mysqli_fetch_assoc($sp_res);
     mysqli_stmt_close($sp_stmt);
 }
+
+// Collect all supplier IDs linked to this user, business name, phone or email for complete identity unification
+$all_my_supplier_ids = [(int)$current_supplier_id];
+$logged_user_id = (int)($_SESSION['user_id'] ?? 0);
+if ($logged_user_id > 0) {
+    $alt_res = @mysqli_query($conn, "SELECT id FROM suppliers WHERE user_id = $logged_user_id");
+    if ($alt_res) {
+        while ($ar = mysqli_fetch_assoc($alt_res)) {
+            $all_my_supplier_ids[] = (int)$ar['id'];
+        }
+    }
+}
+if (!empty($supplier_profile)) {
+    $sp_name = trim((string)($supplier_profile['name'] ?? ''));
+    $sp_email = trim((string)($supplier_profile['email'] ?? ''));
+    $sp_phone = trim((string)($supplier_profile['phone'] ?? ''));
+    if ($sp_name !== '') {
+        $nr = @mysqli_query($conn, "SELECT id FROM suppliers WHERE LOWER(TRIM(name)) = LOWER('" . mysqli_real_escape_string($conn, $sp_name) . "')");
+        if ($nr) {
+            while ($ar = mysqli_fetch_assoc($nr)) {
+                $all_my_supplier_ids[] = (int)$ar['id'];
+            }
+        }
+    }
+    if ($sp_email !== '') {
+        $er = @mysqli_query($conn, "SELECT id FROM suppliers WHERE LOWER(TRIM(email)) = LOWER('" . mysqli_real_escape_string($conn, $sp_email) . "')");
+        if ($er) {
+            while ($ar = mysqli_fetch_assoc($er)) {
+                $all_my_supplier_ids[] = (int)$ar['id'];
+            }
+        }
+    }
+    if ($sp_phone !== '') {
+        $clean_p = preg_replace('/[^0-9]/', '', $sp_phone);
+        if ($clean_p !== '') {
+            $pr = @mysqli_query($conn, "SELECT id FROM suppliers WHERE REPLACE(REPLACE(phone, ' ', ''), '-', '') LIKE '%$clean_p%'");
+            if ($pr) {
+                while ($ar = mysqli_fetch_assoc($pr)) {
+                    $all_my_supplier_ids[] = (int)$ar['id'];
+                }
+            }
+        }
+    }
+}
+$all_my_supplier_ids = array_values(array_unique(array_filter($all_my_supplier_ids)));
+if (empty($all_my_supplier_ids)) {
+    $all_my_supplier_ids = [(int)$current_supplier_id];
+}
+$supp_id_in_str = implode(',', $all_my_supplier_ids);
+$_SESSION['all_my_supplier_ids'] = $all_my_supplier_ids;
