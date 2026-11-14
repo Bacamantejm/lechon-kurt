@@ -11,8 +11,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['save_material'])) {
         $name = trim($_POST['name']);
         $unit = trim($_POST['unit']);
-        $stock = floatval($_POST['current_stock']);
-        $min = floatval($_POST['min_level']);
+        $stock = max(0, intval(round(floatval($_POST['current_stock'] ?? 0))));
+        $min = max(0, intval(round(floatval($_POST['min_level'] ?? 0))));
         $cost = floatval($_POST['cost_per_unit']);
         $id = isset($_POST['material_id']) ? intval($_POST['material_id']) : 0;
 
@@ -189,7 +189,7 @@ $materials = mysqli_query($conn, "SELECT * FROM materials ORDER BY name");
                                         <label class="form-label-modern">Current Stock <span class="form-req-star">*</span></label>
                                         <div class="form-input-wrap">
                                             <i class="fas fa-layer-group form-input-icon"></i>
-                                            <input type="number" step="0.01" name="current_stock" id="current_stock" class="form-control" required>
+                                            <input type="number" step="1" min="0" name="current_stock" id="current_stock" class="form-control" required onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
                                         </div>
                                     </div>
                                 </div>
@@ -198,7 +198,7 @@ $materials = mysqli_query($conn, "SELECT * FROM materials ORDER BY name");
                                         <label class="form-label-modern">Min Alert Level <span class="form-req-star">*</span></label>
                                         <div class="form-input-wrap">
                                             <i class="fas fa-bell form-input-icon"></i>
-                                            <input type="number" step="0.01" name="min_level" id="min_level" class="form-control" required>
+                                            <input type="number" step="1" min="0" name="min_level" id="min_level" class="form-control" required onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
                                         </div>
                                     </div>
                                 </div>

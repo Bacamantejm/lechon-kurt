@@ -383,35 +383,9 @@ class IngredientStockManager {
         static $ensured = false;
         if ($ensured || !$conn) return;
 
-        $check_col = mysqli_query($conn, "SHOW COLUMNS FROM `supplier_orders` LIKE 'procurement_type'");
-        if ($check_col && mysqli_num_rows($check_col) === 0) {
-            @mysqli_query($conn, "ALTER TABLE `supplier_orders` 
-                ADD COLUMN `procurement_type` ENUM('supplier', 'self_procured') NOT NULL DEFAULT 'supplier' AFTER `store_id`,
-                ADD COLUMN `vendor_name` VARCHAR(255) NULL AFTER `procurement_type`,
-                ADD COLUMN `receipt_image` VARCHAR(255) NULL AFTER `vendor_name`,
-                ADD COLUMN `invoice_number` VARCHAR(100) NULL AFTER `receipt_image`,
-                ADD COLUMN `finance_status` ENUM('not_required', 'pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending' AFTER `payment_status`,
-                ADD COLUMN `finance_approved_by` INT NULL AFTER `finance_status`,
-                ADD COLUMN `finance_approved_at` DATETIME NULL AFTER `finance_approved_by`,
-                ADD COLUMN `finance_notes` TEXT NULL AFTER `finance_approved_at`,
-                ADD COLUMN `received_by_store_at` DATETIME NULL AFTER `completed_at`
-            ");
-            @mysqli_query($conn, "ALTER TABLE `supplier_orders` 
-                MODIFY COLUMN `status` ENUM(
-                    'pending', 
-                    'awaiting_finance_approval', 
-                    'finance_approved', 
-                    'modified', 
-                    'accepted', 
-                    'processing', 
-                    'packed', 
-                    'in_transit', 
-                    'delivered', 
-                    'completed', 
-                    'rejected', 
-                    'cancelled'
-                ) NOT NULL DEFAULT 'pending'
-            ");
+        require_once __DIR__ . '/supplier_helper.php';
+        if (function_exists('ensureSupplierProcurementTables')) {
+            ensureSupplierProcurementTables($conn);
         }
 
         @mysqli_query($conn, "
@@ -483,7 +457,7 @@ class IngredientStockManager {
 
         foreach ($items as $item) {
             $m_id = intval($item['material_id'] ?? 0);
-            $qty_bought = floatval($item['quantity_bought'] ?? $item['quantity_supplied'] ?? 0);
+            $qty_bought = max(1, intval(round(floatval($item['quantity_bought'] ?? $item['quantity_supplied'] ?? 0))));
             $unit = trim((string)($item['unit'] ?? 'kg'));
             $unit_cost = floatval($item['unit_cost'] ?? 0);
             $line_total = floatval($item['line_total'] ?? ($qty_bought * $unit_cost));

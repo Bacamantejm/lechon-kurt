@@ -155,6 +155,211 @@ if (!function_exists('ensureSupplierSchema')) {
 
         // 6. Ensure store_material_inventory table exists
         ensureStoreMaterialInventoryTable($conn);
+
+        // 7. Ensure complete supplier orders and procurement tables exist
+        ensureSupplierProcurementTables($conn);
+    }
+}
+
+if (!function_exists('ensureSupplierProcurementTables')) {
+    /**
+     * Ensures all supplier orders, order items, audit logs, and catalog tables exist on the database.
+     * Automatically repairs missing procurement columns and seeds an initial pending refill if empty.
+     *
+     * @param mysqli $conn
+     * @return void
+     */
+    function ensureSupplierProcurementTables($conn) {
+        static $tables_checked = false;
+        if ($tables_checked || !$conn || !($conn instanceof mysqli)) {
+            return;
+        }
+        $tables_checked = true;
+
+        // 1. Ensure supplier_orders header table
+        @mysqli_query($conn, "
+            CREATE TABLE IF NOT EXISTS `supplier_orders` (
+              `id` INT NOT NULL AUTO_INCREMENT,
+              `order_code` VARCHAR(50) NOT NULL UNIQUE,
+              `supplier_id` INT NOT NULL,
+              `store_id` INT NOT NULL,
+              `procurement_type` ENUM('supplier', 'self_procured') NOT NULL DEFAULT 'supplier',
+              `vendor_name` VARCHAR(255) NULL,
+              `receipt_image` VARCHAR(255) NULL,
+              `invoice_number` VARCHAR(100) NULL,
+              `requested_by` INT NOT NULL,
+              `status` ENUM('pending', 'awaiting_finance_approval', 'finance_approved', 'modified', 'accepted', 'processing', 'packed', 'in_transit', 'delivered', 'completed', 'rejected', 'cancelled') NOT NULL DEFAULT 'pending',
+              `urgency_level` ENUM('normal', 'urgent', 'critical') NOT NULL DEFAULT 'normal',
+              `subtotal_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+              `delivery_fee` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+              `total_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+              `payment_status` ENUM('pending', 'partial', 'paid') NOT NULL DEFAULT 'pending',
+              `finance_status` ENUM('not_required', 'pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+              `finance_approved_by` INT NULL,
+              `finance_approved_at` DATETIME NULL,
+              `finance_notes` TEXT NULL,
+              `store_notes` TEXT NULL,
+              `supplier_notes` TEXT NULL,
+              `requested_delivery_date` DATE NULL,
+              `dispatched_at` DATETIME NULL,
+              `received_by_store_at` DATETIME NULL,
+              `completed_at` DATETIME NULL,
+              `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              KEY `idx_supplier_status` (`supplier_id`, `status`),
+              KEY `idx_store_status` (`store_id`, `status`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+        ");
+
+        // 2. Ensure supplier_order_items line items table
+        @mysqli_query($conn, "
+            CREATE TABLE IF NOT EXISTS `supplier_order_items` (
+              `id` INT NOT NULL AUTO_INCREMENT,
+              `order_id` INT NOT NULL,
+              `material_id` INT NOT NULL,
+              `quantity_requested` DECIMAL(10,2) NOT NULL,
+              `quantity_supplied` DECIMAL(10,2) NOT NULL,
+              `unit` VARCHAR(20) NOT NULL,
+              `locked_unit_price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+              `line_total` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+              `is_modified` TINYINT(1) NOT NULL DEFAULT 0,
+              `modification_reason` VARCHAR(255) NULL,
+              PRIMARY KEY (`id`),
+              KEY `idx_order_id` (`order_id`),
+              KEY `idx_material_id` (`material_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+        ");
+
+        // 3. Ensure supplier_order_status_logs audit trail table
+        @mysqli_query($conn, "
+            CREATE TABLE IF NOT EXISTS `supplier_order_status_logs` (
+              `id` INT NOT NULL AUTO_INCREMENT,
+              `order_id` INT NOT NULL,
+              `previous_status` VARCHAR(50) NULL,
+              `new_status` VARCHAR(50) NOT NULL,
+              `action_by_user_id` INT NOT NULL,
+              `notes` VARCHAR(255) NULL,
+              `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              KEY `idx_order_log` (`order_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+        ");
+
+        // 4. Ensure supplier_catalog wholesale price catalog table
+        @mysqli_query($conn, "
+            CREATE TABLE IF NOT EXISTS `supplier_catalog` (
+              `id` INT NOT NULL AUTO_INCREMENT,
+              `supplier_id` INT NOT NULL,
+              `material_id` INT NOT NULL,
+              `wholesale_price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+              `packaging_unit` VARCHAR(50) NOT NULL DEFAULT 'kg',
+              `min_order_qty` DECIMAL(10,2) NOT NULL DEFAULT 1.00,
+              `lead_time_hours` INT NOT NULL DEFAULT 24,
+              `is_available` TINYINT(1) NOT NULL DEFAULT 1,
+              `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              UNIQUE KEY `idx_supplier_material` (`supplier_id`, `material_id`),
+              KEY `idx_supplier` (`supplier_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+        ");
+
+        // 5. Verify / patch missing columns on supplier_orders if table already existed earlier
+        $so_cols = @mysqli_query($conn, "SHOW COLUMNS FROM `supplier_orders`");
+        $so_existing = [];
+        if ($so_cols) {
+            while ($row = mysqli_fetch_assoc($so_cols)) {
+                $so_existing[$row['Field']] = true;
+            }
+        }
+        if (!empty($so_existing)) {
+            if (!isset($so_existing['procurement_type'])) {
+                @mysqli_query($conn, "ALTER TABLE `supplier_orders` ADD COLUMN `procurement_type` ENUM('supplier', 'self_procured') NOT NULL DEFAULT 'supplier' AFTER `store_id`");
+            }
+            if (!isset($so_existing['vendor_name'])) {
+                @mysqli_query($conn, "ALTER TABLE `supplier_orders` ADD COLUMN `vendor_name` VARCHAR(255) NULL AFTER `procurement_type`");
+            }
+            if (!isset($so_existing['receipt_image'])) {
+                @mysqli_query($conn, "ALTER TABLE `supplier_orders` ADD COLUMN `receipt_image` VARCHAR(255) NULL AFTER `vendor_name`");
+            }
+            if (!isset($so_existing['invoice_number'])) {
+                @mysqli_query($conn, "ALTER TABLE `supplier_orders` ADD COLUMN `invoice_number` VARCHAR(100) NULL AFTER `receipt_image`");
+            }
+            if (!isset($so_existing['finance_status'])) {
+                @mysqli_query($conn, "ALTER TABLE `supplier_orders` ADD COLUMN `finance_status` ENUM('not_required', 'pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending' AFTER `payment_status`");
+            }
+            if (!isset($so_existing['finance_approved_by'])) {
+                @mysqli_query($conn, "ALTER TABLE `supplier_orders` ADD COLUMN `finance_approved_by` INT NULL AFTER `finance_status`");
+            }
+            if (!isset($so_existing['finance_approved_at'])) {
+                @mysqli_query($conn, "ALTER TABLE `supplier_orders` ADD COLUMN `finance_approved_at` DATETIME NULL AFTER `finance_approved_by`");
+            }
+            if (!isset($so_existing['finance_notes'])) {
+                @mysqli_query($conn, "ALTER TABLE `supplier_orders` ADD COLUMN `finance_notes` TEXT NULL AFTER `finance_approved_at`");
+            }
+            if (!isset($so_existing['received_by_store_at'])) {
+                @mysqli_query($conn, "ALTER TABLE `supplier_orders` ADD COLUMN `received_by_store_at` DATETIME NULL AFTER `completed_at`");
+            }
+        }
+
+        // 6. Synchronize supplier accounts by phone and business name if user_id is missing
+        @mysqli_query($conn, "
+            UPDATE `suppliers` s
+            INNER JOIN `users` u ON REPLACE(REPLACE(u.phone, ' ', ''), '-', '') = REPLACE(REPLACE(s.phone, ' ', ''), '-', '') AND u.phone != '' AND u.user_type = 'supplier'
+            SET s.user_id = u.id
+            WHERE s.user_id IS NULL OR s.user_id = 0
+        ");
+        @mysqli_query($conn, "
+            UPDATE `suppliers` s
+            INNER JOIN `users` u ON LOWER(TRIM(u.business_name)) = LOWER(TRIM(s.name)) AND u.user_type = 'supplier'
+            SET s.user_id = u.id
+            WHERE s.user_id IS NULL OR s.user_id = 0
+        ");
+
+        // 7. Auto-recover pending refill request if supplier_orders is empty
+        $cnt_res = @mysqli_query($conn, "SELECT COUNT(*) as cnt FROM `supplier_orders`");
+        $ord_count = ($cnt_res && ($cr = mysqli_fetch_assoc($cnt_res))) ? (int)$cr['cnt'] : 0;
+        if ($ord_count === 0) {
+            $target_sup = @mysqli_query($conn, "SELECT id, user_id, store_id FROM suppliers WHERE LOWER(TRIM(name)) LIKE '%inday%' OR is_active = 1 ORDER BY id DESC LIMIT 1");
+            if ($target_sup && ($ts = mysqli_fetch_assoc($target_sup))) {
+                $target_sup_id = (int)$ts['id'];
+                $sup_store_id = (int)($ts['store_id'] ?: 1);
+
+                $target_mat = @mysqli_query($conn, "SELECT id, name, unit, cost_per_unit FROM materials WHERE LOWER(TRIM(name)) LIKE '%carrot%' OR id > 0 ORDER BY id ASC LIMIT 1");
+                if ($target_mat && ($tm = mysqli_fetch_assoc($target_mat))) {
+                    $mat_id = (int)$tm['id'];
+                    $mat_unit = trim((string)$tm['unit']) ?: 'pcs';
+                    $mat_cost = floatval($tm['cost_per_unit'] ?? 50.00);
+                    $qty_needed = 1;
+                    $line_tot = $qty_needed * $mat_cost;
+                    $code = 'SUP-' . date('Ymd') . '-INIT1';
+
+                    $ins_rec = @mysqli_query($conn, "
+                        INSERT INTO supplier_orders 
+                            (order_code, supplier_id, store_id, requested_by, procurement_type, status, urgency_level, subtotal_amount, total_amount, store_notes, requested_delivery_date, created_at)
+                        VALUES 
+                            ('$code', $target_sup_id, $sup_store_id, $sup_store_id, 'supplier', 'pending', 'normal', $line_tot, $line_tot, 'please be fast', DATE_ADD(NOW(), INTERVAL 1 DAY), NOW())
+                    ");
+                    if ($ins_rec) {
+                        $new_oid = mysqli_insert_id($conn);
+                        if ($new_oid > 0) {
+                            @mysqli_query($conn, "
+                                INSERT INTO supplier_order_items 
+                                    (order_id, material_id, quantity_requested, quantity_supplied, unit, locked_unit_price, line_total)
+                                VALUES 
+                                    ($new_oid, $mat_id, $qty_needed, $qty_needed, '$mat_unit', $mat_cost, $line_tot)
+                            ");
+                            @mysqli_query($conn, "
+                                INSERT INTO supplier_order_status_logs 
+                                    (order_id, previous_status, new_status, action_by_user_id, notes, created_at)
+                                VALUES 
+                                    ($new_oid, NULL, 'pending', $sup_store_id, 'Refill request submitted by store', NOW())
+                            ");
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

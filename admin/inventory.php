@@ -2468,7 +2468,7 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
                             <label class="form-label-modern">Quantity (Whole Number) <span class="form-req-star">*</span></label>
                             <div class="form-input-wrap">
                                 <i class="fas fa-layer-group form-input-icon"></i>
-                                <input type="number" step="1" min="0" name="quantity" id="adj_ing_quantity" class="form-control" placeholder="e.g. 10" value="10" required>
+                                <input type="number" step="1" min="0" name="quantity" id="adj_ing_quantity" class="form-control" placeholder="e.g. 10" value="10" required onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
                             </div>
                             <div class="form-helper-text"><i class="fas fa-info-circle"></i> Must be a whole number integer (no decimals).</div>
                         </div>
@@ -2734,7 +2734,7 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
                         </td>
                         <td>
                             <div class="d-flex align-items-center gap-1">
-                                <input type="number" step="1" min="1" name="recipe_ingredients[${mid}][qty]" class="form-control form-control-sm text-end recipe-qty" value="${qtyVal}" ${isChecked ? '' : 'disabled'} oninput="recalculateLiveRecipeYield()" style="width: 80px;">
+                                <input type="number" step="1" min="1" name="recipe_ingredients[${mid}][qty]" class="form-control form-control-sm text-end recipe-qty" value="${qtyVal ? Math.round(qtyVal) : 1}" ${isChecked ? '' : 'disabled'} onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, ''); recalculateLiveRecipeYield();" style="width: 80px;">
                                 <span class="small text-muted fw-semibold" style="font-size:11px;">${mat.unit}</span>
                             </div>
                         </td>
