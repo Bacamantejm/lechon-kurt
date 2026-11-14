@@ -749,14 +749,21 @@ function getUserDashboardRoute($conn, $user_id, $user_type = '') {
 
     // Check if user is a registered supplier or employee with supplier position
     if ($conn && $user_id > 0) {
+        if (function_exists('isSupplierUser') && isSupplierUser($conn, $user_id)) {
+            return 'supplier/dashboard.php';
+        }
+        if (strtolower($user_type) === 'supplier') {
+            return 'supplier/dashboard.php';
+        }
         $s_chk = mysqli_query($conn, "SELECT id FROM suppliers WHERE user_id = $user_id LIMIT 1");
         if ($s_chk && mysqli_num_rows($s_chk) > 0) {
             return 'supplier/dashboard.php';
         }
         $emp_sup_chk = mysqli_query($conn, "SELECT e.id FROM employees e 
                                              LEFT JOIN job_positions jp ON e.position_id = jp.id 
+                                             LEFT JOIN departments d ON e.department_id = d.id
                                              WHERE e.user_id = $user_id 
-                                             AND (jp.position_title LIKE '%Supplier%' OR e.position LIKE '%Supplier%') 
+                                             AND (jp.position_title LIKE '%Supplier%' OR e.position LIKE '%Supplier%' OR d.name LIKE '%Supplier%') 
                                              LIMIT 1");
         if ($emp_sup_chk && mysqli_num_rows($emp_sup_chk) > 0) {
             return 'supplier/dashboard.php';

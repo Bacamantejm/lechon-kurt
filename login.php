@@ -60,6 +60,10 @@ if (isset($_SESSION['user_id'])) {
             header("Location: rider/index.php");
             exit;
         }
+        if (function_exists('isSupplierUser') && isSupplierUser($conn, $session_user_id)) {
+            header("Location: supplier/dashboard.php");
+            exit;
+        }
         $redirect = getUserDashboardRoute($conn, $session_user_id, $_SESSION['user_type'] ?? '');
         $raw_target = $_GET['redirect'] ?? ($_SESSION['redirect_to'] ?? '');
         $custom_redirect = sanitizeRelativePhpRedirect($raw_target);
@@ -264,6 +268,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
                 }
 
                 $redirect = 'rider/index.php';
+            } elseif (function_exists('isSupplierUser') && isSupplierUser($conn, $result['user_id'])) {
+                $redirect = 'supplier/dashboard.php';
             } else {
                 // Determine default redirect from RBAC role permissions first, then legacy fallback
                 $redirect = getUserDashboardRoute($conn, $result['user_id'], $result['user_type']);

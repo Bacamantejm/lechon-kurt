@@ -845,17 +845,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         require_once __DIR__ . '/../includes/rider_helper.php';
                         isDeliveryDriverUser($conn, $user_id_for_employee, $store_id);
 
-                        // Ensure supplier profile exists if position is Supplier
-                        if (stripos($position, 'supplier') !== false) {
+                        // Ensure supplier profile exists if position, department, or role is Supplier
+                        $is_supplier_emp = (stripos($position, 'supplier') !== false);
+                        if (!$is_supplier_emp && $department_id > 0) {
+                            $dept_chk = mysqli_query($conn, "SELECT name FROM departments WHERE id = $department_id LIMIT 1");
+                            if ($dept_chk && ($dr = mysqli_fetch_assoc($dept_chk)) && stripos($dr['name'], 'supplier') !== false) {
+                                $is_supplier_emp = true;
+                            }
+                        }
+                        if (!$is_supplier_emp && isset($user_role_id) && $user_role_id > 0) {
+                            $r_chk = mysqli_query($conn, "SELECT name FROM roles WHERE id = $user_role_id LIMIT 1");
+                            if ($r_chk && ($rr = mysqli_fetch_assoc($r_chk)) && stripos($rr['name'], 'supplier') !== false) {
+                                $is_supplier_emp = true;
+                            }
+                        }
+                        if ($is_supplier_emp) {
                             $full_emp_name = formatEmployeeFullName($first_name, $middle_initial, $last_name, $suffix);
                             $s_chk = mysqli_query($conn, "SELECT id FROM suppliers WHERE user_id = " . (int)$user_id_for_employee . " LIMIT 1");
                             if ($s_chk && mysqli_num_rows($s_chk) === 0) {
                                 $e_name = mysqli_real_escape_string($conn, $full_emp_name);
                                 $e_phone = mysqli_real_escape_string($conn, $phone);
                                 $e_email = mysqli_real_escape_string($conn, $email);
-                                mysqli_query($conn, "INSERT INTO suppliers (user_id, name, contact_person, phone, email, is_active) 
-                                                     VALUES (" . (int)$user_id_for_employee . ", '$e_name', '$e_name', '$e_phone', '$e_email', 1)");
+                                mysqli_query($conn, "INSERT INTO suppliers (user_id, name, contact_person, phone, email, is_active, status) 
+                                                     VALUES (" . (int)$user_id_for_employee . ", '$e_name', '$e_name', '$e_phone', '$e_email', 1, 'active')");
                             }
+                            mysqli_query($conn, "UPDATE users SET user_type = 'supplier' WHERE id = " . (int)$user_id_for_employee . " AND user_type != 'admin'");
                         }
                     }
                     $_SESSION['success'] = (isset($_SESSION['success']) ? $_SESSION['success'] . " Employee added successfully." : "Employee added successfully.");
@@ -1153,17 +1167,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 require_once __DIR__ . '/../includes/rider_helper.php';
                 isDeliveryDriverUser($conn, $sync_user_id, $store_id);
 
-                // Ensure supplier profile exists if position is Supplier
-                if (stripos($position, 'supplier') !== false) {
+                // Ensure supplier profile exists if position, department, or role is Supplier
+                $is_supplier_emp = (stripos($position, 'supplier') !== false);
+                if (!$is_supplier_emp && $department_id > 0) {
+                    $dept_chk = mysqli_query($conn, "SELECT name FROM departments WHERE id = $department_id LIMIT 1");
+                    if ($dept_chk && ($dr = mysqli_fetch_assoc($dept_chk)) && stripos($dr['name'], 'supplier') !== false) {
+                        $is_supplier_emp = true;
+                    }
+                }
+                if (!$is_supplier_emp && isset($user_role_id) && $user_role_id > 0) {
+                    $r_chk = mysqli_query($conn, "SELECT name FROM roles WHERE id = $user_role_id LIMIT 1");
+                    if ($r_chk && ($rr = mysqli_fetch_assoc($r_chk)) && stripos($rr['name'], 'supplier') !== false) {
+                        $is_supplier_emp = true;
+                    }
+                }
+                if ($is_supplier_emp) {
                     $full_emp_name = formatEmployeeFullName($first_name, $middle_initial, $last_name, $suffix);
                     $s_chk = mysqli_query($conn, "SELECT id FROM suppliers WHERE user_id = " . (int)$sync_user_id . " LIMIT 1");
                     if ($s_chk && mysqli_num_rows($s_chk) === 0) {
                         $e_name = mysqli_real_escape_string($conn, $full_emp_name);
                         $e_phone = mysqli_real_escape_string($conn, $phone);
                         $e_email = mysqli_real_escape_string($conn, $email);
-                        mysqli_query($conn, "INSERT INTO suppliers (user_id, name, contact_person, phone, email, is_active) 
-                                             VALUES (" . (int)$sync_user_id . ", '$e_name', '$e_name', '$e_phone', '$e_email', 1)");
+                        mysqli_query($conn, "INSERT INTO suppliers (user_id, name, contact_person, phone, email, is_active, status) 
+                                             VALUES (" . (int)$sync_user_id . ", '$e_name', '$e_name', '$e_phone', '$e_email', 1, 'active')");
                     }
+                    mysqli_query($conn, "UPDATE users SET user_type = 'supplier' WHERE id = " . (int)$sync_user_id . " AND user_type != 'admin'");
                 }
             }
 

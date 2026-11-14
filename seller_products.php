@@ -418,15 +418,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_product'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_material'])) {
     $mat_name = trim($_POST['material_name'] ?? '');
     $mat_unit = trim($_POST['material_unit'] ?? 'kg');
-    $initial_stock = floatval($_POST['initial_stock'] ?? 0);
-    $reorder_level = floatval($_POST['reorder_level'] ?? 10);
+    $initial_stock = intval(round(floatval($_POST['initial_stock'] ?? 0)));
+    $reorder_level = intval(round(floatval($_POST['reorder_level'] ?? 10)));
     $cost_per_unit = floatval($_POST['cost_per_unit'] ?? 0);
 
     if (!empty($mat_name) && !empty($mat_unit)) {
+        if (function_exists('ensureStoreMaterialInventoryTable')) {
+            ensureStoreMaterialInventoryTable($conn);
+        }
         // 1. Insert into materials table
         $m_stmt = mysqli_prepare($conn, "INSERT INTO materials (name, unit, current_stock, min_level, cost_per_unit, last_updated) VALUES (?, ?, ?, ?, ?, NOW())");
         if ($m_stmt) {
-            mysqli_stmt_bind_param($m_stmt, "ssddd", $mat_name, $mat_unit, $initial_stock, $reorder_level, $cost_per_unit);
+            $init_d = (float)$initial_stock;
+            $reord_d = (float)$reorder_level;
+            mysqli_stmt_bind_param($m_stmt, "ssddd", $mat_name, $mat_unit, $init_d, $reord_d, $cost_per_unit);
             if (mysqli_stmt_execute($m_stmt)) {
                 $new_mat_id = mysqli_insert_id($conn);
                 // 2. Initialize store-level inventory
@@ -436,11 +441,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_material'])) {
                     ON DUPLICATE KEY UPDATE current_stock = VALUES(current_stock)
                 ");
                 if ($smi_stmt) {
-                    mysqli_stmt_bind_param($smi_stmt, "iidss", $user_id, $new_mat_id, $initial_stock, $reorder_level, $mat_unit);
+                    mysqli_stmt_bind_param($smi_stmt, "iidss", $user_id, $new_mat_id, $init_d, $reord_d, $mat_unit);
                     mysqli_stmt_execute($smi_stmt);
                     mysqli_stmt_close($smi_stmt);
                 }
-                $_SESSION['success'] = "Ingredient '$mat_name' ($mat_unit) added to inventory successfully!";
+                $_SESSION['success'] = "Ingredient '$mat_name' ({$initial_stock} {$mat_unit}) added to inventory successfully!";
             } else {
                 $_SESSION['error'] = "Failed to add ingredient: " . mysqli_error($conn);
             }
@@ -704,8 +709,18 @@ if ($m_q) {
 }
 
 // Fetch store-level ingredient stock for this store
+if (function_exists('ensureStoreMaterialInventoryTable')) {
+    ensureStoreMaterialInventoryTable($conn);
+}
+
+// Auto-backfill store_material_inventory from master materials if needed
+@mysqli_query($conn, "
+    INSERT IGNORE INTO store_material_inventory (store_id, material_id, current_stock, reorder_level, unit, last_restocked_at)
+    SELECT {$user_id}, id, current_stock, min_level, unit, NOW() FROM materials
+");
+
 $store_ingredients = [];
-$smi_q = mysqli_prepare($conn, "
+$smi_q = @mysqli_prepare($conn, "
     SELECT m.id, m.name, m.unit, m.cost_per_unit, 
            COALESCE(smi.current_stock, m.current_stock, 0) as current_stock,
            COALESCE(smi.reorder_level, m.min_level, 10) as reorder_level,
@@ -718,18 +733,36 @@ if ($smi_q) {
     mysqli_stmt_bind_param($smi_q, "i", $user_id);
     mysqli_stmt_execute($smi_q);
     $smi_res = mysqli_stmt_get_result($smi_q);
-    while ($s_row = mysqli_fetch_assoc($smi_res)) {
+    while ($smi_res && ($s_row = mysqli_fetch_assoc($smi_res))) {
         $store_ingredients[] = $s_row;
     }
     mysqli_stmt_close($smi_q);
 }
 
+// Robust fallback: if store_material_inventory query returned 0, load directly from materials!
+if (empty($store_ingredients)) {
+    $mat_fallback = @mysqli_query($conn, "
+        SELECT id, name, unit, cost_per_unit, current_stock, min_level as reorder_level, last_updated as last_restocked_at
+        FROM materials
+        ORDER BY name ASC
+    ");
+    if ($mat_fallback) {
+        while ($mf_row = mysqli_fetch_assoc($mat_fallback)) {
+            $store_ingredients[] = $mf_row;
+        }
+    }
+}
+
 // Fetch registered active suppliers
-$suppliers_list = [];
-$supp_q = mysqli_query($conn, "SELECT id, name, contact_person, phone, email FROM suppliers WHERE is_active = 1 ORDER BY name ASC");
-if ($supp_q) {
-    while ($sp = mysqli_fetch_assoc($supp_q)) {
-        $suppliers_list[] = $sp;
+$suppliers_list = function_exists('getActiveSuppliersList')
+    ? getActiveSuppliersList($conn, $user_id)
+    : [];
+if (empty($suppliers_list)) {
+    $supp_q = mysqli_query($conn, "SELECT id, name, contact_person, phone, email FROM suppliers ORDER BY name ASC");
+    if ($supp_q) {
+        while ($sp = mysqli_fetch_assoc($supp_q)) {
+            $suppliers_list[] = $sp;
+        }
     }
 }
 
@@ -1339,45 +1372,21 @@ include 'includes/header.php';
 
 <div class="seller-products-page">
     <div class="container">
-        <?php $current_seller_tab = $_GET['tab'] ?? 'products'; ?>
+        <?php $current_seller_tab = $_GET['tab'] ?? 'ingredients'; ?>
         <div class="seller-header">
             <div class="header-content">
-                <h1><i class="fas fa-box"></i> My Products &amp; Inventory</h1>
-                <p>Manage offerings, recipes, ingredient stocks, and supplier refills</p>
+                <h1><i class="fas fa-boxes-stacked"></i> Raw Ingredients &amp; Refill Orders</h1>
+                <p>Manage raw ingredient stocks, wholesale supplier refill orders, and local market procurement</p>
             </div>
             <div class="seller-header-actions">
                 <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#requestRefillModal" style="border-radius:8px; font-weight:700;">
                     <i class="fas fa-truck-ramp-box"></i> Request Supplier Refill
                 </button>
-                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addMaterialModal" style="border-radius:8px; font-weight:700;">
+                <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#addMaterialModal" style="background:#b3261e; border-color:#b3261e; border-radius:8px; font-weight:700;">
                     <i class="fas fa-plus"></i> Add Ingredient
                 </button>
-                <a href="seller_vouchers.php" class="btn btn-dark" style="border-radius:8px; font-weight:700;">
-                    <i class="fas fa-tags"></i> Vouchers
-                </a>
-                <?php if ($can_upload_products): ?>
-                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addProductModal" style="background:#b3261e; border-color:#b3261e; border-radius:8px; font-weight:700;">
-                        <i class="fas fa-plus-circle"></i> Add New Product
-                    </button>
-                <?php else: ?>
-                    <a href="subscription_plans.php?locked_feature=upload_products&required_tier=starter" class="btn btn-outline-danger" style="border-radius:8px; font-weight:600;">
-                        <i class="fas fa-lock"></i> Add New Product (Plan Required)
-                    </a>
-                <?php endif; ?>
             </div>
         </div>
-
-        <?php if (!$can_upload_products): ?>
-            <div style="background:#fff8ef; border:1px solid #fedf89; border-radius:12px; padding:14px 18px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
-                <div style="color:#b54708; font-size:0.92rem; display:flex; align-items:center; gap:10px;">
-                    <i class="fas fa-lock" style="font-size:1.2rem; color:#b54708;"></i>
-                    <span><strong>Limited Access (Non-Subscribed Account):</strong> Product uploading is locked. Subscribe to the Starter Plan or higher to upload and sell products.</span>
-                </div>
-                <a href="subscription_plans.php?locked_feature=upload_products&required_tier=starter" class="btn btn-sm" style="background:#b3261e; color:#ffffff; border-radius:999px; font-weight:700; padding:8px 20px; text-decoration:none;">
-                    <i class="fas fa-arrow-up"></i> Upgrade to Starter
-                </a>
-            </div>
-        <?php endif; ?>
 
         <?php if (isset($_SESSION['success'])): ?>
             <div class="alert alert-success">
@@ -1397,14 +1406,14 @@ include 'includes/header.php';
 
         <!-- Portal Tab Bar -->
         <div class="d-flex mb-4 gap-2 flex-wrap">
-            <a href="seller_products.php?tab=products" class="btn btn-sm <?php echo $current_seller_tab === 'products' ? 'btn-danger' : 'btn-outline-secondary'; ?>" style="font-weight:700; border-radius:8px;">
-                <i class="fas fa-utensils"></i> Menu Products
-            </a>
             <a href="seller_products.php?tab=ingredients" class="btn btn-sm <?php echo $current_seller_tab === 'ingredients' ? 'btn-danger' : 'btn-outline-secondary'; ?>" style="font-weight:700; border-radius:8px;">
                 <i class="fas fa-boxes-stacked"></i> Raw Ingredients Inventory (<?php echo count($store_ingredients); ?>)
             </a>
             <a href="seller_products.php?tab=procurement" class="btn btn-sm <?php echo $current_seller_tab === 'procurement' ? 'btn-danger' : 'btn-outline-secondary'; ?>" style="font-weight:700; border-radius:8px;">
                 <i class="fas fa-truck-ramp-box"></i> Supplier Refill Orders (<?php echo count($procurement_requests); ?>)
+            </a>
+            <a href="seller_products.php?tab=products" class="btn btn-sm <?php echo $current_seller_tab === 'products' ? 'btn-danger' : 'btn-outline-secondary'; ?>" style="font-weight:700; border-radius:8px;">
+                <i class="fas fa-utensils"></i> Menu Products
             </a>
         </div>
 
@@ -1544,21 +1553,21 @@ include 'includes/header.php';
                                         <td>
                                             <?php if ($is_empty): ?>
                                                 <span class="fw-bold text-danger" style="font-size:1.05rem;">
-                                                    <i class="fas fa-triangle-exclamation me-1"></i>0.00 <?php echo htmlspecialchars($ing['unit']); ?>
+                                                    <i class="fas fa-triangle-exclamation me-1"></i>0 <?php echo htmlspecialchars($ing['unit']); ?>
                                                 </span>
                                             <?php elseif ($is_low): ?>
                                                 <span class="fw-bold" style="font-size:1.05rem; color:#b54708;">
-                                                    <i class="fas fa-circle-exclamation me-1"></i><?php echo number_format($stk, 2) . ' ' . htmlspecialchars($ing['unit']); ?>
+                                                    <i class="fas fa-circle-exclamation me-1"></i><?php echo (int)round($stk) . ' ' . htmlspecialchars($ing['unit']); ?>
                                                 </span>
                                             <?php else: ?>
                                                 <span class="fw-bold text-success" style="font-size:1.05rem;">
-                                                    <i class="fas fa-circle-check me-1"></i><?php echo number_format($stk, 2) . ' ' . htmlspecialchars($ing['unit']); ?>
+                                                    <i class="fas fa-circle-check me-1"></i><?php echo (int)round($stk) . ' ' . htmlspecialchars($ing['unit']); ?>
                                                 </span>
                                             <?php endif; ?>
                                         </td>
                                         <td>
                                             <span class="text-secondary fw-semibold">
-                                                <?php echo number_format($reorder, 2) . ' ' . htmlspecialchars($ing['unit']); ?>
+                                                <?php echo (int)round($reorder) . ' ' . htmlspecialchars($ing['unit']); ?>
                                             </span>
                                         </td>
                                         <td>
@@ -1843,103 +1852,12 @@ include 'includes/header.php';
                     echo "<div class='no-results'>
                             <i class='fas fa-inbox'></i>
                             <p>No products yet</p>
-                            <p style='font-size: 14px; margin-top: 10px; color: #bbb;'>Click \"Add New Product\" to get started!</p>
+                            <p style='font-size: 14px; margin-top: 10px; color: #bbb;'>To register new menu items, visit <a href='admin/products.php' style='color:#b3261e; font-weight:600;'>Products Management</a>.</p>
                         </div>";
                 }
                 ?>
             </div>
         <?php endif; ?>
-        </div>
-    </div>
-</div>
-
-<!-- Add Product Modal -->
-<div class="modal fade" id="addProductModal" tabindex="-1" aria-labelledby="addProductLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="addProductLabel"><i class="fas fa-plus-circle"></i> Add New Product</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="addProductForm" method="POST" enctype="multipart/form-data">
-                    <input type="hidden" name="add_new_product" value="1">
-                    
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="product_name" class="form-label"><strong>Product Name *</strong></label>
-                            <input type="text" class="form-control" id="product_name" name="product_name" placeholder="e.g., Lechon Kawali" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="product_category" class="form-label"><strong>Category *</strong></label>
-                            <input type="text" class="form-control" id="product_category" name="product_category" placeholder="e.g., Grilled Meats" required>
-                        </div>
-                    </div>
-                    
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="product_price" class="form-label"><strong>Price (₱) *</strong></label>
-                            <input type="number" class="form-control" id="product_price" name="product_price" placeholder="0.00" step="0.01" min="0" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="stock" class="form-label"><strong>Stock Quantity</strong></label>
-                            <input type="number" class="form-control" id="stock" name="stock" placeholder="0" min="0" value="0">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="product_images" class="form-label"><strong><i class="fas fa-images text-danger"></i> Product Photos</strong></label>
-                            <input type="file" class="form-control" id="product_images" name="product_images[]" multiple accept="image/*">
-                            <small class="text-muted">Upload 1 or multiple photos (JPG, PNG, GIF, WEBP up to 8MB). You can add or change photos anytime.</small>
-                        </div>
-                    </div>
-                    
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="weight_info" class="form-label"><strong>Weight Info</strong></label>
-                            <input type="text" class="form-control" id="weight_info" name="weight_info" placeholder="e.g., 1 kg, 500g">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="pax_info" class="form-label"><strong>Pax Info</strong></label>
-                            <input type="text" class="form-control" id="pax_info" name="pax_info" placeholder="e.g., Serves 4-6 pax">
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="product_description" class="form-label"><strong>Description</strong></label>
-                        <textarea class="form-control" id="product_description" name="product_description" rows="3" placeholder="Product details and description..."></textarea>
-                    </div>
-
-                    <!-- Weight & Size Pricing Options (Optional) -->
-                    <div class="card mb-3 p-3 border rounded-3 bg-light">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <div>
-                                <strong style="color: #101828;"><i class="fas fa-weight-hanging text-danger"></i> Weight & Size Pricing Options</strong>
-                                <span class="badge bg-secondary ms-2" style="font-size: 11px;">Optional</span>
-                            </div>
-                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="addSellerWeightTierRow('add')">
-                                <i class="fas fa-plus"></i> Add Weight Tier
-                            </button>
-                        </div>
-                        <p class="text-muted small mb-2" style="font-size: 12px;">
-                            Optional: Add multiple sizes/weights with custom prices and photos (e.g. 500g, 1 kg). If not filled, customers will order at the base price above.
-                        </p>
-                        <div id="seller_add_weight_tiers_container"></div>
-                    </div>
-
-                    <div class="alert alert-light border small text-muted mb-3" style="font-size: 12px; background: #fafbfc; border-radius: 8px;">
-                        <i class="fas fa-info-circle text-primary me-1"></i> Stock quantities are calculated automatically in <strong>Inventory Management</strong> based on raw ingredients availability.
-                    </div>
-                    
-                    <div class="alert alert-info" role="alert">
-                        <i class="fas fa-lightbulb"></i> <strong>Tip:</strong> Once added, this product will be automatically visible on our menu page!
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" form="addProductForm" class="btn btn-success" style="background:#b3261e; border-color:#b3261e;">
-                    <i class="fas fa-save"></i> Add Product
-                </button>
-            </div>
         </div>
     </div>
 </div>
@@ -2080,13 +1998,13 @@ include 'includes/header.php';
                         </div>
                         <div class="col-md-6">
                             <label for="initial_stock" class="form-label fw-bold">Initial Current Stock</label>
-                            <input type="number" step="0.01" min="0" name="initial_stock" id="initial_stock" value="0.00" class="form-control text-end">
+                            <input type="number" step="1" min="0" name="initial_stock" id="initial_stock" value="0" class="form-control text-end">
                         </div>
                     </div>
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label for="reorder_level" class="form-label fw-bold">Low Stock Warning Level</label>
-                            <input type="number" step="0.01" min="0" name="reorder_level" id="reorder_level" value="10.00" class="form-control text-end">
+                            <input type="number" step="1" min="0" name="reorder_level" id="reorder_level" value="10" class="form-control text-end">
                         </div>
                         <div class="col-md-6">
                             <label for="cost_per_unit" class="form-label fw-bold">Est. Cost Per Unit (&#8369;)</label>
@@ -2133,7 +2051,7 @@ include 'includes/header.php';
                     </div>
                     <div class="mb-3">
                         <label for="edit_mat_reorder" class="form-label fw-bold small text-secondary">Low Stock Warning Level</label>
-                        <input type="number" step="0.01" min="0" name="reorder_level" id="edit_mat_reorder" class="form-control text-end">
+                        <input type="number" step="1" min="0" name="reorder_level" id="edit_mat_reorder" class="form-control text-end">
                     </div>
                 </div>
                 <div class="modal-footer bg-light">
@@ -2245,8 +2163,23 @@ include 'includes/header.php';
                             <select name="supplier_id" id="supplier_id" class="form-select" required>
                                 <option value="">-- Choose Supplier --</option>
                                 <?php foreach ($suppliers_list as $sup): ?>
+                                    <?php 
+                                        $s_name = trim((string)$sup['name']);
+                                        $s_contact = trim((string)($sup['contact_person'] ?? ''));
+                                        $s_phone = trim((string)($sup['phone'] ?? ''));
+                                        $s_email = trim((string)($sup['email'] ?? ''));
+                                        $label = $s_name;
+                                        if ($s_contact !== '' && strcasecmp($s_contact, $s_name) !== 0) {
+                                            $label .= ' (' . $s_contact . ')';
+                                        }
+                                        if ($s_phone !== '') {
+                                            $label .= ' - ' . $s_phone;
+                                        } elseif ($s_email !== '') {
+                                            $label .= ' - ' . $s_email;
+                                        }
+                                    ?>
                                     <option value="<?php echo (int)$sup['id']; ?>">
-                                        <?php echo htmlspecialchars($sup['name']); ?> (<?php echo htmlspecialchars($sup['phone'] ?: $sup['email']); ?>)
+                                        <?php echo htmlspecialchars($label); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
