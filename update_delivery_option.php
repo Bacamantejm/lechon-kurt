@@ -48,17 +48,49 @@ $response = [
 ];
 
 if ($delivery_option === 'pickup' || $delivery_option === 'preorder') {
-    $pickup_location_id = (int)($_POST['pickup_location'] ?? ($_SESSION['pickup_location'] ?? 1));
-    $_SESSION['pickup_location'] = $pickup_location_id;
-    unset($_SESSION['delivery_location'], $_SESSION['current_delivery_quote']);
+    $pickup_location_id = (int)($_POST['pickup_location'] ?? ($_SESSION['pickup_location'] ?? 0));
+    $preferred_store = null;
+    if ($preferred_owner_user_id > 0) {
+        $preferred_store_stmt = mysqli_prepare(
+            $conn,
+            "SELECT store_id, store_name, address
+             FROM store_locations
+             WHERE owner_user_id = ? AND is_active = 1
+             ORDER BY store_id ASC
+             LIMIT 1"
+        );
+        if ($preferred_store_stmt) {
+            mysqli_stmt_bind_param($preferred_store_stmt, "i", $preferred_owner_user_id);
+            mysqli_stmt_execute($preferred_store_stmt);
+            $preferred_store_result = mysqli_stmt_get_result($preferred_store_stmt);
+            $preferred_store = $preferred_store_result ? mysqli_fetch_assoc($preferred_store_result) : null;
+            mysqli_stmt_close($preferred_store_stmt);
+        }
+    }
 
     $selected_store = null;
     foreach (dpNormalizeStoreRows($stores) as $store) {
-        if ((int)($store['id'] ?? 0) === $pickup_location_id) {
+        if ((int)($store['id'] ?? 0) === $pickup_location_id
+            && ($preferred_owner_user_id <= 0 || (int)($store['owner_user_id'] ?? 0) === $preferred_owner_user_id)) {
             $selected_store = $store;
             break;
         }
     }
+    if (!$selected_store && $preferred_store) {
+        $pickup_location_id = (int)$preferred_store['store_id'];
+        $selected_store = [
+            'id' => $pickup_location_id,
+            'name' => (string)$preferred_store['store_name'],
+            'address' => (string)$preferred_store['address']
+        ];
+    }
+    if (!$selected_store) {
+        echo json_encode(['success' => false, 'message' => 'No active pickup branch is configured for this shop.']);
+        exit;
+    }
+
+    $_SESSION['pickup_location'] = $pickup_location_id;
+    unset($_SESSION['delivery_location'], $_SESSION['current_delivery_quote']);
 
     $response['pickup_location'] = $pickup_location_id;
     $response['delivery_details'] = ($delivery_option === 'preorder' ? 'Pre-Order from: ' : 'Pickup from: ') . ($selected_store['name'] ?? 'Main Store');
@@ -109,5 +141,4 @@ if ($coords !== null) {
 }
 
 echo json_encode($response);
-
 

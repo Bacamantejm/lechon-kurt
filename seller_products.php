@@ -1925,49 +1925,8 @@ include 'includes/header.php';
                         <div id="seller_add_weight_tiers_container"></div>
                     </div>
 
-                    <!-- Bill of Materials (BOM) / Recipe Ingredients Checklist -->
-                    <div class="card mb-3 p-3 border rounded-3 bg-white" style="border-color:#eaecf0 !important;">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <div>
-                                <strong style="color: #101828;"><i class="fas fa-boxes-packing text-danger me-1"></i> Ingredients Needed (Recipe Checklist)</strong>
-                                <span class="badge bg-danger ms-2" style="font-size: 11px;">Auto Stock Deduction</span>
-                            </div>
-                            <a href="seller_products.php?tab=ingredients" target="_blank" class="btn btn-sm btn-outline-secondary" style="font-size:12px; font-weight:600;">
-                                <i class="fas fa-plus me-1"></i> Register New Ingredient
-                            </a>
-                        </div>
-                        <p class="text-muted small mb-3" style="font-size: 12px;">
-                            Check off the raw ingredients required to prepare 1 unit/serving of this product. When customer orders are placed, these ingredients are automatically deducted from your inventory. If any checked ingredient reaches 0 stock, this product will automatically be unavailable.
-                        </p>
-                        <div class="row g-2" id="seller_add_ingredients_checklist">
-                            <?php if (empty($materials_list)): ?>
-                                <div class="col-12 text-center py-3 text-muted border rounded-2 bg-light">
-                                    <i class="fas fa-exclamation-circle text-warning me-1"></i> No raw ingredients registered yet. 
-                                    <a href="seller_products.php?tab=ingredients" class="text-danger fw-bold">Click here to add your ingredients first</a> (e.g. Pork belly, soy sauce, garlic, water).
-                                </div>
-                            <?php else: ?>
-                                <?php foreach ($materials_list as $m): 
-                                    $mid = (int)$m['id'];
-                                    $mname = htmlspecialchars($m['name']);
-                                    $munit = htmlspecialchars($m['unit']);
-                                ?>
-                                    <div class="col-md-6">
-                                        <div class="border rounded-2 p-2 h-100 d-flex align-items-center justify-content-between ingredient-check-item" style="background:#fcfcfd; border-color:#eaecf0 !important;">
-                                            <div class="form-check m-0 me-2 text-truncate" style="max-width: 170px;">
-                                                <input class="form-check-input ing-checkbox-add" type="checkbox" name="recipe_ingredients[<?php echo $mid; ?>][selected]" value="1" id="add_ing_check_<?php echo $mid; ?>" onchange="handleIngredientCheckToggle(this, 'add_qty_<?php echo $mid; ?>')">
-                                                <label class="form-check-label fw-bold text-dark small text-truncate" for="add_ing_check_<?php echo $mid; ?>" style="cursor:pointer;" title="<?php echo $mname; ?>">
-                                                    <?php echo $mname; ?>
-                                                </label>
-                                            </div>
-                                            <div class="d-flex align-items-center gap-1" style="width: 140px;">
-                                                <input type="number" step="0.001" min="0.001" name="recipe_ingredients[<?php echo $mid; ?>][qty]" id="add_qty_<?php echo $mid; ?>" class="form-control form-control-sm text-end" placeholder="0.00" disabled style="background:#f8f9fa;">
-                                                <span class="small text-muted fw-semibold" style="min-width: 34px; font-size:11px;"><?php echo $munit; ?></span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </div>
+                    <div class="alert alert-light border small text-muted mb-3" style="font-size: 12px; background: #fafbfc; border-radius: 8px;">
+                        <i class="fas fa-info-circle text-primary me-1"></i> Stock quantities are calculated automatically in <strong>Inventory Management</strong> based on raw ingredients availability.
                     </div>
                     
                     <div class="alert alert-info" role="alert">
@@ -2071,49 +2030,8 @@ include 'includes/header.php';
                         <div id="seller_edit_weight_tiers_container"></div>
                     </div>
 
-                    <!-- Bill of Materials (BOM) / Recipe Ingredients Checklist -->
-                    <div class="card mb-3 p-3 border rounded-3 bg-white" style="border-color:#eaecf0 !important;">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <div>
-                                <strong style="color: #101828;"><i class="fas fa-boxes-packing text-danger me-1"></i> Ingredients Needed (Recipe Checklist)</strong>
-                                <span class="badge bg-danger ms-2" style="font-size: 11px;">Auto Stock Deduction</span>
-                            </div>
-                            <a href="seller_products.php?tab=ingredients" target="_blank" class="btn btn-sm btn-outline-secondary" style="font-size:12px; font-weight:600;">
-                                <i class="fas fa-plus me-1"></i> Register New Ingredient
-                            </a>
-                        </div>
-                        <p class="text-muted small mb-3" style="font-size: 12px;">
-                            Check off the ingredients required to prepare this menu item. Checked ingredients are automatically deducted from stock when customer orders are placed.
-                        </p>
-                        <div class="row g-2" id="seller_edit_ingredients_checklist">
-                            <?php if (empty($materials_list)): ?>
-                                <div class="col-12 text-center py-3 text-muted border rounded-2 bg-light">
-                                    <i class="fas fa-exclamation-circle text-warning me-1"></i> No raw ingredients registered yet. 
-                                    <a href="seller_products.php?tab=ingredients" class="text-danger fw-bold">Register ingredients first</a>.
-                                </div>
-                            <?php else: ?>
-                                <?php foreach ($materials_list as $m): 
-                                    $mid = (int)$m['id'];
-                                    $mname = htmlspecialchars($m['name']);
-                                    $munit = htmlspecialchars($m['unit']);
-                                ?>
-                                    <div class="col-md-6">
-                                        <div class="border rounded-2 p-2 h-100 d-flex align-items-center justify-content-between ingredient-check-item" style="background:#fcfcfd; border-color:#eaecf0 !important;">
-                                            <div class="form-check m-0 me-2 text-truncate" style="max-width: 170px;">
-                                                <input class="form-check-input ing-checkbox-edit" type="checkbox" name="recipe_ingredients[<?php echo $mid; ?>][selected]" value="1" id="edit_ing_check_<?php echo $mid; ?>" onchange="handleIngredientCheckToggle(this, 'edit_qty_<?php echo $mid; ?>')">
-                                                <label class="form-check-label fw-bold text-dark small text-truncate" for="edit_ing_check_<?php echo $mid; ?>" style="cursor:pointer;" title="<?php echo $mname; ?>">
-                                                    <?php echo $mname; ?>
-                                                </label>
-                                            </div>
-                                            <div class="d-flex align-items-center gap-1" style="width: 140px;">
-                                                <input type="number" step="0.001" min="0.001" name="recipe_ingredients[<?php echo $mid; ?>][qty]" id="edit_qty_<?php echo $mid; ?>" class="form-control form-control-sm text-end" placeholder="0.00" disabled style="background:#f8f9fa;">
-                                                <span class="small text-muted fw-semibold" style="min-width: 34px; font-size:11px;"><?php echo $munit; ?></span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </div>
+                    <div class="alert alert-light border small text-muted mb-3" style="font-size: 12px; background: #fafbfc; border-radius: 8px;">
+                        <i class="fas fa-info-circle text-primary me-1"></i> Stock quantities are calculated automatically in <strong>Inventory Management</strong> based on raw ingredients availability.
                     </div>
                 </form>
             </div>
