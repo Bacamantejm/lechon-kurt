@@ -271,6 +271,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
             } elseif (function_exists('isSupplierUser') && isSupplierUser($conn, $result['user_id'])) {
                 $redirect = 'supplier/dashboard.php';
             } else {
+                if (isset($_SESSION['is_driver'])) { unset($_SESSION['is_driver']); }
+                if (isset($_SESSION['rider_id'])) { unset($_SESSION['rider_id']); }
+                if (isset($_SESSION['rider_code'])) { unset($_SESSION['rider_code']); }
+
                 // Determine default redirect from RBAC role permissions first, then legacy fallback
                 $redirect = getUserDashboardRoute($conn, $result['user_id'], $result['user_type']);
                 if ($redirect === 'index.php' && ($user_type === 'employee' || $is_employee_record)) {
