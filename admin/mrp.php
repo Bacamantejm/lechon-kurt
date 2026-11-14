@@ -3258,9 +3258,9 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <div class="tab-pane fade <?php echo $tab === 'suppliers' ? 'show active' : ''; ?>" id="suppliers">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h4>Suppliers</h4>
-                            <?php if ($seller_scope_id === null): ?>
-                                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#supplierModal" onclick="resetSupplierForm()"><i class="fas fa-plus"></i> Add Supplier</button>
-                            <?php endif; ?>
+                            <a href="add_supplier.php" class="btn btn-sm btn-danger" style="background:#b3261e; border-color:#b3261e; font-weight:600;">
+                                <i class="fas fa-user-plus"></i> Add Supplier Account
+                            </a>
                         </div>
                         <table class="admin-table">
                             <thead>

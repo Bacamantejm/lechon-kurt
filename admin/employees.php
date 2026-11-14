@@ -2361,6 +2361,11 @@ if ($roles_query instanceof mysqli_result) {
                             </button>
                         </div>
 
+                        <!-- Add Supplier Shortcut -->
+                        <a href="add_supplier.php" class="btn btn-outline-danger btn-sm" style="border-radius: 8px; font-weight: 600; padding: 7px 14px;" title="Register wholesale ingredient supplier">
+                            <i class="fas fa-truck-loading me-1"></i> Add Supplier
+                        </a>
+
                         <!-- Add Employee Primary CTA -->
                         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addEmployeeModal" style="background: #b3261e; border-color: #b3261e; border-radius: 8px; font-weight: 600; padding: 7px 16px;">
                             <i class="fas fa-plus me-1"></i> Add Employee
