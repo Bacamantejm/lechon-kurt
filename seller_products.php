@@ -1521,7 +1521,7 @@ include 'includes/header.php';
                                 <th>Current Store Stock</th>
                                 <th>Reorder Level</th>
                                 <th>Stock Status</th>
-                                <th>Est. Cost / Unit</th>
+                                <th>Wholesale Cost / Unit</th>
                                 <th>Last Restocked</th>
                                 <th class="text-end">Actions</th>
                             </tr>
@@ -1586,9 +1586,15 @@ include 'includes/header.php';
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <span class="text-muted">
-                                                &#8369;<?php echo number_format($cost_val, 2); ?> / <?php echo htmlspecialchars($ing['unit']); ?>
-                                            </span>
+                                            <?php if ($cost_val > 0): ?>
+                                                <span class="text-dark fw-semibold">
+                                                    &#8369;<?php echo number_format($cost_val, 2); ?> <small class="text-muted fw-normal">/ <?php echo htmlspecialchars($ing['unit']); ?></small>
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge" style="background:#f2f4f7; color:#475467; border:1px solid #eaecf0; font-size:0.75rem; font-weight:500;">
+                                                    Supplier Quoted
+                                                </span>
+                                            <?php endif; ?>
                                         </td>
                                         <td class="text-muted small">
                                             <?php echo !empty($ing['last_restocked_at']) ? date('M d, Y h:i A', strtotime($ing['last_restocked_at'])) : 'Initial Setup'; ?>
@@ -2008,15 +2014,12 @@ include 'includes/header.php';
                         </div>
                     </div>
                     <div class="row g-3">
-                        <div class="col-md-6">
+                        <div class="col-md-12">
                             <label for="reorder_level" class="form-label fw-bold">Low Stock Warning Level</label>
                             <input type="number" step="1" min="0" name="reorder_level" id="reorder_level" value="10" class="form-control text-end" onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
                         </div>
-                        <div class="col-md-6">
-                            <label for="cost_per_unit" class="form-label fw-bold">Est. Cost Per Unit (&#8369;)</label>
-                            <input type="number" step="0.01" min="0" name="cost_per_unit" id="cost_per_unit" value="0.00" class="form-control text-end">
-                        </div>
                     </div>
+                    <input type="hidden" name="cost_per_unit" id="cost_per_unit" value="0.00">
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -2045,20 +2048,15 @@ include 'includes/header.php';
                         <label for="edit_mat_name" class="form-label fw-bold small text-secondary">Ingredient Name *</label>
                         <input type="text" name="material_name" id="edit_mat_name" class="form-control" required>
                     </div>
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label for="edit_mat_unit" class="form-label fw-bold small text-secondary">Unit of Measure *</label>
-                            <input type="text" name="material_unit" id="edit_mat_unit" class="form-control" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="edit_mat_cost" class="form-label fw-bold small text-secondary">Est. Cost Per Unit (&#8369;)</label>
-                            <input type="number" step="0.01" min="0" name="cost_per_unit" id="edit_mat_cost" class="form-control text-end">
-                        </div>
+                    <div class="mb-3">
+                        <label for="edit_mat_unit" class="form-label fw-bold small text-secondary">Unit of Measure *</label>
+                        <input type="text" name="material_unit" id="edit_mat_unit" class="form-control" required>
                     </div>
                     <div class="mb-3">
                         <label for="edit_mat_reorder" class="form-label fw-bold small text-secondary">Low Stock Warning Level</label>
                         <input type="number" step="1" min="0" name="reorder_level" id="edit_mat_reorder" class="form-control text-end" onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
                     </div>
+                    <input type="hidden" name="cost_per_unit" id="edit_mat_cost" value="0.00">
                 </div>
                 <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

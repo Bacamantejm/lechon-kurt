@@ -2364,16 +2364,15 @@ unset($_SESSION['success'], $_SESSION['error']);
                         <?php endforeach; ?>
                     </div>
                 </div>
-                <div class="small text-muted mb-2">Process order: left to right. Select a section to manage procurement operations.</div>
                 <ul class="nav nav-tabs mb-4">
                     <li class="nav-item">
                         <a class="nav-link <?php echo $tab === 'low_stock' ? 'active' : ''; ?>" href="?tab=low_stock">
-                            <i class="fas fa-boxes-stacked me-1"></i> 1. Needs Planner &amp; Stock
+                            <i class="fas fa-boxes-stacked me-1"></i> Needs &amp; Stock Planner
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?php echo $tab === 'procurement_orders' ? 'active' : ''; ?>" href="?tab=procurement_orders">
-                            <i class="fas fa-truck-ramp-box me-1"></i> 2. Refill &amp; Restock Orders
+                            <i class="fas fa-truck-ramp-box me-1"></i> Refill &amp; Restock Orders
                             <?php if (!empty($procurement_orders_list)): ?>
                                 <span class="badge rounded-pill bg-danger ms-1"><?= count($procurement_orders_list) ?></span>
                             <?php endif; ?>
@@ -2381,27 +2380,27 @@ unset($_SESSION['success'], $_SESSION['error']);
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?php echo $tab === 'requisitions' ? 'active' : ''; ?>" href="?tab=requisitions">
-                            3. Requisitions (PR)
+                            <i class="fas fa-file-invoice me-1"></i> Requisitions (PR)
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?php echo $tab === 'purchase_orders' ? 'active' : ''; ?>" href="?tab=purchase_orders">
-                            4. Purchase Orders (PO)
+                            <i class="fas fa-file-contract me-1"></i> Purchase Orders (PO)
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?php echo $tab === 'budget_payments' ? 'active' : ''; ?>" href="?tab=budget_payments">
-                            5. Finance &amp; Budgets
+                            <i class="fas fa-wallet me-1"></i> Finance &amp; Budgets
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?php echo $tab === 'suppliers' ? 'active' : ''; ?>" href="?tab=suppliers">
-                            Optional: Suppliers
+                            <i class="fas fa-handshake me-1"></i> Suppliers
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?php echo $tab === 'batch_roasting' ? 'active' : ''; ?>" href="?tab=batch_roasting">
-                            <i class="fas fa-fire me-1"></i> 6. Batch Roasting &amp; Yield
+                            <i class="fas fa-fire me-1"></i> Batch Roasting &amp; Yield
                         </a>
                     </li>
                 </ul>
@@ -2697,82 +2696,38 @@ unset($_SESSION['success'], $_SESSION['error']);
 
                     <!-- Low Stock Tab -->
                     <div class="tab-pane fade <?php echo $tab === 'low_stock' ? 'show active' : ''; ?>" id="low_stock">
-                        <!-- Top Header with Primary Actions -->
-                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                            <div>
-                                <h4 class="fw-bold mb-1" style="font-family:'Outfit',sans-serif; color:#101828;">
-                                    Inventory Needs &amp; Stock Depletion Monitor
-                                </h4>
-                                <p class="text-muted small mb-0">
-                                    Monitor live ingredient stocks, affected menu availability, and trigger procurement via local market purchase or partner supplier refill.
-                                </p>
-                            </div>
-                            <div class="d-flex align-items-center gap-2 flex-wrap">
-                                <a href="../shopping_list.php" target="_blank" class="btn btn-outline-success btn-sm fw-bold">
-                                    <i class="fas fa-list-check me-1"></i> Mobile Shopping List
-                                </a>
-                                <button type="button" class="btn btn-success btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#logSelfProcureModal">
-                                    <i class="fas fa-receipt me-1"></i> Log Market Purchase
-                                </button>
-                                <button type="button" class="btn btn-danger btn-sm fw-bold" style="background:#b3261e; border-color:#b3261e;" data-bs-toggle="modal" data-bs-target="#supplierRefillModal">
-                                    <i class="fas fa-paper-plane me-1"></i> Refill from Supplier
-                                </button>
-                                <?php if ($seller_scope_id === null): ?>
-                                    <a href="materials.php" class="btn btn-outline-secondary btn-sm"><i class="fas fa-boxes me-1"></i> All Materials</a>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-
-                        <!-- Dual-Flow Procurement Pathway Cards -->
-                        <div class="row g-3 mb-4">
-                            <!-- Pathway 1: Self-Procurement -->
-                            <div class="col-md-6">
-                                <div class="card p-3 h-100" style="border: 1px solid #eaecf0; border-radius: 12px; background: #ffffff; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
-                                    <div class="d-flex align-items-center gap-2 mb-2">
-                                        <div style="width:36px; height:36px; border-radius:8px; background:#ecfdf3; color:#027a48; display:flex; align-items:center; justify-content:center; font-size:1.1rem;">
-                                            <i class="fas fa-basket-shopping"></i>
-                                        </div>
-                                        <div>
-                                            <h6 class="fw-bold mb-0 text-dark">Self-Procurement (Local Market Trip)</h6>
-                                            <span class="small text-muted">Shop owner buys stock directly at wet market or supermarket</span>
-                                        </div>
-                                    </div>
-                                    <p class="small text-secondary mb-3">
-                                        Take the interactive shopping checklist to the market on your phone, then log the purchase receipt to restock your ingredients immediately and route the expense to Finance.
+                        <!-- Clean, Compact Header with Unified Action Toolbar -->
+                        <div class="card mb-3 border-0 shadow-sm" style="border-radius:12px; background:#ffffff; border:1px solid #eaecf0 !important;">
+                            <div class="card-body p-3 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                                <div>
+                                    <h5 class="fw-bold mb-1 text-dark" style="font-family:'Outfit',sans-serif;">
+                                        <i class="fas fa-boxes-stacked text-danger me-2"></i> Inventory Needs &amp; Stock Monitor
+                                    </h5>
+                                    <p class="text-muted small mb-0">
+                                        Track live ingredient stocks, restock via local market run, or order from partner suppliers.
                                     </p>
-                                    <div class="d-flex gap-2 mt-auto">
-                                        <a href="../shopping_list.php" target="_blank" class="btn btn-sm btn-outline-success fw-bold">
-                                            <i class="fas fa-list-check me-1"></i> Open Shopping List
-                                        </a>
-                                        <button type="button" class="btn btn-sm btn-success fw-bold" data-bs-toggle="modal" data-bs-target="#logSelfProcureModal">
-                                            <i class="fas fa-receipt me-1"></i> Log Market Purchase
-                                        </button>
-                                    </div>
                                 </div>
-                            </div>
-
-                            <!-- Pathway 2: Partner Supplier Refill -->
-                            <div class="col-md-6">
-                                <div class="card p-3 h-100" style="border: 1px solid #eaecf0; border-radius: 12px; background: #ffffff; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
-                                    <div class="d-flex align-items-center gap-2 mb-2">
-                                        <div style="width:36px; height:36px; border-radius:8px; background:#eff8ff; color:#175cd3; display:flex; align-items:center; justify-content:center; font-size:1.1rem;">
-                                            <i class="fas fa-truck-ramp-box"></i>
-                                        </div>
-                                        <div>
-                                            <h6 class="fw-bold mb-0 text-dark">Supplier Procurement (Partner Wholesale Refill)</h6>
-                                            <span class="small text-muted">B2B procurement with quotes, finance approval &amp; dispatch</span>
-                                        </div>
-                                    </div>
-                                    <p class="small text-secondary mb-3">
-                                        Send a refill request to an accredited partner supplier. The supplier quotes and sends the invoice to Finance. Once approved, the supplier dispatches and you confirm receipt to restock.
-                                    </p>
-                                    <div class="d-flex gap-2 mt-auto">
-                                        <button type="button" class="btn btn-sm btn-danger fw-bold" style="background:#b3261e; border-color:#b3261e;" data-bs-toggle="modal" data-bs-target="#supplierRefillModal">
-                                            <i class="fas fa-paper-plane me-1"></i> Refill from Supplier
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <a href="../shopping_list.php" target="_blank" class="btn btn-outline-success btn-sm fw-semibold">
+                                        <i class="fas fa-list-check me-1"></i> Shopping List
+                                    </a>
+                                    <button type="button" class="btn btn-success btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#logSelfProcureModal">
+                                        <i class="fas fa-receipt me-1"></i> Log Market Buy
+                                    </button>
+                                    <button type="button" class="btn btn-danger btn-sm fw-semibold" style="background:#b3261e; border-color:#b3261e;" data-bs-toggle="modal" data-bs-target="#supplierRefillModal">
+                                        <i class="fas fa-paper-plane me-1"></i> Request Supplier Refill
+                                    </button>
+                                    <div class="btn-group">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle fw-semibold" data-bs-toggle="dropdown" aria-expanded="false">
+                                            <i class="fas fa-folder-open me-1"></i> Catalogs
                                         </button>
-                                        <a href="?tab=procurement_orders" class="btn btn-sm btn-outline-secondary fw-semibold">
-                                            <i class="fas fa-boxes-stacked me-1"></i> Track Refill Requests
-                                        </a>
+                                        <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="border-radius:8px;">
+                                            <li><a class="dropdown-item small" href="materials.php"><i class="fas fa-cubes text-danger me-2"></i> Raw Ingredients (Materials)</a></li>
+                                            <li><a class="dropdown-item small" href="products.php"><i class="fas fa-utensils text-primary me-2"></i> Menu Products</a></li>
+                                            <li><a class="dropdown-item small" href="inventory.php"><i class="fas fa-warehouse text-success me-2"></i> Finished Inventory</a></li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li><a class="dropdown-item small" href="?tab=procurement_orders"><i class="fas fa-truck-ramp-box text-secondary me-2"></i> Track Refill Requests</a></li>
+                                        </ul>
                                     </div>
                                 </div>
                             </div>
@@ -2780,7 +2735,7 @@ unset($_SESSION['success'], $_SESSION['error']);
 
                         <!-- Menu Out-of-Stock Impact Alert -->
                         <?php if (!empty($affected_menu_products)): ?>
-                            <div class="alert alert-danger d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 p-3 mb-4" style="background:#fff1f0; border:1px solid #fee4e2; border-radius:12px; color:#b3261e;">
+                            <div class="alert alert-danger d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 p-3 mb-3" style="background:#fff1f0; border:1px solid #fee4e2; border-radius:12px; color:#b3261e;">
                                 <div class="d-flex align-items-center gap-3">
                                     <i class="fas fa-triangle-exclamation fa-2x"></i>
                                     <div>
@@ -2802,32 +2757,6 @@ unset($_SESSION['success'], $_SESSION['error']);
                                 </div>
                             </div>
                         <?php endif; ?>
-
-                        <!-- Dedicated Catalog Navigation Links -->
-                        <div class="card mb-4" style="border: 1px solid #eaecf0; border-radius: 12px; background: #ffffff; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
-                            <div class="card-body p-3 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
-                                <div class="d-flex align-items-center gap-3">
-                                    <div style="width: 38px; height: 38px; border-radius: 8px; background: #f8f9fa; border: 1px solid #eaecf0; display: flex; align-items: center; justify-content: center; color: #475467; font-size: 1.1rem;">
-                                        <i class="fas fa-sitemap"></i>
-                                    </div>
-                                    <div>
-                                        <strong style="color: #101828; font-size: 0.95rem;">Catalog &amp; Inventory Management Modules</strong>
-                                        <p class="text-muted small mb-0">Menu products, finished goods stock, and raw ingredient definitions are managed in their dedicated pages.</p>
-                                    </div>
-                                </div>
-                                <div class="d-flex gap-2 flex-wrap">
-                                    <a href="materials.php" class="btn btn-sm btn-outline-secondary fw-semibold">
-                                        <i class="fas fa-cubes me-1 text-danger"></i> Raw Ingredients (Materials)
-                                    </a>
-                                    <a href="products.php" class="btn btn-sm btn-outline-secondary fw-semibold">
-                                        <i class="fas fa-utensils me-1 text-primary"></i> Menu Products
-                                    </a>
-                                    <a href="inventory.php" class="btn btn-sm btn-outline-secondary fw-semibold">
-                                        <i class="fas fa-warehouse me-1 text-success"></i> Finished Inventory
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
 
                         <div class="sales-wire-grid">
                             <div class="sales-wire-card">
