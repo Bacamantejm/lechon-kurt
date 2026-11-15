@@ -418,16 +418,9 @@ class IngredientStockManager {
 
             $has_recipe = (mysqli_num_rows($bom_res) > 0);
             if (!$has_recipe) {
-                // When shop owner hasn't configured ingredients yet, the product must NOT be available
-                mysqli_query($conn, "UPDATE products SET stock = 0, is_available = 0 WHERE id = {$p_id}");
-
-                // Update today's inventory row to 0
-                $chk_inv = mysqli_query($conn, "SELECT id FROM inventory WHERE product_id = {$p_id} AND inventory_date = '{$today_str}' AND is_archived = 0 LIMIT 1");
-                if ($chk_inv && ($inv_r = mysqli_fetch_assoc($chk_inv))) {
-                    mysqli_query($conn, "UPDATE inventory SET current_stock = 0, last_updated = NOW() WHERE id = " . (int)$inv_r['id']);
-                } else {
-                    mysqli_query($conn, "INSERT INTO inventory (product_id, inventory_date, current_stock, min_stock_level, last_updated) VALUES ({$p_id}, '{$today_str}', 0, 5, NOW())");
-                }
+                // Products without BOM recipes rely on direct inventory stock. Do not force 0!
+                // Restore is_available if direct stock exists.
+                mysqli_query($conn, "UPDATE products SET is_available = 1 WHERE id = {$p_id} AND stock > 0 AND is_available = 0");
                 continue;
             }
 

@@ -397,7 +397,7 @@ if ($category !== '') {
 }
 
 $where_clause = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_clauses) : "";
-$products_query = "SELECT p.*, COALESCE(i.current_stock, 0) as today_stock FROM products p LEFT JOIN inventory i ON p.id = i.product_id AND i.inventory_date = CURDATE() $where_clause ORDER BY p.created_at DESC";
+$products_query = "SELECT p.*, COALESCE(i.current_stock, p.stock, 0) as today_stock FROM products p LEFT JOIN inventory i ON p.id = i.product_id AND i.inventory_date = CURDATE() $where_clause ORDER BY p.created_at DESC";
 
 $stmt = mysqli_prepare($conn, $products_query);
 if (count($params) > 0) {
