@@ -459,11 +459,11 @@ if ($logs_stmt) {
                     <table class="table align-middle mb-0">
                         <thead>
                             <tr style="border-bottom: 2px solid #eaecf0; color:#475467; font-size:0.82rem; text-transform:uppercase;">
-                                <th>Ingredient</th>
-                                <th class="text-center" style="width:120px;">Requested Qty</th>
-                                <th class="text-center" style="width:160px;">Supplied Qty</th>
+                                <th>Item / Ingredient Name</th>
+                                <th class="text-center" style="width:150px; white-space:nowrap;">Requested Qty / Weight</th>
+                                <th class="text-center" style="width:160px; white-space:nowrap;">Supplied Qty / Weight</th>
                                 <th class="text-end" style="width:190px; min-width:180px; white-space:nowrap;">Wholesale Unit Price</th>
-                                <th class="text-end" style="width:130px;">Line Total</th>
+                                <th class="text-end" style="width:130px; white-space:nowrap;">Line Total</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -489,9 +489,9 @@ if ($logs_stmt) {
                                             </span>
                                         <?php endif; ?>
                                     </td>
-                                    <td class="text-center align-middle">
-                                        <div class="fw-bold text-dark" style="font-size:1.05rem;"><?php echo formatQtyVal($req_qty); ?></div>
-                                        <span class="badge" style="background:#f2f4f7; color:#475467; border:1px solid #eaecf0; font-size:0.75rem; font-weight:500;">
+                                    <td class="text-center align-middle" style="white-space: nowrap;">
+                                        <span class="fw-bold text-dark" style="font-size:1.05rem;"><?php echo formatQtyVal($req_qty); ?></span>
+                                        <span class="badge ms-1" style="background:#f2f4f7; color:#344054; border:1px solid #eaecf0; font-size:0.8rem; font-weight:600;">
                                             <?php echo htmlspecialchars($unit); ?>
                                         </span>
                                     </td>
@@ -507,10 +507,12 @@ if ($logs_stmt) {
                                                 <span class="input-group-text bg-light text-muted small px-2"><?php echo htmlspecialchars($unit); ?></span>
                                             </div>
                                         <?php else: ?>
-                                            <div class="fw-bold text-dark" style="font-size:1.05rem;"><?php echo formatQtyVal($sup_qty); ?></div>
-                                            <span class="badge" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; font-size:0.75rem; font-weight:500;">
-                                                <?php echo htmlspecialchars($unit); ?>
-                                            </span>
+                                            <div class="d-inline-flex align-items-center justify-content-center" style="white-space: nowrap;">
+                                                <span class="fw-bold text-dark" style="font-size:1.05rem;"><?php echo formatQtyVal($sup_qty); ?></span>
+                                                <span class="badge ms-1" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; font-size:0.8rem; font-weight:600;">
+                                                    <?php echo htmlspecialchars($unit); ?>
+                                                </span>
+                                            </div>
                                         <?php endif; ?>
                                     </td>
                                     <td class="text-end align-middle">

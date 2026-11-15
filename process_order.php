@@ -351,6 +351,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $delivery_address = $store['store_name'] . ', ' . $store['address'];
     }
     
+    // Validate live ingredient stocks and recipes for all items in checkout cart
+    require_once 'includes/IngredientStockManager.php';
+    foreach ($checkout_cart as $item) {
+        $item_raw_pid = trim((string)($item['id'] ?? $item['product_id'] ?? ''));
+        $item_name = (string)($item['name'] ?? 'Selected Item');
+        $item_qty = floatval($item['quantity'] ?? 1);
+
+        $item_prod_id = intval($item_raw_pid);
+        $item_seller_id = intval($item['seller_id'] ?? $checkout_seller_owner_id ?? 0);
+        if ($item_prod_id <= 0 || !is_numeric($item_raw_pid)) {
+            $get_pid = mysqli_prepare($conn, "SELECT id, seller_id FROM products WHERE product_id = ? OR id = ? LIMIT 1");
+            if ($get_pid) {
+                $test_id = intval($item_raw_pid);
+                mysqli_stmt_bind_param($get_pid, "si", $item_raw_pid, $test_id);
+                mysqli_stmt_execute($get_pid);
+                $pid_res = mysqli_stmt_get_result($get_pid);
+                if ($p_row = mysqli_fetch_assoc($pid_res)) {
+                    $item_prod_id = (int)$p_row['id'];
+                    if ($item_seller_id <= 0 && !empty($p_row['seller_id'])) {
+                        $item_seller_id = (int)$p_row['seller_id'];
+                    }
+                }
+                mysqli_stmt_close($get_pid);
+            }
+        }
+
+        if ($item_prod_id > 0) {
+            $cap = IngredientStockManager::getProductIngredientCapacity($conn, $item_prod_id, $item_seller_id);
+            if (!$cap['has_recipe']) {
+                checkoutFail(
+                    'Item Unavailable',
+                    "The item '{$item_name}' cannot be ordered yet because its raw ingredients have not been registered by the shop owner.",
+                    422
+                );
+            }
+            if (!$cap['can_make'] || $cap['yield'] < $item_qty) {
+                $dep_list = !empty($cap['depleted_ingredients']) ? ' (Depleted: ' . implode(', ', $cap['depleted_ingredients']) . ')' : '';
+                checkoutFail(
+                    'Insufficient Ingredient Stock',
+                    "The item '{$item_name}' cannot be fulfilled due to insufficient raw ingredient stock{$dep_list}. Available quantity: {$cap['yield']}.",
+                    422
+                );
+            }
+        }
+    }
+
     // Calculate order totals
     $subtotal = 0;
     foreach ($checkout_cart as $item) {

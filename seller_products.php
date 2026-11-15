@@ -537,30 +537,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_supplier_refi
                     $mat_id = intval($item['material_id'] ?? 0);
                     $qty_req = max(1, intval(round(floatval($item['quantity_requested'] ?? 0))));
                     if ($mat_id > 0 && $qty_req > 0) {
-                        // Check wholesale catalog or fallback to material baseline cost
-                        $price_chk = mysqli_prepare($conn, "SELECT wholesale_price, packaging_unit FROM supplier_catalog WHERE supplier_id = ? AND material_id = ? LIMIT 1");
-                        $unit_price = 0.0;
                         $pack_unit = 'kg';
-                        if ($price_chk) {
-                            mysqli_stmt_bind_param($price_chk, "ii", $supplier_id, $mat_id);
-                            mysqli_stmt_execute($price_chk);
-                            $p_res = mysqli_stmt_get_result($price_chk);
-                            if ($p_row = mysqli_fetch_assoc($p_res)) {
-                                $unit_price = floatval($p_row['wholesale_price']);
-                                $pack_unit = $p_row['packaging_unit'];
-                            }
-                            mysqli_stmt_close($price_chk);
-                        }
-                        if ($unit_price <= 0) {
-                            $m_chk = mysqli_query($conn, "SELECT cost_per_unit, unit FROM materials WHERE id = $mat_id LIMIT 1");
-                            if ($m_chk && ($m_r = mysqli_fetch_assoc($m_chk))) {
-                                $unit_price = floatval($m_r['cost_per_unit']);
-                                $pack_unit = $m_r['unit'];
-                            }
+                        $m_chk = mysqli_query($conn, "SELECT unit FROM materials WHERE id = $mat_id LIMIT 1");
+                        if ($m_chk && ($m_r = mysqli_fetch_assoc($m_chk))) {
+                            $pack_unit = $m_r['unit'] ?: 'kg';
                         }
 
-                        $line_total = $qty_req * $unit_price;
-                        $total_order_amount += $line_total;
+                        // Store owner only submits needed item and quantity/weight; supplier decides and quotes unit pricing
+                        $unit_price = 0.0;
+                        $line_total = 0.0;
 
                         if ($item_ins) {
                             mysqli_stmt_bind_param($item_ins, "iiddsdd", $supp_order_id, $mat_id, $qty_req, $qty_req, $pack_unit, $unit_price, $line_total);
@@ -570,8 +555,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_supplier_refi
                 }
                 if ($item_ins) mysqli_stmt_close($item_ins);
 
-                // Update subtotal & total
-                mysqli_query($conn, "UPDATE supplier_orders SET subtotal_amount = $total_order_amount, total_amount = $total_order_amount WHERE id = $supp_order_id");
+                // Initial total is 0.00 until supplier inputs pricing and routes quote to Finance
+                mysqli_query($conn, "UPDATE supplier_orders SET subtotal_amount = 0.00, total_amount = 0.00 WHERE id = $supp_order_id");
 
                 // Audit log
                 mysqli_query($conn, "INSERT INTO supplier_order_status_logs (order_id, previous_status, new_status, action_by_user_id, notes) 
@@ -1062,30 +1047,31 @@ include 'includes/header.php';
 
     .products-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 25px;
-        margin-top: 30px;
+        grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+        gap: 12px;
+        margin-top: 20px;
     }
 
     .product-card {
         background: white;
         border-radius: 12px;
         overflow: hidden;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border: 1px solid #eaecf0;
+        box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+        transition: all 0.2s ease;
         display: flex;
         flex-direction: column;
     }
 
     .product-card:hover {
-        transform: translateY(-8px);
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(16, 24, 40, 0.08);
     }
 
     .product-image {
         width: 100%;
-        height: 220px;
-        background: linear-gradient(135deg, #f5f5f5, #eeeeee);
+        height: 130px;
+        background: #f8f9fa;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1105,31 +1091,31 @@ include 'includes/header.php';
     }
 
     .product-image i {
-        font-size: 48px;
+        font-size: 36px;
         color: #ccc;
     }
 
     .product-header {
-        padding: 16px 20px 12px;
+        padding: 10px 12px 6px;
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        gap: 12px;
-        flex: 1;
+        gap: 8px;
     }
 
     .product-header h5 {
         margin: 0;
-        font-size: 16px;
+        font-size: 0.88rem;
         font-weight: 700;
-        color: #333;
+        color: #101828;
+        line-height: 1.25;
         flex: 1;
     }
 
     .status-badge {
-        padding: 6px 12px;
+        padding: 3px 8px;
         border-radius: 20px;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 600;
         white-space: nowrap;
     }
@@ -1145,7 +1131,7 @@ include 'includes/header.php';
     }
 
     .product-body {
-        padding: 0 20px 16px;
+        padding: 0 12px 10px;
         flex: 1;
         border-bottom: 1px solid #f0f0f0;
     }
@@ -1812,7 +1798,7 @@ include 'includes/header.php';
                         }
 
                         if ($photo_count > 1) {
-                            echo "<span class='photo-count-badge' style='position:absolute; top:10px; right:10px; background:rgba(16,24,40,0.85); color:#ffffff; font-size:11px; font-weight:700; padding:4px 8px; border-radius:20px; backdrop-filter:blur(4px); display:flex; align-items:center; gap:5px; z-index:2;'><i class='fas fa-images'></i> " . $photo_count . " photos</span>";
+                            echo "<span class='photo-count-badge' style='position:absolute; top:6px; right:6px; background:rgba(16,24,40,0.85); color:#ffffff; font-size:10px; font-weight:700; padding:2px 6px; border-radius:20px; backdrop-filter:blur(4px); display:flex; align-items:center; gap:4px; z-index:2;'><i class='fas fa-images'></i> " . $photo_count . "</span>";
                         }
                         
                         echo "</div>
@@ -1825,13 +1811,16 @@ include 'includes/header.php';
                                 <p class='product-category'>" . htmlspecialchars($product['category']) . "</p>
                                 <p class='product-price'>₱" . number_format($product['price'], 2) . "</p>";
 
-                        if ($is_product_available === 0) {
-                            echo "<div class='mb-2'><span class='badge bg-danger' style='font-size:11px;'><i class='fas fa-exclamation-triangle'></i> Out of Ingredient Stock (Disabled)</span></div>";
-                        }
-                        
-                        echo "<p class='product-info'><i class='fas fa-cubes'></i> Stock: " . intval($product['stock']) . "</p>";
-
-                        if (!empty($prod_ingredients)) {
+                        if (empty($prod_ingredients)) {
+                            echo "<div class='mb-2'><span class='badge' style='background:#fee4e2; color:#b3261e; border:1px solid #fecdca; font-size:11px;'><i class='fas fa-exclamation-circle me-1'></i> No Ingredients Set (Unavailable)</span></div>";
+                            echo "<p class='product-info text-danger fw-bold'><i class='fas fa-ban'></i> Stock: 0 units <span class='text-muted small fw-normal'>(Pending Recipe)</span></p>";
+                        } else {
+                            if ($is_product_available === 0 || intval($product['stock']) <= 0) {
+                                echo "<div class='mb-2'><span class='badge bg-danger' style='font-size:11px;'><i class='fas fa-ban me-1'></i> Out of Stock (Depleted)</span></div>";
+                                echo "<p class='product-info text-danger fw-bold'><i class='fas fa-cubes'></i> Stock: 0 units</p>";
+                            } else {
+                                echo "<p class='product-info text-success fw-bold'><i class='fas fa-cubes'></i> Stock: " . intval($product['stock']) . " units <span class='text-muted small fw-normal'>(From ingredients)</span></p>";
+                            }
                             $ing_names = array_map(function($ig) { return $ig['name']; }, $prod_ingredients);
                             echo "<p class='product-info text-truncate' title='" . htmlspecialchars(implode(', ', $ing_names)) . "'><i class='fas fa-receipt text-danger'></i> Recipe: " . htmlspecialchars(implode(', ', $ing_names)) . "</p>";
                         }
@@ -1906,8 +1895,9 @@ include 'includes/header.php';
                             <input type="number" class="form-control" id="edit_product_price" name="product_price" step="0.01" min="0" required>
                         </div>
                         <div class="col-md-6">
-                            <label for="edit_stock" class="form-label"><strong>Stock Quantity</strong></label>
-                            <input type="number" class="form-control" id="edit_stock" name="stock" step="1" min="0" onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
+                            <label for="edit_stock" class="form-label"><strong>Stock Capacity</strong> <span class="badge bg-light text-muted border small ms-1" style="font-size:10px;">Auto-calculated</span></label>
+                            <input type="number" class="form-control bg-light fw-bold" id="edit_stock" name="stock" step="1" min="0" readonly title="Stock is automatically calculated from raw ingredients availability">
+                            <small class="text-muted" style="font-size:11px;">Calculated automatically from your recipe ingredients below.</small>
                         </div>
                     </div>
 
@@ -1960,8 +1950,69 @@ include 'includes/header.php';
                         <div id="seller_edit_weight_tiers_container"></div>
                     </div>
 
-                    <div class="alert alert-light border small text-muted mb-3" style="font-size: 12px; background: #fafbfc; border-radius: 8px;">
-                        <i class="fas fa-info-circle text-primary me-1"></i> Stock quantities are calculated automatically in <strong>Inventory Management</strong> based on raw ingredients availability.
+                    <!-- Recipe Ingredients Configuration -->
+                    <div class="card mb-3 p-3 border rounded-3" style="background:#ffffff; border-color:#eaecf0 !important;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <strong style="color: #101828;"><i class="fas fa-layer-group text-danger me-1"></i> Recipe &amp; Ingredients Setup</strong>
+                                <span class="badge bg-danger ms-2" style="font-size: 11px;">Required for Menu Availability</span>
+                            </div>
+                            <span id="edit_live_recipe_capacity" class="badge bg-secondary fs-6">0 units</span>
+                        </div>
+                        <p class="text-muted small mb-2" style="font-size: 12px;">
+                            Select the raw ingredients needed to prepare 1 unit/serving of this product. Menu availability and stock are strictly derived from these ingredients. If no ingredients are selected, the product remains unavailable on the menu.
+                        </p>
+                        <div class="table-responsive" style="max-height: 240px; overflow-y: auto; border: 1px solid #eaecf0; border-radius: 8px;">
+                            <table class="table table-sm align-middle mb-0" style="font-size: 13px;">
+                                <thead style="background:#f8f9fa; position:sticky; top:0; z-index:1;">
+                                    <tr>
+                                        <th style="width: 40px;" class="text-center">Use</th>
+                                        <th>Raw Material</th>
+                                        <th>Store Stock</th>
+                                        <th style="width: 140px;">Qty Needed / Unit</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($store_ingredients)): ?>
+                                        <tr>
+                                            <td colspan="4" class="text-center py-3 text-muted small">
+                                                No raw ingredients registered yet. <a href="#addMaterialModal" data-bs-toggle="modal" class="text-danger fw-bold">Register ingredients first</a>.
+                                            </td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($store_ingredients as $sing): 
+                                            $sm_id = (int)$sing['id'];
+                                            $sm_stock = (int)floor((float)$sing['current_stock']);
+                                            $sm_unit = htmlspecialchars($sing['unit']);
+                                        ?>
+                                            <tr class="edit-recipe-row" data-mid="<?php echo $sm_id; ?>" data-stock="<?php echo $sm_stock; ?>">
+                                                <td class="text-center">
+                                                    <input type="checkbox" class="form-check-input ing-checkbox-edit" name="recipe_ingredients[<?php echo $sm_id; ?>][selected]" value="1" id="edit_ing_check_<?php echo $sm_id; ?>" onchange="recalculateEditModalYield()">
+                                                </td>
+                                                <td>
+                                                    <label for="edit_ing_check_<?php echo $sm_id; ?>" class="fw-bold mb-0 text-dark" style="cursor:pointer;">
+                                                        <?php echo htmlspecialchars($sing['name']); ?>
+                                                    </label>
+                                                    <span class="text-muted small d-block" style="font-size: 11px;">Unit: <?php echo $sm_unit; ?></span>
+                                                </td>
+                                                <td>
+                                                    <span class="fw-bold"><?php echo $sm_stock; ?></span> <span class="badge bg-light text-secondary border" style="font-size:10px;"><?php echo $sm_unit; ?></span>
+                                                </td>
+                                                <td>
+                                                    <div class="input-group input-group-sm">
+                                                        <input type="number" step="1" min="1" name="recipe_ingredients[<?php echo $sm_id; ?>][qty]" id="edit_qty_<?php echo $sm_id; ?>" class="form-control text-center fw-bold edit-ing-qty" value="1" disabled onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, ''); recalculateEditModalYield();">
+                                                        <span class="input-group-text bg-light text-muted small px-1" style="font-size: 11px;"><?php echo $sm_unit; ?></span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="edit_recipe_alert" class="alert alert-secondary py-2 px-3 small mt-2 mb-0" style="font-size: 12px; border-radius: 8px;">
+                            <i class="fas fa-info-circle me-1"></i> Check the ingredients required for this product. If no ingredients are selected, the product will remain unavailable.
+                        </div>
                     </div>
                 </form>
             </div>
@@ -2259,9 +2310,9 @@ include 'includes/header.php';
 
 .products-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 20px;
-    margin-top: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
 }
 
 .product-card {
@@ -2711,6 +2762,74 @@ function preselectSelfProcure(materialId) {
     }
 }
 
+function recalculateEditModalYield() {
+    let minYield = Infinity;
+    let selectedCount = 0;
+    let limitingName = '';
+
+    document.querySelectorAll('.edit-recipe-row').forEach(row => {
+        const mid = row.getAttribute('data-mid');
+        const chk = document.getElementById('edit_ing_check_' + mid);
+        const qtyInput = document.getElementById('edit_qty_' + mid);
+        const stock = parseInt(row.getAttribute('data-stock'), 10) || 0;
+        const nameEl = row.querySelector('label');
+        const name = nameEl ? nameEl.textContent.trim() : '';
+
+        if (chk && chk.checked) {
+            selectedCount++;
+            if (qtyInput) {
+                qtyInput.disabled = false;
+                qtyInput.style.background = '#ffffff';
+                let qty = parseInt(qtyInput.value, 10);
+                if (isNaN(qty) || qty < 1) {
+                    qty = 1;
+                    qtyInput.value = 1;
+                }
+                const canMake = Math.floor(stock / qty);
+                if (canMake < minYield) {
+                    minYield = canMake;
+                    limitingName = name;
+                }
+            }
+        } else if (qtyInput) {
+            qtyInput.disabled = true;
+            qtyInput.style.background = '#f8f9fa';
+        }
+    });
+
+    const badge = document.getElementById('edit_live_recipe_capacity');
+    const alertEl = document.getElementById('edit_recipe_alert');
+    const stockInput = document.getElementById('edit_stock');
+
+    if (selectedCount === 0) {
+        if (badge) {
+            badge.textContent = '0 units (Unavailable)';
+            badge.className = 'badge bg-danger fs-6';
+        }
+        if (alertEl) {
+            alertEl.className = 'alert alert-danger py-2 px-3 small mt-2 mb-0';
+            alertEl.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> <strong>No ingredients selected:</strong> This menu item will remain <strong>Unavailable</strong> until ingredients are linked.';
+        }
+        if (stockInput) stockInput.value = 0;
+    } else {
+        const finalYield = (minYield === Infinity || minYield < 0) ? 0 : minYield;
+        if (stockInput) stockInput.value = finalYield;
+        if (badge) {
+            badge.textContent = finalYield + ' units';
+            badge.className = (finalYield > 0 ? 'badge bg-success fs-6' : 'badge bg-danger fs-6');
+        }
+        if (alertEl) {
+            if (finalYield === 0) {
+                alertEl.className = 'alert alert-danger py-2 px-3 small mt-2 mb-0';
+                alertEl.innerHTML = '<i class="fas fa-ban me-1"></i> <strong>Out of Stock:</strong> Ingredient <strong>' + limitingName + '</strong> is depleted. Item will show as Sold Out.';
+            } else {
+                alertEl.className = 'alert alert-success py-2 px-3 small mt-2 mb-0';
+                alertEl.innerHTML = '<i class="fas fa-check-circle me-1"></i> Stock capacity: <strong>' + finalYield + ' units</strong> (Limited by ' + limitingName + ').';
+            }
+        }
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Add default row to refill modal if container exists
     const refillContainer = document.getElementById('refill_items_container');
@@ -2804,6 +2923,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     });
                 }
+                recalculateEditModalYield();
 
                 var container = document.getElementById('editCurrentImagesContainer');
                 container.innerHTML = '';
@@ -2841,6 +2961,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         container.appendChild(card);
                     });
                 }
+                recalculateEditModalYield();
 
                 var modalEl = document.getElementById('editProductModal');
                 var editModal = bootstrap.Modal.getOrCreateInstance(modalEl);
