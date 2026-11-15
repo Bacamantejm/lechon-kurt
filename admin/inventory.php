@@ -2075,21 +2075,6 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
                     </table>
                 </div>
                 <?php endif; ?>
-                                            </button>";
-                                    }
-                                    
-                                    echo "
-                                        </td>
-                                    </tr>
-                                    ";
-                                }
-                            } else {
-                                echo "<tr><td colspan='9' class='text-center text-muted'>No products found</td></tr>";
-                            }
-                            ?>
-                        </tbody>
-                    </table>
-                </div>
 
                 <!-- Pre-Order Demand Section -->
                 <div class="section-header mt-5">
