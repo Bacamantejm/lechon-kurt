@@ -81,6 +81,12 @@ if (!function_exists('employeesRoleInPartnerScope')) {
                 return false;
             }
         }
+        if ($owner_user_id > 0) {
+            $hidden_check = @mysqli_query($conn, "SELECT 1 FROM partner_hidden_roles WHERE owner_user_id = " . (int)$owner_user_id . " AND role_id = " . (int)$role_id . " LIMIT 1");
+            if ($hidden_check && mysqli_num_rows($hidden_check) > 0) {
+                return false;
+            }
+        }
         return true;
     }
 }
@@ -1581,6 +1587,7 @@ if ($is_partner_scoped_hr) {
             OR
             (r.owner_user_id IS NULL AND r.name IN ($base_template_roles_sql))
         )";
+        $roles_query_sql .= " AND r.id NOT IN (SELECT role_id FROM partner_hidden_roles WHERE owner_user_id = " . (int)$partner_scope_owner_id . ")";
     } else {
         $roles_query_sql .= " AND r.name IN ($base_template_roles_sql)";
     }
