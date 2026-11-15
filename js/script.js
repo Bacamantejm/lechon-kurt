@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (mobileMenu) {
                 mobileMenu.classList.remove('active');
             }
+        }
     });
     
     // Universal Touch & Mouse Horizontal Drag-to-Swipe for Carousels

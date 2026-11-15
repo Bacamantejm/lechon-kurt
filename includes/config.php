@@ -1064,12 +1064,31 @@ if (!function_exists('ensureProductMultipleImagesSchema')) {
     }
 }
 
+if (!function_exists('resolveProductImagePath')) {
+    function resolveProductImagePath(?string $imagePath, string $fallback = 'images/menu/lechon.jpg'): string {
+        $trimmed = trim((string)$imagePath);
+        if ($trimmed === '') {
+            return $fallback;
+        }
+        if (stripos($trimmed, 'http://') === 0 || stripos($trimmed, 'https://') === 0 || stripos($trimmed, 'data:image') === 0) {
+            return $trimmed;
+        }
+        $candidate = (strpos($trimmed, '/') === false) ? 'images/menu/' . $trimmed : $trimmed;
+        $baseRoot = dirname(__DIR__);
+        $fullPath = $baseRoot . '/' . ltrim($candidate, '/\\');
+        if (file_exists($fullPath) && is_file($fullPath)) {
+            return $candidate;
+        }
+        return $fallback;
+    }
+}
+
 if (!function_exists('getProductAllImages')) {
     function getProductAllImages($product_row): array {
         $images = [];
         $primary = trim((string)($product_row['image'] ?? ''));
         if ($primary !== '') {
-            $images[] = $primary;
+            $images[] = function_exists('resolveProductImagePath') ? resolveProductImagePath($primary) : $primary;
         }
         $extra_raw = trim((string)($product_row['additional_images'] ?? ''));
         if ($extra_raw !== '') {
@@ -1077,11 +1096,17 @@ if (!function_exists('getProductAllImages')) {
             if (is_array($decoded)) {
                 foreach ($decoded as $img) {
                     $img = trim((string)$img);
-                    if ($img !== '' && !in_array($img, $images, true)) {
-                        $images[] = $img;
+                    if ($img !== '') {
+                        $resolved = function_exists('resolveProductImagePath') ? resolveProductImagePath($img) : $img;
+                        if (!in_array($resolved, $images, true)) {
+                            $images[] = $resolved;
+                        }
                     }
                 }
             }
+        }
+        if (empty($images)) {
+            $images[] = 'images/menu/lechon.jpg';
         }
         return $images;
     }
