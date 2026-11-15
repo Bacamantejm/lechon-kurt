@@ -6,15 +6,18 @@ include '../includes/security.php';
 
 checkAdminAccess();
 $current_user_id = (int)($_SESSION['user_id'] ?? 0);
+$is_super_admin_user = $current_user_id > 0 && function_exists('isSuperAdmin') ? isSuperAdmin($conn, $current_user_id) : false;
 $is_partner_scoped_admin = isApprovedFranchiseSellerAccount($conn, $current_user_id);
 $partner_scope_owner_id = $is_partner_scoped_admin ? (int)(getFranchiseSellerScopeOwnerId($conn, $current_user_id) ?? 0) : 0;
-if ($is_partner_scoped_admin && $partner_scope_owner_id <= 0) {
-    $partner_scope_owner_id = $current_user_id;
+if (!$is_super_admin_user) {
+    $is_partner_scoped_admin = true;
+    if ($partner_scope_owner_id <= 0) {
+        $partner_scope_owner_id = $current_user_id;
+    }
 }
 $is_partner_owner_admin = $is_partner_scoped_admin && ($partner_scope_owner_id === $current_user_id || $partner_scope_owner_id > 0);
 
 $admin_info = getAdminInfo($conn);
-$is_super_admin_user = $current_user_id > 0 && function_exists('isSuperAdmin') ? isSuperAdmin($conn, $current_user_id) : false;
 
 if (!$is_partner_scoped_admin && !$is_super_admin_user) {
     requirePermission('roles.manage');
@@ -97,14 +100,22 @@ function rbacRoleBelongsToPartner($conn, $role_id, $owner_user_id) {
     if (!$role) {
         return false;
     }
-    // Super administrator role can only be modified by platform super admins
-    if (strtolower(trim((string)$role['name'])) === 'super_admin') {
+    $r_name = strtolower(trim((string)$role['name']));
+    // Super administrator and Business Owner roles can only be managed by platform super admins
+    if (in_array($r_name, ['super_admin', 'business_owner'], true)) {
         return false;
     }
     // If the role is explicitly owned by a different partner, deny
     $role_owner = isset($role['owner_user_id']) && $role['owner_user_id'] !== null ? (int)$role['owner_user_id'] : 0;
     if ($role_owner > 0 && $owner_user_id > 0 && $role_owner !== $owner_user_id) {
         return false;
+    }
+    // If role has no owner, only allow standard platform template roles
+    if ($role_owner <= 0) {
+        $allowed_templates = ['driver', 'hr_manager', 'operations_manager', 'finance_manager', 'inventory_manager', 'viewer'];
+        if (!in_array($r_name, $allowed_templates, true)) {
+            return false;
+        }
     }
     // Template roles, department roles, and roles owned by this store partner are permitted
     return true;
@@ -186,7 +197,7 @@ function rbacIsReservedRoleName($role_name) {
     if ($role_name === '') {
         return true;
     }
-    return in_array($role_name, ['super_admin'], true);
+    return in_array($role_name, ['super_admin', 'business_owner', 'system_admin', 'administrator'], true);
 }
 
 function rbacIsSystemRoleName($role_name) {
@@ -262,8 +273,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $target_role = getRoleById($conn, $role_id);
                 if (!$target_role) {
                     $_SESSION['error'] = 'Selected role no longer exists.';
-                } elseif (($target_role['name'] ?? '') === 'super_admin' && !$is_super_admin_user) {
-                    $_SESSION['error'] = 'Only Super Administrator can modify Super Administrator permissions.';
+                } elseif (in_array(($target_role['name'] ?? ''), ['super_admin', 'business_owner'], true) && !$is_super_admin_user) {
+                    $_SESSION['error'] = 'Only Super Administrator can modify this role.';
                 } else {
                     $permission_ids = [];
                     if (isset($_POST['permissions']) && is_array($_POST['permissions'])) {
@@ -347,7 +358,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Check if role exists in store scope
                 $has_owner_col = rbacColumnExists($conn, 'roles', 'owner_user_id');
                 if ($is_partner_scoped_admin && $has_owner_col && $partner_scope_owner_id > 0) {
-                    $check_query = "SELECT id FROM roles WHERE name = ? AND (owner_user_id = ? OR owner_user_id IS NULL) LIMIT 1";
+                    $check_query = "SELECT id FROM roles 
+                                    WHERE name = ? 
+                                      AND (
+                                          (owner_user_id IS NOT NULL AND owner_user_id = ?) 
+                                          OR (owner_user_id IS NULL AND name IN ('driver', 'hr_manager', 'operations_manager', 'finance_manager', 'inventory_manager', 'viewer'))
+                                      ) 
+                                    LIMIT 1";
                     $check_stmt = mysqli_prepare($conn, $check_query);
                     mysqli_stmt_bind_param($check_stmt, "si", $stored_role_name, $partner_scope_owner_id);
                 } else {
@@ -407,8 +424,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                         }
                     }
-                    $_SESSION['success'] = "Role '" . rbacRoleDisplayName($stored_role_name) . "' created successfully. Configure its permissions below.";
-                    logRBACAction($conn, $current_user_id, 'ROLE_CREATED', 'roles', "Created new role: $stored_role_name");
+                    $_SESSION['success'] = "Role '" . rbacRoleDisplayName($stored_role_name, $partner_scope_owner_id) . "' created successfully. Configure its permissions below.";
+                    logRBACAction($conn, $current_user_id, 'ROLE_CREATED', 'roles', "Created new role: $stored_role_name (Owner: $partner_scope_owner_id)");
                     mysqli_stmt_close($insert_stmt);
 
                     // Redirect directly to permissions tab with new role selected (matching Super Admin process)
@@ -449,8 +466,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 header('Location: rbac_management.php?tab=permissions');
                 exit();
             }
-            if (($source_role['name'] ?? '') === 'super_admin' && !$is_super_admin_user) {
-                $_SESSION['error'] = 'Only Super Administrator can clone Super Administrator role.';
+            if (in_array(($source_role['name'] ?? ''), ['super_admin', 'business_owner'], true) && !$is_super_admin_user) {
+                $_SESSION['error'] = 'Only Super Administrator can clone this role.';
                 header('Location: rbac_management.php?tab=permissions');
                 exit();
             }
@@ -490,7 +507,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $has_owner_col = rbacColumnExists($conn, 'roles', 'owner_user_id');
             if ($is_partner_scoped_admin && $has_owner_col && $partner_scope_owner_id > 0) {
-                $check_stmt = mysqli_prepare($conn, "SELECT id FROM roles WHERE name = ? AND (owner_user_id = ? OR owner_user_id IS NULL) LIMIT 1");
+                $check_stmt = mysqli_prepare($conn, "SELECT id FROM roles WHERE name = ? AND ((owner_user_id IS NOT NULL AND owner_user_id = ?) OR (owner_user_id IS NULL AND name IN ('driver', 'hr_manager', 'operations_manager', 'finance_manager', 'inventory_manager', 'viewer'))) LIMIT 1");
                 mysqli_stmt_bind_param($check_stmt, "si", $stored_clone_name, $partner_scope_owner_id);
             } else {
                 $check_stmt = mysqli_prepare($conn, "SELECT id FROM roles WHERE name = ? LIMIT 1");
@@ -692,8 +709,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $target_role = getRoleById($conn, $role_id);
                 if (!$target_role || !(int)($target_role['is_active'] ?? 0)) {
                     $_SESSION['error'] = 'Selected role is invalid or inactive.';
-                } elseif (($target_role['name'] ?? '') === 'super_admin' && !$is_super_admin_user) {
-                    $_SESSION['error'] = 'Only Super Administrator can assign Super Administrator role.';
+                } elseif (in_array(($target_role['name'] ?? ''), ['super_admin', 'business_owner'], true) && !$is_super_admin_user) {
+                    $_SESSION['error'] = 'Only Super Administrator can assign this role.';
                 } else {
                     $check_user_stmt = mysqli_prepare($conn, "SELECT id FROM users WHERE id = ?");
                     mysqli_stmt_bind_param($check_user_stmt, "i", $user_id);
@@ -869,12 +886,22 @@ $selected_role_id = isset($_GET['role_id']) ? intval($_GET['role_id']) : 0;
 
 if ($is_partner_scoped_admin) {
     // Partner-scoped / Shop Owner / Admin side:
-    // Load all active roles for this store (own created roles, department roles, store template roles)
+    // Strictly isolate roles:
+    // 1. Roles created by THIS shop owner (owner_user_id = $partner_scope_owner_id)
+    // 2. Base platform template roles (owner_user_id IS NULL AND name IN ('driver', 'hr_manager', 'operations_manager', 'finance_manager', 'inventory_manager', 'viewer'))
+    // NEVER show 'super_admin' or 'business_owner'
+    // NEVER show roles created by other shop owners
+    $base_template_roles_sql = "'driver', 'hr_manager', 'operations_manager', 'finance_manager', 'inventory_manager', 'viewer'";
+
     if ($partner_roles_owner_column_exists && $partner_scope_owner_id > 0) {
         $roles_query = "SELECT * FROM roles 
                         WHERE is_active = 1 
-                          AND name != 'super_admin' 
-                          AND (owner_user_id = ? OR owner_user_id IS NULL OR owner_user_id = 0)
+                          AND name NOT IN ('super_admin', 'business_owner') 
+                          AND (
+                              (owner_user_id IS NOT NULL AND owner_user_id = ?)
+                              OR 
+                              (owner_user_id IS NULL AND name IN ($base_template_roles_sql))
+                          )
                         ORDER BY name ASC";
         $roles_stmt = mysqli_prepare($conn, $roles_query);
         if ($roles_stmt) {
@@ -887,7 +914,7 @@ if ($is_partner_scoped_admin) {
             mysqli_stmt_close($roles_stmt);
         }
     } else {
-        $roles_res = mysqli_query($conn, "SELECT * FROM roles WHERE is_active = 1 AND name != 'super_admin' ORDER BY name ASC");
+        $roles_res = mysqli_query($conn, "SELECT * FROM roles WHERE is_active = 1 AND name NOT IN ('super_admin', 'business_owner') AND name IN ($base_template_roles_sql) ORDER BY name ASC");
         while ($roles_res && ($role_row = mysqli_fetch_assoc($roles_res))) {
             $roles[] = $role_row;
         }
@@ -929,7 +956,7 @@ if ($is_partner_scoped_admin) {
 
     if ($selected_role_id > 0) {
         $selected_role = getRoleById($conn, $selected_role_id);
-        if ($selected_role && ($selected_role['name'] ?? '') === 'super_admin' && !$is_super_admin_user) {
+        if ($selected_role && in_array(($selected_role['name'] ?? ''), ['super_admin', 'business_owner'], true) && !$is_super_admin_user) {
             $selected_role = null;
         }
         $selected_role_permissions = $selected_role ? getRolePermissions($conn, $selected_role_id) : [];
@@ -1608,6 +1635,9 @@ unset($_SESSION['success'], $_SESSION['error']);
                         });
                         
                         foreach ($roles as $role): 
+                            $can_delete_role = $is_partner_scoped_admin 
+                                && ((int)($role['owner_user_id'] ?? 0) === (int)$partner_scope_owner_id)
+                                && !in_array(strtolower(trim((string)$role['name'])), ['super_admin', 'business_owner', 'driver', 'hr_manager', 'operations_manager', 'finance_manager', 'inventory_manager', 'viewer'], true);
                         ?>
                             <div class="role-card <?php echo (int)($role['id'] ?? 0) === (int)$selected_role_id ? 'active' : ''; ?>" 
                                  data-role-search="<?php echo htmlspecialchars(strtolower(rbacRoleDisplayName($role['name'] ?? '', $partner_scope_owner_id) . ' ' . ($role['description'] ?? ''))); ?>"
@@ -1623,7 +1653,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                                         <input type="hidden" name="role_id" value="<?php echo (int)$role['id']; ?>">
                                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                                         <input type="hidden" name="return_tab" value="permissions">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" style="font-size: 11px; padding: 2px 8px;">
                                             <i class="fas fa-trash-alt"></i> Delete Role
                                         </button>
                                     </form>
@@ -1632,7 +1662,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                         <?php endforeach; ?>
                     </div>
                     
-                    <?php if ($selected_role): ?>
+                    <?php if ($selected_role && (!in_array(($selected_role['name'] ?? ''), ['super_admin', 'business_owner'], true) || $is_super_admin_user)): ?>
                         <!-- Role Summary -->
                         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -2236,7 +2266,34 @@ unset($_SESSION['success'], $_SESSION['error']);
                 }
             })
         }
+
+        function confirmDeleteRole(roleId, roleName, ev) {
+            if (ev) {
+                ev.stopPropagation();
+                ev.preventDefault();
+            }
+            Swal.fire({
+                title: 'Delete Role?',
+                text: 'Are you sure you want to delete role "' + roleName + '"? This cannot be undone.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#b3261e',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, delete it'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById('delete_role_id').value = roleId;
+                    document.getElementById('deleteRoleForm').submit();
+                }
+            });
+        }
     </script>
+    <form method="POST" id="deleteRoleForm" style="display:none;">
+        <input type="hidden" name="action" value="delete_role">
+        <input type="hidden" name="role_id" id="delete_role_id" value="">
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+        <input type="hidden" name="return_tab" value="permissions">
+    </form>
 </body>
 </html>
 
