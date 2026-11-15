@@ -636,7 +636,7 @@ if (mysqli_num_rows($result) > 0) {
             'description' => $product['description'],
             'store_name' => trim((string)($product['store_name'] ?? '')),
             'base_price' => $product['price'],
-            'image' => $product['image'],
+            'image' => function_exists('resolveProductImagePath') ? resolveProductImagePath($product['image']) : $product['image'],
             'all_images' => array_values($all_images),
             'additional_images' => !empty($product['additional_images']) ? (json_decode($product['additional_images'], true) ?: []) : [],
             'has_weight_options' => $has_weight_options,
@@ -1870,27 +1870,20 @@ $curr_store_status_note = $curr_store_avail ? ($curr_store_avail['note'] ?? '') 
                          data-total-sold="<?php echo (int)$item['total_sold']; ?>">
     <?php
         $imagePath = $item['image'] ?? '';
-        $placeholderText = urlencode($item['name']);
-        if (empty($imagePath)) {
-            $imageSrc = 'https://via.placeholder.com/400x300?text=' . $placeholderText;
-        } elseif (stripos($imagePath, 'http://') === 0 || stripos($imagePath, 'https://') === 0) {
-            $imageSrc = $imagePath;
-        } elseif (strpos($imagePath, '/') === false) {
-            $imageSrc = 'images/menu/' . $imagePath;
-        } else {
-            $imageSrc = $imagePath;
-        }
+        $imageSrc = function_exists('resolveProductImagePath') 
+            ? resolveProductImagePath($imagePath) 
+            : (!empty($imagePath) ? $imagePath : 'images/menu/lechon.jpg');
     ?>
                         <?php if ($item['stock'] <= 0): ?>
                             <div class="item-sold-out-overlay">
-                                <span><?php echo empty($item['has_bom']) ? 'Unavailable' : 'Sold Out'; ?></span>
+                                <span>Sold Out</span>
                             </div>
                         <?php endif; ?>
                         
                         <!-- Card Image -->
                         <div class="item-image">
                             <img src="<?php echo htmlspecialchars($imageSrc); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>" 
-                                 onerror="this.src='https://via.placeholder.com/400x300?text=<?php echo $placeholderText; ?>'">
+                                 onerror="this.onerror=null;this.src='images/menu/lechon.jpg'">
                             <?php if (($item['total_sold'] ?? 0) > 0): ?>
                             <span class="top-seller-badge"><i class="fas fa-fire"></i> Top Seller</span>
                             <?php endif; ?>
@@ -2517,8 +2510,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function resolveCartItemImageFallback(item) {
-        const itemName = String(item?.name || 'Lechon');
-        return `https://via.placeholder.com/80x80?text=${encodeURIComponent(itemName)}`;
+        return 'images/menu/lechon.jpg';
     }
 
     function resolveCartItemImageSource(item) {
