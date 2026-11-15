@@ -62,9 +62,42 @@ class IngredientStockManager {
         $affected_materials = [];
 
         while ($item = mysqli_fetch_assoc($items_res)) {
-            $prod_id = intval($item['product_id']);
-            $order_qty = floatval($item['quantity']);
-            if ($prod_id <= 0 || $order_qty <= 0) continue;
+            $raw_prod_id = trim((string)($item['product_id'] ?? ''));
+            $order_qty = floatval($item['quantity'] ?? 0);
+            if ($raw_prod_id === '' || $order_qty <= 0) continue;
+
+            $prod_id = intval($raw_prod_id);
+            $item_seller_id = $store_id;
+
+            // Resolve string product_id (e.g. 'prod-7f209e', 'lp-001', 'od-003') to integer products.id
+            if ($prod_id <= 0 || !is_numeric($raw_prod_id)) {
+                $get_pid = mysqli_prepare($conn, "SELECT id, seller_id FROM products WHERE product_id = ? OR id = ? LIMIT 1");
+                if ($get_pid) {
+                    $test_id = intval($raw_prod_id);
+                    mysqli_stmt_bind_param($get_pid, "si", $raw_prod_id, $test_id);
+                    mysqli_stmt_execute($get_pid);
+                    $pid_res = mysqli_stmt_get_result($get_pid);
+                    if ($p_row = mysqli_fetch_assoc($pid_res)) {
+                        $prod_id = (int)$p_row['id'];
+                        if ($item_seller_id <= 0 && !empty($p_row['seller_id'])) {
+                            $item_seller_id = (int)$p_row['seller_id'];
+                        }
+                    }
+                    mysqli_stmt_close($get_pid);
+                }
+            } else {
+                if ($item_seller_id <= 0) {
+                    $get_s = mysqli_query($conn, "SELECT seller_id FROM products WHERE id = {$prod_id} LIMIT 1");
+                    if ($get_s && ($sr = mysqli_fetch_assoc($get_s))) {
+                        $item_seller_id = (int)($sr['seller_id'] ?? 0);
+                    }
+                }
+            }
+
+            if ($prod_id <= 0) continue;
+            if ($store_id <= 0 && $item_seller_id > 0) {
+                $store_id = $item_seller_id;
+            }
 
             // Fetch Bill of Materials (BOM) recipe for this product
             $bom_stmt = mysqli_prepare($conn, "SELECT bom.material_id, bom.quantity_needed, m.name, m.unit 
@@ -82,7 +115,7 @@ class IngredientStockManager {
                     $total_deduct = $order_qty * $needed_per_unit;
 
                     if ($mat_id > 0 && $total_deduct > 0) {
-                        self::deductSingleIngredientStock($conn, $store_id, $mat_id, $total_deduct, $order_num, $recipe['name']);
+                        self::deductSingleIngredientStock($conn, $item_seller_id, $mat_id, $total_deduct, $order_num, $recipe['name']);
                         $affected_materials[$mat_id] = true;
                     }
                 }
@@ -92,9 +125,7 @@ class IngredientStockManager {
         mysqli_stmt_close($items_stmt);
 
         // 3. Re-evaluate and sync availability for all products in this store
-        if ($store_id > 0) {
-            self::syncProductAvailabilityForStore($conn, $store_id);
-        }
+        self::syncProductAvailabilityForStore($conn, $store_id);
 
         return true;
     }
@@ -132,16 +163,35 @@ class IngredientStockManager {
      */
     public static function deductProductIngredients($conn, $store_id, $product_id, $quantity, $ref_code = '') {
         $store_id = intval($store_id);
-        $product_id = intval($product_id);
+        $raw_pid = trim((string)$product_id);
+        $prod_id = intval($raw_pid);
         $quantity = floatval($quantity);
-        if ($product_id <= 0 || $quantity <= 0 || !$conn) return false;
+        if ($quantity <= 0 || !$conn || $raw_pid === '') return false;
+
+        if ($prod_id <= 0 || !is_numeric($raw_pid)) {
+            $get_pid = mysqli_prepare($conn, "SELECT id, seller_id FROM products WHERE product_id = ? OR id = ? LIMIT 1");
+            if ($get_pid) {
+                $test_id = intval($raw_pid);
+                mysqli_stmt_bind_param($get_pid, "si", $raw_pid, $test_id);
+                mysqli_stmt_execute($get_pid);
+                $pid_res = mysqli_stmt_get_result($get_pid);
+                if ($p_row = mysqli_fetch_assoc($pid_res)) {
+                    $prod_id = (int)$p_row['id'];
+                    if ($store_id <= 0 && !empty($p_row['seller_id'])) {
+                        $store_id = (int)$p_row['seller_id'];
+                    }
+                }
+                mysqli_stmt_close($get_pid);
+            }
+        }
+        if ($prod_id <= 0) return false;
 
         $bom_stmt = mysqli_prepare($conn, "SELECT bom.material_id, bom.quantity_needed, m.name, m.unit 
                                             FROM bill_of_materials bom
                                             INNER JOIN materials m ON m.id = bom.material_id
                                             WHERE bom.product_id = ?");
         if ($bom_stmt) {
-            mysqli_stmt_bind_param($bom_stmt, "i", $product_id);
+            mysqli_stmt_bind_param($bom_stmt, "i", $prod_id);
             mysqli_stmt_execute($bom_stmt);
             $bom_res = mysqli_stmt_get_result($bom_stmt);
 
@@ -157,56 +207,30 @@ class IngredientStockManager {
             mysqli_stmt_close($bom_stmt);
         }
 
-        if ($store_id > 0) {
-            self::syncProductAvailabilityForStore($conn, $store_id);
-        }
+        self::syncProductAvailabilityForStore($conn, $store_id);
         return true;
     }
 
     /**
-     * Deduct stock for a single ingredient from store_material_inventory or materials table.
+     * Deduct stock for a single ingredient from store_material_inventory and materials table.
      */
     private static function deductSingleIngredientStock($conn, $store_id, $material_id, $deduct_qty, $order_num, $material_name) {
         $material_id = intval($material_id);
         $store_id = intval($store_id);
         $deduct_qty = floatval($deduct_qty);
+        if ($material_id <= 0 || $deduct_qty <= 0 || !$conn) return;
 
-        // 1. Try deducting from store_material_inventory if store_id is set
-        $has_store_inv = false;
-        if ($store_id > 0) {
-            // Check if store record exists
-            $check_smi = mysqli_prepare($conn, "SELECT id, current_stock FROM store_material_inventory WHERE store_id = ? AND material_id = ? LIMIT 1");
-            if ($check_smi) {
-                mysqli_stmt_bind_param($check_smi, "ii", $store_id, $material_id);
-                mysqli_stmt_execute($check_smi);
-                $smi_res = mysqli_stmt_get_result($check_smi);
-                $smi_row = mysqli_fetch_assoc($smi_res);
-                mysqli_stmt_close($check_smi);
-
-                if ($smi_row) {
-                    $has_store_inv = true;
-                    $prev_stock = floatval($smi_row['current_stock']);
-                    $new_stock = max(0.0, $prev_stock - $deduct_qty);
-
-                    $upd_smi = mysqli_prepare($conn, "UPDATE store_material_inventory SET current_stock = ?, updated_at = NOW() WHERE id = ?");
-                    if ($upd_smi) {
-                        mysqli_stmt_bind_param($upd_smi, "di", $new_stock, $smi_row['id']);
-                        mysqli_stmt_execute($upd_smi);
-                        mysqli_stmt_close($upd_smi);
-                    }
-                }
-            }
-        }
-
-        // 2. Also update primary materials table to keep global/local stock in sync
+        // 1. Fetch and deduct from primary materials table
         $prev_mat_stock = 0.0;
-        $get_mat = mysqli_prepare($conn, "SELECT current_stock FROM materials WHERE id = ? LIMIT 1");
+        $mat_unit = 'kg';
+        $get_mat = mysqli_prepare($conn, "SELECT current_stock, unit FROM materials WHERE id = ? LIMIT 1");
         if ($get_mat) {
             mysqli_stmt_bind_param($get_mat, "i", $material_id);
             mysqli_stmt_execute($get_mat);
             $mat_res = mysqli_stmt_get_result($get_mat);
             if ($m_row = mysqli_fetch_assoc($mat_res)) {
                 $prev_mat_stock = floatval($m_row['current_stock']);
+                $mat_unit = $m_row['unit'] ?: 'kg';
             }
             mysqli_stmt_close($get_mat);
         }
@@ -217,6 +241,36 @@ class IngredientStockManager {
             mysqli_stmt_bind_param($upd_mat, "di", $new_mat_stock, $material_id);
             mysqli_stmt_execute($upd_mat);
             mysqli_stmt_close($upd_mat);
+        }
+
+        // 2. Deduct from or initialize store_material_inventory
+        if ($store_id > 0) {
+            $check_smi = mysqli_prepare($conn, "SELECT id, current_stock FROM store_material_inventory WHERE store_id = ? AND material_id = ? LIMIT 1");
+            if ($check_smi) {
+                mysqli_stmt_bind_param($check_smi, "ii", $store_id, $material_id);
+                mysqli_stmt_execute($check_smi);
+                $smi_res = mysqli_stmt_get_result($check_smi);
+                $smi_row = mysqli_fetch_assoc($smi_res);
+                mysqli_stmt_close($check_smi);
+
+                if ($smi_row) {
+                    $prev_smi = floatval($smi_row['current_stock']);
+                    $new_smi = max(0.0, $prev_smi - $deduct_qty);
+                    $upd_smi = mysqli_prepare($conn, "UPDATE store_material_inventory SET current_stock = ?, updated_at = NOW() WHERE id = ?");
+                    if ($upd_smi) {
+                        mysqli_stmt_bind_param($upd_smi, "di", $new_smi, $smi_row['id']);
+                        mysqli_stmt_execute($upd_smi);
+                        mysqli_stmt_close($upd_smi);
+                    }
+                } else {
+                    $ins_smi = mysqli_prepare($conn, "INSERT INTO store_material_inventory (store_id, material_id, current_stock, unit, updated_at) VALUES (?, ?, ?, ?, NOW())");
+                    if ($ins_smi) {
+                        mysqli_stmt_bind_param($ins_smi, "iids", $store_id, $material_id, $new_mat_stock, $mat_unit);
+                        mysqli_stmt_execute($ins_smi);
+                        mysqli_stmt_close($ins_smi);
+                    }
+                }
+            }
         }
 
         // 3. Record audit history in inventory_history
@@ -236,88 +290,117 @@ class IngredientStockManager {
     /**
      * Re-evaluate and sync availability status for all products belonging to a store.
      * If any required ingredient is out of stock (current_stock <= 0 or < quantity_needed),
-     * the product is automatically marked is_available = 0.
-     * When ingredients are restocked, products are automatically marked is_available = 1.
+     * the product is automatically marked is_available = 0 and stock = 0.
+     * When ingredients are restocked, products are automatically marked is_available = 1
+     * and stock is updated to the maximum units that can be made.
      */
-    public static function syncProductAvailabilityForStore($conn, $store_id) {
+    public static function syncProductAvailabilityForStore($conn, $store_id = 0) {
         $store_id = intval($store_id);
-        if ($store_id <= 0 || !$conn) {
-            return;
+        if (!$conn) return;
+
+        // Fetch products: if store_id > 0, filter by (seller_id = ? OR seller_id IS NULL); otherwise all active
+        if ($store_id > 0) {
+            $prod_stmt = mysqli_prepare($conn, "SELECT id, product_id, name, seller_id, is_available, stock FROM products WHERE (seller_id = ? OR seller_id IS NULL) AND is_active = 1");
+            if ($prod_stmt) {
+                mysqli_stmt_bind_param($prod_stmt, "i", $store_id);
+                mysqli_stmt_execute($prod_stmt);
+                $prod_res = mysqli_stmt_get_result($prod_stmt);
+            } else {
+                return;
+            }
+        } else {
+            $prod_res = mysqli_query($conn, "SELECT id, product_id, name, seller_id, is_available, stock FROM products WHERE is_active = 1");
         }
 
-        // Fetch all active products for this store
-        $prod_stmt = mysqli_prepare($conn, "SELECT id, name, is_available FROM products WHERE seller_id = ? AND is_active = 1");
-        if (!$prod_stmt) return;
-        mysqli_stmt_bind_param($prod_stmt, "i", $store_id);
-        mysqli_stmt_execute($prod_stmt);
-        $prod_res = mysqli_stmt_get_result($prod_stmt);
+        if (!$prod_res) return;
+
+        $today_str = date('Y-m-d');
 
         while ($p = mysqli_fetch_assoc($prod_res)) {
             $p_id = intval($p['id']);
-            $current_avail = intval($p['is_available']);
+            $current_avail = intval($p['is_available'] ?? 1);
+            $p_seller = intval($p['seller_id'] ?? $store_id);
 
             // Check BOM for this product
-            $bom_check = mysqli_prepare($conn, "
+            $bom_q = "
                 SELECT bom.quantity_needed, 
                        COALESCE(smi.current_stock, m.current_stock, 0) as effective_stock,
                        m.name as material_name
                 FROM bill_of_materials bom
                 INNER JOIN materials m ON m.id = bom.material_id
-                LEFT JOIN store_material_inventory smi ON smi.material_id = bom.material_id AND smi.store_id = ?
-                WHERE bom.product_id = ?
-            ");
+                LEFT JOIN store_material_inventory smi ON smi.material_id = bom.material_id AND smi.store_id = " . intval($p_seller) . "
+                WHERE bom.product_id = " . intval($p_id);
 
-            if ($bom_check) {
-                mysqli_stmt_bind_param($bom_check, "ii", $store_id, $p_id);
-                mysqli_stmt_execute($bom_check);
-                $bom_res = mysqli_stmt_get_result($bom_check);
+            $bom_res = mysqli_query($conn, $bom_q);
+            if (!$bom_res) continue;
 
-                $can_make = true;
-                $depleted_ingredients = [];
+            $has_recipe = (mysqli_num_rows($bom_res) > 0);
+            if (!$has_recipe) {
+                // Products without recipe keep their standard stock
+                continue;
+            }
 
-                while ($b = mysqli_fetch_assoc($bom_res)) {
-                    $needed = floatval($b['quantity_needed']);
-                    $have = floatval($b['effective_stock']);
+            $can_make = true;
+            $depleted_ingredients = [];
+            $min_yield = PHP_INT_MAX;
 
-                    if ($have < $needed || $have <= 0) {
-                        $can_make = false;
-                        $depleted_ingredients[] = $b['material_name'];
-                    }
+            while ($b = mysqli_fetch_assoc($bom_res)) {
+                $needed = max(1.0, floatval($b['quantity_needed']));
+                $have = max(0.0, floatval($b['effective_stock']));
+
+                $units_possible = (int)floor($have / $needed);
+                if ($units_possible < $min_yield) {
+                    $min_yield = $units_possible;
                 }
-                mysqli_stmt_close($bom_check);
 
-                // If recipe has ingredients defined
-                if (mysqli_num_rows($bom_res) > 0) {
-                    if (!$can_make && $current_avail != 0) {
-                        // Mark out of stock
-                        $upd_p = mysqli_prepare($conn, "UPDATE products SET is_available = 0, stock = 0 WHERE id = ?");
-                        if ($upd_p) {
-                            mysqli_stmt_bind_param($upd_p, "i", $p_id);
-                            mysqli_stmt_execute($upd_p);
-                            mysqli_stmt_close($upd_p);
-                        }
+                if ($have < $needed || $have <= 0) {
+                    $can_make = false;
+                    $depleted_ingredients[] = $b['material_name'];
+                }
+            }
 
-                        // Send shop alert notification
-                        self::createStoreNotification(
-                            $conn, 
-                            $store_id, 
-                            'ingredient_out_of_stock',
-                            'Item Disabled: ' . $p['name'],
-                            'Product has been auto-disabled because required ingredients ran out: ' . implode(', ', $depleted_ingredients)
-                        );
-                    } elseif ($can_make && $current_avail == 0) {
-                        // Restore availability
-                        $upd_p = mysqli_prepare($conn, "UPDATE products SET is_available = 1 WHERE id = ?");
-                        if ($upd_p) {
-                            mysqli_stmt_bind_param($upd_p, "i", $p_id);
-                            mysqli_stmt_execute($upd_p);
-                            mysqli_stmt_close($upd_p);
-                        }
-                    }
+            if ($min_yield === PHP_INT_MAX) {
+                $min_yield = 0;
+            }
+            $min_yield = max(0, $min_yield);
+
+            if (!$can_make || $min_yield <= 0) {
+                // Out of stock! Auto-disable product and zero stock
+                mysqli_query($conn, "UPDATE products SET stock = 0, is_available = 0 WHERE id = {$p_id}");
+
+                // Update today's inventory row to 0
+                $chk_inv = mysqli_query($conn, "SELECT id FROM inventory WHERE product_id = {$p_id} AND inventory_date = '{$today_str}' AND is_archived = 0 LIMIT 1");
+                if ($chk_inv && ($inv_r = mysqli_fetch_assoc($chk_inv))) {
+                    mysqli_query($conn, "UPDATE inventory SET current_stock = 0, last_updated = NOW() WHERE id = " . (int)$inv_r['id']);
+                } else {
+                    mysqli_query($conn, "INSERT INTO inventory (product_id, inventory_date, current_stock, min_stock_level, last_updated) VALUES ({$p_id}, '{$today_str}', 0, 5, NOW())");
+                }
+
+                if ($current_avail != 0) {
+                    self::createStoreNotification(
+                        $conn, 
+                        $p_seller, 
+                        'ingredient_out_of_stock',
+                        'Item Out of Stock: ' . $p['name'],
+                        'Product has been auto-disabled because required ingredients ran out: ' . implode(', ', $depleted_ingredients)
+                    );
+                }
+            } else {
+                // Available! Update stock to calculated capacity and activate
+                mysqli_query($conn, "UPDATE products SET stock = {$min_yield}, is_available = 1 WHERE id = {$p_id}");
+
+                // Update today's inventory row to calculated capacity
+                $chk_inv = mysqli_query($conn, "SELECT id FROM inventory WHERE product_id = {$p_id} AND inventory_date = '{$today_str}' AND is_archived = 0 LIMIT 1");
+                if ($chk_inv && ($inv_r = mysqli_fetch_assoc($chk_inv))) {
+                    mysqli_query($conn, "UPDATE inventory SET current_stock = {$min_yield}, last_updated = NOW() WHERE id = " . (int)$inv_r['id']);
+                } else {
+                    mysqli_query($conn, "INSERT INTO inventory (product_id, inventory_date, current_stock, min_stock_level, last_updated) VALUES ({$p_id}, '{$today_str}', {$min_yield}, 5, NOW())");
                 }
             }
         }
-        mysqli_stmt_close($prod_stmt);
+        if (isset($prod_stmt) && $prod_stmt) {
+            mysqli_stmt_close($prod_stmt);
+        }
     }
 
     /**
