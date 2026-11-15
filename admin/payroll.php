@@ -103,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_bulk_payroll']
 }
 
 // Fetch all employees
-$employees_query = "SELECT e.id, e.first_name, e.last_name, e.position, e.department_id, e.salary, e.daily_rate
+$employees_query = "SELECT e.id, e.first_name, e.last_name, e.position, e.department_id, e.salary, e.daily_rate, e.employment_basis
                     FROM employees e
                     WHERE e.status = 'active'" . ($is_partner_scoped_hr ? " AND {$employee_scope_sql}" : "") . "
                     ORDER BY e.first_name ASC";
@@ -267,8 +267,23 @@ if ($employees_result && mysqli_num_rows($employees_result) > 0) {
                                             <a href="#" id="selectAllEmployees" class="small text-decoration-none">Select All</a>
                                         </label>
                                         <select id="employee_select" class="form-select" multiple size="3">
-                                            <?php foreach($employees as $emp): ?>
-                                                <option value="<?= $emp['id'] ?>" <?= ($selected_employee_id == 0 || $selected_employee_id == $emp['id']) ? 'selected' : '' ?>><?= htmlspecialchars($emp['first_name'] . ' ' . $emp['last_name']) ?></option>
+                                            <?php foreach($employees as $emp): 
+                                                $b = strtolower(trim((string)($emp['employment_basis'] ?? '')));
+                                                $d = floatval($emp['daily_rate'] ?? 0);
+                                                $s = floatval($emp['salary'] ?? 0);
+                                                $rate_desc = '';
+                                                if ($b === 'daily' || ($d > 0 && $s <= 0)) {
+                                                    $r = $d > 0 ? $d : $s;
+                                                    $rate_desc = ' (Daily: ₱' . number_format($r, 2) . ')';
+                                                } elseif ($b === 'monthly' || ($s > 0 && $d <= 0)) {
+                                                    $r = $s > 0 ? $s : $d;
+                                                    $rate_desc = ' (Monthly: ₱' . number_format($r, 2) . ')';
+                                                } elseif ($d > 0 || $s > 0) {
+                                                    $r = max($d, $s);
+                                                    $rate_desc = ' (₱' . number_format($r, 2) . ')';
+                                                }
+                                            ?>
+                                                <option value="<?= $emp['id'] ?>" <?= ($selected_employee_id == 0 || $selected_employee_id == $emp['id']) ? 'selected' : '' ?>><?= htmlspecialchars($emp['first_name'] . ' ' . $emp['last_name'] . $rate_desc) ?></option>
                                             <?php endforeach; ?>
                                         </select>
                                         <small class="text-muted">Hold Ctrl/Cmd to select multiple.</small>
@@ -292,15 +307,17 @@ if ($employees_result && mysqli_num_rows($employees_result) > 0) {
                                         <input type="hidden" name="pay_period_start" id="form_pay_period_start">
                                         <input type="hidden" name="pay_period_end" id="form_pay_period_end">
                                         <div class="table-responsive">
-                                            <table class="admin-table">
+                                            <table class="admin-table align-middle">
                                                 <thead>
                                                     <tr>
-                                                        <th><input type="checkbox" class="form-check-input" id="selectAllDrafts" checked></th>
+                                                        <th style="width: 40px;"><input type="checkbox" class="form-check-input" id="selectAllDrafts" checked></th>
                                                         <th>Employee</th>
+                                                        <th>Rate Breakdown</th>
+                                                        <th>Time Worked</th>
                                                         <th class="text-end">Gross Pay</th>
                                                         <th class="text-end">Deductions</th>
                                                         <th class="text-end">Net Pay</th>
-                                                        <th>Details</th>
+                                                        <th style="min-width: 220px;">Details & Bonus</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody id="draftTableBody">
@@ -475,24 +492,52 @@ if ($employees_result && mysqli_num_rows($employees_result) > 0) {
                         draftTableBody.empty();
                         response.data.forEach(p => {
                             const details = p.details;
-                            let detailsHtml = `Reg Pay: PHP ${details.regular_pay.toFixed(2)}<br>OT Pay: PHP ${details.overtime_pay.toFixed(2)}<br>Late Ded: -PHP ${details.late_deduction.toFixed(2)}`;
+                            const isMonthly = (p.rate_basis === 'monthly');
+                            const rateBadge = isMonthly
+                                ? `<span class="badge bg-primary text-white" style="font-size:11px;">Monthly</span>`
+                                : `<span class="badge text-white" style="background:#b3261e; font-size:11px;">Daily</span>`;
+
+                            let detailsHtml = `
+                                <div style="font-size: 12px; line-height: 1.5;">
+                                    <div><strong>Reg Pay:</strong> PHP ${details.regular_pay.toFixed(2)}</div>
+                                    ${details.overtime_pay > 0 ? `<div><strong>OT Pay:</strong> PHP ${details.overtime_pay.toFixed(2)} (${details.overtime_hours} hrs)</div>` : ''}
+                                    ${details.late_deduction > 0 ? `<div class="text-danger"><strong>Late Ded:</strong> -PHP ${details.late_deduction.toFixed(2)}</div>` : ''}
+                                </div>
+                            `;
                             if (p.deduction_breakdown && p.deduction_breakdown.length > 0) {
+                                detailsHtml += `<div class="mt-1 pt-1 border-top" style="font-size: 11.5px;">`;
                                 p.deduction_breakdown.forEach(d => {
-                                    detailsHtml += `<br><span class="text-danger small">${escapeHtml(d.description)}: -PHP ${d.amount.toFixed(2)}</span>`;
+                                    detailsHtml += `<div class="text-danger">${escapeHtml(d.description)}: -PHP ${d.amount.toFixed(2)}</div>`;
                                 });
+                                detailsHtml += `</div>`;
                             }
+
                             const row = `
                                 <tr data-employee-id="${p.employee_id}">
-                                    <td><input type="checkbox" class="form-check-input draft-checkbox" name="payrolls[]" value='${JSON.stringify(p)}' checked></td>
-                                    <td>${p.full_name}</td>
-                                    <td class="text-end gross-pay">PHP ${p.gross_pay.toFixed(2)}</td>
-                                    <td class="text-end total-deductions">PHP ${p.total_deductions.toFixed(2)}</td>
-                                    <td class="text-end net-pay"><strong>PHP ${p.net_pay.toFixed(2)}</strong></td>
-                                    <td>
-                                        <small class="payroll-details">${detailsHtml}</small>
-                                        <div class="input-group input-group-sm mt-2" style="max-width: 200px;">
-                                            <span class="input-group-text">Bonus PHP </span>
-                                            <input type="number" class="form-control bonus-input" value="0" step="50" min="0">
+                                    <td class="align-middle"><input type="checkbox" class="form-check-input draft-checkbox" name="payrolls[]" value='${JSON.stringify(p)}' checked></td>
+                                    <td class="align-middle">
+                                        <div class="fw-bold text-dark" style="font-size: 14px;">${escapeHtml(p.full_name)}</div>
+                                        <div class="text-muted small">${escapeHtml(p.position || '')}</div>
+                                        <div class="mt-1">${rateBadge} <span class="fw-bold text-dark small">${details.rate_basis_text}</span></div>
+                                    </td>
+                                    <td class="align-middle">
+                                        <div class="small fw-semibold text-dark"><i class="fas fa-clock text-muted me-1"></i>${details.hourly_rate_text}</div>
+                                        <div class="small text-muted"><i class="fas fa-stopwatch text-muted me-1"></i>${details.minute_rate_text}</div>
+                                    </td>
+                                    <td class="align-middle">
+                                        <span class="badge bg-light text-dark border px-2 py-1" style="font-size: 12.5px;">
+                                            <i class="fas fa-user-clock text-danger me-1"></i>${details.time_worked_label}
+                                        </span>
+                                        ${details.days_present > 0 ? `<div class="small text-muted mt-1">${details.days_present} shift/day(s) logged</div>` : `<div class="small text-muted mt-1">Timeline evaluated</div>`}
+                                    </td>
+                                    <td class="text-end align-middle gross-pay fw-bold" style="font-size: 14px; color: #101828;">PHP ${p.gross_pay.toFixed(2)}</td>
+                                    <td class="text-end align-middle total-deductions" style="color: #b3261e; font-size: 13.5px;">PHP ${p.total_deductions.toFixed(2)}</td>
+                                    <td class="text-end align-middle net-pay fw-bold" style="font-size: 15px; color: #027a48;"><strong>PHP ${p.net_pay.toFixed(2)}</strong></td>
+                                    <td class="align-middle">
+                                        <div class="payroll-details">${detailsHtml}</div>
+                                        <div class="input-group input-group-sm mt-2" style="max-width: 190px;">
+                                            <span class="input-group-text bg-light">Bonus PHP</span>
+                                            <input type="number" class="form-control bonus-input text-end" value="0" step="50" min="0">
                                         </div>
                                     </td>
                                 </tr>`;
@@ -528,7 +573,7 @@ if ($employees_result && mysqli_num_rows($employees_result) > 0) {
             // Recalculate pays
             const originalGross = payrollData.details.regular_pay + payrollData.details.overtime_pay;
             const newGross = originalGross + bonus;
-            const newNet = newGross - payrollData.total_deductions;
+            const newNet = Math.max(0, newGross - payrollData.total_deductions);
 
             // Update the UI
             row.find('.gross-pay').text('PHP ' + newGross.toFixed(2));
