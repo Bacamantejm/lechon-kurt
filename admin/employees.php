@@ -64,12 +64,22 @@ if (!function_exists('employeesRoleInPartnerScope')) {
         $role = mysqli_fetch_assoc($res);
         mysqli_stmt_close($stmt);
 
-        if (!$role || strtolower(trim((string)$role['name'])) === 'super_admin') {
+        if (!$role) {
+            return false;
+        }
+        $r_name = strtolower(trim((string)$role['name']));
+        if (in_array($r_name, ['super_admin', 'business_owner'], true)) {
             return false;
         }
         $role_owner = isset($role['owner_user_id']) && $role['owner_user_id'] !== null ? (int)$role['owner_user_id'] : 0;
         if ($role_owner > 0 && $owner_user_id > 0 && $role_owner !== $owner_user_id) {
             return false;
+        }
+        if ($role_owner <= 0) {
+            $allowed_templates = ['driver', 'hr_manager', 'operations_manager', 'finance_manager', 'inventory_manager', 'viewer'];
+            if (!in_array($r_name, $allowed_templates, true)) {
+                return false;
+            }
         }
         return true;
     }
@@ -1554,18 +1564,25 @@ if ($has_dept_table && $has_role_dept_col) {
         SELECT r.id, r.name, d.department_name
         FROM roles r
         LEFT JOIN departments d ON r.department_id = d.id
-        WHERE r.name != 'super_admin'
+        WHERE r.name NOT IN ('super_admin', 'business_owner')
     ";
 } else {
     $roles_query_sql = "
         SELECT r.id, r.name, '' AS department_name
         FROM roles r
-        WHERE r.name != 'super_admin'
+        WHERE r.name NOT IN ('super_admin', 'business_owner')
     ";
 }
 if ($is_partner_scoped_hr) {
+    $base_template_roles_sql = "'driver', 'hr_manager', 'operations_manager', 'finance_manager', 'inventory_manager', 'viewer'";
     if (employeesRoleOwnerColumnExists($conn) && $partner_scope_owner_id > 0) {
-        $roles_query_sql .= " AND (r.owner_user_id = " . (int)$partner_scope_owner_id . " OR r.owner_user_id IS NULL OR r.owner_user_id = 0)";
+        $roles_query_sql .= " AND (
+            (r.owner_user_id IS NOT NULL AND r.owner_user_id = " . (int)$partner_scope_owner_id . ")
+            OR
+            (r.owner_user_id IS NULL AND r.name IN ($base_template_roles_sql))
+        )";
+    } else {
+        $roles_query_sql .= " AND r.name IN ($base_template_roles_sql)";
     }
 }
 $roles_query_sql .= " ORDER BY " . ($has_dept_table && $has_role_dept_col ? "d.department_name, " : "") . "r.name";
