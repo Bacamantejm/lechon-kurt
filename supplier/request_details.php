@@ -14,6 +14,16 @@ if ($order_id <= 0) {
     exit;
 }
 
+if (!function_exists('formatQtyVal')) {
+    function formatQtyVal($num) {
+        $f = floatval($num);
+        if ($f == intval($f)) {
+            return number_format($f, 0);
+        }
+        return rtrim(rtrim(number_format($f, 2, '.', ''), '0'), '.');
+    }
+}
+
 // 1. Fetch Order Header
 $ord_stmt = mysqli_prepare($conn, "
     SELECT so.*, 
@@ -48,55 +58,49 @@ if (!$order) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = trim((string)($_POST['action'] ?? ''));
 
-    // ACTION: Send Quoted Invoice to Finance Department
-    if ($action === 'send_invoice_to_finance') {
-        $supplier_notes = trim((string)($_POST['supplier_notes'] ?? ''));
-        $submitted = IngredientStockManager::submitSupplierInvoiceToFinance($conn, $order_id, (int)$_SESSION['user_id'], $supplier_notes);
-        if ($submitted) {
-            $_SESSION['success'] = "Invoice for refill request {$order['order_code']} has been submitted to the Finance Department for budget approval!";
-        } else {
-            $_SESSION['error'] = "Could not submit invoice to Finance Department. Please try again.";
-        }
-        header("Location: request_details.php?id=$order_id");
-        exit;
-    }
-
-    // ACTION: Modify Quantities/Pricing & Send Invoice to Finance
-    if ($action === 'modify_and_send_finance' || $action === 'modify_accept') {
+    // ACTION: Send Quoted Invoice to Finance Department (Supplier inputs prices and quantities)
+    if ($action === 'send_invoice_to_finance' || $action === 'modify_and_send_finance' || $action === 'modify_accept') {
         $mod_items = isset($_POST['items']) && is_array($_POST['items']) ? $_POST['items'] : [];
         $supplier_notes = trim((string)($_POST['supplier_notes'] ?? ''));
-        $delivery_fee = floatval($_POST['delivery_fee'] ?? $order['delivery_fee']);
+        $delivery_fee = max(0.0, floatval($_POST['delivery_fee'] ?? 0));
 
         $new_subtotal = 0.0;
-        $upd_item_stmt = mysqli_prepare($conn, "
-            UPDATE supplier_order_items 
-            SET quantity_supplied = ?, 
-                locked_unit_price = ?, 
-                line_total = ?, 
-                is_modified = ?, 
-                modification_reason = ? 
-            WHERE id = ? AND order_id = ?
-        ");
+        if (!empty($mod_items)) {
+            $upd_item_stmt = mysqli_prepare($conn, "
+                UPDATE supplier_order_items 
+                SET quantity_supplied = ?, 
+                    locked_unit_price = ?, 
+                    line_total = ?, 
+                    is_modified = ?, 
+                    modification_reason = ? 
+                WHERE id = ? AND order_id = ?
+            ");
 
-        if ($upd_item_stmt) {
-            foreach ($mod_items as $item_id => $i_data) {
-                $i_id = intval($item_id);
-                $qty_supplied = floatval($i_data['quantity_supplied'] ?? 0);
-                $unit_price = floatval($i_data['locked_unit_price'] ?? 0);
-                $orig_qty = floatval($i_data['quantity_requested'] ?? 0);
-                $reason = trim((string)($i_data['modification_reason'] ?? ''));
+            if ($upd_item_stmt) {
+                foreach ($mod_items as $item_id => $i_data) {
+                    $i_id = intval($item_id);
+                    $qty_supplied = max(0.0, floatval($i_data['quantity_supplied'] ?? 0));
+                    $unit_price = max(0.0, floatval($i_data['locked_unit_price'] ?? 0));
+                    $orig_qty = max(0.0, floatval($i_data['quantity_requested'] ?? 0));
+                    $reason = trim((string)($i_data['modification_reason'] ?? ''));
 
-                $is_mod = ($qty_supplied != $orig_qty) ? 1 : 0;
-                $line_tot = $qty_supplied * $unit_price;
-                $new_subtotal += $line_tot;
+                    $is_mod = (abs($qty_supplied - $orig_qty) > 0.0001) ? 1 : 0;
+                    $line_tot = round($qty_supplied * $unit_price, 2);
+                    $new_subtotal += $line_tot;
 
-                mysqli_stmt_bind_param($upd_item_stmt, "dddisii", $qty_supplied, $unit_price, $line_tot, $is_mod, $reason, $i_id, $order_id);
-                mysqli_stmt_execute($upd_item_stmt);
+                    mysqli_stmt_bind_param($upd_item_stmt, "dddisii", $qty_supplied, $unit_price, $line_tot, $is_mod, $reason, $i_id, $order_id);
+                    mysqli_stmt_execute($upd_item_stmt);
+                }
+                mysqli_stmt_close($upd_item_stmt);
             }
-            mysqli_stmt_close($upd_item_stmt);
+        } else {
+            $it_calc = mysqli_query($conn, "SELECT line_total FROM supplier_order_items WHERE order_id = $order_id");
+            while ($it_calc && ($row = mysqli_fetch_assoc($it_calc))) {
+                $new_subtotal += floatval($row['line_total']);
+            }
         }
 
-        $new_grand_total = $new_subtotal + $delivery_fee;
+        $new_grand_total = round($new_subtotal + $delivery_fee, 2);
 
         // Update Order totals & notes
         $upd_ord = mysqli_prepare($conn, "
@@ -109,15 +113,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             WHERE id = ? AND supplier_id = ?
         ");
         if ($upd_ord) {
-            mysqli_stmt_bind_param($upd_ord, "dddssi", $new_subtotal, $delivery_fee, $new_grand_total, $supplier_notes, $order_id, $current_supplier_id);
+            mysqli_stmt_bind_param($upd_ord, "dddsii", $new_subtotal, $delivery_fee, $new_grand_total, $supplier_notes, $order_id, $current_supplier_id);
             mysqli_stmt_execute($upd_ord);
             mysqli_stmt_close($upd_ord);
         }
 
-        // Submit revised invoice to Finance Department
-        IngredientStockManager::submitSupplierInvoiceToFinance($conn, $order_id, (int)$_SESSION['user_id'], $supplier_notes);
-        $_SESSION['success'] = "Refill quote {$order['order_code']} modified and invoice submitted to Finance Department for approval (Total: ₱" . number_format($new_grand_total, 2) . ")!";
+        // Keep supplier catalog updated with vendor's wholesale price for future orders
+        if (!empty($mod_items)) {
+            $cat_sync = mysqli_prepare($conn, "
+                INSERT INTO supplier_catalog (supplier_id, material_id, wholesale_price, packaging_unit, is_available, updated_at)
+                VALUES (?, ?, ?, ?, 1, NOW())
+                ON DUPLICATE KEY UPDATE wholesale_price = VALUES(wholesale_price), updated_at = NOW()
+            ");
+            if ($cat_sync) {
+                foreach ($mod_items as $item_id => $i_data) {
+                    $i_id = intval($item_id);
+                    $unit_price = max(0.0, floatval($i_data['locked_unit_price'] ?? 0));
+                    $m_res = mysqli_query($conn, "SELECT material_id, unit FROM supplier_order_items WHERE id = $i_id LIMIT 1");
+                    if ($m_res && ($mr = mysqli_fetch_assoc($m_res))) {
+                        $mat_id = intval($mr['material_id']);
+                        $unit_str = $mr['unit'];
+                        if ($mat_id > 0 && $unit_price > 0) {
+                            mysqli_stmt_bind_param($cat_sync, "iids", $current_supplier_id, $mat_id, $unit_price, $unit_str);
+                            mysqli_stmt_execute($cat_sync);
+                        }
+                    }
+                }
+                mysqli_stmt_close($cat_sync);
+            }
+        }
 
+        if ($new_grand_total <= 0) {
+            $_SESSION['error'] = "Please specify a unit price greater than ₱0.00 for the ingredients before sending invoice to Finance.";
+            header("Location: request_details.php?id=$order_id");
+            exit;
+        }
+
+        $submitted = IngredientStockManager::submitSupplierInvoiceToFinance($conn, $order_id, (int)$_SESSION['user_id'], $supplier_notes);
+        if ($submitted) {
+            $_SESSION['success'] = "Invoice for refill request {$order['order_code']} (Total: ₱" . number_format($new_grand_total, 2) . ") has been submitted to Finance Department for budget approval!";
+        } else {
+            $_SESSION['error'] = "Could not submit invoice to Finance Department. Please try again.";
+        }
         header("Location: request_details.php?id=$order_id");
         exit;
     }
@@ -324,17 +361,11 @@ if ($logs_stmt) {
             <div class="d-flex flex-wrap gap-2">
                 <?php if ($order['status'] === 'pending'): ?>
                     <button type="button" class="btn btn-system-outline text-danger border-danger" data-bs-toggle="modal" data-bs-target="#rejectModal">
-                        <i class="fas fa-times-circle"></i> Reject
+                        <i class="fas fa-times-circle me-1"></i> Reject
                     </button>
-                    <button type="button" class="btn btn-system-outline" data-bs-toggle="modal" data-bs-target="#modifyModal">
-                        <i class="fas fa-sliders"></i> Modify Quote &amp; Send Invoice
+                    <button type="submit" form="supplierPricingForm" class="btn btn-system-primary">
+                        <i class="fas fa-file-invoice-dollar me-1"></i> Send Invoice to Finance Department
                     </button>
-                    <form method="POST" style="margin:0;">
-                        <input type="hidden" name="action" value="send_invoice_to_finance">
-                        <button type="submit" class="btn btn-system-primary">
-                            <i class="fas fa-file-invoice-dollar"></i> Send Invoice to Finance Department
-                        </button>
-                    </form>
                 <?php elseif ($order['status'] === 'awaiting_finance_approval'): ?>
                     <span class="badge py-2 px-3" style="background:#fffaeb; color:#b54708; border:1px solid #fedf89; font-size:0.88rem;">
                         <i class="fas fa-hourglass-half me-1"></i> Awaiting Finance Department Approval
@@ -405,9 +436,15 @@ if ($logs_stmt) {
         </div>
     <?php endif; ?>
 
+    <?php $is_pending = ($order['status'] === 'pending'); ?>
     <div class="row g-4">
         <!-- Left: Itemized Checklist & Details -->
         <div class="col-lg-8">
+            <?php if ($is_pending): ?>
+                <form method="POST" id="supplierPricingForm">
+                    <input type="hidden" name="action" value="send_invoice_to_finance">
+            <?php endif; ?>
+
             <div class="system-card mb-4">
                 <div class="system-card-header">
                     <h5 class="system-card-title">
@@ -423,52 +460,114 @@ if ($logs_stmt) {
                         <thead>
                             <tr style="border-bottom: 2px solid #eaecf0; color:#475467; font-size:0.82rem; text-transform:uppercase;">
                                 <th>Ingredient</th>
-                                <th class="text-center">Requested Qty</th>
-                                <th class="text-center">Supplied Qty</th>
-                                <th class="text-end">Locked Unit Price</th>
-                                <th class="text-end">Line Total</th>
+                                <th class="text-center" style="width:120px;">Requested Qty</th>
+                                <th class="text-center" style="width:160px;">Supplied Qty</th>
+                                <th class="text-end" style="width:170px;">Wholesale Unit Price</th>
+                                <th class="text-end" style="width:130px;">Line Total</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($order_items as $item): ?>
+                            <?php foreach ($order_items as $item): 
+                                $it_id = (int)$item['id'];
+                                $req_qty = floatval($item['quantity_requested']);
+                                $sup_qty = floatval($item['quantity_supplied']);
+                                $unit_price = floatval($item['locked_unit_price']);
+                                $line_tot = floatval($item['line_total']);
+                                $unit = trim((string)$item['unit']);
+                            ?>
                                 <tr>
                                     <td>
-                                        <div style="font-weight:700; color:#101828;">
+                                        <div class="fw-bold text-dark item-mat-name" style="font-size:0.95rem;">
                                             <?php echo htmlspecialchars($item['material_name']); ?>
                                         </div>
-                                        <?php if (!empty($item['is_modified'])): ?>
-                                            <span class="badge bg-warning text-dark" style="font-size:0.75rem;">
-                                                <i class="fas fa-pen"></i> Modified: <?php echo htmlspecialchars($item['modification_reason'] ?? 'Qty adjusted'); ?>
+                                        <?php if ($is_pending): ?>
+                                            <input type="hidden" name="items[<?php echo $it_id; ?>][quantity_requested]" value="<?php echo htmlspecialchars((string)$req_qty); ?>">
+                                        <?php endif; ?>
+                                        <?php if (!empty($item['is_modified']) && !$is_pending): ?>
+                                            <span class="badge bg-warning text-dark mt-1" style="font-size:0.75rem;">
+                                                <i class="fas fa-pen"></i> Adjusted: <?php echo htmlspecialchars($item['modification_reason'] ?? ''); ?>
                                             </span>
                                         <?php endif; ?>
                                     </td>
-                                    <td class="text-center" style="font-weight:600; color:#344054;">
-                                        <?php echo number_format($item['quantity_requested'], 2) . ' ' . htmlspecialchars($item['unit']); ?>
+                                    <td class="text-center align-middle">
+                                        <div class="fw-bold text-dark" style="font-size:1.05rem;"><?php echo formatQtyVal($req_qty); ?></div>
+                                        <span class="badge" style="background:#f2f4f7; color:#475467; border:1px solid #eaecf0; font-size:0.75rem; font-weight:500;">
+                                            <?php echo htmlspecialchars($unit); ?>
+                                        </span>
                                     </td>
-                                    <td class="text-center" style="font-weight:700; color:#101828;">
-                                        <?php echo number_format($item['quantity_supplied'], 2) . ' ' . htmlspecialchars($item['unit']); ?>
+                                    <td class="text-center align-middle">
+                                        <?php if ($is_pending): ?>
+                                            <div class="input-group input-group-sm mx-auto" style="max-width: 140px;">
+                                                <input type="number" step="any" min="0" 
+                                                       name="items[<?php echo $it_id; ?>][quantity_supplied]" 
+                                                       class="form-control text-center fw-bold item-supplied-qty" 
+                                                       data-item-id="<?php echo $it_id; ?>"
+                                                       value="<?php echo formatQtyVal($sup_qty > 0 ? $sup_qty : $req_qty); ?>" 
+                                                       required>
+                                                <span class="input-group-text bg-light text-muted small px-2"><?php echo htmlspecialchars($unit); ?></span>
+                                            </div>
+                                        <?php else: ?>
+                                            <div class="fw-bold text-dark" style="font-size:1.05rem;"><?php echo formatQtyVal($sup_qty); ?></div>
+                                            <span class="badge" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; font-size:0.75rem; font-weight:500;">
+                                                <?php echo htmlspecialchars($unit); ?>
+                                            </span>
+                                        <?php endif; ?>
                                     </td>
-                                    <td class="text-end" style="color:#475467;">
-                                        ₱<?php echo number_format($item['locked_unit_price'], 2); ?> / <?php echo htmlspecialchars($item['unit']); ?>
+                                    <td class="text-end align-middle">
+                                        <?php if ($is_pending): ?>
+                                            <div class="d-flex flex-column align-items-end">
+                                                <div class="input-group input-group-sm" style="max-width: 150px;">
+                                                    <span class="input-group-text fw-bold text-muted bg-light">&#8369;</span>
+                                                    <input type="number" step="0.01" min="0.01" 
+                                                           name="items[<?php echo $it_id; ?>][locked_unit_price]" 
+                                                           class="form-control text-end fw-bold item-unit-price" 
+                                                           data-item-id="<?php echo $it_id; ?>"
+                                                           placeholder="0.00"
+                                                           value="<?php echo $unit_price > 0 ? number_format($unit_price, 2, '.', '') : ''; ?>" 
+                                                           required>
+                                                </div>
+                                                <small class="text-muted mt-1" style="font-size:0.75rem;">per <?php echo htmlspecialchars($unit); ?></small>
+                                            </div>
+                                        <?php else: ?>
+                                            <div class="fw-bold text-dark" style="font-size:0.95rem;">
+                                                &#8369;<?php echo number_format($unit_price, 2); ?>
+                                            </div>
+                                            <small class="text-muted" style="font-size:0.75rem;">per <?php echo htmlspecialchars($unit); ?></small>
+                                        <?php endif; ?>
                                     </td>
-                                    <td class="text-end" style="font-weight:700; color:#101828;">
-                                        ₱<?php echo number_format($item['line_total'], 2); ?>
+                                    <td class="text-end align-middle">
+                                        <div class="fw-bold text-dark item-line-total-val" id="line_total_<?php echo $it_id; ?>" style="font-size:1rem;">
+                                            &#8369;<?php echo number_format($line_tot, 2); ?>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
                         <tfoot>
                             <tr style="border-top: 2px solid #eaecf0;">
-                                <td colspan="4" class="text-end fw-semibold">Subtotal:</td>
-                                <td class="text-end fw-bold">₱<?php echo number_format($order['subtotal_amount'], 2); ?></td>
+                                <td colspan="4" class="text-end fw-semibold text-secondary">Subtotal:</td>
+                                <td class="text-end fw-bold text-dark fs-6">
+                                    &#8369;<span id="display_subtotal"><?php echo number_format($order['subtotal_amount'], 2); ?></span>
+                                </td>
                             </tr>
                             <tr>
-                                <td colspan="4" class="text-end fw-semibold">Delivery / Logistics Fee:</td>
-                                <td class="text-end fw-bold">₱<?php echo number_format($order['delivery_fee'], 2); ?></td>
+                                <td colspan="4" class="text-end fw-semibold text-secondary align-middle">Delivery / Logistics Fee:</td>
+                                <td class="text-end align-middle">
+                                    <?php if ($is_pending): ?>
+                                        <div class="input-group input-group-sm ms-auto" style="max-width: 140px;">
+                                            <span class="input-group-text fw-bold text-muted bg-light">&#8369;</span>
+                                            <input type="number" step="0.01" min="0" name="delivery_fee" id="supplier_delivery_fee" class="form-control text-end fw-bold" value="<?php echo number_format($order['delivery_fee'], 2, '.', ''); ?>">
+                                        </div>
+                                    <?php else: ?>
+                                        <span class="fw-bold text-dark">&#8369;<?php echo number_format($order['delivery_fee'], 2); ?></span>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
                             <tr style="background:#f8f9fa;">
-                                <td colspan="4" class="text-end fw-bold" style="font-size:1.05rem; color:#101828;">Grand Total:</td>
-                                <td class="text-end fw-bold" style="font-size:1.15rem; color:#b3261e;">₱<?php echo number_format($order['total_amount'], 2); ?></td>
+                                <td colspan="4" class="text-end fw-bold align-middle" style="font-size:1.05rem; color:#101828;">Grand Total:</td>
+                                <td class="text-end fw-bold align-middle" style="font-size:1.2rem; color:#b3261e;">
+                                    &#8369;<span id="display_grand_total"><?php echo number_format($order['total_amount'], 2); ?></span>
+                                </td>
                             </tr>
                         </tfoot>
                     </table>
@@ -476,7 +575,7 @@ if ($logs_stmt) {
             </div>
 
             <!-- Notes & Instructions -->
-            <div class="system-card">
+            <div class="system-card mb-4">
                 <div class="system-card-header">
                     <h5 class="system-card-title">
                         <i class="fas fa-comment-dots text-secondary"></i> Order Notes &amp; Logistics Instructions
@@ -491,12 +590,30 @@ if ($logs_stmt) {
                     </div>
                     <div class="col-md-6">
                         <label class="form-label text-muted small fw-bold">Supplier Response Notes:</label>
-                        <div class="p-3 bg-light rounded border text-secondary" style="min-height: 80px; font-size:0.9rem;">
-                            <?php echo !empty($order['supplier_notes']) ? nl2br(htmlspecialchars($order['supplier_notes'])) : '<em>No vendor notes attached.</em>'; ?>
-                        </div>
+                        <?php if ($is_pending): ?>
+                            <textarea name="supplier_notes" id="supplier_notes" class="form-control" rows="3" placeholder="e.g. Deliveries scheduled for tomorrow morning. Wholesale rates locked."><?php echo htmlspecialchars($order['supplier_notes'] ?? ''); ?></textarea>
+                        <?php else: ?>
+                            <div class="p-3 bg-light rounded border text-secondary" style="min-height: 80px; font-size:0.9rem;">
+                                <?php echo !empty($order['supplier_notes']) ? nl2br(htmlspecialchars($order['supplier_notes'])) : '<em>No vendor notes attached.</em>'; ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
+                <?php if ($is_pending): ?>
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mt-4 pt-3 border-top">
+                        <div class="text-muted small">
+                            <i class="fas fa-shield-alt text-success me-1"></i> Submitting will calculate the total and route this invoice directly to Finance Department for budget clearance.
+                        </div>
+                        <button type="submit" class="btn btn-system-primary px-4 py-2" style="font-weight:700;">
+                            <i class="fas fa-file-invoice-dollar me-2"></i> Send Invoice to Finance Department
+                        </button>
+                    </div>
+                <?php endif; ?>
             </div>
+
+            <?php if ($is_pending): ?>
+                </form>
+            <?php endif; ?>
         </div>
 
         <!-- Right: Store Profile & Timeline -->
@@ -599,88 +716,75 @@ if ($logs_stmt) {
     </div>
 </div>
 
-<!-- Modal: Modify & Send Invoice to Finance -->
-<div class="modal fade" id="modifyModal" tabindex="-1" aria-labelledby="modifyModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <form method="POST">
-                <input type="hidden" name="action" value="modify_and_send_finance">
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold" id="modifyModalLabel">Modify Quantities, Pricing &amp; Invoice</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="text-muted small mb-3">
-                        Adjust supplied quantities or locked unit prices below. Submitting will generate and route the updated invoice directly to the Finance Department for budget approval.
-                    </p>
-                    <div class="table-responsive">
-                        <table class="table align-middle">
-                            <thead>
-                                <tr class="table-light small text-uppercase">
-                                    <th>Ingredient</th>
-                                    <th>Req. Qty</th>
-                                    <th>Supplied Qty</th>
-                                    <th>Unit Price (₱)</th>
-                                    <th>Reason for Change</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($order_items as $it): 
-                                    $it_id = (int)$it['id'];
-                                ?>
-                                    <tr>
-                                        <td class="fw-bold">
-                                            <?php echo htmlspecialchars($it['material_name']); ?>
-                                            <input type="hidden" name="items[<?php echo $it_id; ?>][quantity_requested]" value="<?php echo htmlspecialchars((string)$it['quantity_requested']); ?>">
-                                        </td>
-                                        <td>
-                                            <?php echo number_format($it['quantity_requested'], 2) . ' ' . htmlspecialchars($it['unit']); ?>
-                                        </td>
-                                        <td style="max-width:110px;">
-                                            <input type="number" step="0.01" min="0" 
-                                                   name="items[<?php echo $it_id; ?>][quantity_supplied]" 
-                                                   value="<?php echo htmlspecialchars((string)$it['quantity_supplied']); ?>" 
-                                                   class="form-control form-control-sm text-end" required>
-                                        </td>
-                                        <td style="max-width:120px;">
-                                            <input type="number" step="0.01" min="0" 
-                                                   name="items[<?php echo $it_id; ?>][locked_unit_price]" 
-                                                   value="<?php echo htmlspecialchars(number_format($it['locked_unit_price'], 2, '.', '')); ?>" 
-                                                   class="form-control form-control-sm text-end" required>
-                                        </td>
-                                        <td>
-                                            <input type="text" 
-                                                   name="items[<?php echo $it_id; ?>][modification_reason]" 
-                                                   value="<?php echo htmlspecialchars($it['modification_reason'] ?? ''); ?>" 
-                                                   placeholder="e.g. Partial batch" 
-                                                   class="form-control form-control-sm">
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function recalcTotals() {
+        let subtotal = 0;
+        document.querySelectorAll('.item-unit-price').forEach(function(pInput) {
+            const itemId = pInput.getAttribute('data-item-id');
+            const qInput = document.querySelector('.item-supplied-qty[data-item-id="' + itemId + '"]');
+            const qty = parseFloat(qInput ? qInput.value : 0) || 0;
+            const price = parseFloat(pInput.value) || 0;
+            const lineTot = Math.round(qty * price * 100) / 100;
+            subtotal += lineTot;
 
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label for="delivery_fee" class="form-label fw-bold">Logistics / Delivery Fee (₱)</label>
-                            <input type="number" step="0.01" min="0" name="delivery_fee" id="delivery_fee" value="<?php echo htmlspecialchars(number_format($order['delivery_fee'], 2, '.', '')); ?>" class="form-control">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="supplier_notes" class="form-label fw-bold">Notes to Shop Owner</label>
-                            <input type="text" name="supplier_notes" id="supplier_notes" value="<?php echo htmlspecialchars($order['supplier_notes'] ?? ''); ?>" placeholder="e.g. Balance arriving Thursday" class="form-control">
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-system-primary">
-                        <i class="fas fa-file-invoice-dollar me-1"></i> Save Changes &amp; Send Invoice to Finance
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+            const lineEl = document.getElementById('line_total_' + itemId);
+            if (lineEl) {
+                lineEl.textContent = '₱' + lineTot.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+        });
+
+        const feeInput = document.getElementById('supplier_delivery_fee');
+        const deliveryFee = parseFloat(feeInput ? feeInput.value : 0) || 0;
+        const grandTotal = Math.round((subtotal + deliveryFee) * 100) / 100;
+
+        const subEl = document.getElementById('display_subtotal');
+        if (subEl) {
+            subEl.textContent = subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        const grandEl = document.getElementById('display_grand_total');
+        if (grandEl) {
+            grandEl.textContent = grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+    }
+
+    document.querySelectorAll('.item-unit-price, .item-supplied-qty').forEach(function(el) {
+        el.addEventListener('input', recalcTotals);
+    });
+
+    const feeEl = document.getElementById('supplier_delivery_fee');
+    if (feeEl) {
+        feeEl.addEventListener('input', recalcTotals);
+    }
+
+    const formEl = document.getElementById('supplierPricingForm');
+    if (formEl) {
+        formEl.addEventListener('submit', function(e) {
+            let zeroFound = false;
+            let zeroName = '';
+            document.querySelectorAll('.item-unit-price').forEach(function(input) {
+                const val = parseFloat(input.value) || 0;
+                if (val <= 0) {
+                    zeroFound = true;
+                    input.classList.add('is-invalid');
+                    const row = input.closest('tr');
+                    const nameEl = row ? row.querySelector('.item-mat-name') : null;
+                    if (!zeroName && nameEl) {
+                        zeroName = nameEl.textContent.trim();
+                    }
+                } else {
+                    input.classList.remove('is-invalid');
+                }
+            });
+
+            if (zeroFound) {
+                e.preventDefault();
+                alert('Please enter a wholesale unit price for all ingredients' + (zeroName ? ' (e.g. ' + zeroName + ')' : '') + ' before sending the invoice to Finance.');
+                return false;
+            }
+        });
+    }
+});
+</script>
 
 <?php require_once __DIR__ . '/footer.php'; ?>
