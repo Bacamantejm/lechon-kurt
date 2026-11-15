@@ -2717,28 +2717,29 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
                     row.setAttribute('data-stock', stock);
                     row.setAttribute('data-unit', mat.unit);
 
-                    let stockBadgeClass = stock <= 0 ? 'bg-danger' : (stock <= reorder ? 'bg-warning text-dark' : 'bg-light text-dark border');
+                    let stockBadgeClass = stock <= 0 ? 'bg-danger text-white' : (stock <= reorder ? 'bg-warning text-dark' : 'bg-light text-secondary border');
 
                     row.innerHTML = `
-                        <td class="text-center">
+                        <td class="text-center align-middle">
                             <input type="checkbox" class="form-check-input recipe-chk" name="recipe_ingredients[${mid}][selected]" value="1" id="rec_chk_${mid}" ${isChecked ? 'checked' : ''} onchange="recalculateLiveRecipeYield()">
                         </td>
-                        <td>
+                        <td class="align-middle">
                             <label for="rec_chk_${mid}" class="fw-bold mb-0 text-dark" style="cursor:pointer;">${mat.name}</label>
                             <span class="text-muted small d-block" style="font-size:11px;">Unit: ${mat.unit}</span>
                         </td>
-                        <td>
-                            <span class="badge ${stockBadgeClass}" style="font-size:11px;">
-                                ${stock} ${mat.unit}
-                            </span>
-                        </td>
-                        <td>
+                        <td class="align-middle">
                             <div class="d-flex align-items-center gap-1">
-                                <input type="number" step="1" min="1" name="recipe_ingredients[${mid}][qty]" class="form-control form-control-sm text-end recipe-qty" value="${qtyVal ? Math.round(qtyVal) : 1}" ${isChecked ? '' : 'disabled'} onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, ''); recalculateLiveRecipeYield();" style="width: 80px;">
-                                <span class="small text-muted fw-semibold" style="font-size:11px;">${mat.unit}</span>
+                                <span class="fw-bold text-dark" style="font-size:0.95rem;">${stock}</span>
+                                <span class="badge ${stockBadgeClass}" style="font-size:10px; font-weight:500;">${mat.unit}</span>
                             </div>
                         </td>
-                        <td class="text-end">
+                        <td class="align-middle">
+                            <div class="input-group input-group-sm" style="max-width: 120px;">
+                                <input type="number" step="1" min="1" name="recipe_ingredients[${mid}][qty]" class="form-control form-control-sm text-center fw-bold recipe-qty" value="${qtyVal ? Math.round(qtyVal) : 1}" ${isChecked ? '' : 'disabled'} onkeydown="if(event.key==='.'||event.key===',') event.preventDefault();" oninput="this.value = this.value.replace(/[^0-9]/g, ''); recalculateLiveRecipeYield();">
+                                <span class="input-group-text bg-light text-muted small px-2" style="font-size:11px;">${mat.unit}</span>
+                            </div>
+                        </td>
+                        <td class="text-end align-middle">
                             <span class="recipe-item-yield fw-bold text-muted" style="font-size:12px;">—</span>
                         </td>
                     `;

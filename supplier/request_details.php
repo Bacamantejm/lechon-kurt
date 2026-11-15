@@ -462,7 +462,7 @@ if ($logs_stmt) {
                                 <th>Ingredient</th>
                                 <th class="text-center" style="width:120px;">Requested Qty</th>
                                 <th class="text-center" style="width:160px;">Supplied Qty</th>
-                                <th class="text-end" style="width:170px;">Wholesale Unit Price</th>
+                                <th class="text-end" style="width:190px; min-width:180px; white-space:nowrap;">Wholesale Unit Price</th>
                                 <th class="text-end" style="width:130px;">Line Total</th>
                             </tr>
                         </thead>
@@ -517,16 +517,17 @@ if ($logs_stmt) {
                                         <?php if ($is_pending): ?>
                                             <div class="d-flex flex-column align-items-end">
                                                 <div class="input-group input-group-sm" style="max-width: 150px;">
-                                                    <span class="input-group-text fw-bold text-muted bg-light">&#8369;</span>
+                                                    <span class="input-group-text fw-bold" style="background:#f8f9fa; color:#101828; border-color:#d0d5dd; font-size:0.95rem;">&#8369;</span>
                                                     <input type="number" step="0.01" min="0.01" 
                                                            name="items[<?php echo $it_id; ?>][locked_unit_price]" 
                                                            class="form-control text-end fw-bold item-unit-price" 
                                                            data-item-id="<?php echo $it_id; ?>"
                                                            placeholder="0.00"
                                                            value="<?php echo $unit_price > 0 ? number_format($unit_price, 2, '.', '') : ''; ?>" 
-                                                           required>
+                                                           required
+                                                           style="border-color:#d0d5dd; font-size:0.95rem;">
                                                 </div>
-                                                <small class="text-muted mt-1" style="font-size:0.75rem;">per <?php echo htmlspecialchars($unit); ?></small>
+                                                <small class="text-muted mt-1 text-end" style="font-size:0.75rem;">per <?php echo htmlspecialchars($unit); ?></small>
                                             </div>
                                         <?php else: ?>
                                             <div class="fw-bold text-dark" style="font-size:0.95rem;">
@@ -545,18 +546,18 @@ if ($logs_stmt) {
                         </tbody>
                         <tfoot>
                             <tr style="border-top: 2px solid #eaecf0;">
-                                <td colspan="4" class="text-end fw-semibold text-secondary">Subtotal:</td>
-                                <td class="text-end fw-bold text-dark fs-6">
+                                <td colspan="4" class="text-end fw-semibold text-secondary py-2">Subtotal:</td>
+                                <td class="text-end fw-bold text-dark py-2" style="font-size: 1rem;">
                                     &#8369;<span id="display_subtotal"><?php echo number_format($order['subtotal_amount'], 2); ?></span>
                                 </td>
                             </tr>
                             <tr>
-                                <td colspan="4" class="text-end fw-semibold text-secondary align-middle">Delivery / Logistics Fee:</td>
-                                <td class="text-end align-middle">
+                                <td colspan="4" class="text-end fw-semibold text-secondary py-2 align-middle">Delivery / Logistics Fee:</td>
+                                <td class="text-end py-2 align-middle">
                                     <?php if ($is_pending): ?>
-                                        <div class="input-group input-group-sm ms-auto" style="max-width: 140px;">
-                                            <span class="input-group-text fw-bold text-muted bg-light">&#8369;</span>
-                                            <input type="number" step="0.01" min="0" name="delivery_fee" id="supplier_delivery_fee" class="form-control text-end fw-bold" value="<?php echo number_format($order['delivery_fee'], 2, '.', ''); ?>">
+                                        <div class="input-group input-group-sm ms-auto" style="max-width: 150px;">
+                                            <span class="input-group-text fw-bold" style="background:#f8f9fa; color:#101828; border-color:#d0d5dd; font-size:0.95rem;">&#8369;</span>
+                                            <input type="number" step="0.01" min="0" name="delivery_fee" id="supplier_delivery_fee" class="form-control text-end fw-bold" value="<?php echo number_format($order['delivery_fee'], 2, '.', ''); ?>" style="border-color:#d0d5dd; font-size:0.95rem;">
                                         </div>
                                     <?php else: ?>
                                         <span class="fw-bold text-dark">&#8369;<?php echo number_format($order['delivery_fee'], 2); ?></span>
@@ -564,8 +565,8 @@ if ($logs_stmt) {
                                 </td>
                             </tr>
                             <tr style="background:#f8f9fa;">
-                                <td colspan="4" class="text-end fw-bold align-middle" style="font-size:1.05rem; color:#101828;">Grand Total:</td>
-                                <td class="text-end fw-bold align-middle" style="font-size:1.2rem; color:#b3261e;">
+                                <td colspan="4" class="text-end fw-bold py-3 align-middle" style="font-size:1.05rem; color:#101828;">Grand Total:</td>
+                                <td class="text-end fw-bold py-3 align-middle" style="font-size:1.25rem; color:#b3261e;">
                                     &#8369;<span id="display_grand_total"><?php echo number_format($order['total_amount'], 2); ?></span>
                                 </td>
                             </tr>
