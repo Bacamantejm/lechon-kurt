@@ -288,7 +288,89 @@ class IngredientStockManager {
     }
 
     /**
+     * Check if a product has a recipe and calculate its real-time capacity from ingredient stocks.
+     * @return array [
+     *   'has_recipe' => bool,
+     *   'can_make' => bool,
+     *   'yield' => int,
+     *   'depleted_ingredients' => array,
+     *   'limiting_ingredient' => string
+     * ]
+     */
+    public static function getProductIngredientCapacity($conn, $product_id, $store_id = 0) {
+        $p_id = intval($product_id);
+        $store_id = intval($store_id);
+        if ($p_id <= 0 || !$conn) {
+            return [
+                'has_recipe' => false,
+                'can_make' => false,
+                'yield' => 0,
+                'depleted_ingredients' => [],
+                'limiting_ingredient' => ''
+            ];
+        }
+
+        if ($store_id <= 0) {
+            $get_s = mysqli_query($conn, "SELECT seller_id FROM products WHERE id = {$p_id} LIMIT 1");
+            if ($get_s && ($sr = mysqli_fetch_assoc($get_s))) {
+                $store_id = intval($sr['seller_id'] ?? 0);
+            }
+        }
+
+        $bom_q = "
+            SELECT bom.quantity_needed, 
+                   COALESCE(smi.current_stock, m.current_stock, 0) as effective_stock,
+                   m.name as material_name
+            FROM bill_of_materials bom
+            INNER JOIN materials m ON m.id = bom.material_id
+            LEFT JOIN store_material_inventory smi ON smi.material_id = bom.material_id AND smi.store_id = {$store_id}
+            WHERE bom.product_id = {$p_id}";
+
+        $bom_res = mysqli_query($conn, $bom_q);
+        if (!$bom_res || mysqli_num_rows($bom_res) === 0) {
+            return [
+                'has_recipe' => false,
+                'can_make' => false,
+                'yield' => 0,
+                'depleted_ingredients' => [],
+                'limiting_ingredient' => ''
+            ];
+        }
+
+        $can_make = true;
+        $depleted = [];
+        $min_yield = PHP_INT_MAX;
+        $limiting_ing = '';
+
+        while ($b = mysqli_fetch_assoc($bom_res)) {
+            $needed = max(1.0, floatval($b['quantity_needed']));
+            $have = max(0.0, floatval($b['effective_stock']));
+            $possible = (int)floor($have / $needed);
+            if ($possible < $min_yield) {
+                $min_yield = $possible;
+                $limiting_ing = $b['material_name'];
+            }
+            if ($have < $needed || $have <= 0) {
+                $can_make = false;
+                $depleted[] = $b['material_name'];
+            }
+        }
+
+        if ($min_yield === PHP_INT_MAX) $min_yield = 0;
+        $min_yield = max(0, $min_yield);
+
+        return [
+            'has_recipe' => true,
+            'can_make' => ($can_make && $min_yield > 0),
+            'yield' => $min_yield,
+            'depleted_ingredients' => $depleted,
+            'limiting_ingredient' => $limiting_ing
+        ];
+    }
+
+    /**
      * Re-evaluate and sync availability status for all products belonging to a store.
+     * If a product has no ingredients in bill_of_materials, it is marked is_available = 0 and stock = 0.
      * If any required ingredient is out of stock (current_stock <= 0 or < quantity_needed),
      * the product is automatically marked is_available = 0 and stock = 0.
      * When ingredients are restocked, products are automatically marked is_available = 1
@@ -336,7 +418,16 @@ class IngredientStockManager {
 
             $has_recipe = (mysqli_num_rows($bom_res) > 0);
             if (!$has_recipe) {
-                // Products without recipe keep their standard stock
+                // When shop owner hasn't configured ingredients yet, the product must NOT be available
+                mysqli_query($conn, "UPDATE products SET stock = 0, is_available = 0 WHERE id = {$p_id}");
+
+                // Update today's inventory row to 0
+                $chk_inv = mysqli_query($conn, "SELECT id FROM inventory WHERE product_id = {$p_id} AND inventory_date = '{$today_str}' AND is_archived = 0 LIMIT 1");
+                if ($chk_inv && ($inv_r = mysqli_fetch_assoc($chk_inv))) {
+                    mysqli_query($conn, "UPDATE inventory SET current_stock = 0, last_updated = NOW() WHERE id = " . (int)$inv_r['id']);
+                } else {
+                    mysqli_query($conn, "INSERT INTO inventory (product_id, inventory_date, current_stock, min_stock_level, last_updated) VALUES ({$p_id}, '{$today_str}', 0, 5, NOW())");
+                }
                 continue;
             }
 

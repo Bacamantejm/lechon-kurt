@@ -182,6 +182,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($price == 0) {
                 $price = floatval($product['price']);
             }
+
+            // Check recipe and calculate live capacity from ingredients
+            require_once 'includes/IngredientStockManager.php';
+            $cap = IngredientStockManager::getProductIngredientCapacity($conn, $product_id, $product_seller_id);
+            $has_recipe = (bool)$cap['has_recipe'];
+            $ingredient_capacity = (int)$cap['yield'];
+            $ingredient_can_make = (bool)$cap['can_make'];
+            $depleted_ingredients = (array)$cap['depleted_ingredients'];
             
             mysqli_stmt_close($stmt);
             mysqli_close($conn);
@@ -217,12 +225,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $_SESSION['storefront_seller_id'] = $product_seller_id;
 
-    // Guard: Block if marked unavailable due to ingredient stock depletion
-    if (isset($product_is_available) && (int)$product_is_available === 0) {
-        sendJsonResponse(false, 'This item is currently unavailable because required ingredients are depleted.');
+    // Guard: Block if shop owner hasn't configured ingredients yet
+    if (empty($has_recipe)) {
+        sendJsonResponse(false, 'This item is currently unavailable because recipe ingredients have not been configured yet.');
     }
 
-    // Enforce stock-based maximum (not just hardcoded 20)
+    // Guard: Block if marked unavailable due to ingredient stock depletion
+    if (empty($ingredient_can_make) || $ingredient_capacity <= 0 || (isset($product_is_available) && (int)$product_is_available === 0)) {
+        $dep_msg = !empty($depleted_ingredients) ? ' (Depleted: ' . implode(', ', $depleted_ingredients) . ')' : '';
+        sendJsonResponse(false, 'This item is currently out of stock' . $dep_msg . '.');
+    }
+
+    // Enforce stock-based maximum strictly derived from ingredients
+    $available_stock = min($available_stock, $ingredient_capacity);
     $requested_quantity = $quantity;
     $max_allowed_by_stock = min(20, $available_stock);
     if ($max_allowed_by_stock <= 0) {

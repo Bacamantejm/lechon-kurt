@@ -420,21 +420,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $qty_req = max(1, intval(round(floatval($v))));
                         }
                         if ($mat_id > 0 && $qty_req > 0) {
-                            $sc_q = mysqli_query($conn, "SELECT wholesale_unit_price, unit FROM supplier_catalog WHERE supplier_id = $supplier_id AND material_id = $mat_id LIMIT 1");
-                            $unit_price = 0.0;
                             $unit = 'kg';
-                            if ($sc_q && ($sc_r = mysqli_fetch_assoc($sc_q))) {
-                                $unit_price = floatval($sc_r['wholesale_unit_price']);
-                                $unit = $sc_r['unit'];
-                            } else {
-                                $mat_q = mysqli_query($conn, "SELECT unit, cost_per_unit FROM materials WHERE id = $mat_id LIMIT 1");
-                                if ($mat_q && ($mr = mysqli_fetch_assoc($mat_q))) {
-                                    $unit_price = floatval($mr['cost_per_unit']);
-                                    $unit = $mr['unit'];
-                                }
+                            $mat_q = mysqli_query($conn, "SELECT unit FROM materials WHERE id = $mat_id LIMIT 1");
+                            if ($mat_q && ($mr = mysqli_fetch_assoc($mat_q))) {
+                                $unit = $mr['unit'] ?: 'kg';
                             }
-                            $line_tot = $qty_req * $unit_price;
-                            $subtotal += $line_tot;
+                            // Supplier determines wholesale pricing upon quote
+                            $unit_price = 0.00;
+                            $line_tot = 0.00;
                             if ($ins_item) {
                                 mysqli_stmt_bind_param($ins_item, "iiddsdd", $new_ord_id, $mat_id, $qty_req, $qty_req, $unit, $unit_price, $line_tot);
                                 mysqli_stmt_execute($ins_item);

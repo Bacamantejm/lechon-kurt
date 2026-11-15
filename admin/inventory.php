@@ -273,6 +273,8 @@ function runInventoryAutomation($conn, $target_date, $admin_id) {
                 $summary['errors'][] = 'Unable to sync master product stock/status.';
             }
             mysqli_stmt_close($sync_stmt);
+            require_once dirname(__DIR__) . '/includes/IngredientStockManager.php';
+            IngredientStockManager::syncProductAvailabilityForStore($conn, 0);
         } else {
             $summary['errors'][] = 'Unable to prepare product sync automation.';
         }
@@ -463,6 +465,8 @@ function runPartnerInventoryAutomation($conn, $target_date, $seller_scope_id, $a
                 $summary['errors'][] = 'Unable to sync scoped product stock/status.';
             }
             mysqli_stmt_close($sync_stmt);
+            require_once dirname(__DIR__) . '/includes/IngredientStockManager.php';
+            IngredientStockManager::syncProductAvailabilityForStore($conn, $seller_scope_id);
         } else {
             $summary['errors'][] = 'Unable to prepare scoped product sync.';
         }
@@ -708,6 +712,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['adjust_stock'])) {
     mysqli_stmt_bind_param($stmt, "isiiisi", $product_id, $adjustment_type, $quantity, $current_stock, $new_stock, $log_notes, $admin_id_for_log);
     mysqli_stmt_execute($stmt);
     mysqli_stmt_close($stmt);
+
+        // Sync all dependent products in store with ingredient stocks
+        require_once dirname(__DIR__) . '/includes/IngredientStockManager.php';
+        $scope_target_store = $seller_scope_id !== null ? (int)$seller_scope_id : 0;
+        IngredientStockManager::syncProductAvailabilityForStore($conn, $scope_target_store);
     
         $_SESSION['success'] = "Stock adjusted successfully.";
     }
@@ -813,6 +822,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_inventory'])) 
                 mysqli_stmt_close($insert_stmt);
             }
         }
+
+        // Sync all dependent products in store with ingredient stocks
+        require_once dirname(__DIR__) . '/includes/IngredientStockManager.php';
+        $scope_target_store = $seller_scope_id !== null ? (int)$seller_scope_id : 0;
+        IngredientStockManager::syncProductAvailabilityForStore($conn, $scope_target_store);
     }
 }
 
@@ -967,6 +981,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_create_inventory
             $summary = count($parts) > 0 ? implode(", ", $parts) : "No rows processed";
 
             if (($created + $restored + $topped_up) > 0) {
+                // Sync all dependent products in store with ingredient stocks
+                require_once dirname(__DIR__) . '/includes/IngredientStockManager.php';
+                $scope_target_store = $seller_scope_id !== null ? (int)$seller_scope_id : 0;
+                IngredientStockManager::syncProductAvailabilityForStore($conn, $scope_target_store);
+
                 $_SESSION['success'] = "Bulk inventory completed: " . $summary . ".";
             } else {
                 $_SESSION['error'] = "No inventory rows were created: " . $summary . ".";
@@ -1080,6 +1099,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_min_stock'])) 
             mysqli_stmt_close($update_stmt);
         }
     }
+}
+
+// Auto-sync products availability and ingredient-derived stock for today
+if ($selected_date === date('Y-m-d')) {
+    require_once dirname(__DIR__) . '/includes/IngredientStockManager.php';
+    IngredientStockManager::syncProductAvailabilityForStore($conn, $seller_scope_id !== null ? (int)$seller_scope_id : 0);
 }
 
 // Get filter
@@ -1895,15 +1920,16 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
                                         if ($calc_yield === PHP_INT_MAX) $calc_yield = 0;
                                         $daily_stock = max(0, $calc_yield);
                                     } else {
-                                        $daily_stock = (int)$inv['daily_stock'];
+                                        // Product stock strictly depends on raw ingredients. If no recipe is configured, stock is 0 and item is unavailable!
+                                        $daily_stock = 0;
                                     }
 
                                     $min_level = (int)$inv['min_stock_level'];
                                     
-                                    // Status is based on whole number daily stock
-                                    if (!$inv['has_inventory'] && !$has_recipe) {
-                                        $status_badge = '<span class="status-badge badge-info">Not Tracked</span>';
-                                        $status_color = 'info';
+                                    // Status is strictly based on ingredient availability and whole number yield
+                                    if (!$has_recipe) {
+                                        $status_badge = '<span class="status-badge badge-danger" style="background:#fee4e2; color:#b3261e; border:1px solid #fecdca;"><i class="fas fa-exclamation-triangle me-1"></i>No Ingredients</span>';
+                                        $status_color = 'danger';
                                     } elseif ($daily_stock <= 0) {
                                         $status_badge = '<span class="status-badge badge-danger">Out of Stock</span>';
                                         $status_color = 'danger';
@@ -1943,7 +1969,7 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
                                             echo "<small class='d-block text-success mt-1' style='font-size:11px;'><i class='fas fa-check-circle'></i> Limit: {$limiting_ingredient}</small>";
                                         }
                                     } else {
-                                        echo "<small class='d-block text-muted mt-1' style='font-size:11px;'><i class='fas fa-info-circle'></i> Manual Stock</small>";
+                                        echo "<small class='d-block text-danger mt-1 fw-bold' style='font-size:11px;'><i class='fas fa-ban'></i> Needs Ingredients Setup</small>";
                                     }
 
                                     echo "
@@ -1951,8 +1977,8 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
                                         <td>{$min_level} units</td>
                                         <td>$status_badge</td>
                                         <td>
-                                            <button type='button' class='btn btn-sm " . ($has_recipe ? 'btn-outline-secondary' : 'btn-outline-danger') . "' onclick='openProductRecipeModal({$recipe_json})' style='font-size:12px; font-weight:600;'>
-                                                <i class='fas fa-layer-group me-1'></i> " . ($has_recipe ? "Recipe (" . count($recipe) . " items)" : "+ Link Ingredients") . "
+                                            <button type='button' class='btn btn-sm " . ($has_recipe ? 'btn-outline-secondary' : 'btn-danger text-white') . "' onclick='openProductRecipeModal({$recipe_json})' style='font-size:12px; font-weight:600;'>
+                                                <i class='fas fa-layer-group me-1'></i> " . ($has_recipe ? "Recipe (" . count($recipe) . " items)" : "+ Link Ingredients First") . "
                                             </button>
                                         </td>
                                         <td>";

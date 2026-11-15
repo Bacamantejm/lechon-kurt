@@ -540,6 +540,7 @@ if ($sales_result) {
     }
 }
 $query = "SELECT p.*, COALESCE(i.current_stock, p.stock) as stock,
+                 (SELECT COUNT(*) FROM bill_of_materials bom WHERE bom.product_id = p.id) as bom_count,
                  COALESCE(NULLIF(TRIM(u.business_name), ''), NULLIF(TRIM(u.full_name), ''), '') AS store_name
           FROM products p 
           LEFT JOIN inventory i ON p.id = i.product_id AND i.inventory_date = CURDATE() AND i.is_archived = 0
@@ -648,8 +649,9 @@ if (mysqli_num_rows($result) > 0) {
             'category' => $category,
             'general_weight' => $product['weight_info'],
             'general_pax' => $product['pax_info'],
-            'stock' => (isset($product['is_available']) && (int)$product['is_available'] === 0) ? 0 : ($product['stock'] ?? 0),
-            'is_available' => isset($product['is_available']) ? (int)$product['is_available'] : 1,
+            'has_bom' => ((int)($product['bom_count'] ?? 0) > 0),
+            'stock' => (((int)($product['bom_count'] ?? 0) > 0) && (!isset($product['is_available']) || (int)$product['is_available'] !== 0)) ? max(0, (int)($product['stock'] ?? 0)) : 0,
+            'is_available' => (((int)($product['bom_count'] ?? 0) > 0) && (!isset($product['is_available']) || (int)$product['is_available'] === 1) && (int)($product['stock'] ?? 0) > 0) ? 1 : 0,
             'avg_rating' => $product['avg_rating'] ?? 0,
             'review_count' => $product['review_count'] ?? 0,
             'total_sold' => $total_sold_map[(int)$product['id']] ?? 0
@@ -1881,7 +1883,7 @@ $curr_store_status_note = $curr_store_avail ? ($curr_store_avail['note'] ?? '') 
     ?>
                         <?php if ($item['stock'] <= 0): ?>
                             <div class="item-sold-out-overlay">
-                                <span>Sold Out</span>
+                                <span><?php echo empty($item['has_bom']) ? 'Unavailable' : 'Sold Out'; ?></span>
                             </div>
                         <?php endif; ?>
                         
@@ -1952,7 +1954,7 @@ $curr_store_status_note = $curr_store_avail ? ($curr_store_avail['note'] ?? '') 
                                     </span>
                                 <?php else: ?>
                                     <span style="font-size: 0.72rem; font-weight: 700; color: #b3261e; background: #fff1f0; border: 1px solid #fee4e2; padding: 2px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
-                                        <i class="fas fa-ban"></i> Currently Sold Out
+                                        <i class="fas fa-ban"></i> <?php echo empty($item['has_bom']) ? 'Unavailable (Recipe Pending)' : 'Currently Sold Out'; ?>
                                     </span>
                                 <?php endif; ?>
                             </div>

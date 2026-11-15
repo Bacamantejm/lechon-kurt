@@ -842,87 +842,114 @@ if (empty($product_decisions)) {
 
         .products-page .products-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
-            gap: 16px;
+            grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+            gap: 12px;
         }
 
         .products-page .product-card {
-            border: 1px solid #e8edf3;
-            border-radius: 16px;
+            border: 1px solid #eaecf0;
+            border-radius: 12px;
             overflow: hidden;
             background: #fff;
-            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.05);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
             display: flex;
             flex-direction: column;
         }
 
         .products-page .product-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(16, 24, 40, 0.08);
         }
 
         .products-page .product-image {
             position: relative;
+            width: 100%;
+            height: 130px !important;
             border-radius: 0 !important;
-            background: linear-gradient(160deg, #fff6f6, #ffffff) !important;
+            background: #f8f9fa !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
         }
 
         .products-page .product-header {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            gap: 8px;
-            padding: 12px 14px 8px;
-            border-bottom: 1px dashed #e8edf3;
+            align-items: flex-start;
+            gap: 6px;
+            padding: 8px 10px 6px;
+            border-bottom: 1px dashed #eaecf0;
         }
 
         .products-page .product-header h5 {
             margin: 0;
-            font-size: 1rem;
+            font-size: 0.88rem;
             font-weight: 700;
-            color: #111827;
+            color: #101828;
+            line-height: 1.25;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }
 
         .products-page .product-body {
-            padding: 12px 14px;
+            padding: 8px 10px;
             display: grid;
-            gap: 6px;
+            gap: 4px;
         }
 
         .products-page .product-category {
             margin: 0;
-            color: #6b7280;
-            font-size: 0.84rem;
-            font-weight: 600;
+            color: #475467;
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
         }
 
         .products-page .product-price {
             margin: 0;
-            color: #c62828;
+            color: #b3261e;
             font-weight: 800;
-            font-size: 1.08rem;
+            font-size: 1rem;
         }
 
         .products-page .product-info {
             margin: 0;
-            color: #475569;
-            font-size: 0.88rem;
+            color: #475467;
+            font-size: 0.78rem;
+            display: flex;
+            align-items: center;
+            gap: 4px;
         }
 
         .products-page .product-footer {
             margin-top: auto;
-            padding: 12px 14px 14px;
-            border-top: 1px solid #edf2f7;
+            padding: 8px 10px;
+            border-top: 1px solid #eaecf0;
             display: flex;
             align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
+            gap: 4px;
+            flex-wrap: nowrap;
         }
 
         .products-page .product-footer form {
             display: inline-flex !important;
             align-items: center;
+            gap: 4px;
+            margin: 0;
+        }
+
+        .products-page .product-footer .btn {
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            border-radius: 6px;
+            font-weight: 600;
+            line-height: 1.2;
+        }
             gap: 8px;
         }
 
@@ -1100,12 +1127,12 @@ if (empty($product_decisions)) {
                             
                             echo "
                             <div class='product-card'>
-                                <div class='product-image' style='width: 100%; height: 200px; background-color: #f5f5f5; border-radius: 8px 8px 0 0; display: flex; align-items: center; justify-content: center; overflow: hidden;'>";
+                                <div class='product-image' style='width: 100%; height: 130px; background-color: #f8f9fa; display: flex; align-items: center; justify-content: center; overflow: hidden;'>";
                             
                             if (!empty($product['image']) && file_exists('../' . $product['image'])) {
                                 echo "<img src='../" . htmlspecialchars($product['image']) . "' alt='" . htmlspecialchars($product['name']) . "' style='width: 100%; height: 100%; object-fit: cover;'>";
                             } else {
-                                echo "<div style='text-align: center; color: #999;'><i class='fas fa-image' style='font-size: 48px;'></i><p>No Image</p></div>";
+                                echo "<div style='text-align: center; color: #999;'><i class='fas fa-image' style='font-size: 32px;'></i><p class='small m-0 mt-1'>No Image</p></div>";
                             }
                             
                             echo "</div>
@@ -1117,20 +1144,20 @@ if (empty($product_decisions)) {
                                 <div class='product-body'>
                                     <p class='product-category'>" . htmlspecialchars($product['category']) . "</p>
                                     <p class='product-price'>&#8369;" . number_format($product['price'], 2) . "</p>
-                                    <p class='product-info'><i class='fas fa-box'></i> Stock Today: {$product['today_stock']}</p>
-                                    " . (isset($product['weight_info']) ? "<p class='product-info'><i class='fas fa-weight'></i> {$product['weight_info']}</p>" : "") . "
-                                    " . (isset($product['pax_info']) ? "<p class='product-info'><i class='fas fa-users'></i> {$product['pax_info']}</p>" : "") . "
-                                    " . (isset($product['lead_time_hours']) ? "<p class='product-info'><i class='fas fa-clock'></i> {$product['lead_time_hours']} hrs lead time</p>" : "") . "
+                                    <p class='product-info'><i class='fas fa-box text-muted'></i> Stock Today: {$product['today_stock']}</p>
+                                    " . (isset($product['weight_info']) && $product['weight_info'] !== '' ? "<p class='product-info'><i class='fas fa-weight text-muted'></i> {$product['weight_info']}</p>" : "") . "
+                                    " . (isset($product['pax_info']) && $product['pax_info'] !== '' ? "<p class='product-info'><i class='fas fa-users text-muted'></i> {$product['pax_info']}</p>" : "") . "
+                                    " . (isset($product['lead_time_hours']) && $product['lead_time_hours'] > 0 ? "<p class='product-info'><i class='fas fa-clock text-muted'></i> {$product['lead_time_hours']} hrs lead time</p>" : "") . "
                                 </div>
                                 
                                 <div class='product-footer'>
-                                    <button type='button' class='btn btn-sm btn-primary me-1' onclick='openEditModal(" . htmlspecialchars(json_encode($product), ENT_QUOTES, 'UTF-8') . ")'>
+                                    <button type='button' class='btn btn-sm text-white' style='background:#b3261e; border:1px solid #b3261e; flex:1;' onclick='openEditModal(" . htmlspecialchars(json_encode($product), ENT_QUOTES, 'UTF-8') . ")'>
                                         <i class='fas fa-edit'></i> Edit
                                     </button>
-                                    <form method='POST' id='toggleForm{$product['id']}' style='display:inline;'>
+                                    <form method='POST' id='toggleForm{$product['id']}' style='display:inline; flex:1;'>
                                         <input type='hidden' name='product_id' value='{$product['id']}'>
                                         <input type='hidden' name='toggle_product' value='1'>
-                                        <button type='button' onclick='confirmToggle({$product['id']}, {$product['is_active']})' class='btn btn-sm btn-" . ($product['is_active'] ? 'warning' : 'success') . " me-1'>
+                                        <button type='button' onclick='confirmToggle({$product['id']}, {$product['is_active']})' class='btn btn-sm btn-outline-secondary w-100'>
                                             <i class='fas fa-" . ($product['is_active'] ? 'eye-slash' : 'eye') . "'></i>
                                             " . ($product['is_active'] ? 'Hide' : 'Show') . "
                                         </button>
@@ -1138,7 +1165,7 @@ if (empty($product_decisions)) {
                                     <form method='POST' id='archiveForm{$product['id']}' style='display:inline;'>
                                         <input type='hidden' name='product_id' value='{$product['id']}'>
                                         <input type='hidden' name='archive_product' value='1'>
-                                        <button type='button' onclick='confirmArchive({$product['id']})' class='btn btn-sm btn-danger' title='Archive Product'>
+                                        <button type='button' onclick='confirmArchive({$product['id']})' class='btn btn-sm btn-outline-danger' title='Archive Product'>
                                             <i class='fas fa-trash'></i>
                                         </button>
                                     </form>
