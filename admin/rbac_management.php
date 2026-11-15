@@ -24,20 +24,17 @@ if (!$is_partner_scoped_admin && !$is_super_admin_user) {
 }
 
 function rbacCanDeleteRole($role, $current_user_id, $is_partner_scoped_admin, $partner_scope_owner_id) {
-    if (!$role || rbacIsSystemRoleName($role['name'] ?? '')) {
+    if (!$role) {
+        return false;
+    }
+    $role_name = strtolower(trim((string)($role['name'] ?? '')));
+    if (in_array($role_name, ['super_admin', 'business_owner'], true)) {
         return false;
     }
 
     if ($is_partner_scoped_admin) {
-        if ((int)($role['owner_user_id'] ?? 0) !== (int)$partner_scope_owner_id) {
-            return false;
-        }
-    }
-
-    $creator_id = (int)($role['created_by_user_id'] ?? 0);
-    if ($creator_id > 0 && $creator_id !== (int)$current_user_id) {
-        // If current user is the partner owner, allow deleting store roles
-        if (!$is_partner_scoped_admin || (int)$current_user_id !== (int)$partner_scope_owner_id) {
+        $owner_id = (int)($role['owner_user_id'] ?? 0);
+        if ($owner_id > 0 && $owner_id !== (int)$partner_scope_owner_id) {
             return false;
         }
     }
@@ -81,6 +78,18 @@ if (!rbacTableExists($conn, 'partner_user_links')) {
         KEY `idx_managed_user_id` (`managed_user_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 }
+if (!rbacTableExists($conn, 'partner_hidden_roles')) {
+    @mysqli_query($conn, "CREATE TABLE IF NOT EXISTS `partner_hidden_roles` (
+        `id` int(11) NOT NULL AUTO_INCREMENT,
+        `owner_user_id` int(11) NOT NULL,
+        `role_id` int(11) NOT NULL,
+        `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+        PRIMARY KEY (`id`),
+        UNIQUE KEY `unique_owner_role` (`owner_user_id`, `role_id`),
+        KEY `idx_owner_user_id` (`owner_user_id`),
+        KEY `idx_role_id` (`role_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
 
 function rbacRoleBelongsToPartner($conn, $role_id, $owner_user_id) {
     $role_id = (int)$role_id;
@@ -119,6 +128,13 @@ function rbacRoleBelongsToPartner($conn, $role_id, $owner_user_id) {
     if ($role_owner <= 0) {
         $allowed_templates = ['driver', 'hr_manager', 'operations_manager', 'finance_manager', 'inventory_manager', 'viewer'];
         if (!in_array($r_name, $allowed_templates, true)) {
+            return false;
+        }
+    }
+    // If role has been hidden by this store owner, deny
+    if ($owner_user_id > 0 && rbacTableExists($conn, 'partner_hidden_roles')) {
+        $hidden_check = mysqli_query($conn, "SELECT 1 FROM partner_hidden_roles WHERE owner_user_id = {$owner_user_id} AND role_id = {$role_id} LIMIT 1");
+        if ($hidden_check && mysqli_num_rows($hidden_check) > 0) {
             return false;
         }
     }
@@ -663,17 +679,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         continue;
                     }
 
-                    // Check if role is assigned to users
-                    $assigned_stmt = mysqli_prepare($conn, "SELECT COUNT(*) AS assigned_count FROM users WHERE role_id = ?");
+                    // Check if role is assigned to users in this store/partner scope
                     $assigned_count = 0;
-                    if ($assigned_stmt) {
-                        mysqli_stmt_bind_param($assigned_stmt, "i", $role_id);
-                        if (mysqli_stmt_execute($assigned_stmt)) {
-                            $assigned_res = mysqli_stmt_get_result($assigned_stmt);
-                            $assigned_row = $assigned_res ? mysqli_fetch_assoc($assigned_res) : null;
-                            $assigned_count = (int)($assigned_row['assigned_count'] ?? 0);
+                    if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
+                        $assigned_stmt = mysqli_prepare($conn, "SELECT COUNT(*) AS assigned_count FROM users u 
+                            LEFT JOIN employees e ON u.id = e.user_id 
+                            WHERE u.role_id = ? 
+                              AND (
+                                  u.created_by = ? 
+                                  OR e.created_by = ? 
+                                  OR e.store_id IN (SELECT store_id FROM store_locations WHERE owner_user_id = ?)
+                              )");
+                        if ($assigned_stmt) {
+                            mysqli_stmt_bind_param($assigned_stmt, "iiii", $role_id, $partner_scope_owner_id, $partner_scope_owner_id, $partner_scope_owner_id);
+                            if (mysqli_stmt_execute($assigned_stmt)) {
+                                $assigned_res = mysqli_stmt_get_result($assigned_stmt);
+                                $assigned_row = $assigned_res ? mysqli_fetch_assoc($assigned_res) : null;
+                                $assigned_count = (int)($assigned_row['assigned_count'] ?? 0);
+                            }
+                            mysqli_stmt_close($assigned_stmt);
                         }
-                        mysqli_stmt_close($assigned_stmt);
+                    } else {
+                        $assigned_stmt = mysqli_prepare($conn, "SELECT COUNT(*) AS assigned_count FROM users WHERE role_id = ?");
+                        if ($assigned_stmt) {
+                            mysqli_stmt_bind_param($assigned_stmt, "i", $role_id);
+                            if (mysqli_stmt_execute($assigned_stmt)) {
+                                $assigned_res = mysqli_stmt_get_result($assigned_stmt);
+                                $assigned_row = $assigned_res ? mysqli_fetch_assoc($assigned_res) : null;
+                                $assigned_count = (int)($assigned_row['assigned_count'] ?? 0);
+                            }
+                            mysqli_stmt_close($assigned_stmt);
+                        }
                     }
 
                     if ($assigned_count > 0) {
@@ -693,22 +729,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $deleted_names = [];
                         foreach ($roles_to_delete as $role_item) {
                             $del_id = (int)$role_item['id'];
-                            $perm_del_stmt = mysqli_prepare($conn, "DELETE FROM role_permissions WHERE role_id = ?");
-                            if ($perm_del_stmt) {
-                                mysqli_stmt_bind_param($perm_del_stmt, "i", $del_id);
-                                mysqli_stmt_execute($perm_del_stmt);
-                                mysqli_stmt_close($perm_del_stmt);
-                            }
+                            $owner_id = (int)($role_item['owner_user_id'] ?? 0);
 
-                            $role_del_stmt = mysqli_prepare($conn, "DELETE FROM roles WHERE id = ?");
-                            if ($role_del_stmt) {
-                                mysqli_stmt_bind_param($role_del_stmt, "i", $del_id);
-                                mysqli_stmt_execute($role_del_stmt);
-                                mysqli_stmt_close($role_del_stmt);
+                            if ($is_partner_scoped_admin && $partner_scope_owner_id > 0 && $owner_id === 0) {
+                                // Base template role: hide/remove for this store owner scope
+                                $hide_stmt = mysqli_prepare($conn, "INSERT IGNORE INTO partner_hidden_roles (owner_user_id, role_id) VALUES (?, ?)");
+                                if ($hide_stmt) {
+                                    mysqli_stmt_bind_param($hide_stmt, "ii", $partner_scope_owner_id, $del_id);
+                                    mysqli_stmt_execute($hide_stmt);
+                                    mysqli_stmt_close($hide_stmt);
+                                }
+                                logRBACAction($conn, $current_user_id, 'ROLE_REMOVED_FROM_STORE', 'roles', "Removed template role {$role_item['name']} (ID {$del_id}) from store {$partner_scope_owner_id}");
+                            } else {
+                                // Custom role: permanently delete
+                                $perm_del_stmt = mysqli_prepare($conn, "DELETE FROM role_permissions WHERE role_id = ?");
+                                if ($perm_del_stmt) {
+                                    mysqli_stmt_bind_param($perm_del_stmt, "i", $del_id);
+                                    mysqli_stmt_execute($perm_del_stmt);
+                                    mysqli_stmt_close($perm_del_stmt);
+                                }
+
+                                $role_del_stmt = mysqli_prepare($conn, "DELETE FROM roles WHERE id = ?");
+                                if ($role_del_stmt) {
+                                    mysqli_stmt_bind_param($role_del_stmt, "i", $del_id);
+                                    mysqli_stmt_execute($role_del_stmt);
+                                    mysqli_stmt_close($role_del_stmt);
+                                }
+                                logRBACAction($conn, $current_user_id, 'ROLE_DELETED', 'roles', "Deleted role {$role_item['name']} (ID {$del_id})");
                             }
 
                             $deleted_names[] = rbacRoleDisplayName($role_item['name'] ?? '', $partner_scope_owner_id);
-                            logRBACAction($conn, $current_user_id, 'ROLE_DELETED', 'roles', "Deleted role {$role_item['name']} (ID {$del_id})");
                         }
 
                         mysqli_commit($conn);
@@ -940,10 +990,11 @@ if ($is_partner_scoped_admin) {
                               OR 
                               (owner_user_id IS NULL AND name IN ($base_template_roles_sql))
                           )
+                          AND id NOT IN (SELECT role_id FROM partner_hidden_roles WHERE owner_user_id = ?)
                         ORDER BY name ASC";
         $roles_stmt = mysqli_prepare($conn, $roles_query);
         if ($roles_stmt) {
-            mysqli_stmt_bind_param($roles_stmt, "i", $partner_scope_owner_id);
+            mysqli_stmt_bind_param($roles_stmt, "ii", $partner_scope_owner_id, $partner_scope_owner_id);
             mysqli_stmt_execute($roles_stmt);
             $roles_result = mysqli_stmt_get_result($roles_stmt);
             while ($roles_result && ($role_row = mysqli_fetch_assoc($roles_result))) {
@@ -1694,13 +1745,21 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <h2>Manage Role Permissions</h2>
                     <p class="text-muted mb-4">Select a role to configure its permissions.</p>
                     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                        <div style="flex: 1; min-width: 260px;">
-                            <input type="text" id="roleSearch" class="form-control" placeholder="Search role by name or description..." style="height: 42px; border-radius: 8px;">
+                        <div style="flex: 1; min-width: 240px;">
+                            <input type="text" id="roleSearch" class="form-control" placeholder="Search role by name or description..." style="height: 40px; border-radius: 8px;">
                         </div>
-                        <div id="roleBatchActions" style="display: none;">
-                            <button type="button" class="btn btn-danger d-inline-flex align-items-center gap-2" onclick="confirmDeleteCheckedRoles()" style="background-color: #b3261e; border-color: #b3261e; font-size: 13px; font-weight: 600; padding: 9px 18px; border-radius: 8px; box-shadow: 0 2px 4px rgba(179,38,30,0.2);">
-                                <i class="fas fa-trash-alt"></i> Delete Selected (<span id="deleteRoleCountBadge">0</span>)
+                        <div class="d-flex align-items-center gap-2">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="toggleSelectAllRoleCards(true)" style="font-size: 12px; padding: 6px 12px; border-radius: 6px; font-weight: 500;">
+                                <i class="fas fa-check-square me-1"></i> Select All
                             </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="toggleSelectAllRoleCards(false)" style="font-size: 12px; padding: 6px 12px; border-radius: 6px; font-weight: 500;">
+                                <i class="fas fa-square me-1"></i> Clear
+                            </button>
+                            <div id="roleBatchActions" style="display: none;">
+                                <button type="button" class="btn btn-danger d-inline-flex align-items-center gap-2" onclick="confirmDeleteCheckedRoles()" style="background-color: #b3261e; border-color: #b3261e; font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(179,38,30,0.2);">
+                                    <i class="fas fa-trash-alt"></i> Delete Selected (<span id="deleteRoleCountBadge">0</span>)
+                                </button>
+                            </div>
                         </div>
                     </div>
                     
@@ -1715,7 +1774,6 @@ unset($_SESSION['success'], $_SESSION['error']);
                         
                         foreach ($roles as $role): 
                             $role_id_int = (int)($role['id'] ?? 0);
-                            $can_delete_role = rbacCanDeleteRole($role, $current_user_id, $is_partner_scoped_admin, $partner_scope_owner_id);
                             $role_display_title = rbacRoleDisplayName($role['name'] ?? '', $partner_scope_owner_id);
                         ?>
                             <div class="role-card <?php echo $role_id_int === (int)$selected_role_id ? 'active' : ''; ?>" 
@@ -1725,18 +1783,14 @@ unset($_SESSION['success'], $_SESSION['error']);
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 8px;">
                                     <h3 style="margin: 0; flex: 1;"><?php echo htmlspecialchars($role_display_title); ?></h3>
                                     <div style="display: flex; align-items: center; gap: 6px;">
-                                        <?php if ($can_delete_role): ?>
-                                            <label class="role-check-wrap" onclick="event.stopPropagation();" title="Check to remove <?php echo htmlspecialchars($role_display_title); ?>">
-                                                <input type="checkbox" 
-                                                       class="role-delete-check" 
-                                                       value="<?php echo $role_id_int; ?>" 
-                                                       data-name="<?php echo htmlspecialchars($role_display_title); ?>"
-                                                       onchange="onRoleCheckChange(this, <?php echo $role_id_int; ?>);" 
-                                                       onclick="event.stopPropagation();">
-                                            </label>
-                                        <?php else: ?>
-                                            <span style="font-size: 15px; color: #98a2b3;" title="System Role"><i class="fas fa-shield-alt"></i></span>
-                                        <?php endif; ?>
+                                        <label class="role-check-wrap" onclick="event.stopPropagation();" title="Check to select <?php echo htmlspecialchars($role_display_title); ?>">
+                                            <input type="checkbox" 
+                                                   class="role-delete-check" 
+                                                   value="<?php echo $role_id_int; ?>" 
+                                                   data-name="<?php echo htmlspecialchars($role_display_title); ?>"
+                                                   onchange="onRoleCheckChange(this, <?php echo $role_id_int; ?>);" 
+                                                   onclick="event.stopPropagation();">
+                                        </label>
                                     </div>
                                 </div>
                                 <p style="margin: 0;"><?php echo htmlspecialchars($role['description'] ?? ''); ?></p>
@@ -1744,9 +1798,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                         <?php endforeach; ?>
                     </div>
                     
-                    <?php if ($selected_role && (!in_array(($selected_role['name'] ?? ''), ['super_admin', 'business_owner'], true) || $is_super_admin_user)): 
-                        $selected_can_delete = rbacCanDeleteRole($selected_role, $current_user_id, $is_partner_scoped_admin, $partner_scope_owner_id);
-                    ?>
+                    <?php if ($selected_role && (!in_array(($selected_role['name'] ?? ''), ['super_admin', 'business_owner'], true) || $is_super_admin_user)): ?>
                         <!-- Role Summary -->
                         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
                             <div style="display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap;">
@@ -1756,13 +1808,11 @@ unset($_SESSION['success'], $_SESSION['error']);
                                     </h3>
                                     <p style="margin: 0; opacity: 0.9;"><?php echo htmlspecialchars($selected_role['description']); ?></p>
                                 </div>
-                                <?php if ($selected_can_delete): ?>
-                                    <div>
-                                        <button type="button" class="btn btn-light btn-sm" onclick="confirmDeleteSingleRole(<?php echo (int)$selected_role['id']; ?>, '<?php echo htmlspecialchars(addslashes(rbacRoleDisplayName($selected_role['name'], $partner_scope_owner_id))); ?>')" style="color: #b3261e; font-weight: 600; border: none; padding: 6px 14px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">
-                                            <i class="fas fa-trash-alt me-1"></i> Delete Role
-                                        </button>
-                                    </div>
-                                <?php endif; ?>
+                                <div>
+                                    <button type="button" class="btn btn-light btn-sm" onclick="confirmDeleteSingleRole(<?php echo (int)$selected_role['id']; ?>, '<?php echo htmlspecialchars(addslashes(rbacRoleDisplayName($selected_role['name'], $partner_scope_owner_id))); ?>')" style="color: #b3261e; font-weight: 600; border: none; padding: 6px 14px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">
+                                        <i class="fas fa-trash-alt me-1"></i> Delete Role
+                                    </button>
+                                </div>
                             </div>
                             <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);">
                                 <div style="display: flex; gap: 20px;">
@@ -2356,6 +2406,21 @@ unset($_SESSION['success'], $_SESSION['error']);
                     document.getElementById('permissionsForm').submit();
                 }
             })
+        }
+
+        function toggleSelectAllRoleCards(select) {
+            document.querySelectorAll('.role-delete-check').forEach(cb => {
+                cb.checked = select;
+                const card = document.getElementById('roleCard_' + cb.value);
+                if (card) {
+                    if (select) {
+                        card.classList.add('role-card-checked');
+                    } else {
+                        card.classList.remove('role-card-checked');
+                    }
+                }
+            });
+            updateDeleteSelectedState();
         }
 
         function onRoleCheckChange(checkbox, roleId) {
