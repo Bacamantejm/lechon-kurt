@@ -20,6 +20,23 @@ if (!$is_partner_scoped_admin && !$is_super_admin_user) {
     requirePermission('roles.manage');
 }
 
+function rbacCanDeleteRole($role, $current_user_id, $is_partner_scoped_admin, $partner_scope_owner_id) {
+    if (!$role || rbacIsSystemRoleName($role['name'] ?? '')) {
+        return false;
+    }
+
+    $creator_id = (int)($role['created_by_user_id'] ?? 0);
+    if ($creator_id > 0 && $creator_id !== (int)$current_user_id) {
+        return false;
+    }
+
+    if ($is_partner_scoped_admin && (int)($role['owner_user_id'] ?? 0) !== (int)$partner_scope_owner_id) {
+        return false;
+    }
+
+    return true;
+}
+
 if (empty($_SESSION['csrf_token']) || !is_string($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = function_exists('generateCSRFToken') ? generateCSRFToken() : bin2hex(random_bytes(32));
 }
@@ -41,6 +58,9 @@ function rbacColumnExists($conn, $table_name, $column_name) {
 // Ensure schema columns & tables exist
 if (!rbacColumnExists($conn, 'roles', 'owner_user_id')) {
     @mysqli_query($conn, "ALTER TABLE `roles` ADD COLUMN `owner_user_id` INT NULL DEFAULT NULL AFTER `department_id`");
+}
+if (!rbacColumnExists($conn, 'roles', 'created_by_user_id')) {
+    @mysqli_query($conn, "ALTER TABLE `roles` ADD COLUMN `created_by_user_id` INT NULL DEFAULT NULL AFTER `owner_user_id`");
 }
 if (!rbacTableExists($conn, 'partner_user_links')) {
     @mysqli_query($conn, "CREATE TABLE IF NOT EXISTS `partner_user_links` (
@@ -167,6 +187,22 @@ function rbacIsReservedRoleName($role_name) {
         return true;
     }
     return in_array($role_name, ['super_admin'], true);
+}
+
+function rbacIsSystemRoleName($role_name) {
+    $role_name = strtolower(trim((string)$role_name));
+    return in_array($role_name, [
+        'super_admin',
+        'business_owner',
+        'hr_manager',
+        'operations_manager',
+        'finance_manager',
+        'inventory_manager',
+        'driver',
+        'viewer',
+        'operational_manager',
+        'operations_staff'
+    ], true);
 }
 
 $partner_roles_owner_column_exists = rbacColumnExists($conn, 'roles', 'owner_user_id');
@@ -330,13 +366,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 mysqli_stmt_close($check_stmt);
 
-                // Insert new role with clean slug and owner reference
-                $insert_query = ($has_owner_col && $partner_scope_owner_id > 0)
-                    ? "INSERT INTO roles (name, description, is_active, owner_user_id) VALUES (?, ?, 1, ?)"
-                    : "INSERT INTO roles (name, description, is_active) VALUES (?, ?, 1)";
+                // Insert new role with clean slug, owner scope, and creator reference
+                $has_creator_col = rbacColumnExists($conn, 'roles', 'created_by_user_id');
+                if ($has_owner_col && $partner_scope_owner_id > 0 && $has_creator_col) {
+                    $insert_query = "INSERT INTO roles (name, description, is_active, owner_user_id, created_by_user_id) VALUES (?, ?, 1, ?, ?)";
+                } elseif ($has_owner_col && $partner_scope_owner_id > 0) {
+                    $insert_query = "INSERT INTO roles (name, description, is_active, owner_user_id) VALUES (?, ?, 1, ?)";
+                } elseif ($has_creator_col) {
+                    $insert_query = "INSERT INTO roles (name, description, is_active, created_by_user_id) VALUES (?, ?, 1, ?)";
+                } else {
+                    $insert_query = "INSERT INTO roles (name, description, is_active) VALUES (?, ?, 1)";
+                }
                 $insert_stmt = mysqli_prepare($conn, $insert_query);
-                if ($has_owner_col && $partner_scope_owner_id > 0) {
+                if ($has_owner_col && $partner_scope_owner_id > 0 && $has_creator_col) {
+                    mysqli_stmt_bind_param($insert_stmt, "ssii", $stored_role_name, $role_description, $partner_scope_owner_id, $current_user_id);
+                } elseif ($has_owner_col && $partner_scope_owner_id > 0) {
                     mysqli_stmt_bind_param($insert_stmt, "ssi", $stored_role_name, $role_description, $partner_scope_owner_id);
+                } elseif ($has_creator_col) {
+                    mysqli_stmt_bind_param($insert_stmt, "ssi", $stored_role_name, $role_description, $current_user_id);
                 } else {
                     mysqli_stmt_bind_param($insert_stmt, "ss", $stored_role_name, $role_description);
                 }
@@ -461,15 +508,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             mysqli_begin_transaction($conn);
             try {
-                $insert_role_sql = ($has_owner_col && $partner_scope_owner_id > 0)
-                    ? "INSERT INTO roles (name, description, is_active, owner_user_id) VALUES (?, ?, 1, ?)"
-                    : "INSERT INTO roles (name, description, is_active) VALUES (?, ?, 1)";
+                if ($has_owner_col && $partner_scope_owner_id > 0 && $has_creator_col) {
+                    $insert_role_sql = "INSERT INTO roles (name, description, is_active, owner_user_id, created_by_user_id) VALUES (?, ?, 1, ?, ?)";
+                } elseif ($has_owner_col && $partner_scope_owner_id > 0) {
+                    $insert_role_sql = "INSERT INTO roles (name, description, is_active, owner_user_id) VALUES (?, ?, 1, ?)";
+                } elseif ($has_creator_col) {
+                    $insert_role_sql = "INSERT INTO roles (name, description, is_active, created_by_user_id) VALUES (?, ?, 1, ?)";
+                } else {
+                    $insert_role_sql = "INSERT INTO roles (name, description, is_active) VALUES (?, ?, 1)";
+                }
                 $insert_role_stmt = mysqli_prepare($conn, $insert_role_sql);
                 if (!$insert_role_stmt) {
                     throw new Exception('Unable to prepare clone role insert.');
                 }
-                if ($has_owner_col && $partner_scope_owner_id > 0) {
+                if ($has_owner_col && $partner_scope_owner_id > 0 && $has_creator_col) {
+                    mysqli_stmt_bind_param($insert_role_stmt, "ssii", $stored_clone_name, $clone_role_description, $partner_scope_owner_id, $current_user_id);
+                } elseif ($has_owner_col && $partner_scope_owner_id > 0) {
                     mysqli_stmt_bind_param($insert_role_stmt, "ssi", $stored_clone_name, $clone_role_description, $partner_scope_owner_id);
+                } elseif ($has_creator_col) {
+                    mysqli_stmt_bind_param($insert_role_stmt, "ssi", $stored_clone_name, $clone_role_description, $current_user_id);
                 } else {
                     mysqli_stmt_bind_param($insert_role_stmt, "ss", $stored_clone_name, $clone_role_description);
                 }
@@ -526,6 +583,98 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 header('Location: rbac_management.php?tab=permissions&role_id=' . $source_role_id);
                 exit();
             }
+        }
+
+        // Delete a role that is not a protected system role or assigned to users
+        if ($action === 'delete_role') {
+            $role_id = (int)($_POST['role_id'] ?? 0);
+            $redirect_tab = 'permissions';
+
+            if ($role_id <= 0) {
+                $_SESSION['error'] = 'Invalid role selected.';
+            } else {
+                $has_owner_col = rbacColumnExists($conn, 'roles', 'owner_user_id');
+                $has_creator_col = rbacColumnExists($conn, 'roles', 'created_by_user_id');
+                $role_query = "SELECT id, name, "
+                    . ($has_owner_col ? "owner_user_id" : "NULL AS owner_user_id")
+                    . ", "
+                    . ($has_creator_col ? "created_by_user_id" : "NULL AS created_by_user_id")
+                    . " FROM roles WHERE id = ? LIMIT 1";
+                $role_stmt = mysqli_prepare($conn, $role_query);
+                $role = null;
+                if (!$role_stmt) {
+                    $_SESSION['error'] = 'Unable to prepare role lookup.';
+                } else {
+                    mysqli_stmt_bind_param($role_stmt, "i", $role_id);
+                    if (!mysqli_stmt_execute($role_stmt)) {
+                        $_SESSION['error'] = 'Unable to load the selected role.';
+                    } else {
+                        $role_result = mysqli_stmt_get_result($role_stmt);
+                        $role = $role_result ? mysqli_fetch_assoc($role_result) : null;
+                    }
+                    mysqli_stmt_close($role_stmt);
+                }
+
+                if (!$role && empty($_SESSION['error'])) {
+                    $_SESSION['error'] = 'Selected role no longer exists.';
+                } elseif ($role && !rbacCanDeleteRole($role, $current_user_id, $is_partner_scoped_admin, $partner_scope_owner_id)) {
+                    $_SESSION['error'] = 'You can only delete a custom role that you created.';
+                } elseif ($role) {
+                    $assigned_stmt = mysqli_prepare($conn, "SELECT COUNT(*) AS assigned_count FROM users WHERE role_id = ?");
+                    $assigned_count = 0;
+                    if (!$assigned_stmt) {
+                        $_SESSION['error'] = 'Unable to check whether the role is assigned to users.';
+                    } else {
+                        mysqli_stmt_bind_param($assigned_stmt, "i", $role_id);
+                        if (!mysqli_stmt_execute($assigned_stmt)) {
+                            $_SESSION['error'] = 'Unable to check whether the role is assigned to users.';
+                            $assigned_count = 1;
+                        } else {
+                            $assigned_result = mysqli_stmt_get_result($assigned_stmt);
+                            $assigned_row = $assigned_result ? mysqli_fetch_assoc($assigned_result) : null;
+                            $assigned_count = (int)($assigned_row['assigned_count'] ?? 0);
+                        }
+                        mysqli_stmt_close($assigned_stmt);
+                    }
+
+                    if ($assigned_count > 0) {
+                        $_SESSION['error'] = 'This role cannot be deleted while it is assigned to users. Reassign them first.';
+                    } else {
+                        mysqli_begin_transaction($conn);
+                        try {
+                            $permission_stmt = mysqli_prepare($conn, "DELETE FROM role_permissions WHERE role_id = ?");
+                            if (!$permission_stmt) {
+                                throw new Exception('Unable to prepare role permission cleanup.');
+                            }
+                            mysqli_stmt_bind_param($permission_stmt, "i", $role_id);
+                            if (!mysqli_stmt_execute($permission_stmt)) {
+                                throw new Exception('Unable to remove role permissions.');
+                            }
+                            mysqli_stmt_close($permission_stmt);
+
+                            $delete_stmt = mysqli_prepare($conn, "DELETE FROM roles WHERE id = ?");
+                            if (!$delete_stmt) {
+                                throw new Exception('Unable to prepare role deletion.');
+                            }
+                            mysqli_stmt_bind_param($delete_stmt, "i", $role_id);
+                            if (!mysqli_stmt_execute($delete_stmt) || mysqli_stmt_affected_rows($delete_stmt) !== 1) {
+                                throw new Exception('Unable to delete the selected role.');
+                            }
+                            mysqli_stmt_close($delete_stmt);
+
+                            mysqli_commit($conn);
+                            $_SESSION['success'] = "Role '" . rbacRoleDisplayName($role['name'] ?? '') . "' deleted successfully.";
+                            logRBACAction($conn, $current_user_id, 'ROLE_DELETED', 'roles', "Deleted role {$role['name']} (ID {$role_id})");
+                        } catch (Throwable $e) {
+                            mysqli_rollback($conn);
+                            $_SESSION['error'] = 'Failed to delete role safely: ' . $e->getMessage();
+                        }
+                    }
+                }
+            }
+
+            header("Location: rbac_management.php?tab={$redirect_tab}");
+            exit();
         }
         
         // Assign user to role
@@ -1468,6 +1617,17 @@ unset($_SESSION['success'], $_SESSION['error']);
                                     <span style="font-size: 15px; color: #6b7280;"><i class="fas fa-shield-alt"></i></span>
                                 </div>
                                 <p style="margin: 0 0 8px 0;"><?php echo htmlspecialchars($role['description'] ?? ''); ?></p>
+                                <?php if (rbacCanDeleteRole($role, $current_user_id, $is_partner_scoped_admin, $partner_scope_owner_id)): ?>
+                                    <form method="POST" class="mt-2" onsubmit="return confirm('Delete this role and its permission mappings? This cannot be undone.');" onclick="event.stopPropagation();">
+                                        <input type="hidden" name="action" value="delete_role">
+                                        <input type="hidden" name="role_id" value="<?php echo (int)$role['id']; ?>">
+                                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                                        <input type="hidden" name="return_tab" value="permissions">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="fas fa-trash-alt"></i> Delete Role
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
                             </div>
                         <?php endforeach; ?>
                     </div>
