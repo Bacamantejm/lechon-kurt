@@ -1812,8 +1812,12 @@ include 'includes/header.php';
                                 <p class='product-price'>₱" . number_format($product['price'], 2) . "</p>";
 
                         if (empty($prod_ingredients)) {
-                            echo "<div class='mb-2'><span class='badge' style='background:#fee4e2; color:#b3261e; border:1px solid #fecdca; font-size:11px;'><i class='fas fa-exclamation-circle me-1'></i> No Ingredients Set (Unavailable)</span></div>";
-                            echo "<p class='product-info text-danger fw-bold'><i class='fas fa-ban'></i> Stock: 0 units <span class='text-muted small fw-normal'>(Pending Recipe)</span></p>";
+                            if ($is_product_available === 0 || intval($product['stock']) <= 0) {
+                                echo "<div class='mb-2'><span class='badge bg-danger' style='font-size:11px;'><i class='fas fa-ban me-1'></i> Out of Stock</span></div>";
+                                echo "<p class='product-info text-danger fw-bold'><i class='fas fa-cubes'></i> Stock: 0 units</p>";
+                            } else {
+                                echo "<p class='product-info text-success fw-bold'><i class='fas fa-cubes'></i> Stock: " . intval($product['stock']) . " units</p>";
+                            }
                         } else {
                             if ($is_product_available === 0 || intval($product['stock']) <= 0) {
                                 echo "<div class='mb-2'><span class='badge bg-danger' style='font-size:11px;'><i class='fas fa-ban me-1'></i> Out of Stock (Depleted)</span></div>";
@@ -1955,12 +1959,12 @@ include 'includes/header.php';
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <div>
                                 <strong style="color: #101828;"><i class="fas fa-layer-group text-danger me-1"></i> Recipe &amp; Ingredients Setup</strong>
-                                <span class="badge bg-danger ms-2" style="font-size: 11px;">Required for Menu Availability</span>
+                                <span class="badge bg-secondary ms-2" style="font-size: 11px;">Optional BOM Recipe</span>
                             </div>
-                            <span id="edit_live_recipe_capacity" class="badge bg-secondary fs-6">0 units</span>
+                            <span id="edit_live_recipe_capacity" class="badge bg-secondary fs-6">Direct Stock</span>
                         </div>
                         <p class="text-muted small mb-2" style="font-size: 12px;">
-                            Select the raw ingredients needed to prepare 1 unit/serving of this product. Menu availability and stock are strictly derived from these ingredients. If no ingredients are selected, the product remains unavailable on the menu.
+                            Select the raw ingredients needed to prepare 1 unit/serving of this product. If ingredients are linked, stock is automatically derived from raw materials. If not linked, product uses direct inventory stock.
                         </p>
                         <div class="table-responsive" style="max-height: 240px; overflow-y: auto; border: 1px solid #eaecf0; border-radius: 8px;">
                             <table class="table table-sm align-middle mb-0" style="font-size: 13px;">
@@ -2011,7 +2015,7 @@ include 'includes/header.php';
                             </table>
                         </div>
                         <div id="edit_recipe_alert" class="alert alert-secondary py-2 px-3 small mt-2 mb-0" style="font-size: 12px; border-radius: 8px;">
-                            <i class="fas fa-info-circle me-1"></i> Check the ingredients required for this product. If no ingredients are selected, the product will remain unavailable.
+                            <i class="fas fa-info-circle me-1"></i> Check the ingredients required for this product. If no ingredients are selected, stock is managed directly from inventory.
                         </div>
                     </div>
                 </form>
@@ -2802,18 +2806,27 @@ function recalculateEditModalYield() {
     const stockInput = document.getElementById('edit_stock');
 
     if (selectedCount === 0) {
+        if (stockInput) {
+            stockInput.readOnly = false;
+            stockInput.classList.remove('bg-light');
+            stockInput.title = 'Direct stock quantity entered manually';
+        }
         if (badge) {
-            badge.textContent = '0 units (Unavailable)';
-            badge.className = 'badge bg-danger fs-6';
+            badge.textContent = 'Direct Stock';
+            badge.className = 'badge bg-secondary fs-6';
         }
         if (alertEl) {
-            alertEl.className = 'alert alert-danger py-2 px-3 small mt-2 mb-0';
-            alertEl.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> <strong>No ingredients selected:</strong> This menu item will remain <strong>Unavailable</strong> until ingredients are linked.';
+            alertEl.className = 'alert alert-secondary py-2 px-3 small mt-2 mb-0';
+            alertEl.innerHTML = '<i class="fas fa-info-circle me-1"></i> No recipe ingredients selected. Stock is managed directly (enter stock count above).';
         }
-        if (stockInput) stockInput.value = 0;
     } else {
         const finalYield = (minYield === Infinity || minYield < 0) ? 0 : minYield;
-        if (stockInput) stockInput.value = finalYield;
+        if (stockInput) {
+            stockInput.readOnly = true;
+            stockInput.classList.add('bg-light');
+            stockInput.value = finalYield;
+            stockInput.title = 'Stock is automatically calculated from raw ingredients availability';
+        }
         if (badge) {
             badge.textContent = finalYield + ' units';
             badge.className = (finalYield > 0 ? 'badge bg-success fs-6' : 'badge bg-danger fs-6');

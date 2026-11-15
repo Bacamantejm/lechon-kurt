@@ -225,19 +225,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $_SESSION['storefront_seller_id'] = $product_seller_id;
 
-    // Guard: Block if shop owner hasn't configured ingredients yet
-    if (empty($has_recipe)) {
-        sendJsonResponse(false, 'This item is currently unavailable because recipe ingredients have not been configured yet.');
+    // If recipe is configured, constrain availability and stock strictly by ingredients
+    if ($has_recipe) {
+        if (empty($ingredient_can_make) || $ingredient_capacity <= 0) {
+            $dep_msg = !empty($depleted_ingredients) ? ' (Depleted: ' . implode(', ', $depleted_ingredients) . ')' : '';
+            sendJsonResponse(false, 'This item is currently out of stock' . $dep_msg . '.');
+        }
+        $available_stock = min($available_stock, $ingredient_capacity);
+    } else {
+        // If recipe ingredients have not been configured yet, allow ordering based on existing product stock
+        if (isset($product_is_available) && (int)$product_is_available === 0 && $available_stock <= 0) {
+            sendJsonResponse(false, 'This item is currently out of stock.');
+        }
     }
 
-    // Guard: Block if marked unavailable due to ingredient stock depletion
-    if (empty($ingredient_can_make) || $ingredient_capacity <= 0 || (isset($product_is_available) && (int)$product_is_available === 0)) {
-        $dep_msg = !empty($depleted_ingredients) ? ' (Depleted: ' . implode(', ', $depleted_ingredients) . ')' : '';
-        sendJsonResponse(false, 'This item is currently out of stock' . $dep_msg . '.');
-    }
-
-    // Enforce stock-based maximum strictly derived from ingredients
-    $available_stock = min($available_stock, $ingredient_capacity);
     $requested_quantity = $quantity;
     $max_allowed_by_stock = min(20, $available_stock);
     if ($max_allowed_by_stock <= 0) {

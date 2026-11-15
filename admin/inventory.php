@@ -1920,17 +1920,13 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
                                         if ($calc_yield === PHP_INT_MAX) $calc_yield = 0;
                                         $daily_stock = max(0, $calc_yield);
                                     } else {
-                                        // Product stock strictly depends on raw ingredients. If no recipe is configured, stock is 0 and item is unavailable!
-                                        $daily_stock = 0;
+                                        // If no BOM recipe configured yet, use direct inventory stock
+                                        $daily_stock = max(0, (int)$inv['current_stock']);
                                     }
 
                                     $min_level = (int)$inv['min_stock_level'];
                                     
-                                    // Status is strictly based on ingredient availability and whole number yield
-                                    if (!$has_recipe) {
-                                        $status_badge = '<span class="status-badge badge-danger" style="background:#fee4e2; color:#b3261e; border:1px solid #fecdca;"><i class="fas fa-exclamation-triangle me-1"></i>No Ingredients</span>';
-                                        $status_color = 'danger';
-                                    } elseif ($daily_stock <= 0) {
+                                    if ($daily_stock <= 0) {
                                         $status_badge = '<span class="status-badge badge-danger">Out of Stock</span>';
                                         $status_color = 'danger';
                                     } elseif ($daily_stock <= $min_level) {

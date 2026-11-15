@@ -379,20 +379,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($item_prod_id > 0) {
             $cap = IngredientStockManager::getProductIngredientCapacity($conn, $item_prod_id, $item_seller_id);
-            if (!$cap['has_recipe']) {
-                checkoutFail(
-                    'Item Unavailable',
-                    "The item '{$item_name}' cannot be ordered yet because its raw ingredients have not been registered by the shop owner.",
-                    422
-                );
-            }
-            if (!$cap['can_make'] || $cap['yield'] < $item_qty) {
-                $dep_list = !empty($cap['depleted_ingredients']) ? ' (Depleted: ' . implode(', ', $cap['depleted_ingredients']) . ')' : '';
-                checkoutFail(
-                    'Insufficient Ingredient Stock',
-                    "The item '{$item_name}' cannot be fulfilled due to insufficient raw ingredient stock{$dep_list}. Available quantity: {$cap['yield']}.",
-                    422
-                );
+            if ($cap['has_recipe']) {
+                if (!$cap['can_make'] || $cap['yield'] < $item_qty) {
+                    $dep_list = !empty($cap['depleted_ingredients']) ? ' (Depleted: ' . implode(', ', $cap['depleted_ingredients']) . ')' : '';
+                    checkoutFail(
+                        'Insufficient Ingredient Stock',
+                        "The item '{$item_name}' cannot be fulfilled due to insufficient raw ingredient stock{$dep_list}. Available quantity: {$cap['yield']}.",
+                        422
+                    );
+                }
+            } else {
+                // If recipe is not configured yet, validate against direct product stock
+                $check_stk = mysqli_query($conn, "SELECT stock, is_available FROM products WHERE id = {$item_prod_id} LIMIT 1");
+                if ($check_stk && ($stk_r = mysqli_fetch_assoc($check_stk))) {
+                    $prod_stk = (int)($stk_r['stock'] ?? 0);
+                    $prod_avail = (int)($stk_r['is_available'] ?? 1);
+                    if ($prod_avail === 0 && $prod_stk <= 0) {
+                        checkoutFail(
+                            'Item Out of Stock',
+                            "The item '{$item_name}' is currently out of stock.",
+                            422
+                        );
+                    }
+                    if ($prod_stk > 0 && $prod_stk < $item_qty) {
+                        checkoutFail(
+                            'Insufficient Stock',
+                            "The item '{$item_name}' only has {$prod_stk} unit(s) remaining in stock.",
+                            422
+                        );
+                    }
+                }
             }
         }
     }
