@@ -32,6 +32,7 @@ function calculatePayrollBreakdown($attendance_result, $employee_details) {
     $payroll = [
         'attendance_records' => [],
         'total_hours_worked' => 0,
+        'total_minutes_worked' => 0,
         'late_hours' => 0,
         'overtime_hours' => 0,
         'gross_pay' => 0,
@@ -41,78 +42,174 @@ function calculatePayrollBreakdown($attendance_result, $employee_details) {
         'net_pay' => 0,
         'regular_pay' => 0,
         'overtime_premium' => 0,
-        'hourly_rate' => 0
+        'hourly_rate' => 0,
+        'minute_rate' => 0,
+        'daily_rate' => 0,
+        'rate_basis' => 'daily',
+        'rate_basis_text' => ''
     ];
 
-    $total_hours = 0;
-    $late_hours = 0;
-    $overtime_hours = 0;
-    $daily_hours = 8;
-    $hourly_rate = 0;
+    $daily_hours = 8.0;
+    $daily_minutes = 480.0;
+    $monthly_work_days = 21.75;
 
-    $employment_basis = strtolower(trim((string)($employee_details['employment_basis'] ?? '')));
-    if ($employment_basis === 'monthly') {
-        $monthly_salary = floatval($employee_details['salary'] ?? 0);
-        $hourly_rate = $monthly_salary > 0 ? ($monthly_salary / 21.75) / $daily_hours : 0;
+    $salary = floatval($employee_details['salary'] ?? 0);
+    $daily_rate_raw = floatval($employee_details['daily_rate'] ?? 0);
+    $basis = strtolower(trim((string)($employee_details['employment_basis'] ?? '')));
+
+    $rate_basis_key = 'daily';
+    $eff_daily_rate = 0.0;
+    $eff_monthly_salary = 0.0;
+
+    if ($basis === 'monthly') {
+        $rate_basis_key = 'monthly';
+        $eff_monthly_salary = ($salary > 0) ? $salary : $daily_rate_raw;
+        $eff_daily_rate = ($eff_monthly_salary > 0) ? ($eff_monthly_salary / $monthly_work_days) : 0.0;
+    } elseif ($basis === 'daily') {
+        $rate_basis_key = 'daily';
+        $eff_daily_rate = ($daily_rate_raw > 0) ? $daily_rate_raw : $salary;
+        $eff_monthly_salary = $eff_daily_rate * $monthly_work_days;
     } else {
-        $daily_rate = floatval($employee_details['daily_rate'] ?? 0);
-        $hourly_rate = $daily_rate > 0 ? $daily_rate / $daily_hours : 0;
+        if ($daily_rate_raw > 0 && $salary <= 0) {
+            $rate_basis_key = 'daily';
+            $eff_daily_rate = $daily_rate_raw;
+            $eff_monthly_salary = $eff_daily_rate * $monthly_work_days;
+        } elseif ($salary > 0 && $daily_rate_raw <= 0) {
+            if ($salary <= 2500.0) {
+                $rate_basis_key = 'daily';
+                $eff_daily_rate = $salary;
+                $eff_monthly_salary = $eff_daily_rate * $monthly_work_days;
+            } else {
+                $rate_basis_key = 'monthly';
+                $eff_monthly_salary = $salary;
+                $eff_daily_rate = $eff_monthly_salary / $monthly_work_days;
+            }
+        } else {
+            $eff_daily_rate = max($daily_rate_raw, $salary);
+            $rate_basis_key = 'daily';
+            $eff_monthly_salary = $eff_daily_rate * $monthly_work_days;
+        }
     }
+
+    $hourly_rate = ($eff_daily_rate > 0) ? ($eff_daily_rate / $daily_hours) : 0.0;
+    $minute_rate = ($eff_daily_rate > 0) ? ($eff_daily_rate / $daily_minutes) : 0.0;
+
+    $total_worked_seconds = 0;
+    $total_regular_seconds = 0;
+    $total_overtime_seconds = 0;
+    $late_hours = 0;
+    $days_worked = [];
+    $today_str = date('Y-m-d');
+    $now_time_str = date('H:i:s');
 
     $attendance_records = [];
     while ($attendance_result && ($row = mysqli_fetch_assoc($attendance_result))) {
+        $st = strtolower(trim((string)($row['status'] ?? '')));
+        $hr_st = strtolower(trim((string)($row['hr_status'] ?? '')));
+        if ($st === 'absent' || $hr_st === 'rejected' || $st === 'on_leave') {
+            continue;
+        }
+
+        $check_in_str = trim((string)($row['check_in_time'] ?? ''));
+        if (empty($check_in_str)) {
+            continue;
+        }
+
+        $att_date = $row['attendance_date'];
+        $check_out_str = trim((string)($row['check_out_time'] ?? ''));
+
+        if (empty($check_out_str)) {
+            if ($att_date === $today_str) {
+                $check_out_str = $now_time_str;
+            } else {
+                $check_out_str = date('H:i:s', strtotime($check_in_str . ' +8 hours'));
+            }
+        }
+
         $record = [
-            'date' => $row['attendance_date'],
-            'time_in' => $row['check_in_time'],
-            'time_out' => $row['check_out_time'],
+            'date' => $att_date,
+            'time_in' => $check_in_str,
+            'time_out' => $check_out_str,
             'status' => $row['status'],
             'hours_worked' => 0,
+            'minutes_worked' => 0,
             'is_late' => false,
             'late_minutes' => 0,
             'is_overtime' => false,
             'overtime_hours' => 0
         ];
 
-        if (!empty($row['check_in_time']) && !empty($row['check_out_time'])) {
-            $check_in = new DateTime($row['attendance_date'] . ' ' . $row['check_in_time']);
-            $check_out = new DateTime($row['attendance_date'] . ' ' . $row['check_out_time']);
+        try {
+            $check_in = new DateTime($att_date . ' ' . $check_in_str);
+            $check_out = new DateTime($att_date . ' ' . $check_out_str);
             if ($check_out < $check_in) {
                 $check_out->modify('+1 day');
             }
 
-            $interval = $check_in->diff($check_out);
-            $hours_worked = $interval->h + ($interval->i / 60);
+            $elapsed_secs = max(0, $check_out->getTimestamp() - $check_in->getTimestamp());
 
-            $expected_time = new DateTime($row['attendance_date'] . ' 10:00:00');
-            if ($check_in > $expected_time) {
-                $late_interval = $check_in->diff($expected_time);
-                $record['is_late'] = true;
-                $record['late_minutes'] = abs($late_interval->i + ($late_interval->h * 60));
-                $late_hours += ($record['late_minutes'] / 60);
+            $break_secs = 0;
+            if (!empty($row['break_start'])) {
+                $b_start = new DateTime($att_date . ' ' . $row['break_start']);
+                if (!empty($row['break_end'])) {
+                    $b_end = new DateTime($att_date . ' ' . $row['break_end']);
+                    if ($b_end < $b_start) $b_end->modify('+1 day');
+                    $break_secs = max(0, $b_end->getTimestamp() - $b_start->getTimestamp());
+                } elseif ($att_date === $today_str) {
+                    $now_dt = new DateTime();
+                    if ($now_dt > $b_start) {
+                        $break_secs = max(0, $now_dt->getTimestamp() - $b_start->getTimestamp());
+                    }
+                }
             }
 
-            if ($hours_worked > $daily_hours) {
+            $net_secs = max(0, $elapsed_secs - $break_secs);
+
+            $prev_day_secs = $days_worked[$att_date] ?? 0;
+            $new_day_secs = $prev_day_secs + $net_secs;
+            $days_worked[$att_date] = $new_day_secs;
+
+            $max_reg_day_secs = 8 * 3600;
+            $reg_secs_entry = max(0, min($net_secs, $max_reg_day_secs - $prev_day_secs));
+            $ot_secs_entry = max(0, $net_secs - $reg_secs_entry);
+
+            $total_worked_seconds += $net_secs;
+            $total_regular_seconds += $reg_secs_entry;
+            $total_overtime_seconds += $ot_secs_entry;
+
+            $record['hours_worked'] = round($net_secs / 3600.0, 2);
+            $record['minutes_worked'] = round($net_secs / 60.0, 1);
+            if ($ot_secs_entry > 0) {
                 $record['is_overtime'] = true;
-                $record['overtime_hours'] = $hours_worked - $daily_hours;
-                $overtime_hours += $record['overtime_hours'];
-                $total_hours += $daily_hours;
-            } else {
-                $total_hours += $hours_worked;
+                $record['overtime_hours'] = round($ot_secs_entry / 3600.0, 2);
             }
-            $record['hours_worked'] = $hours_worked;
+        } catch (Exception $e) {
+            continue;
         }
 
         $attendance_records[] = $record;
     }
 
+    $total_worked_mins = $total_worked_seconds / 60.0;
+    $total_regular_mins = $total_regular_seconds / 60.0;
+    $total_overtime_mins = $total_overtime_seconds / 60.0;
+
+    $regular_pay = $total_regular_mins * $minute_rate;
+    $overtime_pay = $total_overtime_mins * ($minute_rate * 1.25);
+
     $payroll['attendance_records'] = $attendance_records;
-    $payroll['total_hours_worked'] = round($total_hours, 2);
+    $payroll['total_hours_worked'] = round($total_worked_seconds / 3600.0, 2);
+    $payroll['total_minutes_worked'] = round($total_worked_mins, 1);
     $payroll['late_hours'] = round($late_hours, 2);
-    $payroll['overtime_hours'] = round($overtime_hours, 2);
+    $payroll['overtime_hours'] = round($total_overtime_seconds / 3600.0, 2);
+    $payroll['daily_rate'] = round($eff_daily_rate, 2);
     $payroll['hourly_rate'] = round($hourly_rate, 2);
-    $payroll['regular_pay'] = round($total_hours * $hourly_rate, 2);
-    $payroll['overtime_pay'] = round($overtime_hours * $hourly_rate * 1.25, 2);
-    $payroll['late_deduction'] = round($late_hours * $hourly_rate, 2);
+    $payroll['minute_rate'] = round($minute_rate, 4);
+    $payroll['rate_basis'] = $rate_basis_key;
+    $payroll['rate_basis_text'] = ($rate_basis_key === 'monthly') ? ('₱' . number_format($eff_monthly_salary, 2) . '/month') : ('₱' . number_format($eff_daily_rate, 2) . '/day');
+    $payroll['regular_pay'] = round($regular_pay, 2);
+    $payroll['overtime_pay'] = round($overtime_pay, 2);
+    $payroll['late_deduction'] = 0.00;
 
     return $payroll;
 }
@@ -201,7 +298,8 @@ mysqli_stmt_close($attendance_stmt);
                         <?php echo date('M d, Y', strtotime($payroll_record['pay_period_start'])); ?> &ndash; <?php echo date('M d, Y', strtotime($payroll_record['pay_period_end'])); ?>
                     </div>
                     <div class="text-muted small mt-1">
-                        Basis: <span class="badge bg-light text-dark border"><?php echo htmlspecialchars(ucfirst((string)($payroll_record['employment_basis'] ?? 'Daily'))); ?></span>
+                        Rate: <span class="badge bg-light text-dark border"><?php echo htmlspecialchars($payroll_breakdown['rate_basis_text'] ?: ucfirst((string)($payroll_record['employment_basis'] ?? 'Daily'))); ?></span>
+                        <div class="small text-muted mt-1">&#8369;<?php echo number_format((float)$payroll_breakdown['hourly_rate'], 2); ?>/hr &bull; &#8369;<?php echo number_format((float)$payroll_breakdown['minute_rate'], 2); ?>/min</div>
                     </div>
                 </div>
             </div>
