@@ -1001,13 +1001,6 @@ unset($_SESSION['success'], $_SESSION['error']);
                             </div>
                             <?php endif; ?>
 
-                            <?php if ($has_website_col): ?>
-                            <div>
-                                <label class="form-label fw-semibold">Website</label>
-                                <input type="text" class="form-control" name="website" maxlength="200" placeholder="https://yourbusiness.com" value="<?php echo htmlspecialchars((string)($business_user['website'] ?? '')); ?>">
-                            </div>
-                            <?php endif; ?>
-
                             <?php if ($has_phone_col): ?>
                             <div>
                                 <label class="form-label fw-semibold">Business Phone</label>
