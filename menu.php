@@ -629,6 +629,7 @@ if (mysqli_num_rows($result) > 0) {
             }
         }
         
+        $live_stock = max(0, (int)($product['stock'] ?? 0));
         $product_info = [
             'id' => $product['id'], // Numeric ID
             'product_id' => $product['product_id'], // String product_id like 'wl-001'
@@ -650,8 +651,8 @@ if (mysqli_num_rows($result) > 0) {
             'general_weight' => $product['weight_info'],
             'general_pax' => $product['pax_info'],
             'has_bom' => ((int)($product['bom_count'] ?? 0) > 0),
-            'stock' => (!isset($product['is_available']) || (int)$product['is_available'] !== 0) ? max(0, (int)($product['stock'] ?? 0)) : 0,
-            'is_available' => (!isset($product['is_available']) || (int)$product['is_available'] === 1) && ((int)($product['stock'] ?? 0) > 0) ? 1 : 0,
+            'stock' => $live_stock,
+            'is_available' => $live_stock > 0 ? 1 : 0,
             'avg_rating' => $product['avg_rating'] ?? 0,
             'review_count' => $product['review_count'] ?? 0,
             'total_sold' => $total_sold_map[(int)$product['id']] ?? 0

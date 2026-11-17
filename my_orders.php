@@ -225,10 +225,19 @@ if (isset($_POST['cancel_order']) && isset($_POST['order_id'])) {
 
     if ($success) {
         $cancellation_id = 0;
-        $cxl_query = "INSERT INTO cancellations (user_id, order_id, reason, other_reason_text, status) VALUES (?, ?, 'Other', ?, 'Cancelled')";
+        $reason_lower = strtolower($reason);
+        $cxl_enum_reason = 'Other';
+        if (strpos($reason_lower, 'change of mind') !== false || strpos($reason_lower, 'no longer needed') !== false) {
+            $cxl_enum_reason = 'Change of mind';
+        } elseif (strpos($reason_lower, 'mistake') !== false || strpos($reason_lower, 'wrong') !== false || strpos($reason_lower, 'duplicate') !== false) {
+            $cxl_enum_reason = 'Wrong order';
+        } elseif (strpos($reason_lower, 'emergency') !== false) {
+            $cxl_enum_reason = 'Emergency';
+        }
+        $cxl_query = "INSERT INTO cancellations (user_id, order_id, reason, other_reason_text, status) VALUES (?, ?, ?, ?, 'Cancelled')";
         $cxl_stmt = mysqli_prepare($conn, $cxl_query);
         if ($cxl_stmt) {
-            mysqli_stmt_bind_param($cxl_stmt, "iis", $user_id, $order_id, $reason);
+            mysqli_stmt_bind_param($cxl_stmt, "iiss", $user_id, $order_id, $cxl_enum_reason, $reason);
             mysqli_stmt_execute($cxl_stmt);
             $cancellation_id = (int)mysqli_insert_id($conn);
             mysqli_stmt_close($cxl_stmt);
@@ -357,10 +366,23 @@ if (isset($_POST['reorder']) && isset($_POST['order_id'])) {
 if (isset($_POST['cancel_preorder']) && isset($_POST['pre_order_id'])) {
     require_once 'preorder_service.php';
     $preorder_service = new PreOrderService($conn);
-    $reason = $_POST['reason'] ?? 'User cancelled';
-    
-    $result = $preorder_service->cancelPreOrder($_POST['pre_order_id'], $reason);
+    $pre_order_id = (int)$_POST['pre_order_id'];
+    $reason = trim((string)($_POST['reason'] ?? ''));
+    if ($reason === '') {
+        $reason = 'User cancelled';
+    }
+
+    $po_record = $preorder_service->getPreOrder($pre_order_id);
+    if (!$po_record || (int)($po_record['user_id'] ?? 0) !== (int)$user_id) {
+        $result = ['success' => false, 'message' => 'Pre-order not found.'];
+    } elseif (strtolower(trim((string)($po_record['reservation_status'] ?? ''))) === 'in_preparation') {
+        $result = ['success' => false, 'message' => 'This pre-order is already being prepared by the kitchen and can no longer be cancelled.'];
+    } else {
+        $result = $preorder_service->cancelPreOrder($pre_order_id, $reason);
+    }
+
     if (isset($_POST['ajax'])) {
+        header('Content-Type: application/json');
         echo json_encode($result);
         exit;
     }
@@ -2044,14 +2066,56 @@ function cancelOrder(orderId, policyMessage = '') {
         title: 'Cancel Order?',
         icon: 'warning',
         html: `
-            ${policyMessage ? `<div class="swal-policy-note">${escapeHtml(policyMessage)}</div>` : ''}
-            <textarea id="cancelReasonInput" class="swal2-textarea" placeholder="Reason for cancellation (optional)"></textarea>
+            ${policyMessage ? `<div class="swal-policy-note" style="margin-bottom:12px;font-size:0.85rem;color:#b54708;background:#fffaeb;border:1px solid #fedf89;border-radius:8px;padding:10px 12px;text-align:left;">${escapeHtml(policyMessage)}</div>` : ''}
+            <div style="text-align:left;margin-bottom:12px;">
+                <label for="cancelReasonPreset" style="display:block;font-size:0.82rem;font-weight:600;color:#344054;margin-bottom:6px;">Reason for Cancellation</label>
+                <select id="cancelReasonPreset" class="swal2-select" style="display:block;width:100%;margin:0;padding:10px 12px;border:1px solid #d0d5dd;border-radius:8px;font-size:0.9rem;color:#101828;background:#ffffff;">
+                    <option value="">-- Select a reason --</option>
+                    <option value="Need to change delivery address / contact details">Need to change delivery address / contact details</option>
+                    <option value="Ordered by mistake / duplicate order">Ordered by mistake / duplicate order</option>
+                    <option value="Need to modify order items or quantities">Need to modify order items or quantities</option>
+                    <option value="Order is taking too long to confirm">Order is taking too long to confirm</option>
+                    <option value="Change of mind / No longer needed">Change of mind / No longer needed</option>
+                    <option value="Found a better price or alternative">Found a better price or alternative</option>
+                    <option value="Other">Other reason (specify below)</option>
+                </select>
+            </div>
+            <div style="text-align:left;">
+                <label for="cancelReasonManual" style="display:block;font-size:0.82rem;font-weight:600;color:#344054;margin-bottom:6px;">Additional Details / Manual Reason</label>
+                <textarea id="cancelReasonManual" class="swal2-textarea" style="display:block;width:100%;margin:0;padding:10px 12px;border:1px solid #d0d5dd;border-radius:8px;font-size:0.9rem;min-height:85px;box-sizing:border-box;" placeholder="Type your reason or provide additional details here..."></textarea>
+            </div>
         `,
         showCancelButton: true,
         confirmButtonColor: '#b3261e',
         cancelButtonColor: '#667085',
         confirmButtonText: 'Confirm Cancel',
-        preConfirm: () => document.getElementById('cancelReasonInput').value.trim()
+        didOpen: () => {
+            const presetEl = document.getElementById('cancelReasonPreset');
+            const manualEl = document.getElementById('cancelReasonManual');
+            if (presetEl && manualEl) {
+                presetEl.addEventListener('change', () => {
+                    if (presetEl.value === 'Other') {
+                        manualEl.focus();
+                    }
+                });
+            }
+        },
+        preConfirm: () => {
+            const preset = (document.getElementById('cancelReasonPreset')?.value || '').trim();
+            const manual = (document.getElementById('cancelReasonManual')?.value || '').trim();
+            if (!preset && !manual) {
+                Swal.showValidationMessage('Please select a reason from the dropdown or enter your reason manually.');
+                return false;
+            }
+            if (preset === 'Other' && !manual) {
+                Swal.showValidationMessage('Please enter your reason in the text box below.');
+                return false;
+            }
+            if (preset && preset !== 'Other' && manual) {
+                return `${preset} - ${manual}`;
+            }
+            return (preset && preset !== 'Other') ? preset : manual;
+        }
     }).then((result) => {
         if (result.isConfirmed) {
             const formData = new FormData();
@@ -2079,17 +2143,64 @@ function cancelOrder(orderId, policyMessage = '') {
 function cancelPreOrder(preOrderId) {
     Swal.fire({
         title: 'Cancel Pre-Order?',
-        text: "Are you sure you want to cancel this pre-order?",
         icon: 'warning',
+        html: `
+            <p style="font-size:0.9rem;color:#475467;margin-bottom:14px;text-align:left;">Please select a reason for cancellation or enter details below.</p>
+            <div style="text-align:left;margin-bottom:12px;">
+                <label for="cancelPreOrderPreset" style="display:block;font-size:0.82rem;font-weight:600;color:#344054;margin-bottom:6px;">Cancellation Reason</label>
+                <select id="cancelPreOrderPreset" class="swal2-select" style="display:block;width:100%;margin:0;padding:10px 12px;border:1px solid #d0d5dd;border-radius:8px;font-size:0.9rem;color:#101828;background:#ffffff;">
+                    <option value="">-- Select a reason --</option>
+                    <option value="Schedule conflict / Unable to pick up on reserved date">Schedule conflict / Unable to pick up on reserved date</option>
+                    <option value="Ordered by mistake / duplicate reservation">Ordered by mistake / duplicate reservation</option>
+                    <option value="Need to change pickup date, time, or items">Need to change pickup date, time, or items</option>
+                    <option value="Reservation taking too long to confirm">Reservation taking too long to confirm</option>
+                    <option value="Event cancelled / Change of mind">Event cancelled / Change of mind</option>
+                    <option value="Found a better price or alternative">Found a better price or alternative</option>
+                    <option value="Other">Other reason (specify below)</option>
+                </select>
+            </div>
+            <div style="text-align:left;">
+                <label for="cancelPreOrderManual" style="display:block;font-size:0.82rem;font-weight:600;color:#344054;margin-bottom:6px;">Additional Details / Manual Reason</label>
+                <textarea id="cancelPreOrderManual" class="swal2-textarea" style="display:block;width:100%;margin:0;padding:10px 12px;border:1px solid #d0d5dd;border-radius:8px;font-size:0.9rem;min-height:85px;box-sizing:border-box;" placeholder="Type your reason or additional details here..."></textarea>
+            </div>
+        `,
         showCancelButton: true,
         confirmButtonColor: '#b3261e',
         cancelButtonColor: '#667085',
-        confirmButtonText: 'Yes, cancel it'
+        confirmButtonText: 'Confirm Cancel',
+        didOpen: () => {
+            const presetEl = document.getElementById('cancelPreOrderPreset');
+            const manualEl = document.getElementById('cancelPreOrderManual');
+            if (presetEl && manualEl) {
+                presetEl.addEventListener('change', () => {
+                    if (presetEl.value === 'Other') {
+                        manualEl.focus();
+                    }
+                });
+            }
+        },
+        preConfirm: () => {
+            const preset = (document.getElementById('cancelPreOrderPreset')?.value || '').trim();
+            const manual = (document.getElementById('cancelPreOrderManual')?.value || '').trim();
+            if (!preset && !manual) {
+                Swal.showValidationMessage('Please select a reason from the dropdown or enter your reason manually.');
+                return false;
+            }
+            if (preset === 'Other' && !manual) {
+                Swal.showValidationMessage('Please enter your reason in the text box below.');
+                return false;
+            }
+            if (preset && preset !== 'Other' && manual) {
+                return `${preset} - ${manual}`;
+            }
+            return (preset && preset !== 'Other') ? preset : manual;
+        }
     }).then((result) => {
         if (result.isConfirmed) {
             const formData = new FormData();
             formData.append('cancel_preorder', 'true');
             formData.append('pre_order_id', preOrderId);
+            formData.append('reason', result.value || '');
             formData.append('ajax', 'true');
             
             fetch('my_orders.php', {
@@ -2099,9 +2210,11 @@ function cancelPreOrder(preOrderId) {
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    Swal.fire('Cancelled', data.message, 'success').then(() => location.reload());
+                    Swal.fire('Cancelled', data.message, 'success').then(() => {
+                        window.location.href = 'my_orders.php?tab=preorders';
+                    });
                 } else {
-                    Swal.fire('Error', data.message, 'error');
+                    Swal.fire('Cannot Cancel', data.message, 'error');
                 }
             });
         }

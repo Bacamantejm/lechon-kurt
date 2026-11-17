@@ -223,9 +223,20 @@ class PayMongoIntegration {
             $session = $result['data']['data'];
             $paymentStatus = 'pending';
             
-            // Check if payment was successful
+            // Check if payment was successful via payments array, payment_intent, or session status
             if (isset($session['attributes']['payments']) && count($session['attributes']['payments']) > 0) {
-                $paymentStatus = $session['attributes']['payments'][0]['attributes']['status'] ?? 'pending';
+                $firstStatus = strtolower((string)($session['attributes']['payments'][0]['attributes']['status'] ?? 'pending'));
+                $paymentStatus = in_array($firstStatus, ['paid', 'succeeded'], true) ? 'paid' : $firstStatus;
+            } elseif (!empty($session['attributes']['payment_intent']['attributes']['status'])) {
+                $intentStatus = strtolower((string)$session['attributes']['payment_intent']['attributes']['status']);
+                if (in_array($intentStatus, ['succeeded', 'paid'], true)) {
+                    $paymentStatus = 'paid';
+                }
+            } elseif (!empty($session['attributes']['status'])) {
+                $sessStatus = strtolower((string)$session['attributes']['status']);
+                if (in_array($sessStatus, ['paid', 'succeeded'], true)) {
+                    $paymentStatus = 'paid';
+                }
             }
             
             return [

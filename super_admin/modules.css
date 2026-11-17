@@ -327,6 +327,13 @@ body.dark-mode .theme-toggler:hover {
     overflow: hidden;
 }
 
+.complaint-latest-message {
+    max-width: 520px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
 /* ------------------------------------------------------------------
    Ops toolbar
    ------------------------------------------------------------------ */

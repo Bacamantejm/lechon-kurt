@@ -72,7 +72,9 @@
                     <div class="ecom-card-bottom">
                         <div class="summary-line">
                             <div class="preorder-pay-status">
-                                <?php if ($preorder['payment_type'] === 'downpayment'): ?>
+                                <?php if ($preorder['reservation_status'] === 'cancelled'): ?>
+                                    <span class="payment-method">Payment Status: <strong style="color: #b3261e;">Cancelled</strong></span>
+                                <?php elseif ($preorder['payment_type'] === 'downpayment'): ?>
                                     <span class="payment-method">
                                         Downpayment: <strong>₱<?php echo number_format($preorder['downpayment_amount'], 2); ?></strong> (<?php echo ucfirst($preorder['downpayment_status']); ?>)
                                         &bull; Balance: <strong>₱<?php echo number_format($preorder['remaining_amount'], 2); ?></strong> (<?php echo ucfirst($preorder['final_payment_status']); ?>)
@@ -92,15 +94,21 @@
                             <div class="action-buttons-group">
                                 <?php 
                                 $can_pay = ($preorder['reservation_status'] !== 'cancelled' && $preorder['reservation_status'] !== 'completed');
+                                $can_cancel = in_array($preorder['reservation_status'], ['pending', 'confirmed'], true);
+                                $is_preparing = ($preorder['reservation_status'] === 'in_preparation');
                                 $needs_downpayment = ($preorder['payment_type'] === 'downpayment' && $preorder['downpayment_status'] !== 'paid');
                                 $needs_final = ($preorder['payment_type'] === 'downpayment' && $preorder['downpayment_status'] === 'paid' && $preorder['final_payment_status'] !== 'paid');
                                 $needs_full = ($preorder['payment_type'] === 'full_payment' && $preorder['final_payment_status'] !== 'paid');
                                 ?>
                                 
-                                <?php if ($can_pay && $preorder['reservation_status'] === 'pending'): ?>
+                                <?php if ($can_cancel): ?>
                                     <button type="button" class="btn-action-outline btn-cancel" onclick="cancelPreOrder(<?php echo $preorder['id']; ?>)">
                                         Cancel Pre-Order
                                     </button>
+                                <?php elseif ($is_preparing): ?>
+                                    <span class="badge" style="background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff; padding: 6px 12px; border-radius: 20px; font-size: 0.78rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+                                        <i class="fas fa-utensils"></i> In Preparation (Cannot be cancelled)
+                                    </span>
                                 <?php endif; ?>
 
                                 <a href="preorder_receipt.php?id=<?php echo $preorder['id']; ?>" class="btn-action-outline" target="_blank" rel="noopener">
@@ -111,7 +119,7 @@
                                     View Details
                                 </a>
 
-                                <?php if ($needs_downpayment || $needs_final || $needs_full): ?>
+                                <?php if ($can_pay && ($needs_downpayment || $needs_final || $needs_full)): ?>
                                     <a href="preorder_payment.php?id=<?php echo $preorder['id']; ?>&type=<?php echo $needs_downpayment ? 'downpayment' : 'full'; ?>" class="btn-action-primary">
                                         Pay Now
                                     </a>

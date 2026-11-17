@@ -138,13 +138,19 @@ try {
                 }
                 
                 // Update order status
-                $update_order = "UPDATE orders SET status = 'confirmed', payment_status = ? WHERE id = ?";
+                $is_partial_downpayment = ((float)($order['downpayment_amount'] ?? 0) > 0 && (float)($order['remaining_balance'] ?? 0) > 0.01);
+                $payment_status = $is_partial_downpayment ? 'partial' : 'paid';
+
+                if ($payment_status === 'paid') {
+                    $update_order = "UPDATE orders SET status = 'confirmed', payment_status = ?, remaining_balance = 0 WHERE id = ?";
+                } else {
+                    $update_order = "UPDATE orders SET status = 'confirmed', payment_status = ? WHERE id = ?";
+                }
                 $update_stmt = mysqli_prepare($conn, $update_order);
                 if (!$update_stmt) {
                     throw new Exception("Database prepare failed: " . mysqli_error($conn));
                 }
                 
-                $payment_status = ($order['downpayment_amount'] > 0) ? 'partial' : 'paid';
                 mysqli_stmt_bind_param($update_stmt, "si", $payment_status, $order_id);
                 
                 if (!mysqli_stmt_execute($update_stmt)) {

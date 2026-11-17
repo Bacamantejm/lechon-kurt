@@ -78,7 +78,7 @@ function ensureInventoryHistoryActionTypes($conn) {
 /**
  * One-click inventory automation:
  * - auto-create missing inventory rows (all non-archived products for today, active products for other dates)
- * - if target date is today, set all product inventory rows to 10 units
+ * - if target date is today, seed only missing product inventory rows at 10 units
  * - otherwise normalize negative stocks to 0 for target date
  * - if target date is today, sync master product stock and active status
  * - send low-stock notification to admins (deduplicated by exact message)
@@ -184,28 +184,8 @@ function runInventoryAutomation($conn, $target_date, $admin_id) {
         $summary['errors'][] = 'Unable to prepare missing inventory automation.';
     }
 
-    // 2) If target date is today, force all product inventory rows to 10 units.
-    // Otherwise, only normalize negative values to 0.
-    if ($target_date === $today) {
-        $seed_today_stmt = mysqli_prepare(
-            $conn,
-            "UPDATE inventory i
-             INNER JOIN products p ON p.id = i.product_id
-             SET i.current_stock = ?, i.last_updated = NOW()
-             WHERE i.inventory_date = ? AND i.is_archived = 0 AND p.is_archived = 0 AND i.current_stock <> ?"
-        );
-        if ($seed_today_stmt) {
-            mysqli_stmt_bind_param($seed_today_stmt, "isi", $default_today_seed_stock, $target_date, $default_today_seed_stock);
-            if (mysqli_stmt_execute($seed_today_stmt)) {
-                $summary['today_seeded'] = mysqli_stmt_affected_rows($seed_today_stmt);
-            } else {
-                $summary['errors'][] = 'Unable to apply 10-unit stock seeding for today.';
-            }
-            mysqli_stmt_close($seed_today_stmt);
-        } else {
-            $summary['errors'][] = 'Unable to prepare today stock seeding.';
-        }
-    } else {
+    // 2) Historical rows may not contain negative stock values.
+    if ($target_date !== $today) {
         $normalize_stmt = mysqli_prepare(
             $conn,
             "UPDATE inventory SET current_stock = 0, last_updated = NOW() WHERE inventory_date = ? AND is_archived = 0 AND current_stock < 0"
@@ -333,7 +313,7 @@ function runInventoryAutomation($conn, $target_date, $admin_id) {
 /**
  * Partner-safe inventory automation (scoped to one seller only):
  * - create missing rows for selected date
- * - set selected-date rows to 10 units
+ * - seed only missing selected-date rows at 10 units
  * - if selected date is today, sync product stock/is_active
  */
 function runPartnerInventoryAutomation($conn, $target_date, $seller_scope_id, $admin_id) {
@@ -397,29 +377,6 @@ function runPartnerInventoryAutomation($conn, $target_date, $seller_scope_id, $a
         mysqli_stmt_close($create_stmt);
     } else {
         $summary['errors'][] = 'Unable to prepare scoped inventory creation.';
-    }
-
-    $seed_stmt = mysqli_prepare(
-        $conn,
-        "UPDATE inventory i
-         INNER JOIN products p ON p.id = i.product_id
-         SET i.current_stock = ?, i.last_updated = NOW()
-         WHERE i.inventory_date = ?
-           AND i.is_archived = 0
-           AND p.is_archived = 0
-           AND p.seller_id = ?
-           AND i.current_stock <> ?"
-    );
-    if ($seed_stmt) {
-        mysqli_stmt_bind_param($seed_stmt, "isii", $seed_stock, $target_date, $seller_scope_id, $seed_stock);
-        if (mysqli_stmt_execute($seed_stmt)) {
-            $summary['today_seeded'] = mysqli_stmt_affected_rows($seed_stmt);
-        } else {
-            $summary['errors'][] = 'Unable to seed scoped inventory rows to 10.';
-        }
-        mysqli_stmt_close($seed_stmt);
-    } else {
-        $summary['errors'][] = 'Unable to prepare scoped stock seeding.';
     }
 
     if ($target_date === $today) {
@@ -713,10 +670,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['adjust_stock'])) {
     mysqli_stmt_execute($stmt);
     mysqli_stmt_close($stmt);
 
-        // Sync all dependent products in store with ingredient stocks
-        require_once dirname(__DIR__) . '/includes/IngredientStockManager.php';
-        $scope_target_store = $seller_scope_id !== null ? (int)$seller_scope_id : 0;
-        IngredientStockManager::syncProductAvailabilityForStore($conn, $scope_target_store);
+        if ($inventory_date === date('Y-m-d')) {
+            $sync_stmt = mysqli_prepare(
+                $conn,
+                "UPDATE products p
+                 INNER JOIN inventory i ON i.product_id = p.id
+                    AND i.inventory_date = ?
+                    AND i.is_archived = 0
+                 SET p.stock = GREATEST(i.current_stock, 0),
+                     p.is_active = CASE WHEN i.current_stock > 0 THEN 1 ELSE 0 END
+                 WHERE p.id = ? AND p.is_archived = 0"
+            );
+            if ($sync_stmt) {
+                mysqli_stmt_bind_param($sync_stmt, "si", $inventory_date, $product_id);
+                mysqli_stmt_execute($sync_stmt);
+                mysqli_stmt_close($sync_stmt);
+            }
+        }
     
         $_SESSION['success'] = "Stock adjusted successfully.";
     }
@@ -823,10 +793,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_inventory'])) 
             }
         }
 
-        // Sync all dependent products in store with ingredient stocks
-        require_once dirname(__DIR__) . '/includes/IngredientStockManager.php';
-        $scope_target_store = $seller_scope_id !== null ? (int)$seller_scope_id : 0;
-        IngredientStockManager::syncProductAvailabilityForStore($conn, $scope_target_store);
+        if ($inventory_date === date('Y-m-d')) {
+            $sync_stmt = mysqli_prepare(
+                $conn,
+                "UPDATE products p
+                 INNER JOIN inventory i ON i.product_id = p.id
+                    AND i.inventory_date = ?
+                    AND i.is_archived = 0
+                 SET p.stock = GREATEST(i.current_stock, 0),
+                     p.is_active = CASE WHEN i.current_stock > 0 THEN 1 ELSE 0 END
+                 WHERE p.id = ? AND p.is_archived = 0"
+            );
+            if ($sync_stmt) {
+                mysqli_stmt_bind_param($sync_stmt, "si", $inventory_date, $product_id);
+                mysqli_stmt_execute($sync_stmt);
+                mysqli_stmt_close($sync_stmt);
+            }
+        }
     }
 }
 
@@ -981,11 +964,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_create_inventory
             $summary = count($parts) > 0 ? implode(", ", $parts) : "No rows processed";
 
             if (($created + $restored + $topped_up) > 0) {
-                // Sync all dependent products in store with ingredient stocks
-                require_once dirname(__DIR__) . '/includes/IngredientStockManager.php';
-                $scope_target_store = $seller_scope_id !== null ? (int)$seller_scope_id : 0;
-                IngredientStockManager::syncProductAvailabilityForStore($conn, $scope_target_store);
-
+                if ($inventory_date === date('Y-m-d')) {
+                    $scope_sql = $seller_scope_id !== null ? " AND p.seller_id = ?" : "";
+                    $sync_sql = "UPDATE products p
+                                 INNER JOIN inventory i ON i.product_id = p.id
+                                    AND i.inventory_date = ?
+                                    AND i.is_archived = 0
+                                 SET p.stock = GREATEST(i.current_stock, 0),
+                                     p.is_active = CASE WHEN i.current_stock > 0 THEN 1 ELSE 0 END
+                                 WHERE p.is_archived = 0{$scope_sql}";
+                    $sync_stmt = mysqli_prepare($conn, $sync_sql);
+                    if ($sync_stmt) {
+                        if ($seller_scope_id !== null) {
+                            mysqli_stmt_bind_param($sync_stmt, "si", $inventory_date, $seller_scope_id);
+                        } else {
+                            mysqli_stmt_bind_param($sync_stmt, "s", $inventory_date);
+                        }
+                        mysqli_stmt_execute($sync_stmt);
+                        mysqli_stmt_close($sync_stmt);
+                    }
+                }
                 $_SESSION['success'] = "Bulk inventory completed: " . $summary . ".";
             } else {
                 $_SESSION['error'] = "No inventory rows were created: " . $summary . ".";
@@ -1008,7 +1006,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['run_inventory_automat
         } else {
             $message = "Partner automation completed for {$automation_date}: " .
                 "{$automation_summary['created_missing']} missing row(s) created, " .
-                "{$automation_summary['today_seeded']} row(s) seeded to 10 units, " .
                 "{$automation_summary['stock_synced']} product stock value(s) synced, " .
                 "{$automation_summary['activated']} product(s) activated, " .
                 "{$automation_summary['deactivated']} product(s) deactivated.";
@@ -1026,7 +1023,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['run_inventory_automat
         } else {
             $message = "Automation completed for {$automation_date}: " .
                 "{$automation_summary['created_missing']} missing row(s) created, " .
-                "{$automation_summary['today_seeded']} row(s) seeded to 10 units for today, " .
                 "{$automation_summary['normalized_negative']} negative stock value(s) fixed, " .
                 "{$automation_summary['stock_synced']} product stock value(s) synced, " .
                 "{$automation_summary['activated']} product(s) activated, " .
@@ -1099,12 +1095,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_min_stock'])) 
             mysqli_stmt_close($update_stmt);
         }
     }
-}
-
-// Auto-sync products availability and ingredient-derived stock for today
-if ($selected_date === date('Y-m-d')) {
-    require_once dirname(__DIR__) . '/includes/IngredientStockManager.php';
-    IngredientStockManager::syncProductAvailabilityForStore($conn, $seller_scope_id !== null ? (int)$seller_scope_id : 0);
 }
 
 // Get filter
