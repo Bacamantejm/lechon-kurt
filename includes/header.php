@@ -3667,14 +3667,54 @@ document.addEventListener('DOMContentLoaded', function () {
             navigator.geolocation.getCurrentPosition(function (position) {
                 resolve(position);
             }, function (error) {
-                // Fallback once with relaxed cache settings if strict fresh lookup fails.
+                // If user or browser explicitly denied permission, fail fast so fallback triggers immediately
+                if (error && error.code === 1) {
+                    reject(error);
+                    return;
+                }
+                // Fallback once with relaxed accuracy and cache settings for desktop/wifi networks
                 navigator.geolocation.getCurrentPosition(function (position) {
                     resolve(position);
                 }, function (fallbackError) {
                     reject(fallbackError || error || new Error('GEO_FAILED'));
-                }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 180000 });
-            }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+                }, { enableHighAccuracy: false, timeout: 6000, maximumAge: 180000 });
+            }, { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 });
         });
+    };
+
+    const fetchIpFallbackLocation = async function () {
+        try {
+            const resp = await fetch('https://ipwho.is/', { signal: AbortSignal.timeout(4000) });
+            if (resp.ok) {
+                const data = await resp.json();
+                if (data && data.success !== false && Number.isFinite(parseFloat(data.latitude)) && Number.isFinite(parseFloat(data.longitude))) {
+                    return {
+                        lat: parseFloat(data.latitude),
+                        lng: parseFloat(data.longitude),
+                        city: data.city || 'Cavite',
+                        region: data.region || '',
+                        isIpFallback: true
+                    };
+                }
+            }
+        } catch (e) {
+            try {
+                const resp2 = await fetch('https://freeipapi.com/api/json', { signal: AbortSignal.timeout(4000) });
+                if (resp2.ok) {
+                    const data2 = await resp2.json();
+                    if (data2 && Number.isFinite(parseFloat(data2.latitude)) && Number.isFinite(parseFloat(data2.longitude))) {
+                        return {
+                            lat: parseFloat(data2.latitude),
+                            lng: parseFloat(data2.longitude),
+                            city: data2.cityName || 'Cavite',
+                            region: data2.regionName || '',
+                            isIpFallback: true
+                        };
+                    }
+                }
+            } catch (e2) {}
+        }
+        return null;
     };
 
     const centerMapAt = function (lat, lng, zoomLevel, shouldReverseLookup) {
@@ -3926,12 +3966,135 @@ document.addEventListener('DOMContentLoaded', function () {
     let headerMap = null;
     let headerMarker = null;
 
+    const saveMarketLocationToUserDatabase = async function(payload) {
+        if (!payload || (!payload.street_address && !payload.full_address)) return;
+        const bodyData = new URLSearchParams();
+        bodyData.append('label', 'Saved Location');
+        bodyData.append('street_address', payload.street_address || payload.full_address);
+        bodyData.append('city_name', payload.city || 'Cavite');
+        bodyData.append('full_address', payload.full_address || payload.street_address);
+        bodyData.append('latitude', String(payload.latitude || ''));
+        bodyData.append('longitude', String(payload.longitude || ''));
+        bodyData.append('is_default', '1');
+
+        try {
+            const apiEndpoint = '<?php echo $path_prefix; ?>api/save_user_address.php';
+            const response = await fetch(apiEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: bodyData
+            });
+            const data = await response.json();
+            if (data && data.success) {
+                if (typeof window.dispatchEvent === 'function') {
+                    window.dispatchEvent(new CustomEvent('marketAddressUpdated', { 
+                        detail: {
+                            ...payload,
+                            address_id: data.saved_address_id || 0,
+                            addresses: data.addresses || []
+                        }
+                    }));
+                }
+            }
+        } catch (err) {
+            console.error('Header save location error:', err);
+        }
+    };
+
+    const geocodeHeaderCoords = async function (lat, lng) {
+        if (!headerMarker || !headerMap) return;
+        const isInside = window.isCoordinatesInsideLuzon(lat, lng);
+        const alertEl = document.getElementById('headerLuzonGateAlert');
+        const saveBtn = document.getElementById('headerSaveLocationBtn');
+
+        if (!isInside) {
+            if (alertEl) alertEl.style.display = 'flex';
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.style.opacity = '0.5';
+                saveBtn.style.cursor = 'not-allowed';
+            }
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Location Outside Service Area',
+                    text: 'Delivery is strictly available within Luzon only. Your selected location is outside our coverage area.',
+                    confirmButtonColor: '#b3261e'
+                });
+            }
+            // Snap back to default Luzon center
+            headerMarker.setLatLng([14.3294, 120.9367]);
+            headerMap.setView([14.3294, 120.9367], 13);
+            return;
+        }
+
+        if (alertEl) alertEl.style.display = 'none';
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.style.opacity = '1';
+            saveBtn.style.cursor = 'pointer';
+        }
+
+        try {
+            if (marketQuickStreetInput) marketQuickStreetInput.value = "Locating...";
+            const endpoint = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&countrycodes=ph&lat=${lat}&lon=${lng}`;
+            const response = await fetch(endpoint, {
+                headers: { Accept: 'application/json' }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                if (data && data.display_name) {
+                    if (!window.isCoordinatesInsideLuzon(lat, lng, data)) {
+                        if (alertEl) alertEl.style.display = 'flex';
+                        if (saveBtn) {
+                            saveBtn.disabled = true;
+                            saveBtn.style.opacity = '0.5';
+                            saveBtn.style.cursor = 'not-allowed';
+                        }
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Location Outside Service Area',
+                                text: 'Delivery is strictly available within Luzon only. Your selected location is outside our coverage area.',
+                                confirmButtonColor: '#b3261e'
+                            });
+                        }
+                        headerMarker.setLatLng([14.3294, 120.9367]);
+                        headerMap.setView([14.3294, 120.9367], 13);
+                        return;
+                    }
+                    const addr = data.display_name;
+                    if (marketQuickStreetInput) marketQuickStreetInput.value = addr;
+                    const city = data.address?.city || data.address?.town || data.address?.municipality || 'Cavite';
+                    const payload = { street_address: addr, city: city, postal_code: data.address?.postcode || '', latitude: String(lat), longitude: String(lng) };
+                    fillMarketAddressInputs(payload, { includeMapFields: true });
+                    const stored = persistMarketAddressPayload(payload);
+                    renderMarketAddressDisplay(stored);
+                    saveMarketLocationToUserDatabase(stored);
+                }
+            }
+        } catch (e) {
+            console.error("Header map geocoding error:", e);
+            const payload = buildMarketAddressPayload('Pinned Location, Cavite', 'Cavite', '', lat, lng);
+            fillMarketAddressInputs(payload, { includeMapFields: true });
+            const stored = persistMarketAddressPayload(payload);
+            renderMarketAddressDisplay(stored);
+            saveMarketLocationToUserDatabase(stored);
+        }
+    };
+
     const initHeaderMap = function() {
         const headerMapEl = document.getElementById('headerMap');
         if (!headerMapEl || typeof L === 'undefined' || headerMap) return;
 
         let startLat = 14.3294;
         let startLng = 120.9367;
+
+        const saved = getStoredMarketAddressPayload();
+        if (saved && Number.isFinite(parseFloat(saved.latitude)) && Number.isFinite(parseFloat(saved.longitude)) && parseFloat(saved.latitude) !== 0) {
+            startLat = parseFloat(saved.latitude);
+            startLng = parseFloat(saved.longitude);
+        }
 
         headerMap = L.map('headerMap').setView([startLat, startLng], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -3942,81 +4105,6 @@ document.addEventListener('DOMContentLoaded', function () {
         headerMarker = L.marker([startLat, startLng], {
             draggable: true
         }).addTo(headerMap);
-
-        const geocodeHeaderCoords = async (lat, lng) => {
-            const isInside = window.isCoordinatesInsideLuzon(lat, lng);
-            const alertEl = document.getElementById('headerLuzonGateAlert');
-            const saveBtn = document.getElementById('headerSaveLocationBtn');
-
-            if (!isInside) {
-                if (alertEl) alertEl.style.display = 'flex';
-                if (saveBtn) {
-                    saveBtn.disabled = true;
-                    saveBtn.style.opacity = '0.5';
-                    saveBtn.style.cursor = 'not-allowed';
-                }
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Location Outside Service Area',
-                        text: 'Delivery is strictly available within Luzon only. Your selected location is outside our coverage area.',
-                        confirmButtonColor: '#b3261e'
-                    });
-                }
-                // Snap back to default Luzon center
-                headerMarker.setLatLng([14.3294, 120.9367]);
-                headerMap.setView([14.3294, 120.9367], 13);
-                return;
-            }
-
-            if (alertEl) alertEl.style.display = 'none';
-            if (saveBtn) {
-                saveBtn.disabled = false;
-                saveBtn.style.opacity = '1';
-                saveBtn.style.cursor = 'pointer';
-            }
-
-            try {
-                if (marketQuickStreetInput) marketQuickStreetInput.value = "Locating...";
-                const endpoint = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&countrycodes=ph&lat=${lat}&lon=${lng}`;
-                const response = await fetch(endpoint, {
-                    headers: { Accept: 'application/json' }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data && data.display_name) {
-                        if (!window.isCoordinatesInsideLuzon(lat, lng, data)) {
-                            if (alertEl) alertEl.style.display = 'flex';
-                            if (saveBtn) {
-                                saveBtn.disabled = true;
-                                saveBtn.style.opacity = '0.5';
-                                saveBtn.style.cursor = 'not-allowed';
-                            }
-                            if (typeof Swal !== 'undefined') {
-                                Swal.fire({
-                                    icon: 'error',
-                                    title: 'Location Outside Service Area',
-                                    text: 'Delivery is strictly available within Luzon only. Your selected location is outside our coverage area.',
-                                    confirmButtonColor: '#b3261e'
-                                });
-                            }
-                            headerMarker.setLatLng([14.3294, 120.9367]);
-                            headerMap.setView([14.3294, 120.9367], 13);
-                            return;
-                        }
-                        const addr = data.display_name;
-                        if (marketQuickStreetInput) marketQuickStreetInput.value = addr;
-                        const city = data.address?.city || data.address?.town || data.address?.municipality || 'Cavite';
-                        const payload = { street_address: addr, city: city, postal_code: data.address?.postcode || '', latitude: String(lat), longitude: String(lng) };
-                        fillMarketAddressInputs(payload, { includeMapFields: true });
-                        const stored = persistMarketAddressPayload(payload);
-                        renderMarketAddressDisplay(stored);
-                    }
-                }
-            } catch (e) {
-                console.error("Header map geocoding error:", e);
-            }
-        };
 
         headerMarker.on('dragend', function() {
             const pos = headerMarker.getLatLng();
@@ -4061,41 +4149,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    const saveMarketLocationToUserDatabase = async function(payload) {
-        if (!payload || (!payload.street_address && !payload.full_address)) return;
-        const bodyData = new URLSearchParams();
-        bodyData.append('label', 'Saved Location');
-        bodyData.append('street_address', payload.street_address || payload.full_address);
-        bodyData.append('city_name', payload.city || 'Cavite');
-        bodyData.append('full_address', payload.full_address || payload.street_address);
-        bodyData.append('latitude', String(payload.latitude || ''));
-        bodyData.append('longitude', String(payload.longitude || ''));
-        bodyData.append('is_default', '1');
-
-        try {
-            const apiEndpoint = '<?php echo $path_prefix; ?>api/save_user_address.php';
-            const response = await fetch(apiEndpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: bodyData
-            });
-            const data = await response.json();
-            if (data && data.success) {
-                if (typeof window.dispatchEvent === 'function') {
-                    window.dispatchEvent(new CustomEvent('marketAddressUpdated', { 
-                        detail: {
-                            ...payload,
-                            address_id: data.saved_address_id || 0,
-                            addresses: data.addresses || []
-                        }
-                    }));
-                }
-            }
-        } catch (err) {
-            console.error('Header save location error:', err);
-        }
-    };
-
     const applyQuickAddressSelection = function (street, city, lat, lng) {
         const payload = buildMarketAddressPayload(street || '', city || 'Cavite', '', lat, lng);
         fillMarketAddressInputs(payload, { includeMapFields: true });
@@ -4111,6 +4164,11 @@ document.addEventListener('DOMContentLoaded', function () {
             const street = pill.dataset.street || (city + ', Cavite');
             const fallback = getCityCoordinatesFallback(city);
             if (marketQuickStreetInput) marketQuickStreetInput.value = street;
+            initHeaderMap();
+            if (headerMap && headerMarker) {
+                headerMarker.setLatLng([fallback.lat, fallback.lng]);
+                headerMap.setView([fallback.lat, fallback.lng], 14);
+            }
             applyQuickAddressSelection(street, city, fallback.lat, fallback.lng);
         });
     });
@@ -4161,64 +4219,106 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (marketLocateMeBtn) {
-        marketLocateMeBtn.addEventListener('click', function (e) {
+        marketLocateMeBtn.addEventListener('click', async function (e) {
             e.stopPropagation();
             e.preventDefault();
 
+            initHeaderMap();
             const originalBtnHtml = marketLocateMeBtn.innerHTML;
             marketLocateMeBtn.disabled = true;
             marketLocateMeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Locating...';
 
-            requestFreshCurrentPosition().then(function (position) {
-                if (!position || !position.coords) throw new Error('GEO_INVALID');
-                const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
+            let coords = null;
+            let usedIpFallback = false;
 
-                return reverseGeocode(lat, lng).then(function(payload) {
-                    if (payload && payload.street_address) return payload;
-                    const CAVITE_CITIES = [
-                        { city: 'General Trias', lat: 14.3167, lng: 120.8833, street: 'General Trias, Cavite' },
-                        { city: 'Dasmarinas', lat: 14.3294, lng: 120.9367, street: 'Dasmariñas, Cavite' },
-                        { city: 'Imus', lat: 14.4297, lng: 120.9367, street: 'Imus, Cavite' },
-                        { city: 'Bacoor', lat: 14.4608, lng: 120.9631, street: 'Bacoor, Cavite' },
-                        { city: 'Tagaytay', lat: 14.1153, lng: 120.9621, street: 'Tagaytay, Cavite' }
-                    ];
-                    let minDistance = Infinity;
-                    let nearest = CAVITE_CITIES[0];
-                    CAVITE_CITIES.forEach(function(item) {
-                        const dist = haversineKm(lat, lng, item.lat, item.lng);
-                        if (dist < minDistance) { minDistance = dist; nearest = item; }
-                    });
-                    return { street_address: nearest.street, city: nearest.city, postal_code: '' };
-                });
-            }).then(function (resolvedPayload) {
-                marketLocateMeBtn.disabled = false;
-                marketLocateMeBtn.innerHTML = originalBtnHtml;
+            // 1. Try browser GPS/geolocation first
+            try {
+                const position = await requestFreshCurrentPosition();
+                if (position && position.coords) {
+                    coords = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    };
+                }
+            } catch (geoErr) {
+                console.warn('Browser GPS unavailable or denied:', geoErr);
+            }
 
-                if (!resolvedPayload) {
-                    if (marketQuickStreetInput) {
-                        marketQuickStreetInput.focus();
-                        marketQuickStreetInput.placeholder = 'Please enter your address manually...';
+            // 2. If browser GPS failed (denied, blocked, timeout, or desktop without GPS chip), fallback to IP network geolocation
+            if (!coords) {
+                try {
+                    const ipLoc = await fetchIpFallbackLocation();
+                    if (ipLoc && ipLoc.lat && ipLoc.lng) {
+                        coords = { lat: ipLoc.lat, lng: ipLoc.lng, city: ipLoc.city };
+                        usedIpFallback = true;
                     }
-                    return;
+                } catch (ipErr) {
+                    console.warn('IP geolocation fallback failed:', ipErr);
                 }
+            }
 
-                const finalPayload = resolvedPayload;
-                if (marketQuickStreetInput) {
-                    marketQuickStreetInput.value = finalPayload.street_address;
+            marketLocateMeBtn.disabled = false;
+            marketLocateMeBtn.innerHTML = originalBtnHtml;
+
+            // 3. If location acquired
+            if (coords) {
+                if (headerMap && headerMarker) {
+                    headerMarker.setLatLng([coords.lat, coords.lng]);
+                    headerMap.setView([coords.lat, coords.lng], 15);
+                    if (headerMap.invalidateSize) headerMap.invalidateSize();
                 }
-                fillMarketAddressInputs(finalPayload, { includeMapFields: true });
-                const storedPayload = persistMarketAddressPayload(finalPayload);
-                renderMarketAddressDisplay(storedPayload);
-                closeAddressPopover();
-            }).catch(function (error) {
-                marketLocateMeBtn.disabled = false;
-                marketLocateMeBtn.innerHTML = originalBtnHtml;
-                if (marketQuickStreetInput) {
-                    marketQuickStreetInput.focus();
-                    marketQuickStreetInput.placeholder = 'Location access denied. Type address manually...';
+                await geocodeHeaderCoords(coords.lat, coords.lng);
+
+                if (usedIpFallback) {
+                    if (typeof Swal !== 'undefined') {
+                        const Toast = Swal.mixin({
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: 4500,
+                            timerProgressBar: true
+                        });
+                        Toast.fire({
+                            icon: 'info',
+                            title: 'Approximate location detected via network. Drag the pin to adjust your exact spot.'
+                        });
+                    }
+                } else {
+                    if (typeof Swal !== 'undefined') {
+                        const Toast = Swal.mixin({
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: 3000,
+                            timerProgressBar: true
+                        });
+                        Toast.fire({
+                            icon: 'success',
+                            title: 'Location detected and pinned!'
+                        });
+                    }
                 }
-            });
+            } else {
+                // 4. Failed completely (both GPS and IP failed)
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Unable to Detect Location',
+                        html: '<div style="font-size: 13px; color: #475467; text-align: left; line-height: 1.6;">' +
+                              'Location access is blocked or unavailable in your browser.<br><br>' +
+                              '<b>To enable browser location:</b><br>' +
+                              '1. Click the <b>tune / site settings icon</b> in the Chrome address bar (left of the URL).<br>' +
+                              '2. Change <b>Location</b> to <b>Allow</b>.<br>' +
+                              '3. Refresh the page.<br><br>' +
+                              '<i>You can also drag the pin on the map below or select a popular city.</i>' +
+                              '</div>',
+                        confirmButtonText: 'Understood',
+                        confirmButtonColor: '#b3261e'
+                    });
+                } else {
+                    alert('Unable to detect location. Please drag the pin on the map or type your address manually.');
+                }
+            }
         });
     }
 
@@ -4289,10 +4389,19 @@ document.addEventListener('DOMContentLoaded', function () {
                         marketMapUseCurrent.disabled = false;
                         marketMapUseCurrent.innerHTML = originalLabel;
                     });
-                }).catch(function () {
+                }).catch(async function () {
+                    try {
+                        const ipLoc = await fetchIpFallbackLocation();
+                        if (ipLoc && ipLoc.lat && ipLoc.lng) {
+                            centerMapAt(ipLoc.lat, ipLoc.lng, 15, false);
+                            marketMapUseCurrent.disabled = false;
+                            marketMapUseCurrent.innerHTML = originalLabel;
+                            return;
+                        }
+                    } catch (e) {}
                     marketMapUseCurrent.disabled = false;
                     marketMapUseCurrent.innerHTML = originalLabel;
-                    showSwalError('Location access was denied. Please allow location permission.', 'Geolocation Blocked');
+                    showSwalError('Location access was denied. Please allow location permission in your browser or drag the pin manually.', 'Geolocation Blocked');
                 });
             });
         });

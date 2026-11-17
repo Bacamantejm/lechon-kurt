@@ -1464,18 +1464,22 @@ document.addEventListener('DOMContentLoaded', function() {
     // Login form validation and AJAX submission
     const loginForm = document.getElementById('loginForm');
 
-    // Pre-acquire device GPS fix with high accuracy
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                const latEl = document.getElementById('loginLatitude');
-                const lngEl = document.getElementById('loginLongitude');
-                if (latEl) latEl.value = pos.coords.latitude;
-                if (lngEl) lngEl.value = pos.coords.longitude;
-            },
-            () => {},
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
+    // Pre-acquire device GPS fix silently ONLY if permission was already granted
+    if (navigator.permissions && navigator.permissions.query) {
+        navigator.permissions.query({ name: 'geolocation' }).then((status) => {
+            if (status.state === 'granted' && navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        const latEl = document.getElementById('loginLatitude');
+                        const lngEl = document.getElementById('loginLongitude');
+                        if (latEl) latEl.value = pos.coords.latitude;
+                        if (lngEl) lngEl.value = pos.coords.longitude;
+                    },
+                    () => {},
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            }
+        }).catch(() => {});
     }
 
     if (loginForm) {
