@@ -450,7 +450,7 @@ saRenderModuleHeader('Reports & Complaints', 'Reports & Complaints', $admin_info
                                     </div>
                                 </td>
                                 <td>
-                                    <div class="text-truncate-2"><?php echo htmlspecialchars((string)($complaint['latest_message'] ?? 'No message yet.')); ?></div>
+                                    <div class="complaint-latest-message"><?php echo htmlspecialchars((string)($complaint['latest_message'] ?? 'No message yet.')); ?></div>
                                     <span class="compact-text">Updated: <?php echo htmlspecialchars(saFormatDateTime($complaint['updated_at'] ?? null)); ?></span>
                                 </td>
                                 <td>
