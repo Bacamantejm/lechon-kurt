@@ -21,6 +21,25 @@ $success_msg = '';
 $error_msg = '';
 $swal_alert = null;
 $allowed_business_types = ['sole_proprietorship', 'partnership', 'corporation', 'llc'];
+$business_experience_options = [
+    'No Previous Business Experience',
+    'Less Than 1 Year',
+    '1–2 Years',
+    '3–5 Years',
+    '6–10 Years',
+    'More Than 10 Years',
+    'Currently Managing a Business',
+    'Previously Owned a Business',
+    'Family Business Experience',
+    'Business Management Experience'
+];
+$marketing_strategy_options = [
+    'Social Media Marketing (Facebook, Instagram, TikTok)',
+    'Content Marketing (Blogs, Videos, Reels)',
+    'Influencer Marketing',
+    'Search Engine Optimization (SEO)',
+    'Paid Online Advertising (Facebook Ads, Google Ads)'
+];
 $csrf_token = generateCSRFToken();
 $has_pending_application = false;
 $latest_application = null;
@@ -1042,6 +1061,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
         }
     }
 
+    if (!$error_msg && !in_array($form_data['business_experience'], $business_experience_options, true)) {
+        $error_msg = "Please select a valid business experience option.";
+    }
+
+    if (!$error_msg && !in_array($form_data['marketing_plan'], $marketing_strategy_options, true)) {
+        $error_msg = "Please select a valid marketing strategy option.";
+    }
+
     $is_ncr_region = (
         $form_data['psgc_region_code'] === '130000000' ||
         stripos($form_data['psgc_region_name'], 'national capital region') !== false ||
@@ -1942,14 +1969,28 @@ include 'includes/header.php';
 
                             <div class="form-group">
                                 <label for="business_experience">Business Experience *</label>
-                                <textarea id="business_experience" name="business_experience" rows="3" required
-                                        placeholder="Describe your relevant business experience"><?php echo oldFormValue('business_experience', $franchise_prefill['business_experience'] ?? ''); ?></textarea>
+                                <?php $selected_business_experience = oldFormValue('business_experience', $franchise_prefill['business_experience'] ?? ''); ?>
+                                <select id="business_experience" name="business_experience" required>
+                                    <option value="">Select your business experience</option>
+                                    <?php foreach ($business_experience_options as $business_experience_option): ?>
+                                        <option value="<?php echo htmlspecialchars($business_experience_option, ENT_QUOTES, 'UTF-8'); ?>"<?php echo $selected_business_experience === htmlspecialchars($business_experience_option, ENT_QUOTES, 'UTF-8') ? ' selected' : ''; ?>>
+                                            <?php echo htmlspecialchars($business_experience_option, ENT_QUOTES, 'UTF-8'); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
 
                             <div class="form-group">
                                 <label for="marketing_plan">Marketing Strategy *</label>
-                                <textarea id="marketing_plan" name="marketing_plan" rows="3" required
-                                        placeholder="How do you plan to promote your store?"><?php echo oldFormValue('marketing_plan', $franchise_prefill['marketing_plan'] ?? ''); ?></textarea>
+                                <?php $selected_marketing_strategy = oldFormValue('marketing_plan', $franchise_prefill['marketing_plan'] ?? ''); ?>
+                                <select id="marketing_plan" name="marketing_plan" required>
+                                    <option value="">Select your marketing strategy</option>
+                                    <?php foreach ($marketing_strategy_options as $marketing_strategy_option): ?>
+                                        <option value="<?php echo htmlspecialchars($marketing_strategy_option, ENT_QUOTES, 'UTF-8'); ?>"<?php echo $selected_marketing_strategy === htmlspecialchars($marketing_strategy_option, ENT_QUOTES, 'UTF-8') ? ' selected' : ''; ?>>
+                                            <?php echo htmlspecialchars($marketing_strategy_option, ENT_QUOTES, 'UTF-8'); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                         </div>
 
