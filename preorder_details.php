@@ -162,7 +162,14 @@ include 'includes/header.php';
                         <span>₱<?php echo number_format($preorder['unit_price'], 2); ?> × <?php echo $preorder['quantity']; ?></span>
                     </div>
                     
-                    <?php if ($preorder['payment_type'] === 'downpayment'): ?>
+                    <?php if ($preorder['reservation_status'] === 'cancelled'): ?>
+                        <div class="summary-row">
+                            <span>Payment Status:</span>
+                            <span class="payment-status-badge cancelled" style="background:#fee4e2;color:#b3261e;border:1px solid #fecdca;">
+                                Cancelled
+                            </span>
+                        </div>
+                    <?php elseif ($preorder['payment_type'] === 'downpayment'): ?>
                         <div class="summary-row">
                             <span>Downpayment (30%):</span>
                             <span>₱<?php echo number_format($preorder['downpayment_amount'], 2); ?></span>
@@ -212,12 +219,15 @@ include 'includes/header.php';
 
             <div class="order-actions">
                 <?php 
+                $can_pay = ($preorder['reservation_status'] !== 'cancelled' && $preorder['reservation_status'] !== 'completed');
+                $can_cancel = in_array($preorder['reservation_status'], ['pending', 'confirmed'], true);
+                $is_prep = ($preorder['reservation_status'] === 'in_preparation');
                 $needs_downpayment = ($preorder['payment_type'] === 'downpayment' && $preorder['downpayment_status'] !== 'paid');
                 $needs_final = ($preorder['payment_type'] === 'downpayment' && $preorder['downpayment_status'] === 'paid' && $preorder['final_payment_status'] !== 'paid');
                 $needs_full = ($preorder['payment_type'] === 'full_payment' && $preorder['final_payment_status'] !== 'paid');
                 ?>
                 
-                <?php if ($needs_downpayment || $needs_final || $needs_full): ?>
+                <?php if ($can_pay && ($needs_downpayment || $needs_final || $needs_full)): ?>
                     <a href="preorder_payment.php?id=<?php echo $pre_order_id; ?>&type=<?php echo $needs_downpayment ? 'downpayment' : 'full'; ?>" class="btn-pay">
                         <i class="fas fa-credit-card"></i> Complete Payment
                     </a>
@@ -227,10 +237,14 @@ include 'includes/header.php';
                     <i class="fas fa-receipt"></i> View Receipt
                 </a>
                 
-                <?php if ($preorder['reservation_status'] !== 'cancelled' && $preorder['reservation_status'] !== 'completed'): ?>
+                <?php if ($can_cancel): ?>
                     <button type="button" class="btn-cancel" onclick="confirmCancel()">
                         <i class="fas fa-times"></i> Cancel Pre-Order
                     </button>
+                <?php elseif ($is_prep): ?>
+                    <span class="badge" style="background:#eff8ff;color:#175cd3;border:1px solid #b2ddff;padding:9px 16px;border-radius:24px;font-size:0.85rem;font-weight:600;display:inline-flex;align-items:center;gap:6px;">
+                        <i class="fas fa-utensils"></i> Order is in preparation and cannot be cancelled
+                    </span>
                 <?php endif; ?>
             </div>
         </div>
@@ -580,19 +594,57 @@ body.dark-mode .order-item {
 function confirmCancel() {
     Swal.fire({
         title: 'Cancel Pre-Order?',
-        text: "Are you sure you want to cancel this pre-order? Please provide a reason.",
         icon: 'warning',
-        input: 'text',
-        inputPlaceholder: 'Reason for cancellation',
+        html: `
+            <p style="font-size:0.9rem;color:#475467;margin-bottom:14px;">Please select a reason for cancellation or provide details below.</p>
+            <div style="text-align:left;margin-bottom:12px;">
+                <label for="cancelPreOrderPreset" style="display:block;font-size:0.82rem;font-weight:600;color:#344054;margin-bottom:6px;">Cancellation Reason</label>
+                <select id="cancelPreOrderPreset" class="swal2-select" style="display:block;width:100%;margin:0;padding:10px 12px;border:1px solid #d0d5dd;border-radius:8px;font-size:0.9rem;color:#101828;background:#ffffff;">
+                    <option value="">-- Select a reason --</option>
+                    <option value="Schedule conflict / Unable to pick up on reserved date">Schedule conflict / Unable to pick up on reserved date</option>
+                    <option value="Ordered by mistake / duplicate reservation">Ordered by mistake / duplicate reservation</option>
+                    <option value="Need to change pickup date, time, or items">Need to change pickup date, time, or items</option>
+                    <option value="Reservation taking too long to confirm">Reservation taking too long to confirm</option>
+                    <option value="Event cancelled / Change of mind">Event cancelled / Change of mind</option>
+                    <option value="Found a better price or alternative">Found a better price or alternative</option>
+                    <option value="Other">Other reason (specify below)</option>
+                </select>
+            </div>
+            <div style="text-align:left;">
+                <label for="cancelPreOrderManual" style="display:block;font-size:0.82rem;font-weight:600;color:#344054;margin-bottom:6px;">Additional Details / Manual Reason</label>
+                <textarea id="cancelPreOrderManual" class="swal2-textarea" style="display:block;width:100%;margin:0;padding:10px 12px;border:1px solid #d0d5dd;border-radius:8px;font-size:0.9rem;min-height:85px;box-sizing:border-box;" placeholder="Type your reason or additional details here..."></textarea>
+            </div>
+        `,
         showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Yes, cancel it!',
-        preConfirm: (reason) => {
-            if (!reason) {
-                Swal.showValidationMessage('Please enter a reason')
+        confirmButtonColor: '#b3261e',
+        cancelButtonColor: '#667085',
+        confirmButtonText: 'Confirm Cancel',
+        didOpen: () => {
+            const presetEl = document.getElementById('cancelPreOrderPreset');
+            const manualEl = document.getElementById('cancelPreOrderManual');
+            if (presetEl && manualEl) {
+                presetEl.addEventListener('change', () => {
+                    if (presetEl.value === 'Other') {
+                        manualEl.focus();
+                    }
+                });
             }
-            return reason;
+        },
+        preConfirm: () => {
+            const preset = (document.getElementById('cancelPreOrderPreset')?.value || '').trim();
+            const manual = (document.getElementById('cancelPreOrderManual')?.value || '').trim();
+            if (!preset && !manual) {
+                Swal.showValidationMessage('Please select a reason from the dropdown or enter your reason manually.');
+                return false;
+            }
+            if (preset === 'Other' && !manual) {
+                Swal.showValidationMessage('Please enter your reason in the text box below.');
+                return false;
+            }
+            if (preset && preset !== 'Other' && manual) {
+                return `${preset} - ${manual}`;
+            }
+            return (preset && preset !== 'Other') ? preset : manual;
         }
     }).then((result) => {
         if (result.isConfirmed) {

@@ -20,15 +20,17 @@ $partner_orders_scope_sql = '';
 
 if ($seller_scope_id !== null) {
     $partner_product_scope_sql = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', (int)$seller_scope_id);
-    $partner_preorder_scope_sql = " AND EXISTS (SELECT 1 FROM products p_scope WHERE p_scope.id = po.product_id AND " . getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', (int)$seller_scope_id) . ")";
-    $partner_orders_scope_sql = " AND (o.seller_id = {$seller_scope_id} OR sl.owner_user_id = {$seller_scope_id} OR " . getFranchiseScopedOrderExistsSql($conn, (int)$seller_scope_id, 'o.id') . ")";
+    $partner_preorder_scope_sql = " AND (" . getFranchiseScopedPreOrderExistsSql($conn, (int)$seller_scope_id, 'po.id') . ")";
+    $partner_orders_scope_sql = " AND (" . getFranchiseScopedOrderExistsSql($conn, (int)$seller_scope_id, 'o.id') . ")";
 }
 
-// Check if orders table has delivery_option column
-$has_delivery_option_col = true;
-if (function_exists('adminAuthColumnExists')) {
-    $has_delivery_option_col = adminAuthColumnExists($conn, 'orders', 'delivery_option');
-}
+// Check optional columns on orders table safely
+$has_delivery_option_col = function_exists('adminAuthColumnExists') ? adminAuthColumnExists($conn, 'orders', 'delivery_option') : true;
+$has_pickup_location_col = function_exists('adminAuthColumnExists') ? adminAuthColumnExists($conn, 'orders', 'pickup_location') : true;
+$has_order_type_col = function_exists('adminAuthColumnExists') ? adminAuthColumnExists($conn, 'orders', 'order_type') : false;
+$has_is_archived_col = function_exists('adminAuthColumnExists') ? adminAuthColumnExists($conn, 'orders', 'is_archived') : true;
+$has_seller_id_col = function_exists('adminAuthColumnExists') ? adminAuthColumnExists($conn, 'orders', 'seller_id') : true;
+$has_store_locations_tbl = function_exists('adminAuthTableExists') ? adminAuthTableExists($conn, 'store_locations') : true;
 
 // Subquery for pre_orders
 $preorders_base = "
@@ -43,8 +45,8 @@ $preorders_base = "
         po.product_name AS items_summary,
         po.quantity AS total_items,
         po.total_price AS total_amount,
-        po.preferred_pickup_date AS pickup_date,
-        po.preferred_pickup_time AS pickup_time,
+        COALESCE(NULLIF(po.preferred_pickup_date, '0000-00-00'), DATE(po.created_at)) AS pickup_date,
+        COALESCE(NULLIF(po.preferred_pickup_time, ''), '') AS pickup_time,
         po.reservation_status AS status,
         po.payment_type AS payment_method,
         po.final_payment_status AS payment_status,
@@ -52,15 +54,46 @@ $preorders_base = "
         COALESCE(po.remaining_amount, 0) AS remaining_amount,
         COALESCE(po.special_instructions, '') AS special_instructions,
         COALESCE(po.admin_notes, '') AS admin_notes,
-        COALESCE(po.pickup_location, 'Main Store') AS pickup_location_name,
+        COALESCE(NULLIF(po.pickup_location, ''), 'Main Store') AS pickup_location_name,
         po.created_at
     FROM pre_orders po
     JOIN users u ON po.user_id = u.id
     WHERE 1=1 {$partner_preorder_scope_sql}
 ";
 
-// Subquery for regular orders placed with pickup
+// Build pickup matching criteria for regular orders
+$orders_pickup_conditions = [];
 if ($has_delivery_option_col) {
+    $orders_pickup_conditions[] = "LOWER(TRIM(REPLACE(REPLACE(COALESCE(o.delivery_option, ''), '_', ''), '-', ''))) IN ('pickup', 'storepickup')";
+    if ($has_pickup_location_col) {
+        $orders_pickup_conditions[] = "((o.delivery_option IS NULL OR TRIM(o.delivery_option) = '') AND o.pickup_location IS NOT NULL AND TRIM(o.pickup_location) != '' AND o.pickup_location != '0')";
+    }
+} elseif ($has_pickup_location_col) {
+    $orders_pickup_conditions[] = "(o.pickup_location IS NOT NULL AND TRIM(o.pickup_location) != '' AND o.pickup_location != '0')";
+}
+if ($has_order_type_col) {
+    $orders_pickup_conditions[] = "LOWER(TRIM(COALESCE(o.order_type, ''))) IN ('pickup', 'store_pickup')";
+}
+
+$orders_archived_sql = $has_is_archived_col ? " AND (o.is_archived = 0 OR o.is_archived IS NULL)" : "";
+
+// Subquery for regular orders placed with pickup
+if (!empty($orders_pickup_conditions)) {
+    $orders_pickup_where = "(" . implode(" OR ", $orders_pickup_conditions) . ")";
+    $store_match_conditions = [];
+    if ($has_store_locations_tbl) {
+        if ($has_pickup_location_col) {
+            $store_match_conditions[] = "(o.pickup_location REGEXP '^[0-9]+$' AND sl.store_id = CAST(o.pickup_location AS UNSIGNED))";
+            $store_match_conditions[] = "sl.store_name = o.pickup_location";
+        }
+        if ($has_seller_id_col) {
+            $store_match_conditions[] = "(o.seller_id IS NOT NULL AND sl.owner_user_id = o.seller_id)";
+        }
+    }
+    $pickup_location_expr = !empty($store_match_conditions)
+        ? "COALESCE((SELECT sl.store_name FROM store_locations sl WHERE " . implode(' OR ', $store_match_conditions) . " LIMIT 1), 'Main Store')"
+        : "'Main Store'";
+
     $orders_base = "
         SELECT 
             'order' AS order_source,
@@ -81,8 +114,8 @@ if ($has_delivery_option_col) {
                 WHERE oi.order_id = o.id
             ), 1) AS total_items,
             o.total_amount,
-            o.delivery_date AS pickup_date,
-            COALESCE(o.delivery_time, '') AS pickup_time,
+            COALESCE(NULLIF(o.delivery_date, '0000-00-00'), DATE(o.created_at)) AS pickup_date,
+            COALESCE(NULLIF(o.delivery_time, ''), '') AS pickup_time,
             CASE 
                 WHEN o.status = 'preparing' THEN 'in_preparation'
                 WHEN o.status = 'delivered' THEN 'completed'
@@ -94,11 +127,10 @@ if ($has_delivery_option_col) {
             COALESCE(o.remaining_balance, 0) AS remaining_amount,
             COALESCE(o.special_instructions, '') AS special_instructions,
             '' AS admin_notes,
-            COALESCE(sl.store_name, 'Main Store') AS pickup_location_name,
+            {$pickup_location_expr} AS pickup_location_name,
             o.created_at
         FROM orders o
-        LEFT JOIN store_locations sl ON (sl.store_id = o.pickup_location OR sl.owner_user_id = o.seller_id)
-        WHERE o.delivery_option = 'pickup' {$partner_orders_scope_sql}
+        WHERE {$orders_pickup_where}{$orders_archived_sql} {$partner_orders_scope_sql}
     ";
     $unified_from = "({$preorders_base} UNION ALL {$orders_base}) AS uo";
 } else {
@@ -263,16 +295,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
         // Scoping check for orders table
         $scope_ok = true;
         if ($seller_scope_id !== null) {
-            $scope_check_query = "SELECT o.id FROM orders o 
-                                  LEFT JOIN store_locations sl ON (sl.store_id = o.pickup_location OR sl.owner_user_id = o.seller_id)
-                                  WHERE o.id = ? AND (o.seller_id = {$seller_scope_id} OR sl.owner_user_id = {$seller_scope_id} OR " . getFranchiseScopedOrderExistsSql($conn, (int)$seller_scope_id, 'o.id') . ")
+            $scope_check_query = "SELECT o.id FROM orders o
+                                  WHERE o.id = ? AND (" . getFranchiseScopedOrderExistsSql($conn, (int)$seller_scope_id, 'o.id') . ")
                                   LIMIT 1";
             $scope_check_stmt = mysqli_prepare($conn, $scope_check_query);
-            mysqli_stmt_bind_param($scope_check_stmt, "i", $order_id);
-            mysqli_stmt_execute($scope_check_stmt);
-            $scope_check_result = mysqli_stmt_get_result($scope_check_stmt);
-            $scope_ok = ($scope_check_result && mysqli_fetch_assoc($scope_check_result));
-            mysqli_stmt_close($scope_check_stmt);
+            if ($scope_check_stmt) {
+                mysqli_stmt_bind_param($scope_check_stmt, "i", $order_id);
+                mysqli_stmt_execute($scope_check_stmt);
+                $scope_check_result = mysqli_stmt_get_result($scope_check_stmt);
+                $scope_ok = (bool)($scope_check_result && mysqli_fetch_assoc($scope_check_result));
+                mysqli_stmt_close($scope_check_stmt);
+            } else {
+                $scope_ok = false;
+            }
         }
 
         if (!$scope_ok) {
@@ -280,7 +315,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
         } else {
             // Map status for orders table
             $mapped_status = $new_status;
-            if ($new_status === 'in_preparation' || $new_status === 'ready_for_pickup') {
+            if ($new_status === 'in_preparation') {
                 $mapped_status = 'preparing';
             } elseif ($new_status === 'completed') {
                 $mapped_status = 'delivered';
@@ -300,15 +335,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
         if ($seller_scope_id !== null) {
             $scope_check_query = "SELECT po.id
                                   FROM pre_orders po
-                                  INNER JOIN products p_scope ON p_scope.id = po.product_id
-                                  WHERE po.id = ? AND {$partner_product_scope_sql}
+                                  WHERE po.id = ? AND (" . getFranchiseScopedPreOrderExistsSql($conn, (int)$seller_scope_id, 'po.id') . ")
                                   LIMIT 1";
             $scope_check_stmt = mysqli_prepare($conn, $scope_check_query);
-            mysqli_stmt_bind_param($scope_check_stmt, "i", $order_id);
-            mysqli_stmt_execute($scope_check_stmt);
-            $scope_check_result = mysqli_stmt_get_result($scope_check_stmt);
-            $scoped_preorder = $scope_check_result ? mysqli_fetch_assoc($scope_check_result) : null;
-            mysqli_stmt_close($scope_check_stmt);
+            $scoped_preorder = null;
+            if ($scope_check_stmt) {
+                mysqli_stmt_bind_param($scope_check_stmt, "i", $order_id);
+                mysqli_stmt_execute($scope_check_stmt);
+                $scope_check_result = mysqli_stmt_get_result($scope_check_stmt);
+                $scoped_preorder = $scope_check_result ? mysqli_fetch_assoc($scope_check_result) : null;
+                mysqli_stmt_close($scope_check_stmt);
+            }
 
             if (!$scoped_preorder) {
                 $update_result = ['success' => false, 'message' => 'You can only update pre-orders for your own store.'];

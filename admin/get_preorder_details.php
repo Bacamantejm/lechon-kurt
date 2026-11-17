@@ -15,10 +15,10 @@ $source = trim($_GET['source'] ?? '');
 $current_user_id = (int)($_SESSION['user_id'] ?? 0);
 $is_partner_scoped_admin = isApprovedFranchiseSellerAccount($conn, $current_user_id);
 $seller_scope_id = $is_partner_scoped_admin ? getFranchiseSellerScopeOwnerId($conn, $current_user_id) : null;
-$partner_product_scope_sql = '';
+$partner_preorder_scope_sql = '';
 $seller_scoped_orders_exists = '';
 if ($seller_scope_id !== null) {
-    $partner_product_scope_sql = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', (int)$seller_scope_id);
+    $partner_preorder_scope_sql = getFranchiseScopedPreOrderExistsSql($conn, (int)$seller_scope_id, 'po.id');
     $seller_scoped_orders_exists = getFranchiseScopedOrderExistsSql($conn, (int)$seller_scope_id, 'o.id');
 }
 
@@ -26,13 +26,22 @@ $order_data = null;
 $items = [];
 $order_source = '';
 
-// If source is explicitly 'order' or if not specified, attempt order lookup first if source == 'order'
+$buildOrderQuery = function () use ($seller_scope_id, $seller_scoped_orders_exists) {
+    return "SELECT o.*,
+                   sl.store_name, sl.address AS store_address, sl.city AS store_city, sl.province AS store_province, sl.phone AS store_phone
+            FROM orders o
+            LEFT JOIN store_locations sl ON (
+                (o.pickup_location REGEXP '^[0-9]+$' AND sl.store_id = CAST(o.pickup_location AS UNSIGNED))
+                OR sl.store_name = o.pickup_location
+                OR (o.seller_id IS NOT NULL AND sl.owner_user_id = o.seller_id)
+            )
+            WHERE o.id = ?" . ($seller_scope_id !== null ? " AND ({$seller_scoped_orders_exists})" : "") . "
+            LIMIT 1";
+};
+
+// If source is explicitly 'order', attempt order lookup first
 if ($source === 'order') {
-    $ord_query = "SELECT o.*, sl.store_name, sl.address AS store_address, sl.city AS store_city, sl.province AS store_province, sl.phone AS store_phone
-                  FROM orders o
-                  LEFT JOIN store_locations sl ON (sl.store_id = o.pickup_location OR sl.store_name = o.pickup_location OR sl.owner_user_id = o.seller_id" . ($seller_scope_id !== null ? " OR sl.owner_user_id = {$seller_scope_id}" : "") . ")
-                  WHERE o.id = ?" . ($seller_scope_id !== null ? " AND (o.seller_id = {$seller_scope_id} OR sl.owner_user_id = {$seller_scope_id} OR {$seller_scoped_orders_exists})" : "") . "
-                  LIMIT 1";
+    $ord_query = $buildOrderQuery();
     $stmt = mysqli_prepare($conn, $ord_query);
     if ($stmt) {
         mysqli_stmt_bind_param($stmt, "i", $id);
@@ -63,9 +72,9 @@ if (!$order_data) {
                  FROM pre_orders po 
                  JOIN users u ON po.user_id = u.id
                  LEFT JOIN products p ON po.product_id = p.id
-                 LEFT JOIN store_locations sl ON sl.owner_user_id = p.seller_id" .
-                 ($seller_scope_id !== null ? " JOIN products p_scope ON p_scope.id = po.product_id AND {$partner_product_scope_sql}" : "") . "
-                 WHERE po.id = ? LIMIT 1";
+                 LEFT JOIN store_locations sl ON sl.owner_user_id = p.seller_id
+                 WHERE po.id = ?" . ($seller_scope_id !== null ? " AND ({$partner_preorder_scope_sql})" : "") . "
+                 LIMIT 1";
     $stmt = mysqli_prepare($conn, $po_query);
     if ($stmt) {
         mysqli_stmt_bind_param($stmt, "i", $id);
@@ -87,11 +96,7 @@ if (!$order_data) {
 
 // If still not found and source was empty, check orders
 if (!$order_data && $source === '') {
-    $ord_query = "SELECT o.*, sl.store_name, sl.address AS store_address, sl.city AS store_city, sl.province AS store_province, sl.phone AS store_phone
-                  FROM orders o
-                  LEFT JOIN store_locations sl ON (sl.store_id = o.pickup_location OR sl.store_name = o.pickup_location OR sl.owner_user_id = o.seller_id" . ($seller_scope_id !== null ? " OR sl.owner_user_id = {$seller_scope_id}" : "") . ")
-                  WHERE o.id = ?" . ($seller_scope_id !== null ? " AND (o.seller_id = {$seller_scope_id} OR sl.owner_user_id = {$seller_scope_id} OR {$seller_scoped_orders_exists})" : "") . "
-                  LIMIT 1";
+    $ord_query = $buildOrderQuery();
     $stmt = mysqli_prepare($conn, $ord_query);
     if ($stmt) {
         mysqli_stmt_bind_param($stmt, "i", $id);

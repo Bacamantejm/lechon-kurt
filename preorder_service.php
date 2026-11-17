@@ -352,6 +352,16 @@ class PreOrderService {
         if (!$po) {
             return ['success' => false, 'message' => 'Pre-order not found'];
         }
+
+        $current_status = strtolower(trim((string)($po['reservation_status'] ?? '')));
+        if ($current_status === 'in_preparation') {
+            return ['success' => false, 'message' => 'This pre-order is already being prepared by the kitchen and can no longer be cancelled.'];
+        }
+        if (in_array($current_status, ['ready_for_pickup', 'completed', 'cancelled'], true)) {
+            $formatted_status = str_replace('_', ' ', $current_status);
+            return ['success' => false, 'message' => 'This pre-order cannot be cancelled because it is already ' . htmlspecialchars($formatted_status) . '.'];
+        }
+
         popEnsurePolicySchema($this->conn);
         $policy = popGetPreOrderPolicy($this->conn, (int)$pre_order_id);
         $downpayment_refundable = !empty($policy['downpayment_refundable']);
@@ -369,7 +379,7 @@ class PreOrderService {
                       cancelled_at = NOW(),
                       updated_at = NOW()
                   WHERE id IN ({$placeholders})
-                    AND reservation_status NOT IN ('cancelled', 'completed')";
+                    AND reservation_status NOT IN ('cancelled', 'completed', 'in_preparation', 'ready_for_pickup')";
         $stmt = mysqli_prepare($this->conn, $query);
         if (!$stmt) {
             return ['success' => false, 'message' => 'Failed to prepare cancellation update'];

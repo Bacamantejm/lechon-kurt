@@ -39,6 +39,18 @@ if (!$preorder || $preorder['user_id'] != $user_id) {
     exit();
 }
 
+$po_status = strtolower(trim((string)($preorder['reservation_status'] ?? '')));
+if ($po_status === 'cancelled') {
+    $_SESSION['error_msg'] = 'This pre-order has been cancelled and does not require payment.';
+    header("Location: my_orders.php?tab=preorders");
+    exit();
+}
+if ($po_status === 'completed' || strtolower(trim((string)($preorder['final_payment_status'] ?? ''))) === 'paid') {
+    $_SESSION['success_msg'] = 'This pre-order is already fully paid.';
+    header("Location: my_orders.php?tab=preorders");
+    exit();
+}
+
 $session_id = trim((string)($preorder['paymongo_session_id'] ?? ''));
 $linked_preorders = [];
 if ($session_id !== '') {
@@ -105,7 +117,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_payment'])) {
         // Create PayMongo checkout session
         $amount = ($payment_type === 'downpayment') ? $transaction_due_downpayment : $transaction_due_full;
         if ($amount <= 0) {
-            $amount = ($payment_type === 'downpayment') ? (float)$preorder['downpayment_amount'] : (float)$preorder['total_price'];
+            $_SESSION['success_msg'] = 'This payment has already been completed.';
+            header("Location: my_orders.php?tab=preorders");
+            exit();
         }
         
         $checkout_data = $paymongo->createCheckoutSession([

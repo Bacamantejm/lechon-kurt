@@ -163,8 +163,14 @@ if (!empty($linked_ids)) {
     } else {
         $update_query = "UPDATE pre_orders
                          SET final_payment_status = 'paid',
+                             downpayment_status = 'paid',
                              final_payment_paid_at = NOW(),
-                             reservation_status = 'confirmed'
+                             remaining_amount = 0,
+                             reservation_status = CASE
+                                 WHEN reservation_status = 'pending' THEN 'confirmed'
+                                 ELSE reservation_status
+                             END,
+                             updated_at = NOW()
                          WHERE id IN ({$placeholders})";
     }
     $update_stmt = mysqli_prepare($conn, $update_query);

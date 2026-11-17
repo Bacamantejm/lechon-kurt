@@ -102,11 +102,17 @@ if ($payment_method === 'paymongo') {
 
         // Retrieve and verify checkout session
         $session = $paymongo->retrieveCheckoutSession($session_id);
+        if (!$session['success'] || strtolower((string)($session['status'] ?? '')) !== 'paid') {
+            $fallback = $paymongo->verifyPayment($session_id);
+            if (!empty($fallback['success']) && strtolower((string)($fallback['status'] ?? '')) === 'paid') {
+                $session = $fallback;
+            }
+        }
 
-        if ($session['success'] && $session['status'] === 'paid') {
+        if ($session['success'] && strtolower((string)($session['status'] ?? '')) === 'paid') {
             // Record payment with transaction ID
             $payment_amount = ($payment_type === 'downpayment') ? $preorder['downpayment_amount'] : $preorder['total_price'];
-            $transaction_id = $session['session_data']['id'];
+            $transaction_id = $session['session_data']['id'] ?? $session_id;
 
             // Update payment record with verification status
             $update_payment = "UPDATE pre_order_payments SET payment_status = 'paid', paid_at = NOW() WHERE pre_order_id = ? AND payment_gateway = 'paymongo' ORDER BY created_at DESC LIMIT 1";
@@ -116,10 +122,31 @@ if ($payment_method === 'paymongo') {
             mysqli_stmt_close($update_stmt);
 
             // Update pre-order status
-            $payment_type_col = ($payment_type === 'downpayment') ? 'downpayment_status' : 'final_payment_status';
             if (!empty($linked_ids)) {
                 $placeholders = implode(',', array_fill(0, count($linked_ids), '?'));
-                $update_preorder = "UPDATE pre_orders SET $payment_type_col = 'paid', updated_at = NOW() WHERE id IN ({$placeholders})";
+                if ($payment_type === 'downpayment') {
+                    $update_preorder = "UPDATE pre_orders
+                                        SET downpayment_status = 'paid',
+                                            downpayment_paid_at = NOW(),
+                                            reservation_status = CASE
+                                                WHEN reservation_status = 'pending' THEN 'confirmed'
+                                                ELSE reservation_status
+                                            END,
+                                            updated_at = NOW()
+                                        WHERE id IN ({$placeholders})";
+                } else {
+                    $update_preorder = "UPDATE pre_orders
+                                        SET final_payment_status = 'paid',
+                                            downpayment_status = 'paid',
+                                            final_payment_paid_at = NOW(),
+                                            remaining_amount = 0,
+                                            reservation_status = CASE
+                                                WHEN reservation_status = 'pending' THEN 'confirmed'
+                                                ELSE reservation_status
+                                            END,
+                                            updated_at = NOW()
+                                        WHERE id IN ({$placeholders})";
+                }
                 $preorder_stmt = mysqli_prepare($conn, $update_preorder);
                 if ($preorder_stmt) {
                     $bind_values = $linked_ids;
