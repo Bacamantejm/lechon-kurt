@@ -8948,19 +8948,50 @@ if (useMyLocationBtn) {
                 window.renderStoresOnCheckoutMap(pos.lat, pos.lng);
             }
             Swal.close();
-        }, (error) => {
+        }, async (error) => {
+            // Attempt network IP fallback if GPS is blocked or timed out
+            let ipLoc = null;
+            try {
+                const resp = await fetch('https://ipwho.is/', { signal: AbortSignal.timeout(4000) });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data && data.success !== false && Number.isFinite(parseFloat(data.latitude)) && Number.isFinite(parseFloat(data.longitude))) {
+                        ipLoc = { lat: parseFloat(data.latitude), lng: parseFloat(data.longitude) };
+                    }
+                }
+            } catch (e) {}
+
+            if (ipLoc) {
+                if (map && marker) {
+                    map.setView([ipLoc.lat, ipLoc.lng], 16);
+                    marker.setLatLng([ipLoc.lat, ipLoc.lng]);
+                }
+                await updateAddressFromCoordinates(ipLoc.lat, ipLoc.lng);
+                calculateDeliveryFee(ipLoc.lat, ipLoc.lng);
+                if (typeof window.renderStoresOnCheckoutMap === 'function') {
+                    window.renderStoresOnCheckoutMap(ipLoc.lat, ipLoc.lng);
+                }
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Approximate Location Found',
+                    text: 'Located via network. Please drag the pin on the map to your exact delivery location.',
+                    confirmButtonColor: '#b3261e'
+                });
+                return;
+            }
+
             let message = 'Error: The Geolocation service failed.';
             if (error && error.code === 1) {
-                message = 'Location permission was denied. Please allow location access.';
+                message = 'Location permission was denied. Please allow location access in your browser settings, or pin your address on the map.';
             } else if (error && error.code === 2) {
-                message = 'Location could not be determined. Please check your signal and try again.';
+                message = 'Location could not be determined. Please drag the pin on the map.';
             } else if (error && error.code === 3) {
-                message = 'Location request timed out. Please try again.';
+                message = 'Location request timed out. Please try again or drag the pin on the map.';
             }
             Swal.fire('Error', message, 'error');
         }, {
             enableHighAccuracy: true,
-            timeout: 12000,
+            timeout: 8000,
             maximumAge: 300000
         });
     } else {

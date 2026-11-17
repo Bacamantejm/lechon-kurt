@@ -1804,18 +1804,22 @@ document.addEventListener('DOMContentLoaded', function () {
     setTimeout(initShopsMap, 150);
     applyShopFilters();
 
-    // 4. Try background browser geolocation if not set from navbar
-    if (!isUserLocationAccurate && navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(function (pos) {
-            isUserLocationAccurate = true;
-            userLocationLabel = 'Current GPS Position';
-            const detected = detectCityFromTextOrCoords('', pos.coords.latitude, pos.coords.longitude);
-            if (detected) {
-                detectedCity = detected;
+    // 4. Try background browser geolocation silently ONLY if permission was already granted
+    if (!isUserLocationAccurate && navigator.permissions && navigator.permissions.query) {
+        navigator.permissions.query({ name: 'geolocation' }).then(function (permissionStatus) {
+            if (permissionStatus.state === 'granted' && navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function (pos) {
+                    isUserLocationAccurate = true;
+                    userLocationLabel = 'Current GPS Position';
+                    const detected = detectCityFromTextOrCoords('', pos.coords.latitude, pos.coords.longitude);
+                    if (detected) {
+                        detectedCity = detected;
+                    }
+                    calculateShopDistances(pos.coords.latitude, pos.coords.longitude);
+                    applyShopFilters();
+                }, function () {}, { timeout: 4000, maximumAge: 300000 });
             }
-            calculateShopDistances(pos.coords.latitude, pos.coords.longitude);
-            applyShopFilters();
-        }, function () {}, { timeout: 4000, maximumAge: 300000 });
+        }).catch(function () {});
     }
 
     // Event Listeners

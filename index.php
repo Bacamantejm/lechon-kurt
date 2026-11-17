@@ -5637,15 +5637,19 @@ document.addEventListener('DOMContentLoaded', function () {
         resetToDefaultCaviteScope();
     }
 
-    // Try auto-detecting user location silently if permission was previously granted
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            function (position) {
-                updateNearest(position.coords.latitude, position.coords.longitude, true);
-            },
-            function () { /* Keep default Cavite calculation */ },
-            { enableHighAccuracy: false, timeout: 4000, maximumAge: 300000 }
-        );
+    // Auto-detect user location silently ONLY if permission was already granted
+    if (navigator.permissions && navigator.permissions.query) {
+        navigator.permissions.query({ name: 'geolocation' }).then(function (permissionStatus) {
+            if (permissionStatus.state === 'granted' && navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function (position) {
+                        updateNearest(position.coords.latitude, position.coords.longitude, true);
+                    },
+                    function () { /* Keep default Cavite calculation */ },
+                    { enableHighAccuracy: false, timeout: 4000, maximumAge: 300000 }
+                );
+            }
+        }).catch(function () {});
     }
 
     window.addEventListener('storage', function (e) {

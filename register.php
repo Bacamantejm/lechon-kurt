@@ -4463,7 +4463,26 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         reverseGeocodeLocation(lat, lng);
                     },
-                    function(err) {
+                    async function(err) {
+                        try {
+                            const resp = await fetch('https://ipwho.is/', { signal: AbortSignal.timeout(4000) });
+                            if (resp.ok) {
+                                const data = await resp.json();
+                                if (data && data.success !== false && Number.isFinite(parseFloat(data.latitude)) && Number.isFinite(parseFloat(data.longitude))) {
+                                    useCurrentLocationBtn.innerHTML = '<i class="fas fa-crosshairs" style="color: #b3261e;"></i> Locate Me';
+                                    const lat = parseFloat(data.latitude);
+                                    const lng = parseFloat(data.longitude);
+                                    if (validatePinLocation(lat, lng)) {
+                                        if (regMap && regMarker) {
+                                            regMap.flyTo([lat, lng], 16);
+                                            regMarker.setLatLng([lat, lng]);
+                                        }
+                                        reverseGeocodeLocation(lat, lng);
+                                    }
+                                    return;
+                                }
+                            }
+                        } catch (e) {}
                         useCurrentLocationBtn.innerHTML = '<i class="fas fa-crosshairs" style="color: #b3261e;"></i> Locate Me';
                         showError('Location Access Error', 'Unable to retrieve your current location. Please drag the pin on the map instead.');
                     },
