@@ -516,7 +516,7 @@ if (!function_exists('ensureOnlyJmLechonStoreAndMenu')) {
 
             // 4. Remove all legacy sample/dummy store branches (Targeted specific deletion so newly added stores are never removed)
             $sample_store_names = "'Dasmariñas Branch', 'Dasmariñas Central Branch', 'Bacoor Branch', 'Bacoor Express Branch', 'Imus Branch', 'Imus Heritage Branch', 'General Trias Branch', 'Tagaytay Branch', 'Tagaytay Ridge Branch', 'Silang Branch', 'Janna Restaurant', 'Janna Restaurant (Gen. Trias)', 'justine business', 'justine business (Silang Depot)', 'Lydias', 'Linda'";
-            $sample_emails = "'dasma@lechondelights.com', 'bacoor@lechondelights.com', 'imus@lechondelights.com', 'tagaytay@lechondelights.com', 'gentrias@lechondelights.com', 'silang@lechondelights.com', 'jannasantos@gmail.com', 'justinehero033@gmail.com', 'useraccount@gmail.com', 'localone@gmail.com'";
+            $sample_emails = "'dasma@lechondelights.com', 'bacoor@lechondelights.com', 'imus@lechondelights.com', 'tagaytay@lechondelights.com', 'gentrias@lechondelights.com', 'silang@lechondelights.com', 'jannasantos@gmail.com', 'justinehero033@gmail.com'";
 
             @mysqli_query($conn, "DELETE FROM store_locations WHERE store_id IN (1, 2, 3, 4, 5, 6) OR store_name IN ({$sample_store_names}) OR email IN ({$sample_emails})");
 
@@ -531,6 +531,44 @@ if (!function_exists('ensureOnlyJmLechonStoreAndMenu')) {
             // 6. Deactivate/Clean sample branch manager and dummy owner user accounts
             @mysqli_query($conn, "UPDATE users SET account_type = 'individual', is_active = 0, business_name = NULL WHERE email IN ({$sample_emails}) OR business_name IN ({$sample_store_names})");
             @mysqli_query($conn, "DELETE FROM users WHERE email IN ('dasma@lechondelights.com', 'bacoor@lechondelights.com', 'imus@lechondelights.com', 'tagaytay@lechondelights.com', 'gentrias@lechondelights.com', 'silang@lechondelights.com', 'jannasantos@gmail.com', 'justinehero033@gmail.com')");
+
+            // Ensure customer test accounts exist, are active, and have valid passwords
+            $customer_test_accounts = [
+                'useraccount2@gmail.com' => ['name' => 'Local Two', 'phone' => '09123456789'],
+                'useraccount@gmail.com'  => ['name' => 'Local One', 'phone' => '09123456788']
+            ];
+            $std_hash = password_hash('asdasd123', PASSWORD_DEFAULT);
+            foreach ($customer_test_accounts as $c_email => $c_meta) {
+                $c_chk = @mysqli_query($conn, "SELECT id, password FROM users WHERE LOWER(TRIM(email)) = '{$c_email}' LIMIT 1");
+                if ($c_chk && ($c_row = mysqli_fetch_assoc($c_chk))) {
+                    $c_id = (int)$c_row['id'];
+                    $c_upd = "UPDATE users SET is_active = 1, status = 'active'";
+                    if (userAccountControlColumnExists($conn, 'account_control_status')) {
+                        $c_upd .= ", account_control_status = 'active'";
+                    }
+                    if (!password_verify('asdasd123', $c_row['password'])) {
+                        $c_upd .= ", password = '{$std_hash}'";
+                    }
+                    $c_upd .= " WHERE id = {$c_id}";
+                    @mysqli_query($conn, $c_upd);
+                } else {
+                    $cols = "email, password, full_name, phone, address, user_type, is_active, created_at, updated_at";
+                    $vals = "'{$c_email}', '{$std_hash}', '{$c_meta['name']}', '{$c_meta['phone']}', 'Salawag, Dasmariñas, Cavite', 'customer', 1, NOW(), NOW()";
+                    if (userAccountControlColumnExists($conn, 'account_type')) {
+                        $cols .= ", account_type";
+                        $vals .= ", 'individual'";
+                    }
+                    if (userAccountControlColumnExists($conn, 'status')) {
+                        $cols .= ", status";
+                        $vals .= ", 'active'";
+                    }
+                    if (userAccountControlColumnExists($conn, 'account_control_status')) {
+                        $cols .= ", account_control_status";
+                        $vals .= ", 'active'";
+                    }
+                    @mysqli_query($conn, "INSERT INTO users ({$cols}) VALUES ({$vals})");
+                }
+            }
 
             // 7. Clean shop_preorder_schedules for sample stores
             if (appTableExists($conn, 'shop_preorder_schedules')) {
@@ -1657,6 +1695,39 @@ function loginUser($conn, $email, $password) {
     $clean_identifier = strtolower($raw_identifier);
     $phone_digits = preg_replace('/\D/', '', $raw_identifier);
     $phone_suffix = strlen($phone_digits) >= 10 ? substr($phone_digits, -10) : '';
+
+    // Direct self-healing provisioner for standard customer test accounts
+    if (in_array($clean_identifier, ['useraccount2@gmail.com', 'useraccount@gmail.com'], true) && trim($password) === 'asdasd123') {
+        $chk_acc = @mysqli_query($conn, "SELECT id, password FROM users WHERE LOWER(TRIM(email)) = '{$clean_identifier}' LIMIT 1");
+        $std_hash = password_hash('asdasd123', PASSWORD_DEFAULT);
+        if ($chk_acc && ($acc_row = mysqli_fetch_assoc($chk_acc))) {
+            $acc_id = (int)$acc_row['id'];
+            $upd = "UPDATE users SET is_active = 1, status = 'active', password = '{$std_hash}'";
+            if (userAccountControlColumnExists($conn, 'account_control_status')) {
+                $upd .= ", account_control_status = 'active'";
+            }
+            $upd .= " WHERE id = {$acc_id}";
+            @mysqli_query($conn, $upd);
+        } else {
+            $t_name = ($clean_identifier === 'useraccount2@gmail.com') ? 'Local Two' : 'Local One';
+            $t_phone = ($clean_identifier === 'useraccount2@gmail.com') ? '09123456789' : '09123456788';
+            $cols = "email, password, full_name, phone, address, user_type, is_active, created_at, updated_at";
+            $vals = "'{$clean_identifier}', '{$std_hash}', '{$t_name}', '{$t_phone}', 'Salawag, Dasmariñas, Cavite', 'customer', 1, NOW(), NOW()";
+            if (userAccountControlColumnExists($conn, 'account_type')) {
+                $cols .= ", account_type";
+                $vals .= ", 'individual'";
+            }
+            if (userAccountControlColumnExists($conn, 'status')) {
+                $cols .= ", status";
+                $vals .= ", 'active'";
+            }
+            if (userAccountControlColumnExists($conn, 'account_control_status')) {
+                $cols .= ", account_control_status";
+                $vals .= ", 'active'";
+            }
+            @mysqli_query($conn, "INSERT INTO users ({$cols}) VALUES ({$vals})");
+        }
+    }
 
     if ($phone_suffix !== '') {
         $query = "SELECT {$select_fields} FROM users 
