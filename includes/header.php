@@ -2581,6 +2581,10 @@ document.addEventListener('pointerdown', function(e) {
                 <!-- Header Location Pinning Map -->
                 <div style="padding: 0 16px 14px 16px;">
                     <div id="headerMap" style="height: 180px; width: 100%; border-radius: 8px; border: 1px solid #efddcd; z-index: 1;"></div>
+                    <div id="headerLuzonGateAlert" style="display: none; align-items: center; gap: 8px; margin: 8px 0 4px 0; padding: 8px 12px; background: #fff1f0; border: 1px solid #fee4e2; border-radius: 8px; color: #b3261e; font-size: 12px; font-weight: 600;">
+                        <i class="fas fa-triangle-exclamation" style="font-size: 14px; flex-shrink: 0;"></i>
+                        <span>Location outside Luzon. Delivery is available within Luzon only.</span>
+                    </div>
                     <p style="font-size: 0.72rem; color: #7b6d64; margin: 4px 0 10px 0; text-align: left; font-weight: 500;">Drag the pin or click on the map to set your location.</p>
                     <button type="button" id="headerSaveLocationBtn" style="width: 100%; background: #b3261e; color: #fff; font-weight: 800; font-size: 14px; border: none; border-radius: 10px; padding: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 12px rgba(179,38,30,0.25);">
                         <i class="fas fa-check-circle"></i> Save Location
@@ -3870,6 +3874,54 @@ document.addEventListener('DOMContentLoaded', function () {
     const marketQuickAddressSubmitBtn = document.getElementById('marketQuickAddressSubmitBtn');
     const marketAddressPills = document.querySelectorAll('#marketAddressPopover .market-address-pill');
 
+    // Shared Luzon Geofence Validation
+    window.LUZON_BOUNDS = window.LUZON_BOUNDS || {
+        minLat: 11.5,
+        maxLat: 21.5,
+        minLng: 119.0,
+        maxLng: 124.6,
+        defaultCenter: [14.3294, 120.9367]
+    };
+
+    window.isCoordinatesInsideLuzon = window.isCoordinatesInsideLuzon || function(lat, lng, addressData) {
+        const latNum = parseFloat(lat);
+        const lngNum = parseFloat(lng);
+        if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
+            return false;
+        }
+        if (latNum < window.LUZON_BOUNDS.minLat || latNum > window.LUZON_BOUNDS.maxLat || 
+            lngNum < window.LUZON_BOUNDS.minLng || lngNum > window.LUZON_BOUNDS.maxLng) {
+            return false;
+        }
+        if (addressData) {
+            const country = String(addressData.country_code || addressData.country || '').toLowerCase();
+            if (country && country !== 'ph' && country !== 'philippines') {
+                return false;
+            }
+            const text = String(
+                (addressData.display_name || addressData.formatted || '') + ' ' +
+                (addressData.region || '') + ' ' +
+                (addressData.state || '') + ' ' +
+                (addressData.province || '') + ' ' +
+                (addressData.city || '')
+            ).toLowerCase();
+            
+            const nonLuzonKeywords = [
+                'visayas', 'mindanao', 'cebu', 'bohol', 'iloilo', 'negros', 'leyte', 'samar', 'guimaras', 'siquijor', 'biliran',
+                'davao', 'zamboanga', 'cagayan de oro', 'bukidnon', 'general santos', 'gensan', 'cotabato', 'misamis',
+                'surigao', 'agusan', 'lanao', 'maguindanao', 'sulu', 'tawi-tawi', 'basilan', 'camiguin', 'sarangani',
+                'sultan kudarat', 'south cotabato', 'compostela', 'caraga', 'barmm', 'western visayas', 'central visayas',
+                'eastern visayas', 'zamboanga peninsula', 'northern mindanao', 'davao region', 'soccsksargen'
+            ];
+            for (let i = 0; i < nonLuzonKeywords.length; i++) {
+                if (text.includes(nonLuzonKeywords[i])) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    };
+
     // Header location Leaflet map
     let headerMap = null;
     let headerMarker = null;
@@ -3892,6 +3944,38 @@ document.addEventListener('DOMContentLoaded', function () {
         }).addTo(headerMap);
 
         const geocodeHeaderCoords = async (lat, lng) => {
+            const isInside = window.isCoordinatesInsideLuzon(lat, lng);
+            const alertEl = document.getElementById('headerLuzonGateAlert');
+            const saveBtn = document.getElementById('headerSaveLocationBtn');
+
+            if (!isInside) {
+                if (alertEl) alertEl.style.display = 'flex';
+                if (saveBtn) {
+                    saveBtn.disabled = true;
+                    saveBtn.style.opacity = '0.5';
+                    saveBtn.style.cursor = 'not-allowed';
+                }
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Location Outside Service Area',
+                        text: 'Delivery is strictly available within Luzon only. Your selected location is outside our coverage area.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                }
+                // Snap back to default Luzon center
+                headerMarker.setLatLng([14.3294, 120.9367]);
+                headerMap.setView([14.3294, 120.9367], 13);
+                return;
+            }
+
+            if (alertEl) alertEl.style.display = 'none';
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.style.opacity = '1';
+                saveBtn.style.cursor = 'pointer';
+            }
+
             try {
                 if (marketQuickStreetInput) marketQuickStreetInput.value = "Locating...";
                 const endpoint = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&countrycodes=ph&lat=${lat}&lon=${lng}`;
@@ -3901,6 +3985,25 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (response.ok) {
                     const data = await response.json();
                     if (data && data.display_name) {
+                        if (!window.isCoordinatesInsideLuzon(lat, lng, data)) {
+                            if (alertEl) alertEl.style.display = 'flex';
+                            if (saveBtn) {
+                                saveBtn.disabled = true;
+                                saveBtn.style.opacity = '0.5';
+                                saveBtn.style.cursor = 'not-allowed';
+                            }
+                            if (typeof Swal !== 'undefined') {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Location Outside Service Area',
+                                    text: 'Delivery is strictly available within Luzon only. Your selected location is outside our coverage area.',
+                                    confirmButtonColor: '#b3261e'
+                                });
+                            }
+                            headerMarker.setLatLng([14.3294, 120.9367]);
+                            headerMap.setView([14.3294, 120.9367], 13);
+                            return;
+                        }
                         const addr = data.display_name;
                         if (marketQuickStreetInput) marketQuickStreetInput.value = addr;
                         const city = data.address?.city || data.address?.town || data.address?.municipality || 'Cavite';

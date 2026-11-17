@@ -27,6 +27,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             saSetFlash('danger', 'Unable to save platform fee rule.');
         }
+    } elseif ($action === 'save_buyer_fee_settings') {
+        if ($monetizationService->saveBuyerFeeSettings($_POST, $current_admin_id)) {
+            saSetFlash('success', 'Buyer convenience fee configuration updated successfully.');
+        } else {
+            saSetFlash('danger', 'Unable to update buyer convenience fee configuration.');
+        }
     } elseif ($action === 'generate_invoice') {
         if ($monetizationService->generateInvoiceForPartner((int)($_POST['partner_user_id'] ?? 0), $current_admin_id, (string)($_POST['billing_month'] ?? ''))) {
             saSetFlash('success', 'Billing invoice generated successfully.');
@@ -106,9 +112,11 @@ $invoices = $dashboard['invoices'] ?? [];
 $feeRules = $dashboard['fee_rules'] ?? [];
 $partnerRows = $dashboard['partner_rows'] ?? [];
 $metrics = $dashboard['metrics'] ?? [];
-$monthlySeries = $dashboard['monthly_series'] ?? ['labels' => [], 'order_fee_revenue' => [], 'subscription_revenue' => []];
+$monthlySeries = $dashboard['monthly_series'] ?? ['labels' => [], 'order_fee_revenue' => [], 'subscription_revenue' => [], 'convenience_fee_revenue' => []];
 $partners = $monetizationService->getApprovedPartners();
 $subscriptionRequests = $monetizationService->getSubscriptionRequests(null, 80);
+$buyerFeeSettings = $dashboard['buyer_fee_settings'] ?? $monetizationService->getBuyerFeeSettings();
+$buyerFeeAnalytics = $dashboard['buyer_fee_analytics'] ?? $monetizationService->getBuyerConvenienceFeeAnalytics();
 
 $editPlanId = (int)($_GET['edit_plan'] ?? 0);
 $selectedPlan = null;
@@ -158,6 +166,10 @@ saRenderModuleHeader('Platform Monetization', 'Platform Monetization & Revenue',
         <div class="metric-card"><span class="metric-label">Actual Collected Total</span><div class="metric-value"><?php echo saFormatCurrency($metrics['actual_collected_revenue'] ?? 0); ?></div></div>
         <div class="metric-card"><span class="metric-label">Outstanding Invoices</span><div class="metric-value"><?php echo saFormatCurrency($metrics['outstanding_invoice_total'] ?? 0); ?></div></div>
         <div class="metric-card"><span class="metric-label">Overdue Invoices</span><div class="metric-value"><?php echo saFormatCurrency($metrics['overdue_invoice_total'] ?? 0); ?></div></div>
+        <div class="metric-card"><span class="metric-label">Buyer Fees (All-Time)</span><div class="metric-value" style="color: #027a48;"><?php echo saFormatCurrency($metrics['buyer_fee_total'] ?? 0); ?></div></div>
+        <div class="metric-card"><span class="metric-label">Buyer Fees (This Month)</span><div class="metric-value" style="color: #175cd3;"><?php echo saFormatCurrency($metrics['buyer_fee_month'] ?? 0); ?></div></div>
+        <div class="metric-card"><span class="metric-label">Orders with Buyer Fee</span><div class="metric-value"><?php echo number_format((int)($metrics['buyer_fee_orders'] ?? 0)); ?></div></div>
+        <div class="metric-card"><span class="metric-label">Avg Buyer Fee per Order</span><div class="metric-value"><?php echo saFormatCurrency($metrics['buyer_fee_avg'] ?? 0); ?></div></div>
     </div>
 </div>
 
@@ -416,6 +428,69 @@ saRenderModuleHeader('Platform Monetization', 'Platform Monetization & Revenue',
             </form>
         </div>
     </div>
+</div>
+
+<div class="module-section">
+    <div class="module-section-header">
+        <div>
+            <h3>Buyer Convenience Fee & Platform Sustainability</h3>
+            <p class="module-subtext">Configure the dynamic percentage fee and flat minimum floor charged to buyers at checkout to fund dispatch operations and platform sustainability.</p>
+        </div>
+        <div>
+            <span class="badge" style="<?php echo !empty($buyerFeeSettings['is_enabled']) ? 'background:#ecfdf3; color:#027a48; border:1px solid #abefc6;' : 'background:#fffaeb; color:#b54708; border:1px solid #fedf89;'; ?> padding: 6px 14px; border-radius: 20px; font-weight: 600; font-size: 0.85rem;">
+                <?php echo !empty($buyerFeeSettings['is_enabled']) ? '<i class="fas fa-check-circle"></i> Active at Checkout' : '<i class="fas fa-pause-circle"></i> Inactive'; ?>
+            </span>
+        </div>
+    </div>
+    <form method="post" class="module-form-grid" data-sa-confirm="1" data-sa-confirm-title="Update buyer convenience fee?" data-sa-confirm-text="This will update checkout calculations for buyers immediately." data-sa-confirm-confirm-text="Save Settings">
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+        <input type="hidden" name="action" value="save_buyer_fee_settings">
+        
+        <div class="form-group">
+            <label class="form-label" style="font-weight: 600; color: #344054;">Fee Switch</label>
+            <div class="form-check form-switch" style="padding-top: 6px;">
+                <input class="form-check-input" type="checkbox" name="is_enabled" value="1" id="buyerFeeEnabledSwitch" <?php echo !empty($buyerFeeSettings['is_enabled']) ? 'checked' : ''; ?>>
+                <label class="form-check-label" for="buyerFeeEnabledSwitch" style="font-size: 0.9rem; color: #475467;">
+                    Enable buyer convenience fee
+                </label>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" style="font-weight: 600; color: #344054;">Order Scope</label>
+            <select name="applies_to" class="form-select">
+                <option value="delivery_only" <?php echo ($buyerFeeSettings['applies_to'] ?? '') === 'delivery_only' ? 'selected' : ''; ?>>Delivery Orders Only (Recommended)</option>
+                <option value="online_only" <?php echo ($buyerFeeSettings['applies_to'] ?? '') === 'online_only' ? 'selected' : ''; ?>>Online / GCash Payments Only</option>
+                <option value="all_orders" <?php echo ($buyerFeeSettings['applies_to'] ?? '') === 'all_orders' ? 'selected' : ''; ?>>All Customer Orders</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" style="font-weight: 600; color: #344054;">Fee Percentage (%)</label>
+            <input type="number" step="0.01" min="0" max="100" name="fee_percent" class="form-control" placeholder="Fee percent" value="<?php echo htmlspecialchars((string)($buyerFeeSettings['fee_percent'] ?? '3.00')); ?>" required>
+            <small class="text-muted" style="font-size: 0.78rem;">Default: 3.00% of order subtotal</small>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" style="font-weight: 600; color: #344054;">Minimum Floor Amount (₱)</label>
+            <input type="number" step="0.01" min="0" name="fee_flat_minimum" class="form-control" placeholder="Minimum fee" value="<?php echo htmlspecialchars((string)($buyerFeeSettings['fee_flat_minimum'] ?? '20.00')); ?>" required>
+            <small class="text-muted" style="font-size: 0.78rem;">Default: ₱20.00 floor per order</small>
+        </div>
+
+        <div class="form-group" style="grid-column: 1 / -1;">
+            <label class="form-label" style="font-weight: 600; color: #344054;">Disclosure / Note on Receipt</label>
+            <input type="text" name="description" class="form-control" placeholder="Customer-facing policy summary" value="<?php echo htmlspecialchars((string)($buyerFeeSettings['description'] ?? 'Platform Sustainability & Dispatch Convenience Fee')); ?>">
+        </div>
+
+        <div class="module-inline-actions" style="grid-column: 1 / -1; margin-top: 8px;">
+            <button type="submit" class="btn btn-primary" style="background: #b3261e; border-color: #b3261e;">
+                <i class="fas fa-hand-holding-dollar"></i> Update Convenience Fee Settings
+            </button>
+            <span class="text-muted" style="font-size: 0.8rem; margin-left: 12px; align-self: center;">
+                Last modified: <?php echo htmlspecialchars((string)($buyerFeeSettings['updated_at'] ?? 'Never')); ?>
+            </span>
+        </div>
+    </form>
 </div>
 
 <div class="module-section">
@@ -921,8 +996,10 @@ $extra_scripts .= '<script>';
 $extra_scripts .= 'const monetizationLabels = ' . json_encode($monthlySeries['labels'] ?? []) . ';';
 $extra_scripts .= 'const monetizationOrderFees = ' . json_encode($monthlySeries['order_fee_revenue'] ?? []) . ';';
 $extra_scripts .= 'const monetizationSubscriptions = ' . json_encode($monthlySeries['subscription_revenue'] ?? []) . ';';
+$extra_scripts .= 'const monetizationConvenienceFees = ' . json_encode($monthlySeries['convenience_fee_revenue'] ?? []) . ';';
 $extra_scripts .= 'const monetizationMrr = ' . json_encode((float)($metrics['mrr'] ?? 0)) . ';';
 $extra_scripts .= 'const monetizationOrderFeeMonth = ' . json_encode((float)($metrics['estimated_order_fee_month'] ?? 0)) . ';';
+$extra_scripts .= 'const monetizationBuyerFeeMonth = ' . json_encode((float)($metrics['buyer_fee_month'] ?? 0)) . ';';
 $extra_scripts .= <<<JS
 const monetizationCurrency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
 const monetizationRevenueChart = document.getElementById('monetizationRevenueChart');
@@ -942,6 +1019,12 @@ if (monetizationRevenueChart) {
                     label: 'Subscription Revenue Baseline',
                     data: monetizationSubscriptions,
                     backgroundColor: 'rgba(22, 163, 74, 0.75)',
+                    borderRadius: 8
+                },
+                {
+                    label: 'Buyer Convenience Fees',
+                    data: monetizationConvenienceFees,
+                    backgroundColor: 'rgba(179, 38, 30, 0.75)',
                     borderRadius: 8
                 }
             ]
@@ -967,10 +1050,10 @@ if (monetizationMixChart) {
     new Chart(monetizationMixChart, {
         type: 'doughnut',
         data: {
-            labels: ['MRR Baseline', 'Order Fee Revenue'],
+            labels: ['MRR Baseline', 'Order Fee Revenue', 'Buyer Convenience Fees'],
             datasets: [{
-                data: [monetizationMrr, monetizationOrderFeeMonth],
-                backgroundColor: ['#16a34a', '#0ea5e9']
+                data: [monetizationMrr, monetizationOrderFeeMonth, monetizationBuyerFeeMonth],
+                backgroundColor: ['#16a34a', '#0ea5e9', '#b3261e']
             }]
         },
         options: {

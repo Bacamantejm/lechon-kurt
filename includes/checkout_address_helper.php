@@ -51,6 +51,109 @@ if (!function_exists('caAddressHash')) {
     }
 }
 
+if (!function_exists('caIsLocationInsideLuzon')) {
+    /**
+     * Hard geofence security validation to ensure buyer delivery locations are strictly inside Luzon.
+     * Validates GPS coordinate bounding box (Lat 12.0N-19.2N, Lng 119.5E-124.5E),
+     * PSGC region codes, and administrative region/province/city keywords.
+     */
+    function caIsLocationInsideLuzon($lat = null, $lng = null, $region = '', $province = '', $address_blob = '', $region_code = '') {
+        $latNum = is_numeric($lat) ? (float)$lat : null;
+        $lngNum = is_numeric($lng) ? (float)$lng : null;
+
+        // GPS Coordinate Bounding Box check (covers Luzon Island Group: Lat 11.5N - 21.5N, Lng 119.0E - 124.6E)
+        if ($latNum !== null && $lngNum !== null && abs($latNum) > 0.0001 && abs($lngNum) > 0.0001) {
+            if ($latNum < 11.5 || $latNum > 21.5 || $lngNum < 119.0 || $lngNum > 124.6) {
+                return false;
+            }
+        }
+
+        // PSGC Region Code Check (06, 07, 08 = Visayas; 09, 10, 11, 12, 15, 16, 19 = Mindanao)
+        $cleanRegCode = trim((string)$region_code);
+        if ($cleanRegCode !== '') {
+            $regNum = (int)$cleanRegCode;
+            $nonLuzonRegCodes = [6, 7, 8, 9, 10, 11, 12, 15, 16, 18, 19];
+            if (in_array($regNum, $nonLuzonRegCodes, true)) {
+                return false;
+            }
+        }
+
+        // Administrative location text check
+        $combinedText = strtolower(trim((string)$region . ' ' . (string)$province . ' ' . (string)$address_blob));
+        if ($combinedText !== '') {
+            $nonLuzonKeywords = [
+                'visayas', 'mindanao', 'cebu', 'bohol', 'iloilo', 'negros', 'leyte', 'samar', 'guimaras', 'siquijor', 'biliran',
+                'davao', 'zamboanga', 'cagayan de oro', 'bukidnon', 'general santos', 'gensan', 'cotabato', 'misamis',
+                'surigao', 'agusan', 'lanao', 'maguindanao', 'sulu', 'tawi-tawi', 'basilan', 'camiguin', 'sarangani',
+                'sultan kudarat', 'south cotabato', 'compostela', 'caraga', 'barmm', 'western visayas', 'central visayas',
+                'eastern visayas', 'zamboanga peninsula', 'northern mindanao', 'davao region', 'soccsksargen'
+            ];
+            foreach ($nonLuzonKeywords as $keyword) {
+                if (strpos($combinedText, $keyword) !== false) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+}
+
+if (!function_exists('caIsLocationInsideCavite')) {
+    /**
+     * Hard geofence security validation to ensure seller/restaurant locations are strictly inside Cavite.
+     * Validates GPS coordinate bounding box (Lat 14.00N-14.52N, Lng 120.55E-121.12E),
+     * Cavite LGUs list, and rejects outside province/city indicators.
+     */
+    function caIsLocationInsideCavite($lat = null, $lng = null, $province = '', $city = '', $address_blob = '') {
+        $latNum = is_numeric($lat) ? (float)$lat : null;
+        $lngNum = is_numeric($lng) ? (float)$lng : null;
+
+        // GPS Coordinate Bounding Box check (covers Cavite province)
+        if ($latNum !== null && $lngNum !== null && abs($latNum) > 0.0001 && abs($lngNum) > 0.0001) {
+            if ($latNum < 14.00 || $latNum > 14.52 || $lngNum < 120.55 || $lngNum > 121.12) {
+                return false;
+            }
+        }
+
+        $combinedText = strtolower(trim((string)$province . ' ' . (string)$city . ' ' . (string)$address_blob));
+        if ($combinedText !== '') {
+            $outsideIndicators = [
+                'metro manila', 'batangas', 'laguna', 'quezon province', 'rizal', 'bulacan',
+                'pampanga', 'bataan', 'ncr', 'quezon city', 'taguig', 'makati', 'pasay',
+                'muntinlupa', 'paranaque', 'parañaque', 'las pinas', 'las piñas', 'manila',
+                'calookan', 'marikina', 'pasig', 'san juan', 'mandaluyong', 'valenzuela',
+                'malabon', 'navotas', 'pateros', 'cebu', 'davao', 'iloilo', 'visayas', 'mindanao'
+            ];
+            foreach ($outsideIndicators as $out) {
+                if (strpos($combinedText, $out) !== false && strpos($combinedText, 'cavite') === false) {
+                    return false;
+                }
+            }
+
+            $caviteLgus = [
+                'bacoor', 'cavite city', 'dasmarinas', 'dasmariñas', 'general trias', 'gen. trias',
+                'imus', 'tagaytay', 'trece martires', 'alfonso', 'amadeo', 'carmona',
+                'general emilio aguinaldo', 'bailen', 'general mariano alvarez', 'gma',
+                'indang', 'kawit', 'magallanes', 'maragondon', 'mendez', 'mendez-nunez',
+                'mendez-nuñez', 'naic', 'noveleta', 'rosario', 'silang', 'tanza', 'ternate', 'cavite'
+            ];
+            $hasCaviteLgu = false;
+            foreach ($caviteLgus as $lgu) {
+                if (strpos($combinedText, $lgu) !== false) {
+                    $hasCaviteLgu = true;
+                    break;
+                }
+            }
+            if (!$hasCaviteLgu && ($latNum === null || $latNum == 0)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+}
+
 if (!function_exists('caEnsureUserSavedAddressSchema')) {
     function caEnsureUserSavedAddressSchema($conn) {
         static $ensured = false;
@@ -224,6 +327,15 @@ if (!function_exists('caSaveUserSavedAddress')) {
             return ['success' => false, 'message' => 'Address is empty.'];
         }
 
+        if (function_exists('caIsLocationInsideLuzon')) {
+            if (!caIsLocationInsideLuzon($latitude, $longitude, $region_name, $province_name, $full_address, $region_code)) {
+                return [
+                    'success' => false,
+                    'message' => 'Delivery addresses are strictly limited to Luzon only. Your location is outside our coverage area.'
+                ];
+            }
+        }
+
         if ($street_address === '') {
             $street_address = caNormalizeAddressValue(strtok($full_address, ','), 190);
         }
@@ -263,6 +375,14 @@ if (!function_exists('caSaveUserSavedAddress')) {
                 }
                 $longitude = number_format($lng_num, 7, '.', '');
             }
+        }
+
+        // Authoritative Hard Security Gate: Address must be inside Luzon
+        if (!caIsLocationInsideLuzon($latitude, $longitude, $region_name, $province_name, $full_address, $region_code)) {
+            return [
+                'success' => false,
+                'message' => 'Delivery is strictly available within Luzon only. The selected address is outside our service area.'
+            ];
         }
 
         $address_hash = caAddressHash($full_address);

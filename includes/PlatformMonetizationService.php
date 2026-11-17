@@ -184,11 +184,41 @@ class PlatformMonetizationService
                 KEY idx_pse_event_type (event_type),
                 KEY idx_pse_subscription (subscription_id),
                 KEY idx_pse_created (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+            "CREATE TABLE IF NOT EXISTS platform_buyer_fee_settings (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                setting_key VARCHAR(80) NOT NULL,
+                fee_percent DECIMAL(6,2) NOT NULL DEFAULT 3.00,
+                fee_flat_minimum DECIMAL(12,2) NOT NULL DEFAULT 20.00,
+                is_enabled TINYINT(1) NOT NULL DEFAULT 1,
+                applies_to ENUM('delivery_only','online_only','all_orders') NOT NULL DEFAULT 'delivery_only',
+                description VARCHAR(255) NULL,
+                updated_by INT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uniq_platform_buyer_fee_key (setting_key)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         ];
 
         foreach ($queries as $query) {
             $this->conn->query($query);
+        }
+
+        if ($this->tableExists('platform_buyer_fee_settings')) {
+            $checkSetting = $this->fetchOne("SELECT id FROM platform_buyer_fee_settings WHERE setting_key = 'buyer_convenience_fee' LIMIT 1");
+            if (!$checkSetting) {
+                $this->conn->query("INSERT INTO platform_buyer_fee_settings (setting_key, fee_percent, fee_flat_minimum, is_enabled, applies_to, description)
+                                    VALUES ('buyer_convenience_fee', 3.00, 20.00, 1, 'delivery_only', 'Platform Sustainability & Dispatch Convenience Fee charged on customer delivery orders')");
+            }
+        }
+
+        if ($this->tableExists('orders')) {
+            if (!$this->columnExists('orders', 'convenience_fee')) {
+                $this->conn->query("ALTER TABLE `orders` ADD COLUMN `convenience_fee` DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER `delivery_fee`");
+            }
+            if (!$this->columnExists('orders', 'convenience_fee_rate')) {
+                $this->conn->query("ALTER TABLE `orders` ADD COLUMN `convenience_fee_rate` DECIMAL(6,2) NOT NULL DEFAULT 0.00 AFTER `convenience_fee`");
+            }
         }
 
         if ($this->tableExists('partner_plan_subscriptions')) {
@@ -2115,6 +2145,179 @@ class PlatformMonetizationService
         );
     }
 
+    public function getBuyerFeeSettings(): array
+    {
+        $default = [
+            'fee_percent' => 3.00,
+            'fee_flat_minimum' => 20.00,
+            'is_enabled' => 1,
+            'applies_to' => 'delivery_only',
+            'description' => 'Platform Sustainability & Dispatch Convenience Fee charged on customer delivery orders',
+            'updated_at' => date('Y-m-d H:i:s')
+        ];
+
+        if (!$this->tableExists('platform_buyer_fee_settings')) {
+            return $default;
+        }
+
+        $row = $this->fetchOne("SELECT * FROM platform_buyer_fee_settings WHERE setting_key = 'buyer_convenience_fee' LIMIT 1");
+        if (!$row) {
+            return $default;
+        }
+
+        return [
+            'fee_percent' => (float)($row['fee_percent'] ?? 3.00),
+            'fee_flat_minimum' => (float)($row['fee_flat_minimum'] ?? 20.00),
+            'is_enabled' => (int)($row['is_enabled'] ?? 1),
+            'applies_to' => (string)($row['applies_to'] ?? 'delivery_only'),
+            'description' => (string)($row['description'] ?? $default['description']),
+            'updated_at' => (string)($row['updated_at'] ?? $default['updated_at'])
+        ];
+    }
+
+    public function saveBuyerFeeSettings(array $input, int $actor_user_id = 0): bool
+    {
+        $this->ensureSchema();
+        $fee_percent = max(0.0, min(100.0, (float)($input['fee_percent'] ?? 3.00)));
+        $fee_flat_minimum = max(0.0, (float)($input['fee_flat_minimum'] ?? 20.00));
+        $is_enabled = isset($input['is_enabled']) && ((string)$input['is_enabled'] === '1' || (string)$input['is_enabled'] === 'on') ? 1 : 0;
+        $applies_to = in_array((string)($input['applies_to'] ?? ''), ['delivery_only', 'online_only', 'all_orders'], true)
+            ? (string)$input['applies_to']
+            : 'delivery_only';
+        $description = trim((string)($input['description'] ?? 'Platform Sustainability & Dispatch Convenience Fee charged on customer delivery orders'));
+
+        $stmt = $this->conn->prepare(
+            "INSERT INTO platform_buyer_fee_settings (setting_key, fee_percent, fee_flat_minimum, is_enabled, applies_to, description, updated_by, updated_at)
+             VALUES ('buyer_convenience_fee', ?, ?, ?, ?, ?, ?, NOW())
+             ON DUPLICATE KEY UPDATE
+                fee_percent = VALUES(fee_percent),
+                fee_flat_minimum = VALUES(fee_flat_minimum),
+                is_enabled = VALUES(is_enabled),
+                applies_to = VALUES(applies_to),
+                description = VALUES(description),
+                updated_by = VALUES(updated_by),
+                updated_at = NOW()"
+        );
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('ddissi', $fee_percent, $fee_flat_minimum, $is_enabled, $applies_to, $description, $actor_user_id);
+        $ok = $stmt->execute();
+        $stmt->close();
+        return $ok;
+    }
+
+    public function calculateBuyerConvenienceFee(float $subtotal, string $delivery_option = 'delivery', string $payment_method = ''): array
+    {
+        $settings = $this->getBuyerFeeSettings();
+        if (empty($settings['is_enabled'])) {
+            return [
+                'fee' => 0.0,
+                'rate' => 0.0,
+                'min_fee' => 0.0,
+                'is_applicable' => false,
+                'is_floor_applied' => false
+            ];
+        }
+
+        $applies_to = $settings['applies_to'] ?? 'delivery_only';
+        $is_applicable = false;
+
+        if ($applies_to === 'delivery_only') {
+            $is_applicable = ($delivery_option === 'delivery');
+        } elseif ($applies_to === 'online_only') {
+            $is_applicable = in_array(strtolower($payment_method), ['paymongo', 'gcash', 'card', 'online'], true);
+        } elseif ($applies_to === 'all_orders') {
+            $is_applicable = true;
+        }
+
+        if (!$is_applicable || $subtotal <= 0) {
+            return [
+                'fee' => 0.0,
+                'rate' => (float)$settings['fee_percent'],
+                'min_fee' => (float)$settings['fee_flat_minimum'],
+                'is_applicable' => false,
+                'is_floor_applied' => false
+            ];
+        }
+
+        $rate = (float)$settings['fee_percent'];
+        $min_fee = (float)$settings['fee_flat_minimum'];
+        $raw_fee = $subtotal * ($rate / 100.0);
+        $is_floor_applied = ($raw_fee < $min_fee);
+        $final_fee = round(max($raw_fee, $min_fee), 2);
+
+        return [
+            'fee' => $final_fee,
+            'rate' => $rate,
+            'min_fee' => $min_fee,
+            'is_applicable' => true,
+            'is_floor_applied' => $is_floor_applied
+        ];
+    }
+
+    public function getBuyerConvenienceFeeAnalytics(): array
+    {
+        $default = [
+            'total_collected' => 0.0,
+            'this_month_collected' => 0.0,
+            'total_orders_charged' => 0,
+            'average_fee' => 0.0,
+            'monthly_series' => []
+        ];
+
+        if (!$this->tableExists('orders') || !$this->columnExists('orders', 'convenience_fee')) {
+            return $default;
+        }
+
+        $totalRow = $this->fetchOne(
+            "SELECT 
+                COALESCE(SUM(convenience_fee), 0) AS total_collected,
+                COUNT(CASE WHEN convenience_fee > 0 THEN 1 END) AS total_orders,
+                COALESCE(AVG(NULLIF(convenience_fee, 0)), 0) AS avg_fee
+             FROM orders 
+             WHERE status NOT IN ('cancelled', 'declined')"
+        );
+
+        $monthStart = date('Y-m-01 00:00:00');
+        $monthEnd = date('Y-m-t 23:59:59');
+        $monthRow = $this->fetchOne(
+            "SELECT COALESCE(SUM(convenience_fee), 0) AS month_collected
+             FROM orders 
+             WHERE created_at BETWEEN ? AND ?
+               AND status NOT IN ('cancelled', 'declined')",
+            [$monthStart, $monthEnd],
+            'ss'
+        );
+
+        $monthlySeries = [];
+        for ($i = 5; $i >= 0; $i--) {
+            $mStart = date('Y-m-01 00:00:00', strtotime("-{$i} month"));
+            $mEnd = date('Y-m-t 23:59:59', strtotime($mStart));
+            $label = date('M Y', strtotime($mStart));
+            $mRow = $this->fetchOne(
+                "SELECT COALESCE(SUM(convenience_fee), 0) AS fee_sum
+                 FROM orders 
+                 WHERE created_at BETWEEN ? AND ?
+                   AND status NOT IN ('cancelled', 'declined')",
+                [$mStart, $mEnd],
+                'ss'
+            );
+            $monthlySeries[] = [
+                'label' => $label,
+                'amount' => round((float)($mRow['fee_sum'] ?? 0), 2)
+            ];
+        }
+
+        return [
+            'total_collected' => round((float)($totalRow['total_collected'] ?? 0), 2),
+            'this_month_collected' => round((float)($monthRow['month_collected'] ?? 0), 2),
+            'total_orders_charged' => (int)($totalRow['total_orders'] ?? 0),
+            'average_fee' => round((float)($totalRow['avg_fee'] ?? 0), 2),
+            'monthly_series' => $monthlySeries
+        ];
+    }
+
     public function getDashboardData(): array
     {
         $plans = $this->getPlans();
@@ -2219,6 +2422,9 @@ class PlatformMonetizationService
             }
         }
 
+        $buyerFeeSettings = $this->getBuyerFeeSettings();
+        $buyerFeeAnalytics = $this->getBuyerConvenienceFeeAnalytics();
+
         return [
             'metrics' => [
                 'approved_partners' => count($partners),
@@ -2234,7 +2440,11 @@ class PlatformMonetizationService
                 'overdue_invoice_total' => round($overdueInvoices, 2),
                 'total_subscription_collected' => round($totalSubCollected, 2),
                 'total_plan_switches' => $totalPlanSwitches,
-                'total_cancellations' => $totalCancellations
+                'total_cancellations' => $totalCancellations,
+                'buyer_fee_total' => $buyerFeeAnalytics['total_collected'] ?? 0.0,
+                'buyer_fee_month' => $buyerFeeAnalytics['this_month_collected'] ?? 0.0,
+                'buyer_fee_orders' => $buyerFeeAnalytics['total_orders_charged'] ?? 0,
+                'buyer_fee_avg' => $buyerFeeAnalytics['average_fee'] ?? 0.0
             ],
             'plans' => $plans,
             'subscriptions' => $subscriptions,
@@ -2242,6 +2452,8 @@ class PlatformMonetizationService
             'invoices' => $invoices,
             'fee_rules' => $this->getFeeRules(),
             'partner_rows' => $partnerRows,
+            'buyer_fee_settings' => $buyerFeeSettings,
+            'buyer_fee_analytics' => $buyerFeeAnalytics,
             'monthly_series' => $this->getMonthlyRevenueSeries()
         ];
     }
@@ -2681,6 +2893,7 @@ class PlatformMonetizationService
         $labels = [];
         $orderFees = [];
         $subscriptionBase = [];
+        $convenienceFees = [];
         $currentMrr = 0.0;
         foreach ($this->getSubscriptions() as $subscription) {
             if (in_array((string)($subscription['subscription_status'] ?? ''), ['trial', 'active', 'past_due', 'paused'], true)) {
@@ -2701,12 +2914,24 @@ class PlatformMonetizationService
             }
             $orderFees[] = round($monthFeeTotal, 2);
             $subscriptionBase[] = round($currentMrr, 2);
+
+            $mStartDt = $start . ' 00:00:00';
+            $mEndDt = $end . ' 23:59:59';
+            $cfRow = $this->tableExists('orders') && $this->columnExists('orders', 'convenience_fee')
+                ? $this->fetchOne(
+                    "SELECT COALESCE(SUM(convenience_fee), 0) AS cf_sum FROM orders WHERE created_at BETWEEN ? AND ? AND status NOT IN ('cancelled', 'declined')",
+                    [$mStartDt, $mEndDt],
+                    'ss'
+                )
+                : null;
+            $convenienceFees[] = round((float)($cfRow['cf_sum'] ?? 0), 2);
         }
 
         return [
             'labels' => $labels,
             'order_fee_revenue' => $orderFees,
-            'subscription_revenue' => $subscriptionBase
+            'subscription_revenue' => $subscriptionBase,
+            'convenience_fee_revenue' => $convenienceFees
         ];
     }
 
@@ -3161,7 +3386,7 @@ class PlatformMonetizationService
         return $rows;
     }
 
-    private function fetchOne(string $query, array $params, string $types): ?array
+    private function fetchOne(string $query, array $params = [], string $types = ''): ?array
     {
         $stmt = $this->conn->prepare($query);
         if (!$stmt) {

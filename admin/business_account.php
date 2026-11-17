@@ -3,6 +3,7 @@ session_start();
 include 'auth.php';
 include '../includes/config.php';
 include '../includes/security.php';
+require_once __DIR__ . '/../includes/checkout_address_helper.php';
 
 checkAdminAccess();
 $admin_info = getAdminInfo($conn);
@@ -310,6 +311,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_business_account
     }
     if (strlen($address) > 350) {
         $errors[] = 'Business address must be 350 characters or less.';
+    } elseif ($address !== '' && function_exists('caIsLocationInsideCavite') && !caIsLocationInsideCavite(null, null, '', '', $address)) {
+        $errors[] = 'Store and restaurant locations must be strictly inside Cavite. Your business address is outside our Cavite coverage area.';
     }
 
     $phone = preg_replace('/\D+/', '', $phone_input);

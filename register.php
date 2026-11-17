@@ -5,6 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once 'includes/config.php';
 require_once 'includes/email_verification_helper.php';
 require_once 'includes/security.php';
+require_once 'includes/checkout_address_helper.php';
 
 // If already logged in, redirect
 if (isset($_SESSION['user_id'])) {
@@ -445,6 +446,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $longitude = trim($_POST['longitude'] ?? '');
     $city_name = trim($_POST['city_name'] ?? '');
     $province_name = trim($_POST['province_name'] ?? '');
+    $region_name = trim($_POST['psgc_region_name'] ?? '');
+    $region_code = trim($_POST['psgc_region_code'] ?? '');
 
     if ($address === '' && $street_address !== '') {
         $address = $street_address . ($city_name !== '' ? ', ' . $city_name : '') . ($province_name !== '' ? ', ' . $province_name : '');
@@ -527,6 +530,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $error = 'Please enter your complete address.';
             $form_data['address'] = '';
             $form_data['street_address'] = '';
+            $form_data['latitude'] = '';
+            $form_data['longitude'] = '';
+        } elseif ($account_type === 'organization' && function_exists('caIsLocationInsideCavite') && !caIsLocationInsideCavite($latitude, $longitude, $province_name, $city_name, $address)) {
+            $error = 'Seller and restaurant locations must be strictly inside Cavite. Your selected address is outside our Cavite coverage area.';
+            $form_data['latitude'] = '';
+            $form_data['longitude'] = '';
+        } elseif ($account_type === 'individual' && function_exists('caIsLocationInsideLuzon') && !caIsLocationInsideLuzon($latitude, $longitude, $region_name, $province_name, $address, $region_code)) {
+            $error = 'Customer registration addresses are strictly limited to Luzon only. Your selected address is outside our delivery coverage area.';
             $form_data['latitude'] = '';
             $form_data['longitude'] = '';
         } else {
@@ -4165,6 +4176,47 @@ document.addEventListener('DOMContentLoaded', function() {
         return false;
     }
 
+    function checkIsLocationInLuzon(lat, lng, addressData) {
+        if (typeof window.isCoordinatesInsideLuzon === 'function') {
+            return window.isCoordinatesInsideLuzon(lat, lng, addressData);
+        }
+        const latNum = parseFloat(lat);
+        const lngNum = parseFloat(lng);
+        if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return false;
+        if (latNum < 11.5 || latNum > 21.5 || lngNum < 119.0 || lngNum > 124.6) return false;
+        return true;
+    }
+
+    function validatePinLocation(lat, lng, addressData = null) {
+        const isOrg = (accountType === 'organization');
+        if (isOrg) {
+            const isCavite = checkIsLocationInCavite(lat, lng, addressData ? (addressData.display_name || JSON.stringify(addressData)) : '');
+            if (!isCavite) {
+                showError('Location Outside Cavite', 'Seller and restaurant locations must be strictly within Cavite. Your pin was moved back to Cavite.');
+                const defaultLat = 14.3294, defaultLng = 120.9367;
+                if (regMarker) regMarker.setLatLng([defaultLat, defaultLng]);
+                if (regMap) regMap.panTo([defaultLat, defaultLng]);
+                if (regLatitude) regLatitude.value = String(defaultLat);
+                if (regLongitude) regLongitude.value = String(defaultLng);
+                updateCaviteStatusUI(false, 'Location outside Cavite. Please select a location in Cavite.');
+                return false;
+            }
+        } else {
+            const isLuzon = checkIsLocationInLuzon(lat, lng, addressData);
+            if (!isLuzon) {
+                showError('Location Outside Service Area', 'Customer delivery addresses must be strictly within Luzon. Your pin was moved back to Luzon.');
+                const defaultLat = 14.3294, defaultLng = 120.9367;
+                if (regMarker) regMarker.setLatLng([defaultLat, defaultLng]);
+                if (regMap) regMap.panTo([defaultLat, defaultLng]);
+                if (regLatitude) regLatitude.value = String(defaultLat);
+                if (regLongitude) regLongitude.value = String(defaultLng);
+                updateCaviteStatusUI(false, 'Location outside Luzon. Delivery is available within Luzon only.');
+                return false;
+            }
+        }
+        return true;
+    }
+
     function updateCaviteStatusUI(isValid, message) {
         isAddressInCavite = isValid;
         if (!caviteStatusBadge) return;
@@ -4215,6 +4267,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const lngNum = parseFloat(lng);
         if (isNaN(latNum) || isNaN(lngNum)) return;
 
+        if (!validatePinLocation(latNum, lngNum)) {
+            return;
+        }
+
         if (regLatitude) regLatitude.value = String(latNum.toFixed(7));
         if (regLongitude) regLongitude.value = String(lngNum.toFixed(7));
 
@@ -4222,6 +4278,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latNum}&lon=${lngNum}&addressdetails=1`);
             const data = await res.json();
             if (data && data.display_name) {
+                if (!validatePinLocation(latNum, lngNum, data)) {
+                    return;
+                }
                 const fullAddr = data.display_name;
                 
                 if (homeAddressInput) {
@@ -4263,6 +4322,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 const first = list[0];
                 const lat = parseFloat(first.lat);
                 const lng = parseFloat(first.lon);
+
+                if (!validatePinLocation(lat, lng, first)) {
+                    return;
+                }
 
                 if (regMap && regMarker) {
                     regMap.flyTo([lat, lng], 16);
@@ -4391,6 +4454,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         useCurrentLocationBtn.innerHTML = '<i class="fas fa-crosshairs" style="color: #b3261e;"></i> Locate Me';
                         const lat = pos.coords.latitude;
                         const lng = pos.coords.longitude;
+                        if (!validatePinLocation(lat, lng)) {
+                            return;
+                        }
                         if (regMap && regMarker) {
                             regMap.flyTo([lat, lng], 16);
                             regMarker.setLatLng([lat, lng]);
@@ -4886,6 +4952,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 homeAddressInput.focus();
                 highlightErrorField(homeAddressInput);
             }
+            return false;
+        }
+
+        const latVal = parseFloat(regLatitude?.value || '');
+        const lngVal = parseFloat(regLongitude?.value || '');
+        if (!validatePinLocation(latVal, lngVal, { display_name: addressVal })) {
             return false;
         }
 

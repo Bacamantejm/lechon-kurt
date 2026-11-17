@@ -726,6 +726,12 @@ class EmailService {
                                 <td>₱<?php echo number_format($order['delivery_fee'], 2); ?></td>
                             </tr>
                             <?php endif; ?>
+                            <?php if (!empty($order['convenience_fee']) && (float)$order['convenience_fee'] > 0): ?>
+                            <tr class="total-row">
+                                <td colspan="3" style="text-align: right;">Convenience Fee:</td>
+                                <td>₱<?php echo number_format($order['convenience_fee'], 2); ?></td>
+                            </tr>
+                            <?php endif; ?>
                             <tr class="total-row">
                                 <td colspan="3" style="text-align: right;"><strong>Total Amount:</strong></td>
                                 <td><strong>₱<?php echo number_format($order['total_amount'], 2); ?></strong></td>
@@ -785,6 +791,9 @@ class EmailService {
         $text .= "Subtotal: ₱" . number_format($order['subtotal'], 2) . "\n";
         if ($order['delivery_fee'] > 0) {
             $text .= "Delivery Fee: ₱" . number_format($order['delivery_fee'], 2) . "\n";
+        }
+        if (!empty($order['convenience_fee']) && (float)$order['convenience_fee'] > 0) {
+            $text .= "Convenience Fee: ₱" . number_format($order['convenience_fee'], 2) . "\n";
         }
         $text .= "Total Amount: ₱" . number_format($order['total_amount'], 2) . "\n\n";
         
