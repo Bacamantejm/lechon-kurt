@@ -28,28 +28,30 @@ if (!function_exists('srClaimCode')) {
 }
 
 if (!function_exists('srResolveVatBreakdown')) {
-    function srResolveVatBreakdown(float $subtotal, float $deliveryFee, float $storedTotal, float $voucherDiscount = 0.00): array
+    function srResolveVatBreakdown(float $subtotal, float $deliveryFee, float $storedTotal, float $voucherDiscount = 0.00, float $convenienceFee = 0.00): array
     {
         $subtotal = round(max(0, $subtotal), 2);
         $deliveryFee = round(max(0, $deliveryFee), 2);
+        $convenienceFee = round(max(0, $convenienceFee), 2);
         $storedTotal = round(max(0, $storedTotal), 2);
         $voucherDiscount = round(max(0, $voucherDiscount), 2);
 
         $defaultVat = round($subtotal * srVatRate(), 2);
-        $expectedTotal = round(max(0, $subtotal + $deliveryFee + $defaultVat - $voucherDiscount), 2);
+        $expectedTotal = round(max(0, $subtotal + $deliveryFee + $convenienceFee + $defaultVat - $voucherDiscount), 2);
         $vatAmount = abs($storedTotal - $expectedTotal) < 0.03
             ? $defaultVat
-            : round(max(0, $storedTotal + $voucherDiscount - $subtotal - $deliveryFee), 2);
+            : round(max(0, $storedTotal + $voucherDiscount - $subtotal - $deliveryFee - $convenienceFee), 2);
 
         if ($vatAmount <= 0 && $subtotal > 0) {
             $vatAmount = $defaultVat;
         }
 
-        $totalAmount = $storedTotal > 0 ? $storedTotal : round(max(0, $subtotal + $deliveryFee + $vatAmount - $voucherDiscount), 2);
+        $totalAmount = $storedTotal > 0 ? $storedTotal : round(max(0, $subtotal + $deliveryFee + $convenienceFee + $vatAmount - $voucherDiscount), 2);
 
         return [
             'subtotal' => $subtotal,
             'delivery_fee' => $deliveryFee,
+            'convenience_fee' => $convenienceFee,
             'voucher_discount' => $voucherDiscount,
             'vatable_sales' => $subtotal,
             'vat_exempt_sales' => 0.00,
@@ -431,7 +433,8 @@ if (!function_exists('srFetchOrderReceiptData')) {
             (float)($order['subtotal'] ?? 0),
             (float)($order['delivery_fee'] ?? 0),
             (float)($order['total_amount'] ?? 0),
-            (float)($order['voucher_discount'] ?? 0)
+            (float)($order['voucher_discount'] ?? 0),
+            (float)($order['convenience_fee'] ?? 0)
         );
 
         $deliveryOption = strtolower(trim((string)($order['delivery_option'] ?? '')));
@@ -799,6 +802,9 @@ if (!function_exists('srRenderReceiptPage')) {
             <div class="receipt-total-row"><span>Subtotal</span><span><?php echo htmlspecialchars(srMoney((float)($totals['subtotal'] ?? 0))); ?></span></div>
             <?php if ((float)($totals['delivery_fee'] ?? 0) > 0): ?>
                 <div class="receipt-total-row"><span>Delivery Fee</span><span><?php echo htmlspecialchars(srMoney((float)($totals['delivery_fee'] ?? 0))); ?></span></div>
+            <?php endif; ?>
+            <?php if ((float)($totals['convenience_fee'] ?? 0) > 0): ?>
+                <div class="receipt-total-row"><span>Convenience Fee</span><span><?php echo htmlspecialchars(srMoney((float)($totals['convenience_fee'] ?? 0))); ?></span></div>
             <?php endif; ?>
             <?php if ((float)($totals['voucher_discount'] ?? 0) > 0): ?>
                 <div class="receipt-total-row"><span>Voucher Discount</span><span>-<?php echo htmlspecialchars(srMoney((float)($totals['voucher_discount'] ?? 0))); ?></span></div>

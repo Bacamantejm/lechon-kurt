@@ -169,6 +169,19 @@ include 'includes/header.php';
                     </strong>
                 </div>
 
+                <?php 
+                $db_convenience_fee = (float)($db_order['convenience_fee'] ?? 0);
+                if ($db_convenience_fee > 0): 
+                ?>
+                <div class="details-item">
+                    <span class="details-label">Convenience Fee</span>
+                    <strong class="details-value" style="color: #475467;">
+                        PHP <?php echo number_format($db_convenience_fee, 2); ?>
+                        <small style="display:block; font-size:11px; font-weight:normal; color:#667085;">Platform Sustainability</small>
+                    </strong>
+                </div>
+                <?php endif; ?>
+
                 <?php if (!$is_pickup && !empty($delivery_address)): ?>
                 <div class="details-item full-width">
                     <span class="details-label">Delivery Address</span>

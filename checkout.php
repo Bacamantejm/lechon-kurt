@@ -555,7 +555,20 @@ if ($storefront_seller_id <= 0 && !empty($pickup_store['owner_user_id'])) {
 require_once __DIR__ . '/includes/preorder_schedule_helper.php';
 $store_schedule_config = posGetSellerSchedule($conn, (int)$storefront_seller_id);
 $initial_calendar_data = posGetCalendarAvailability($conn, (int)$storefront_seller_id);
-$total = max(0, $subtotal + $vat_amount + $delivery_fee - $voucher_discount);
+
+require_once __DIR__ . '/includes/PlatformMonetizationService.php';
+$monetizationService = new PlatformMonetizationService($conn);
+$buyer_fee_calc = $monetizationService->calculateBuyerConvenienceFee(
+    (float)$subtotal,
+    $current_checkout_delivery_option,
+    ''
+);
+$convenience_fee = (float)($buyer_fee_calc['fee'] ?? 0.0);
+$convenience_fee_rate = (float)($buyer_fee_calc['rate'] ?? 3.0);
+$convenience_fee_min = (float)($buyer_fee_calc['min_fee'] ?? 20.0);
+$convenience_fee_settings = $monetizationService->getBuyerFeeSettings();
+
+$total = max(0, $subtotal + $vat_amount + $delivery_fee + $convenience_fee - $voucher_discount);
 
 // Calculate downpayment (30%)
 $downpayment = $total * 0.30;
@@ -825,6 +838,10 @@ $remaining = $total - $downpayment;
                                     <div class="fp-order-note-wrap" style="margin-top: 12px;">
                                         <input type="text" id="delivery_instructions" name="delivery_instructions" class="fp-note-input" placeholder="Note to rider - e.g. building, landmark, gate code" value="<?php echo htmlspecialchars($_SESSION['delivery_instructions'] ?? ''); ?>">
                                     </div>
+                                    <div id="checkoutLuzonGateAlert" style="display: none; align-items: center; gap: 8px; margin-top: 10px; padding: 10px 14px; background: #fff1f0; border: 1px solid #fee4e2; border-radius: 10px; color: #b3261e; font-size: 12.5px; font-weight: 600;">
+                                        <i class="fas fa-triangle-exclamation" style="font-size: 15px; flex-shrink: 0;"></i>
+                                        <span>Your delivery pin is outside Luzon. Delivery is strictly available within Luzon only. Please change your address.</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -991,6 +1008,10 @@ $remaining = $total - $downpayment;
                                 <div class="fp-totals-row">
                                     <span>Delivery Fee</span>
                                     <span id="fpDelDeliveryFeeDisplay">₱<?php echo number_format($delivery_fee, 2); ?></span>
+                                </div>
+                                <div class="fp-totals-row" id="fpConvenienceFeeRow" style="<?php echo ($convenience_fee > 0) ? 'display:flex;' : 'display:none;'; ?>">
+                                    <span>Convenience Fee (Dispatch & Platform)</span>
+                                    <span id="fpDelConvenienceFeeDisplay">₱<?php echo number_format($convenience_fee, 2); ?></span>
                                 </div>
                                 <?php if ($voucher_discount > 0): ?>
                                 <div class="fp-totals-row fp-voucher-discount-row">
@@ -1317,6 +1338,8 @@ $remaining = $total - $downpayment;
                     <input type="hidden" id="voucher_id_hidden" name="voucher_id" value="<?php echo (int)$applied_voucher_id; ?>">
                     <input type="hidden" id="voucher_code_hidden" name="voucher_code" value="<?php echo htmlspecialchars($applied_voucher_code); ?>">
                     <input type="hidden" id="voucher_discount_hidden" name="voucher_discount" value="<?php echo number_format($voucher_discount, 2, '.', ''); ?>">
+                    <input type="hidden" id="convenience_fee_hidden" name="convenience_fee" value="<?php echo number_format($convenience_fee, 2, '.', ''); ?>">
+                    <input type="hidden" id="convenience_fee_rate_hidden" name="convenience_fee_rate" value="<?php echo number_format($convenience_fee_rate, 2, '.', ''); ?>">
                 </form>
             </div>
 
@@ -1391,6 +1414,13 @@ $remaining = $total - $downpayment;
                         <div class="summary-row">
                             <span class="row-label">VAT (12% incl.)</span>
                             <span class="row-value" id="summaryVat">₱<?php echo number_format($vat_amount, 2); ?></span>
+                        </div>
+                        <div class="summary-row" id="summaryConvenienceFeeRow" style="<?php echo ($convenience_fee > 0) ? 'display:flex;' : 'display:none;'; ?>">
+                            <span class="row-label">
+                                Convenience Fee 
+                                <span class="badge" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; font-size:10px; font-weight:600; padding:2px 6px; border-radius:10px; margin-left:4px;">Platform Sustainability</span>
+                            </span>
+                            <span class="row-value" id="summaryConvenienceFee">₱<?php echo number_format($convenience_fee, 2); ?></span>
                         </div>
                         <div class="summary-row voucher-row" id="voucherSummaryRow" style="<?php echo $voucher_discount > 0 ? 'display:flex;' : 'display:none;'; ?>">
                             <span class="row-label">Voucher Discount <small id="summaryVoucherCode"><?php echo $applied_voucher_code !== '' ? '(' . htmlspecialchars($applied_voucher_code) . ')' : ''; ?></small></span>
@@ -5623,6 +5653,31 @@ const vatRate = <?php echo $vat_rate; ?>;
 let currentDeliveryFee = <?php echo number_format($delivery_fee, 2, '.', ''); ?>;
 let currentVoucherDiscount = <?php echo number_format($voucher_discount, 2, '.', ''); ?>;
 let currentVoucherCode = <?php echo json_encode($applied_voucher_code); ?>;
+const platformBuyerFeeSettings = <?php echo json_encode($convenience_fee_settings, JSON_UNESCAPED_UNICODE); ?>;
+let currentConvenienceFee = <?php echo number_format($convenience_fee, 2, '.', ''); ?>;
+
+function calculateBuyerFee(subtotal, mode, paymentMethod) {
+    if (!platformBuyerFeeSettings || !platformBuyerFeeSettings.is_enabled) {
+        return 0;
+    }
+    const appliesTo = platformBuyerFeeSettings.applies_to || 'delivery_only';
+    let isApplicable = false;
+    if (appliesTo === 'delivery_only') {
+        isApplicable = (mode === 'delivery');
+    } else if (appliesTo === 'online_only') {
+        const pm = (paymentMethod || '').toLowerCase();
+        isApplicable = (pm === 'paymongo' || pm === 'gcash' || pm === 'card' || pm === 'online');
+    } else if (appliesTo === 'all_orders') {
+        isApplicable = true;
+    }
+    if (!isApplicable || subtotal <= 0) {
+        return 0;
+    }
+    const pct = parseFloat(platformBuyerFeeSettings.fee_percent || 3.0);
+    const minFloor = parseFloat(platformBuyerFeeSettings.fee_flat_minimum || 20.0);
+    const raw = subtotal * (pct / 100.0);
+    return Math.max(raw, minFloor);
+}
 const PSGC_API_BASE = 'https://psgc.gitlab.io/api';
 const userAddressSeed = <?php echo json_encode((string)($user['address'] ?? '')); ?>;
 const accountAutoFill = <?php echo json_encode([
@@ -5770,6 +5825,14 @@ function applyFoodpandaPickupMode(modeOrIsPickup) {
         if (downpaymentRadio) downpaymentRadio.checked = false;
         currentDeliveryFee = 0;
     } else {
+        if (currentDeliveryFee <= 0) {
+            const savedFee = parseFloat(document.getElementById('calculated_delivery_fee')?.value || '0');
+            if (savedFee > 0) {
+                currentDeliveryFee = savedFee;
+            } else if (typeof initialDeliveryQuote !== 'undefined' && initialDeliveryQuote && initialDeliveryQuote.fee) {
+                currentDeliveryFee = parseFloat(initialDeliveryQuote.fee) || 0;
+            }
+        }
         const isPaymongoSelected = document.getElementById('fpPaymentRowPaymongo')?.classList.contains('is-active');
         if (isPaymongoSelected) {
             if (paymongoRadio) paymongoRadio.checked = true;
@@ -6161,6 +6224,9 @@ function selectDeliveryPaymentMethod(method) {
             guidanceText.innerHTML = `<i class="fas fa-shield-alt"></i> Official payment gateway handled securely by PayMongo. Fast, instant GCash & Maya online verification.`;
         }
     }
+    if (typeof recalculateOrderTotals === 'function') {
+        recalculateOrderTotals();
+    }
 }
 
 function openPickupScheduleSheet() {
@@ -6435,6 +6501,23 @@ function updateFoodpandaTotals() {
         }
     }
 
+    const fpConvenienceDisplay = document.getElementById('fpDelConvenienceFeeDisplay');
+    const fpConvenienceRow = document.getElementById('fpConvenienceFeeRow');
+    if (fpConvenienceDisplay) {
+        fpConvenienceDisplay.textContent = (typeof moneyFormatter !== 'undefined') ? moneyFormatter.format(currentConvenienceFee) : '₱' + currentConvenienceFee.toFixed(2);
+    }
+    if (fpConvenienceRow) {
+        fpConvenienceRow.style.display = (activeCheckoutDeliveryOption === 'delivery' && currentConvenienceFee > 0) ? 'flex' : 'none';
+    }
+    const summaryConvenienceFee = document.getElementById('summaryConvenienceFee');
+    const summaryConvenienceFeeRow = document.getElementById('summaryConvenienceFeeRow');
+    if (summaryConvenienceFee) {
+        summaryConvenienceFee.textContent = (typeof moneyFormatter !== 'undefined') ? moneyFormatter.format(currentConvenienceFee) : '₱' + currentConvenienceFee.toFixed(2);
+    }
+    if (summaryConvenienceFeeRow) {
+        summaryConvenienceFeeRow.style.display = (currentConvenienceFee > 0) ? 'flex' : 'none';
+    }
+
     if (fpGuidanceText && document.getElementById('fpPaymentRowCod')?.classList.contains('is-active')) {
         fpGuidanceText.innerHTML = `Please prepare exact cash of <strong>${formatted}</strong> for the delivery rider upon food arrival.`;
     }
@@ -6559,6 +6642,30 @@ function submitFoodpandaCheckout() {
                 icon: 'warning',
                 title: 'Delivery Address Required',
                 text: 'Please select or enter your delivery address before placing your order.',
+                confirmButtonColor: '#b3261e'
+            });
+            return;
+        }
+
+        // Hard security validation: Delivery must be strictly inside Luzon
+        const latVal = parseFloat(document.getElementById('latitude')?.value || '');
+        const lngVal = parseFloat(document.getElementById('longitude')?.value || '');
+        const addrBlob = delAddr || streetAddr || displayStreet;
+
+        let isLuzon = true;
+        if (typeof window.isCoordinatesInsideLuzon === 'function') {
+            isLuzon = window.isCoordinatesInsideLuzon(latVal, lngVal, { formatted: addrBlob });
+        } else if (!Number.isNaN(latVal) && !Number.isNaN(lngVal) && latVal !== 0 && lngVal !== 0) {
+            isLuzon = (latVal >= 12.0 && latVal <= 19.2 && lngVal >= 119.5 && lngVal <= 124.5);
+        }
+
+        if (!isLuzon) {
+            const gateAlert = document.getElementById('checkoutLuzonGateAlert');
+            if (gateAlert) gateAlert.style.display = 'flex';
+            Swal.fire({
+                icon: 'error',
+                title: 'Location Outside Service Area',
+                text: 'Delivery is strictly available within Luzon only. Your selected delivery address is outside our coverage area.',
                 confirmButtonColor: '#b3261e'
             });
             return;
@@ -6794,6 +6901,19 @@ async function switchCheckoutFulfillmentMode(mode) {
     if (pickupStepSection) pickupStepSection.style.display = isDelivery ? 'none' : 'block';
     if (deliveryBlock) deliveryBlock.style.display = isDelivery ? 'block' : 'none';
     if (deliverySection) deliverySection.style.display = isDelivery ? 'block' : 'none';
+
+    // Toggle Luzon gate alert visibility based on delivery mode
+    const checkoutGateAlert = document.getElementById('checkoutLuzonGateAlert');
+    if (!isDelivery && checkoutGateAlert) {
+        checkoutGateAlert.style.display = 'none';
+    } else if (isDelivery && checkoutGateAlert) {
+        const curLat = parseFloat(document.getElementById('latitude')?.value || '');
+        const curLng = parseFloat(document.getElementById('longitude')?.value || '');
+        const curAddr = (document.getElementById('delivery_address')?.value || document.getElementById('street_address')?.value || '').trim();
+        if (typeof window.isCoordinatesInsideLuzon === 'function' && !Number.isNaN(curLat) && !Number.isNaN(curLng) && curLat !== 0 && curLng !== 0) {
+            checkoutGateAlert.style.display = window.isCoordinatesInsideLuzon(curLat, curLng, { formatted: curAddr }) ? 'none' : 'flex';
+        }
+    }
 
     // 4. Update Hidden Inputs
     const hiddenDeliveryInput = document.getElementById('delivery_option_hidden');
@@ -7225,15 +7345,22 @@ function recalculateOrderTotals() {
     const subtotal = roundToMoney(currentSubtotal);
     const vatAmount = roundToMoney(subtotal * vatRate);
     const deliveryFee = Math.max(0, roundToMoney(currentDeliveryFee));
+
+    // Dynamic Buyer Convenience Fee
+    const checkedPmEl = document.querySelector('input[name="payment_method"]:checked');
+    const currentPaymentMethod = checkedPmEl ? checkedPmEl.value : '';
+    const convenienceFee = roundToMoney(calculateBuyerFee(subtotal, activeCheckoutDeliveryOption, currentPaymentMethod));
+    currentConvenienceFee = convenienceFee;
+
     let voucherDiscount = Math.max(0, roundToMoney(currentVoucherDiscount));
 
-    const maxPossibleDiscount = roundToMoney(subtotal + vatAmount + deliveryFee);
+    const maxPossibleDiscount = roundToMoney(subtotal + vatAmount + deliveryFee + convenienceFee);
     if (voucherDiscount > maxPossibleDiscount) {
         voucherDiscount = maxPossibleDiscount;
     }
     currentVoucherDiscount = voucherDiscount;
 
-    const total = Math.max(0, roundToMoney(subtotal + vatAmount + deliveryFee - voucherDiscount));
+    const total = Math.max(0, roundToMoney(subtotal + vatAmount + deliveryFee + convenienceFee - voucherDiscount));
     const downpayment = roundToMoney(total * 0.30);
     const remaining = roundToMoney(total - downpayment);
 
@@ -7245,6 +7372,16 @@ function recalculateOrderTotals() {
     if (deliveryEl) deliveryEl.textContent = moneyFormatter.format(deliveryFee);
     if (vatEl) vatEl.textContent = moneyFormatter.format(vatAmount);
     if (totalEl) totalEl.textContent = moneyFormatter.format(total);
+
+    const convenienceFeeEl = document.getElementById('summaryConvenienceFee');
+    const convenienceFeeRow = document.getElementById('summaryConvenienceFeeRow');
+    if (convenienceFeeEl) convenienceFeeEl.textContent = moneyFormatter.format(convenienceFee);
+    if (convenienceFeeRow) convenienceFeeRow.style.display = convenienceFee > 0 ? 'flex' : 'none';
+
+    const fpConvenienceRow = document.getElementById('fpConvenienceFeeRow');
+    const fpConvenienceDisplay = document.getElementById('fpDelConvenienceFeeDisplay');
+    if (fpConvenienceDisplay) fpConvenienceDisplay.textContent = moneyFormatter.format(convenienceFee);
+    if (fpConvenienceRow) fpConvenienceRow.style.display = (activeCheckoutDeliveryOption === 'delivery' && convenienceFee > 0) ? 'flex' : 'none';
 
     const voucherRow = document.getElementById('voucherSummaryRow');
     const voucherCodeEl = document.getElementById('summaryVoucherCode');
@@ -7271,11 +7408,18 @@ function recalculateOrderTotals() {
     const voucherIdInput = document.getElementById('voucher_id_hidden');
     const voucherCodeInputHidden = document.getElementById('voucher_code_hidden');
     const voucherDiscountInput = document.getElementById('voucher_discount_hidden');
+    const convenienceFeeHidden = document.getElementById('convenience_fee_hidden');
+    const convenienceFeeRateHidden = document.getElementById('convenience_fee_rate_hidden');
     if (totalInput) totalInput.value = total.toFixed(2);
     if (downpaymentInput) downpaymentInput.value = downpayment.toFixed(2);
     if (voucherCodeInputHidden) voucherCodeInputHidden.value = currentVoucherCode || '';
     if (voucherDiscountInput) voucherDiscountInput.value = voucherDiscount.toFixed(2);
     if (voucherIdInput && voucherDiscount <= 0) voucherIdInput.value = '';
+    if (convenienceFeeHidden) convenienceFeeHidden.value = convenienceFee.toFixed(2);
+    if (convenienceFeeRateHidden) {
+        const feeRateVal = parseFloat(platformBuyerFeeSettings?.fee_percent || 3.0);
+        convenienceFeeRateHidden.value = feeRateVal.toFixed(2);
+    }
 
     const removeVoucherBtn = document.getElementById('removeVoucherBtn');
     if (removeVoucherBtn) {
@@ -7296,6 +7440,8 @@ function recalculateOrderTotals() {
     return {
         subtotal,
         vatAmount,
+        deliveryFee,
+        convenienceFee,
         deliveryFee,
         voucherDiscount,
         total,
@@ -7820,6 +7966,19 @@ const applyCheckoutModeUI = (mode) => {
     if (pickupStepSection) pickupStepSection.style.display = isDelivery ? 'none' : 'block';
     if (deliveryBlock) deliveryBlock.style.display = isDelivery ? 'block' : 'none';
     if (deliverySection) deliverySection.style.display = isDelivery ? 'block' : 'none';
+
+    // Toggle Luzon gate alert visibility based on delivery mode
+    const checkoutGateAlert = document.getElementById('checkoutLuzonGateAlert');
+    if (!isDelivery && checkoutGateAlert) {
+        checkoutGateAlert.style.display = 'none';
+    } else if (isDelivery && checkoutGateAlert) {
+        const curLat = parseFloat(document.getElementById('latitude')?.value || '');
+        const curLng = parseFloat(document.getElementById('longitude')?.value || '');
+        const curAddr = (document.getElementById('delivery_address')?.value || document.getElementById('street_address')?.value || '').trim();
+        if (typeof window.isCoordinatesInsideLuzon === 'function' && !Number.isNaN(curLat) && !Number.isNaN(curLng) && curLat !== 0 && curLng !== 0) {
+            checkoutGateAlert.style.display = window.isCoordinatesInsideLuzon(curLat, curLng, { formatted: curAddr }) ? 'none' : 'flex';
+        }
+    }
 };
 
 const setCheckoutMode = async (mode, syncServer = true) => {
@@ -10299,6 +10458,10 @@ if (activeCheckoutDeliveryOption === 'delivery' && initialDeliveryQuote && initi
         <div id="exactLocationMapShell" style="height: 260px; width: 100%; border-radius: 14px; overflow: hidden; position: relative; margin-bottom: 8px; background: #f3f4f6; border: 1px solid #eaecf0;">
             <div id="exactLocationMapCanvas" style="width: 100%; height: 100%;"></div>
         </div>
+        <div id="exactLuzonGateAlert" style="display: none; align-items: center; gap: 8px; margin-bottom: 10px; padding: 10px 14px; background: #fff1f0; border: 1px solid #fee4e2; border-radius: 10px; color: #b3261e; font-size: 12.5px; font-weight: 600;">
+            <i class="fas fa-triangle-exclamation" style="font-size: 15px; flex-shrink: 0;"></i>
+            <span>Location outside service area. Delivery is strictly available within Luzon only.</span>
+        </div>
         <small style="display: block; margin-bottom: 14px; color: #667085; font-size: 11.5px;">
             <i class="fas fa-hand-pointer" style="color: #b3261e;"></i> Click anywhere on the map or drag the pin to pinpoint your location.
         </small>
@@ -10368,6 +10531,52 @@ document.addEventListener('DOMContentLoaded', function() {
     let exactMap = null;
     let exactMarker = null;
 
+    function checkIsInsideLuzon(lat, lng, addressData = null) {
+        if (typeof window.isCoordinatesInsideLuzon === 'function') {
+            return window.isCoordinatesInsideLuzon(lat, lng, addressData);
+        }
+        const latNum = parseFloat(lat);
+        const lngNum = parseFloat(lng);
+        if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return false;
+        if (latNum < 12.0 || latNum > 19.2 || lngNum < 119.5 || lngNum > 124.5) return false;
+        return true;
+    }
+
+    function handleExactPinMovement(lat, lng, addressData = null) {
+        const alertEl = document.getElementById('exactLuzonGateAlert');
+        const submitBtn = document.getElementById('submitExactLocationBtn');
+        const isInside = checkIsInsideLuzon(lat, lng, addressData);
+
+        if (!isInside) {
+            if (alertEl) alertEl.style.display = 'flex';
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.style.opacity = '0.5';
+                submitBtn.style.cursor = 'not-allowed';
+            }
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Location Outside Service Area',
+                    text: 'Delivery is strictly available within Luzon only. Your selected location is outside our delivery coverage area.',
+                    confirmButtonColor: '#b3261e'
+                });
+            }
+            const defaultLat = 14.3294, defaultLng = 120.9367;
+            if (exactMarker) exactMarker.setLatLng([defaultLat, defaultLng]);
+            if (exactMap) exactMap.panTo([defaultLat, defaultLng]);
+            return false;
+        }
+
+        if (alertEl) alertEl.style.display = 'none';
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.style.opacity = '1';
+            submitBtn.style.cursor = 'pointer';
+        }
+        return true;
+    }
+
     if (mainCard) {
         mainCard.addEventListener('click', function(e) {
             if (e.target.id !== 'delivery_instructions') {
@@ -10409,6 +10618,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     locateMeBtn.disabled = false;
                     const lat = pos.coords.latitude;
                     const lng = pos.coords.longitude;
+                    if (!handleExactPinMovement(lat, lng)) {
+                        return;
+                    }
                     if (exactMap && exactMarker) {
                         exactMap.setView([lat, lng], 17);
                         exactMarker.setLatLng([lat, lng]);
@@ -10417,6 +10629,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
                         const data = await res.json();
                         if (data && data.display_name && exactInput) {
+                            if (!handleExactPinMovement(lat, lng, data)) return;
                             exactInput.value = data.display_name;
                         }
                     } catch (e) {
@@ -10448,6 +10661,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const fullAddr = this.getAttribute('data-full') || this.getAttribute('data-street') || '';
             const lat = parseFloat(this.getAttribute('data-lat') || '');
             const lng = parseFloat(this.getAttribute('data-lng') || '');
+            if (!isNaN(lat) && !isNaN(lng)) {
+                if (!handleExactPinMovement(lat, lng, { formatted: fullAddr })) return;
+            }
             if (exactInput && fullAddr) {
                 exactInput.value = fullAddr;
             }
@@ -10488,6 +10704,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
+        if (!checkIsInsideLuzon(initLat, initLng)) {
+            initLat = 14.3294;
+            initLng = 120.9367;
+        }
+
         setTimeout(function() {
             if (!exactMap && window.L && document.getElementById('exactLocationMapCanvas')) {
                 exactMap = L.map('exactLocationMapCanvas').setView([initLat, initLng], 16);
@@ -10503,6 +10724,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         .then(res => res.json())
                         .then(data => {
                             if (data && data.display_name && exactInput) {
+                                if (!handleExactPinMovement(lat, lng, data)) return;
                                 exactInput.value = data.display_name;
                             }
                         })
@@ -10511,12 +10733,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 exactMarker.on('dragend', function() {
                     const pos = exactMarker.getLatLng();
+                    if (!handleExactPinMovement(pos.lat, pos.lng)) return;
                     if (exactMap) exactMap.panTo(pos);
                     reverseGeocodeExactPin(pos.lat, pos.lng);
                 });
 
                 exactMap.on('click', function(e) {
                     const pos = e.latlng;
+                    if (!handleExactPinMovement(pos.lat, pos.lng)) return;
                     if (exactMarker) exactMarker.setLatLng(pos);
                     if (exactMap) exactMap.panTo(pos);
                     reverseGeocodeExactPin(pos.lat, pos.lng);
@@ -10561,6 +10785,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                 const lat = parseFloat(this.getAttribute('data-lat'));
                                 const lng = parseFloat(this.getAttribute('data-lng'));
                                 const name = this.getAttribute('data-name');
+                                if (!handleExactPinMovement(lat, lng, { formatted: name })) {
+                                    return;
+                                }
                                 if (exactInput) exactInput.value = name;
                                 if (suggestionsBox) suggestionsBox.style.display = 'none';
                                 if (exactMap && exactMarker) {
@@ -10592,6 +10819,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!query) return;
                 const result = await forwardGeocodeFromNominatim(query);
                 if (result && Number.isFinite(result.lat) && Number.isFinite(result.lng)) {
+                    if (!handleExactPinMovement(result.lat, result.lng, { formatted: query })) {
+                        return;
+                    }
                     if (exactMap && exactMarker) {
                         exactMap.setView([result.lat, result.lng], 16);
                         exactMarker.setLatLng([result.lat, result.lng]);
@@ -10741,6 +10971,23 @@ document.addEventListener('DOMContentLoaded', function() {
             localStorage.setItem('market_address', JSON.stringify(payload));
             sessionStorage.setItem('market_address', JSON.stringify(payload));
         } catch(e) {}
+
+        // Check Luzon boundary gate
+        const checkoutGateAlert = document.getElementById('checkoutLuzonGateAlert');
+        const isLuzon = checkIsInsideLuzon(lat, lng, { formatted: fullAddrVal });
+        if (!isLuzon && activeCheckoutDeliveryOption === 'delivery') {
+            if (checkoutGateAlert) checkoutGateAlert.style.display = 'flex';
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Location Outside Service Area',
+                    text: 'Delivery is strictly available within Luzon only. The selected address is outside our coverage area.',
+                    confirmButtonColor: '#b3261e'
+                });
+            }
+        } else if (checkoutGateAlert) {
+            checkoutGateAlert.style.display = 'none';
+        }
 
         // 6. Coordinates & Delivery Fee Recalculation (async background helper)
         (async function processCoordinatesAndFee() {
@@ -10930,10 +11177,18 @@ document.addEventListener('DOMContentLoaded', function() {
         submitExactBtn.addEventListener('click', async function() {
             const queryText = (exactInput?.value || '').trim();
             let lat = 14.3294, lng = 120.9367;
-            if (exactMap) {
+            if (exactMarker) {
+                const markerPos = exactMarker.getLatLng();
+                lat = markerPos.lat;
+                lng = markerPos.lng;
+            } else if (exactMap) {
                 const center = exactMap.getCenter();
                 lat = center.lat;
                 lng = center.lng;
+            }
+
+            if (!handleExactPinMovement(lat, lng, { formatted: queryText })) {
+                return;
             }
 
             if (queryText) {
@@ -10951,6 +11206,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (fallback) {
                         lat = fallback.lat;
                         lng = fallback.lng;
+                    }
+                    if (!handleExactPinMovement(lat, lng, { formatted: queryText })) {
+                        return;
                     }
                 }
 
@@ -11016,6 +11274,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const lat = parseFloat(payload.latitude || '');
         const lng = parseFloat(payload.longitude || '');
         const addrId = payload.address_id || '';
+
+        // Check Luzon boundary gate
+        const isLuzon = checkIsInsideLuzon(lat, lng, { formatted: full });
+        const checkoutGateAlert = document.getElementById('checkoutLuzonGateAlert');
+        if (!isLuzon && activeCheckoutDeliveryOption === 'delivery') {
+            if (checkoutGateAlert) checkoutGateAlert.style.display = 'flex';
+        } else if (checkoutGateAlert) {
+            checkoutGateAlert.style.display = 'none';
+        }
 
         // 1. Update Checkout UI Address Card Text
         const parts = full.split(',').map(p => p.trim()).filter(Boolean);
@@ -11094,6 +11361,17 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (hiddenAddr && hiddenAddr.value.trim()) {
             const parts = hiddenAddr.value.split(',');
             updateDisplayAddressText(parts[0].trim(), parts.slice(1).join(',').trim());
+        }
+
+        // Initial Luzon boundary check
+        const initLat = parseFloat(document.getElementById('latitude')?.value || '');
+        const initLng = parseFloat(document.getElementById('longitude')?.value || '');
+        const initAddr = (document.getElementById('delivery_address')?.value || document.getElementById('street_address')?.value || '').trim();
+        const gateAlert = document.getElementById('checkoutLuzonGateAlert');
+        if (!Number.isNaN(initLat) && !Number.isNaN(initLng) && initLat !== 0 && initLng !== 0) {
+            if (!checkIsInsideLuzon(initLat, initLng, { formatted: initAddr }) && activeCheckoutDeliveryOption === 'delivery') {
+                if (gateAlert) gateAlert.style.display = 'flex';
+            }
         }
     }, 400);
 });

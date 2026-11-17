@@ -172,6 +172,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $longitude = number_format((float)$_POST['longitude'], 7, '.', '');
             }
 
+            if (function_exists('caIsLocationInsideLuzon')) {
+                if (!caIsLocationInsideLuzon($latitude, $longitude, $region_name, $province_name, $full_address, $region_code)) {
+                    $_SESSION['address_book_error'] = 'Delivery addresses are strictly limited to Luzon only. Your location is outside our coverage area.';
+                    header('Location: ' . $address_book_redirect_url);
+                    exit;
+                }
+            }
+
             $address_hash = caAddressHash($full_address);
 
             mysqli_begin_transaction($conn);
@@ -744,6 +752,10 @@ if (!$is_embedded) {
                 </button>
             </div>
             <div id="addressMapCanvas"></div>
+            <div id="addressBookLuzonGateAlert" style="display: none; align-items: center; gap: 8px; margin-top: 10px; padding: 10px 14px; background: #fff1f0; border: 1px solid #fee4e2; border-radius: 10px; color: #b3261e; font-size: 13px; font-weight: 600;">
+                <i class="fas fa-triangle-exclamation" style="font-size: 16px; flex-shrink: 0;"></i>
+                <span>Location outside service area. Delivery addresses are strictly limited to Luzon only.</span>
+            </div>
         </div>
         <div class="address-map-foot">
             <button type="button" class="btn-outline" id="addressMapCancelBtn">Cancel</button>
@@ -2095,14 +2107,73 @@ document.addEventListener('DOMContentLoaded', function () {
         return true;
     };
 
+    const checkIsInsideLuzon = (lat, lng, addressData) => {
+        if (typeof window.isCoordinatesInsideLuzon === 'function') {
+            return window.isCoordinatesInsideLuzon(lat, lng, addressData);
+        }
+        const latNum = parseFloat(lat);
+        const lngNum = parseFloat(lng);
+        if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return false;
+        if (latNum < 12.0 || latNum > 19.2 || lngNum < 119.5 || lngNum > 124.5) return false;
+        return true;
+    };
+
     const setMapPoint = async (point, lookupAddress) => {
         if (!mapInstance || !mapMarker || !point) return;
+
+        const alertEl = document.getElementById('addressBookLuzonGateAlert');
+        const applyBtn = document.getElementById('addressMapApplyBtn');
+
+        if (!checkIsInsideLuzon(point.lat, point.lng)) {
+            if (alertEl) alertEl.style.display = 'flex';
+            if (applyBtn) {
+                applyBtn.disabled = true;
+                applyBtn.style.opacity = '0.5';
+                applyBtn.style.cursor = 'not-allowed';
+            }
+            fireSwal(
+                'Location Outside Service Area',
+                'Delivery addresses are strictly limited to Luzon only. Your selected location is outside our coverage area.',
+                'error'
+            );
+            point = { lat: defaultCoordinates.lat, lng: defaultCoordinates.lng };
+            mapInstance.setView([point.lat, point.lng], 15);
+            mapMarker.setLatLng([point.lat, point.lng]);
+            selectedCoordinates = point;
+            return;
+        }
+
+        if (alertEl) alertEl.style.display = 'none';
+        if (applyBtn) {
+            applyBtn.disabled = false;
+            applyBtn.style.opacity = '1';
+            applyBtn.style.cursor = 'pointer';
+        }
+
         mapInstance.setView([point.lat, point.lng], 16);
         mapMarker.setLatLng([point.lat, point.lng]);
         selectedCoordinates = point;
 
         if (lookupAddress) {
             const resolved = await reverseGeocode(point.lat, point.lng);
+            if (resolved && !checkIsInsideLuzon(point.lat, point.lng, resolved)) {
+                if (alertEl) alertEl.style.display = 'flex';
+                if (applyBtn) {
+                    applyBtn.disabled = true;
+                    applyBtn.style.opacity = '0.5';
+                    applyBtn.style.cursor = 'not-allowed';
+                }
+                fireSwal(
+                    'Location Outside Service Area',
+                    'Delivery addresses are strictly limited to Luzon only. Your selected location is outside our coverage area.',
+                    'error'
+                );
+                point = { lat: defaultCoordinates.lat, lng: defaultCoordinates.lng };
+                mapInstance.setView([point.lat, point.lng], 15);
+                mapMarker.setLatLng([point.lat, point.lng]);
+                selectedCoordinates = point;
+                return;
+            }
             selectedAddressText = (resolved && resolved.formatted) || composeAddressFromParts(resolved?.parts || {}, '');
             selectedAddressComponents = resolved ? (resolved.parts || null) : null;
             if (mapSearchInput) {
@@ -2122,6 +2193,15 @@ document.addEventListener('DOMContentLoaded', function () {
         const lngField = getTargetField(targetPrefix, 'longitude');
         const currentInputAddress = (mapSearchInput?.value || '').trim();
         let finalAddress = selectedAddressText || currentInputAddress;
+
+        if (selectedCoordinates && !checkIsInsideLuzon(selectedCoordinates.lat, selectedCoordinates.lng)) {
+            fireSwal(
+                'Location Outside Service Area',
+                'Delivery addresses are strictly limited to Luzon only. Please choose a pin location inside Luzon.',
+                'error'
+            );
+            return;
+        }
 
         if (!finalAddress && selectedCoordinates) {
             const resolved = await reverseGeocode(selectedCoordinates.lat, selectedCoordinates.lng);

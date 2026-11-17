@@ -221,7 +221,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         checkoutFail('Checkout Error', 'Please enter a valid mobile number.', 422, ['field' => 'phone']);
     }
     $delivery_date = mysqli_real_escape_string($conn, $_POST['delivery_date']);
-    $delivery_time = mysqli_real_escape_string($conn, $_POST['delivery_time']);
+    $delivery_time = mb_substr(trim((string)($_POST['delivery_time'] ?? 'Standard')), 0, 100);
     $raw_payment_method = strtolower(trim((string)($_POST['payment_method'] ?? 'paymongo')));
     $payment_method = in_array($raw_payment_method, ['cod', 'paymongo'], true) ? $raw_payment_method : 'paymongo';
     $payment_type = mysqli_real_escape_string($conn, $_POST['payment_type'] ?? 'full');
@@ -293,6 +293,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 422,
                 ['field' => 'delivery_address']
             );
+        }
+
+        // Hard security validation: Delivery locations must be strictly inside Luzon
+        if (function_exists('caIsLocationInsideLuzon')) {
+            $is_inside_luzon = caIsLocationInsideLuzon(
+                $latitude,
+                $longitude,
+                $delivery_region_name ?? '',
+                $delivery_province_name ?? '',
+                $delivery_address,
+                $delivery_region_code ?? ''
+            );
+            if (!$is_inside_luzon) {
+                checkoutFail(
+                    'Location Outside Service Area',
+                    'Delivery is strictly available within Luzon only. Your selected delivery address is outside our coverage area.',
+                    422,
+                    ['field' => 'delivery_address']
+                );
+            }
         }
     } else {
         // Pickup and pre-order options must use an active branch belonging to the cart seller.
@@ -479,12 +499,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($delivery_option === 'delivery') {
         if (!empty($delivery_quote['nearest_store_id'])) {
             $pickup_location = (int)$delivery_quote['nearest_store_id'];
-        } elseif (empty($pickup_location)) {
-            $pickup_location = 1;
         }
-    } else {
-        if (empty($pickup_location)) {
-            $pickup_location = 1;
+    }
+
+    // Ensure pickup_location resolves to a valid existing store to satisfy foreign key constraints
+    $storeCheckStmt = mysqli_prepare($conn, "SELECT store_id FROM store_locations WHERE store_id = ? LIMIT 1");
+    $validStoreFound = false;
+    if ($storeCheckStmt) {
+        $checkLoc = (int)($pickup_location ?? 0);
+        mysqli_stmt_bind_param($storeCheckStmt, "i", $checkLoc);
+        mysqli_stmt_execute($storeCheckStmt);
+        $resStore = mysqli_stmt_get_result($storeCheckStmt);
+        if ($resStore && mysqli_fetch_assoc($resStore)) {
+            $validStoreFound = true;
+        }
+        mysqli_stmt_close($storeCheckStmt);
+    }
+    if (!$validStoreFound) {
+        $fbRes = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE is_active = 1 ORDER BY store_id ASC LIMIT 1");
+        if ($fbRes && ($fbRow = mysqli_fetch_assoc($fbRes))) {
+            $pickup_location = (int)$fbRow['store_id'];
+        } else {
+            $pickup_location = null;
         }
     }
 
@@ -548,7 +584,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $voucher_code = (string)($voucher_state['voucher_code'] ?? '');
     }
 
-    $total_amount = max(0, $subtotal + $vat_amount + $delivery_fee - $voucher_discount);
+    // Calculate buyer convenience fee (Platform Sustainability & Dispatch)
+    require_once 'includes/PlatformMonetizationService.php';
+    $monetizationService = new PlatformMonetizationService($conn);
+    $buyerFeeCalc = $monetizationService->calculateBuyerConvenienceFee((float)$subtotal, $delivery_option, $payment_method);
+    $convenience_fee = (float)($buyerFeeCalc['fee'] ?? 0.0);
+    $convenience_fee_rate = (float)($buyerFeeCalc['rate'] ?? 0.0);
+
+    $total_amount = max(0, $subtotal + $vat_amount + $delivery_fee + $convenience_fee - $voucher_discount);
     
     // Calculate payment amounts
     if ($payment_method === 'cod') {
@@ -622,158 +665,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         while ($row = mysqli_fetch_assoc($columns_result)) {
             $columns[] = $row['Field'];
         }
-        $has_voucher_columns = in_array('voucher_id', $columns, true)
-            && in_array('voucher_code', $columns, true)
-            && in_array('voucher_discount', $columns, true);
-        
-        // Insert order based on actual database structure
-        $has_modern_schema = in_array('delivery_option', $columns, true)
-            && in_array('latitude', $columns, true)
-            && in_array('platform_fee_amount', $columns, true);
 
-        if ($has_modern_schema) {
-            $query = "INSERT INTO orders (
-                order_number, user_id, seller_id, customer_name, customer_email, customer_phone,
-                delivery_address, delivery_date, delivery_time, estimated_delivery_time, payment_method,
-                delivery_option, pickup_location, delivery_location, latitude, longitude,
-                delivery_instructions, subtotal, delivery_fee, voucher_id, voucher_code,
-                voucher_discount, total_amount, platform_fee_rate_percent, platform_fee_flat,
-                platform_fee_amount, platform_fee_plan_name, net_seller_payout, special_instructions,
-                status, payment_status, downpayment_amount, remaining_balance
-            ) VALUES (
-                ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?,
-                ?, ?, ?, ?,
-                ?, ?, ?, ?,
-                ?, ?, ?, ?
-            )";
+        // Schema-adaptive, fully resilient order data mapping
+        $dataToInsert = [
+            'order_number' => ['value' => $order_number, 'type' => 's'],
+            'user_id' => ['value' => $user_id, 'type' => 'i'],
+            'seller_id' => ['value' => ($seller_id_for_order > 0) ? (int)$seller_id_for_order : null, 'type' => 'i'],
+            'store_id' => ['value' => ($pickup_location > 0) ? (int)$pickup_location : null, 'type' => 'i'],
+            'customer_name' => ['value' => $full_name, 'type' => 's'],
+            'customer_email' => ['value' => $email, 'type' => 's'],
+            'customer_phone' => ['value' => $phone, 'type' => 's'],
+            'delivery_address' => ['value' => $delivery_address, 'type' => 's'],
+            'delivery_date' => ['value' => $delivery_date, 'type' => 's'],
+            'delivery_time' => ['value' => $delivery_time, 'type' => 's'],
+            'estimated_delivery_time' => ['value' => !empty($estimated_delivery_time) ? (string)$estimated_delivery_time : null, 'type' => 's'],
+            'payment_method' => ['value' => $payment_method, 'type' => 's'],
+            'delivery_option' => ['value' => $delivery_option, 'type' => 's'],
+            'pickup_location' => ['value' => ($pickup_location > 0) ? (int)$pickup_location : null, 'type' => 'i'],
+            'delivery_location' => ['value' => !empty($delivery_location) ? (string)$delivery_location : null, 'type' => 's'],
+            'latitude' => ['value' => ($latitude !== null && $latitude !== '') ? number_format((float)$latitude, 8, '.', '') : null, 'type' => 's'],
+            'longitude' => ['value' => ($longitude !== null && $longitude !== '') ? number_format((float)$longitude, 8, '.', '') : null, 'type' => 's'],
+            'delivery_instructions' => ['value' => (string)($delivery_instructions ?? ''), 'type' => 's'],
+            'subtotal' => ['value' => $subtotal, 'type' => 'd'],
+            'delivery_fee' => ['value' => $delivery_fee, 'type' => 'd'],
+            'convenience_fee' => ['value' => $convenience_fee, 'type' => 'd'],
+            'convenience_fee_rate' => ['value' => $convenience_fee_rate, 'type' => 'd'],
+            'voucher_id' => ['value' => ($voucher_id > 0) ? (int)$voucher_id : null, 'type' => 'i'],
+            'voucher_code' => ['value' => !empty($voucher_code) ? (string)$voucher_code : null, 'type' => 's'],
+            'voucher_discount' => ['value' => $voucher_discount, 'type' => 'd'],
+            'total_amount' => ['value' => $total_amount, 'type' => 'd'],
+            'platform_fee_rate_percent' => ['value' => $platform_fee_rate_percent, 'type' => 'd'],
+            'platform_fee_flat' => ['value' => $platform_fee_flat, 'type' => 'd'],
+            'platform_fee_amount' => ['value' => $platform_fee_amount, 'type' => 'd'],
+            'platform_fee_plan_name' => ['value' => !empty($platform_fee_plan_name) ? (string)$platform_fee_plan_name : null, 'type' => 's'],
+            'net_seller_payout' => ['value' => $net_seller_payout, 'type' => 'd'],
+            'special_instructions' => ['value' => $order_notes, 'type' => 's'],
+            'status' => ['value' => $status, 'type' => 's'],
+            'payment_status' => ['value' => $payment_status, 'type' => 's'],
+            'downpayment_amount' => ['value' => $downpayment_amount, 'type' => 'd'],
+            'remaining_balance' => ['value' => $remaining_balance, 'type' => 'd'],
+        ];
 
-            $stmt = mysqli_prepare($conn, $query);
-            if (!$stmt) {
-                throw new Exception("Prepare failed: " . mysqli_error($conn));
+        $insertCols = [];
+        $placeholders = [];
+        $types = '';
+        $values = [];
+
+        foreach ($dataToInsert as $col => $info) {
+            if (in_array($col, $columns, true)) {
+                $insertCols[] = "`{$col}`";
+                $placeholders[] = '?';
+                $types .= $info['type'];
+                $values[] = $info['value'];
             }
-
-            $pickup_location_param = ($pickup_location > 0) ? (int)$pickup_location : null;
-            $delivery_location_param = !empty($delivery_location) ? (string)$delivery_location : null;
-            $latitude_param = ($latitude !== null && $latitude !== '') ? number_format((float)$latitude, 8, '.', '') : null;
-            $longitude_param = ($longitude !== null && $longitude !== '') ? number_format((float)$longitude, 8, '.', '') : null;
-            $estimated_delivery_time_param = !empty($estimated_delivery_time) ? (string)$estimated_delivery_time : null;
-            $voucher_id_param = ($voucher_id > 0) ? (int)$voucher_id : null;
-            $voucher_code_param = !empty($voucher_code) ? (string)$voucher_code : null;
-            $platform_plan_param = !empty($platform_fee_plan_name) ? (string)$platform_fee_plan_name : null;
-            $seller_id_param = ($seller_id_for_order > 0) ? (int)$seller_id_for_order : null;
-            $delivery_instructions_param = (string)($delivery_instructions ?? '');
-
-            mysqli_stmt_bind_param($stmt, "siisssssssssissssddisdddddsdsssdd",
-                $order_number,                  // s (1)
-                $user_id,                       // i (2)
-                $seller_id_param,               // i (3)
-                $full_name,                     // s (4)
-                $email,                         // s (5)
-                $phone,                         // s (6)
-                $delivery_address,              // s (7)
-                $delivery_date,                 // s (8)
-                $delivery_time,                 // s (9)
-                $estimated_delivery_time_param, // s (10)
-                $payment_method,                // s (11)
-                $delivery_option,               // s (12)
-                $pickup_location_param,         // i (13)
-                $delivery_location_param,       // s (14)
-                $latitude_param,                // s (15)
-                $longitude_param,               // s (16)
-                $delivery_instructions_param,   // s (17)
-                $subtotal,                      // d (18)
-                $delivery_fee,                  // d (19)
-                $voucher_id_param,              // i (20)
-                $voucher_code_param,            // s (21)
-                $voucher_discount,              // d (22)
-                $total_amount,                  // d (23)
-                $platform_fee_rate_percent,     // d (24)
-                $platform_fee_flat,             // d (25)
-                $platform_fee_amount,           // d (26)
-                $platform_plan_param,           // s (27)
-                $net_seller_payout,             // d (28)
-                $order_notes,                   // s (29)
-                $status,                        // s (30)
-                $payment_status,                // s (31)
-                $downpayment_amount,            // d (32)
-                $remaining_balance              // d (33)
-            );
-        } elseif (in_array('delivery_option', $columns, true) && 
-            in_array('pickup_location', $columns, true) && 
-            in_array('delivery_location', $columns, true)) {
-            // Database has intermediate columns
-            $query = "INSERT INTO orders (
-                order_number, user_id, customer_name, customer_email, customer_phone, 
-                delivery_address, delivery_date, delivery_time, payment_method,
-                delivery_option, pickup_location, delivery_location,
-                subtotal, delivery_fee, total_amount, special_instructions,
-                status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            
-            $stmt = mysqli_prepare($conn, $query);
-            
-            if (!$stmt) {
-                throw new Exception("Prepare failed: " . mysqli_error($conn));
-            }
-            
-            // Handle NULL values properly
-            $pickup_location_param = $pickup_location ?? NULL;
-            $delivery_location_param = $delivery_location ?? NULL;
-            
-            mysqli_stmt_bind_param($stmt, "sissssssssiisddss", 
-                $order_number,          // s
-                $user_id,               // i
-                $full_name,             // s
-                $email,                 // s
-                $phone,                 // s
-                $delivery_address,      // s
-                $delivery_date,         // s
-                $delivery_time,         // s
-                $payment_method,        // s
-                $delivery_option,       // s
-                $pickup_location_param, // i (could be NULL)
-                $delivery_location_param, // s (could be NULL)
-                $subtotal,              // d
-                $delivery_fee,          // d
-                $total_amount,          // d
-                $order_notes,           // s
-                $status                 // s - must be a variable, not literal
-            );
-        } else {
-            // Database has old structure
-            $query = "INSERT INTO orders (
-                order_number, user_id, customer_name, customer_email, customer_phone, 
-                delivery_address, delivery_date, delivery_time, payment_method,
-                subtotal, delivery_fee, total_amount, special_instructions,
-                status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            
-            $stmt = mysqli_prepare($conn, $query);
-            
-            if (!$stmt) {
-                throw new Exception("Prepare failed: " . mysqli_error($conn));
-            }
-            
-            mysqli_stmt_bind_param($stmt, "sisssssssdddss", 
-                $order_number,          // s
-                $user_id,               // i
-                $full_name,             // s
-                $email,                 // s
-                $phone,                 // s
-                $delivery_address,      // s
-                $delivery_date,         // s
-                $delivery_time,         // s
-                $payment_method,        // s
-                $subtotal,              // d
-                $delivery_fee,          // d
-                $total_amount,          // d
-                $order_notes,           // s
-                $status                 // s - must be a variable, not literal
-            );
         }
+
+        $query = "INSERT INTO orders (" . implode(', ', $insertCols) . ") VALUES (" . implode(', ', $placeholders) . ")";
+        $stmt = mysqli_prepare($conn, $query);
+        if (!$stmt) {
+            throw new Exception("Prepare failed: " . mysqli_error($conn));
+        }
+
+        mysqli_stmt_bind_param($stmt, $types, ...$values);
         
         if (!mysqli_stmt_execute($stmt)) {
             throw new Exception("Failed to create order: " . mysqli_stmt_error($stmt));

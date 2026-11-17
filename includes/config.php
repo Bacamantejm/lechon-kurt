@@ -1182,6 +1182,17 @@ if (!function_exists('ensureOrdersTableSchema')) {
                 }
             }
 
+            // Ensure delivery_time is VARCHAR(100)
+            $resTime = @mysqli_query($conn, "SHOW COLUMNS FROM orders LIKE 'delivery_time'");
+            if ($resTime && $rowTime = mysqli_fetch_assoc($resTime)) {
+                if (strpos(strtolower($rowTime['Type'] ?? ''), 'varchar(20)') !== false) {
+                    @mysqli_query($conn, "SET SESSION sql_mode = ''");
+                    @mysqli_query($conn, "UPDATE `orders` SET `delivery_date` = CURDATE() WHERE CAST(`delivery_date` AS CHAR) LIKE '0000%' OR `delivery_date` IS NULL");
+                    @mysqli_query($conn, "UPDATE `orders` SET `created_at` = NOW() WHERE CAST(`created_at` AS CHAR) LIKE '0000%'");
+                    @mysqli_query($conn, "ALTER TABLE `orders` MODIFY COLUMN `delivery_time` VARCHAR(100) NULL");
+                }
+            }
+
             // Ensure store_id column exists
             if (!appColumnExists($conn, 'orders', 'store_id')) {
                 @mysqli_query($conn, "ALTER TABLE `orders` ADD COLUMN `store_id` INT NULL AFTER `seller_id`");
@@ -1195,6 +1206,14 @@ if (!function_exists('ensureOrdersTableSchema')) {
             // Ensure is_archived column exists
             if (!appColumnExists($conn, 'orders', 'is_archived')) {
                 @mysqli_query($conn, "ALTER TABLE `orders` ADD COLUMN `is_archived` TINYINT(1) NOT NULL DEFAULT 0");
+            }
+
+            // Ensure buyer convenience fee columns exist
+            if (!appColumnExists($conn, 'orders', 'convenience_fee')) {
+                @mysqli_query($conn, "ALTER TABLE `orders` ADD COLUMN `convenience_fee` DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER `delivery_fee`");
+            }
+            if (!appColumnExists($conn, 'orders', 'convenience_fee_rate')) {
+                @mysqli_query($conn, "ALTER TABLE `orders` ADD COLUMN `convenience_fee_rate` DECIMAL(6,2) NOT NULL DEFAULT 0.00 AFTER `convenience_fee`");
             }
         } catch (Throwable $e) {
             // Silently allow continuation

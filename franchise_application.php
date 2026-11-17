@@ -4034,6 +4034,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 businessAddressInput.dataset.isCavite = '0';
             }
 
+            if (franchiseMarker) franchiseMarker.setLatLng(CAVITE_CENTER);
+            if (franchiseMap) franchiseMap.panTo(CAVITE_CENTER);
+
             setMapStatus('Location rejected: Pinned area is outside Cavite. Applications are strictly accepted for Cavite locations only.', false);
 
             if (typeof Swal !== 'undefined') {
