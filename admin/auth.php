@@ -620,19 +620,33 @@ if (!function_exists('getFranchiseScopedOrderExistsSql')) {
         }
 
         $seller_scope_condition = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', $owner_id);
+        $direct_seller_condition = getFranchiseSellerScopeConditionSql($conn, 'o_direct_scope.seller_id', $owner_id);
 
-        $direct_scope_clauses = ["o_direct_scope.seller_id = {$owner_id}"];
+        $direct_scope_clauses = [];
+        if (adminAuthColumnExists($conn, 'orders', 'seller_id')) {
+            $direct_scope_clauses[] = $direct_seller_condition;
+        }
         if (adminAuthColumnExists($conn, 'orders', 'store_id') && adminAuthTableExists($conn, 'store_locations')) {
             $direct_scope_clauses[] = "o_direct_scope.store_id IN (SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id})";
         }
         if (adminAuthColumnExists($conn, 'orders', 'pickup_location') && adminAuthTableExists($conn, 'store_locations')) {
-            $direct_scope_clauses[] = "o_direct_scope.pickup_location IN (SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id})";
-            $direct_scope_clauses[] = "o_direct_scope.pickup_location IN (SELECT store_name FROM store_locations WHERE owner_user_id = {$owner_id})";
+            $unowned_guard = adminAuthColumnExists($conn, 'orders', 'seller_id')
+                ? "(o_direct_scope.seller_id IS NULL OR o_direct_scope.seller_id = 0) AND "
+                : "";
+            $direct_scope_clauses[] = "({$unowned_guard}EXISTS (
+                SELECT 1 FROM store_locations sl_ord
+                WHERE sl_ord.owner_user_id = {$owner_id}
+                  AND (
+                      TRIM(o_direct_scope.pickup_location) = CAST(sl_ord.store_id AS CHAR)
+                      OR (
+                          sl_ord.store_name IS NOT NULL
+                          AND TRIM(sl_ord.store_name) <> ''
+                          AND TRIM(o_direct_scope.pickup_location) COLLATE utf8mb4_general_ci = TRIM(sl_ord.store_name) COLLATE utf8mb4_general_ci
+                      )
+                  )
+            ))";
         }
-        if (adminAuthColumnExists($conn, 'orders', 'special_instructions') && adminAuthTableExists($conn, 'store_locations')) {
-            $direct_scope_clauses[] = "(o_direct_scope.special_instructions IS NOT NULL AND o_direct_scope.special_instructions LIKE CONCAT('%', (SELECT store_name FROM store_locations WHERE owner_user_id = {$owner_id} LIMIT 1), '%'))";
-        }
-        $direct_scope_sql = implode(" OR ", $direct_scope_clauses);
+        $direct_scope_sql = !empty($direct_scope_clauses) ? implode(" OR ", $direct_scope_clauses) : '1=0';
 
         return "((EXISTS (
             SELECT 1
@@ -675,6 +689,44 @@ if (!function_exists('getFranchiseScopedPreOrderExistsSql')) {
         }
 
         $seller_scope_condition = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', $owner_id);
+        $po_direct_clauses = [];
+        if (adminAuthColumnExists($conn, 'pre_orders', 'seller_id')) {
+            $po_direct_clauses[] = getFranchiseSellerScopeConditionSql($conn, 'po_scope.seller_id', $owner_id);
+        }
+        if (adminAuthColumnExists($conn, 'pre_orders', 'store_id') && adminAuthTableExists($conn, 'store_locations')) {
+            $po_direct_clauses[] = "po_scope.store_id IN (SELECT sl_po.store_id FROM store_locations sl_po WHERE sl_po.owner_user_id = {$owner_id})";
+        }
+        if (adminAuthColumnExists($conn, 'pre_orders', 'pickup_location') && adminAuthTableExists($conn, 'store_locations')) {
+            // Only match exact store_id or exact non-empty store_name when the pre-order's product is not owned by another seller
+            $other_seller_condition = getFranchiseSellerScopeConditionSql($conn, 'p_other.seller_id', $owner_id);
+            $po_direct_clauses[] = "(
+                NOT EXISTS (
+                    SELECT 1 FROM products p_other
+                    WHERE (
+                        po_scope.product_id = p_other.id
+                        OR CAST(po_scope.product_id AS CHAR) COLLATE utf8mb4_general_ci = p_other.product_id COLLATE utf8mb4_general_ci
+                        OR CAST(po_scope.product_id AS UNSIGNED) = p_other.id
+                    )
+                    AND p_other.seller_id IS NOT NULL
+                    AND p_other.seller_id > 0
+                    AND NOT ({$other_seller_condition})
+                )
+                AND EXISTS (
+                    SELECT 1 FROM store_locations sl
+                    WHERE sl.owner_user_id = {$owner_id}
+                      AND (
+                          TRIM(po_scope.pickup_location) = CAST(sl.store_id AS CHAR)
+                          OR (
+                              sl.store_name IS NOT NULL
+                              AND TRIM(sl.store_name) <> ''
+                              AND TRIM(po_scope.pickup_location) COLLATE utf8mb4_general_ci = TRIM(sl.store_name) COLLATE utf8mb4_general_ci
+                          )
+                      )
+                )
+            )";
+        }
+
+        $po_direct_sql = !empty($po_direct_clauses) ? implode(" OR ", $po_direct_clauses) : '1=0';
 
         return "((EXISTS (
             SELECT 1
@@ -691,15 +743,7 @@ if (!function_exists('getFranchiseScopedPreOrderExistsSql')) {
             SELECT 1
             FROM pre_orders po_scope
             WHERE po_scope.id = {$pre_order_id_expr}
-              AND EXISTS (
-                  SELECT 1 FROM store_locations sl
-                  WHERE sl.owner_user_id = {$owner_id}
-                    AND (
-                        po_scope.pickup_location LIKE CONCAT('%', sl.store_name, '%')
-                        OR po_scope.pickup_location LIKE CONCAT('%', sl.city, '%')
-                        OR (po_scope.special_instructions IS NOT NULL AND po_scope.special_instructions LIKE CONCAT('%', sl.store_name, '%'))
-                    )
-              )
+              AND ({$po_direct_sql})
         )))";
     }
 }
