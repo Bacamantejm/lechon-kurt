@@ -2843,7 +2843,7 @@ if ($proc_s_res) {
                                                                 <?php endif; ?>
                                                             </form>
                                                     <?php elseif (empty($drow['refund_id']) && $drow['cancellation_status'] === 'Cancelled' && (!empty($drow['order_id']) || !empty($drow['reservation_id']))): ?>
-                                                            <form method="POST" class="d-inline" onsubmit="return confirm('Queue a 50% refund for Finance review?');">
+                                                            <form method="POST" class="d-inline" onsubmit="return confirmFinanceSwalForm(event, this, 'Queue 50% Refund?', 'Queue a 50% refund for Finance review?', 'Yes, Queue Refund', '#b3261e');">
                                                                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
                                                                 <input type="hidden" name="finance_decision_action" value="queue_refund">
                                                                 <input type="hidden" name="cancellation_id" value="<?= (int)$drow['cancellation_id'] ?>">
@@ -2993,7 +2993,7 @@ if ($proc_s_res) {
                                                                 <?php endif; ?>
                                                                 
                                                                 <!-- Approve Form -->
-                                                                <form method="POST" style="margin:0; display:inline-block;" onsubmit="return confirm('Authorize budget release and approve procurement order <?= htmlspecialchars($p_item['order_code']) ?> for ₱<?= number_format($total_amt, 2) ?>?');">
+                                                                <form method="POST" style="margin:0; display:inline-block;" onsubmit="return confirmFinanceSwalForm(event, this, 'Approve Procurement?', <?= htmlspecialchars(json_encode('Authorize budget release and approve procurement order ' . $p_item['order_code'] . ' for PHP ' . number_format($total_amt, 2) . '?'), ENT_QUOTES, 'UTF-8') ?>, 'Yes, Approve', '#027a48');">
                                                                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
                                                                     <input type="hidden" name="procurement_finance_action" value="approve">
                                                                     <input type="hidden" name="order_id" value="<?= $ord_id ?>">
@@ -3004,7 +3004,7 @@ if ($proc_s_res) {
                                                                 </form>
 
                                                                 <!-- Reject Form -->
-                                                                <form method="POST" style="margin:0; display:inline-block;" onsubmit="return confirm('Reject this procurement transaction?');">
+                                                                <form method="POST" style="margin:0; display:inline-block;" onsubmit="return confirmFinanceSwalForm(event, this, 'Reject Procurement?', 'Reject this procurement transaction?', 'Yes, Reject', '#b3261e');">
                                                                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
                                                                     <input type="hidden" name="procurement_finance_action" value="reject">
                                                                     <input type="hidden" name="order_id" value="<?= $ord_id ?>">
@@ -4642,6 +4642,30 @@ if ($proc_s_res) {
                     clearTimeout(timeoutId);
                 }
             }
+        }
+
+        function confirmFinanceSwalForm(event, form, title, text, confirmText, confirmColor) {
+            if (event) event.preventDefault();
+            if (!form) return false;
+            if (typeof Swal === 'undefined') {
+                form.submit();
+                return false;
+            }
+            Swal.fire({
+                icon: 'question',
+                title: title || 'Confirm Action?',
+                text: text || 'Please confirm this action.',
+                showCancelButton: true,
+                confirmButtonText: confirmText || 'Confirm',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: confirmColor || '#b3261e',
+                cancelButtonColor: '#64748b'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    form.submit();
+                }
+            });
+            return false;
         }
 
         <?php if (isset($_SESSION['success'])): ?>

@@ -806,11 +806,90 @@ include 'includes/header.php';
 
 <style>
     /* Scoped Bootstrap adjustments for Seller Products & Ingredients */
+    .seller-products-page .badge,
+    .modal .badge {
+        position: static !important;
+        top: auto !important;
+        right: auto !important;
+        height: auto !important;
+        min-width: auto !important;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1.25;
+        font-size: 0.75rem;
+    }
+    .modal-backdrop {
+        z-index: 2040 !important;
+    }
+    .modal {
+        z-index: 2050 !important;
+    }
+    .modal.show {
+        display: block !important;
+        opacity: 1 !important;
+    }
+    .modal.show .modal-dialog {
+        opacity: 1 !important;
+        transform: none !important;
+    }
+    .seller-fallback-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(16, 24, 40, 0.52);
+        z-index: 2040;
+    }
     .seller-products-page .btn.btn-sm {
-        padding: 6px 14px !important;
+        padding: 6px 12px !important;
         font-size: 13px !important;
         border-radius: 8px !important;
         line-height: 1.4 !important;
+    }
+    .seller-products-page .btn-outline-success {
+        border: 1px solid #198754 !important;
+        color: #198754 !important;
+        background: #ffffff !important;
+    }
+    .seller-products-page .btn-outline-success:hover {
+        background: #198754 !important;
+        color: #ffffff !important;
+    }
+    .seller-products-page .btn-outline-danger {
+        border: 1px solid #b3261e !important;
+        color: #b3261e !important;
+        background: #ffffff !important;
+    }
+    .seller-products-page .btn-outline-danger:hover {
+        background: #b3261e !important;
+        color: #ffffff !important;
+    }
+    .seller-products-page .btn-outline-secondary {
+        border: 1px solid #d0d5dd !important;
+        color: #344054 !important;
+        background: #ffffff !important;
+    }
+    .seller-products-page .btn-outline-secondary:hover {
+        background: #f2f4f7 !important;
+        color: #101828 !important;
+    }
+    .seller-products-page .btn-outline-dark {
+        border: 1px solid #344054 !important;
+        color: #101828 !important;
+        background: #ffffff !important;
+    }
+    .seller-products-page .btn-outline-dark:hover {
+        background: #101828 !important;
+        color: #ffffff !important;
+    }
+    .seller-products-page .btn-outline-primary {
+        border: 1px solid #175cd3 !important;
+        color: #175cd3 !important;
+        background: #ffffff !important;
+    }
+    .seller-products-page .btn-outline-primary:hover {
+        background: #175cd3 !important;
+        color: #ffffff !important;
     }
     .seller-ingredients-table {
         margin-bottom: 0;
@@ -858,8 +937,8 @@ include 'includes/header.php';
     }
     .seller-products-page {
         min-height: calc(100vh - 200px);
-        background: linear-gradient(135deg, #f5f5f5 0%, #fafafa 100%);
-        padding: 50px 0;
+        background: #f8f9fa;
+        padding: 40px 0 140px;
     }
 
     .seller-header {
@@ -1208,9 +1287,9 @@ include 'includes/header.php';
     }
 
     .modal-header {
-        background: linear-gradient(135deg, #c62828, #b71c1c);
+        background: #b3261e;
         border-bottom: none;
-        padding: 25px;
+        padding: 20px 24px;
         border-radius: 12px 12px 0 0;
     }
 
@@ -1380,21 +1459,18 @@ include 'includes/header.php';
             </div>
         </div>
 
-        <?php if (isset($_SESSION['success'])): ?>
-            <div class="alert alert-success">
-                <i class="fas fa-check-circle"></i>
-                <span><?php echo $_SESSION['success']; unset($_SESSION['success']); ?></span>
-                <button type="button" class="btn-close" onclick="this.parentElement.style.display='none';"></button>
-            </div>
-        <?php endif; ?>
-        
-        <?php if (isset($_SESSION['error'])): ?>
-            <div class="alert alert-danger">
-                <i class="fas fa-exclamation-circle"></i>
-                <span><?php echo $_SESSION['error']; unset($_SESSION['error']); ?></span>
-                <button type="button" class="btn-close" onclick="this.parentElement.style.display='none';"></button>
-            </div>
-        <?php endif; ?>
+        <?php
+        $seller_flash_success = '';
+        $seller_flash_error = '';
+        if (isset($_SESSION['success'])) {
+            $seller_flash_success = (string)$_SESSION['success'];
+            unset($_SESSION['success']);
+        }
+        if (isset($_SESSION['error'])) {
+            $seller_flash_error = (string)$_SESSION['error'];
+            unset($_SESSION['error']);
+        }
+        ?>
 
         <!-- Portal Tab Bar -->
         <div class="d-flex mb-4 gap-2 flex-wrap">
@@ -1587,16 +1663,16 @@ include 'includes/header.php';
                                         </td>
                                         <td class="text-end">
                                             <div class="d-inline-flex gap-1 align-items-center">
-                                                <button type="button" class="btn btn-sm btn-outline-success" onclick="preselectSelfProcure(<?php echo (int)$ing['id']; ?>)" title="Buy myself and log receipt">
+                                                <button type="button" class="btn btn-sm btn-outline-success js-market-buy-btn" data-material-id="<?php echo (int)$ing['id']; ?>" title="Buy myself and log receipt">
                                                     <i class="fas fa-cart-shopping"></i> Market Buy
                                                 </button>
-                                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="preselectRefillIngredient(<?php echo (int)$ing['id']; ?>)" title="Order wholesale refill from supplier">
+                                                <button type="button" class="btn btn-sm btn-outline-danger js-refill-btn" data-material-id="<?php echo (int)$ing['id']; ?>" title="Order wholesale refill from supplier">
                                                     <i class="fas fa-truck-fast"></i> Refill
                                                 </button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick='openEditMaterialModal(<?php echo htmlspecialchars(json_encode($ing), ENT_QUOTES, "UTF-8"); ?>)' title="Edit ingredient details">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary js-edit-material-btn" data-material="<?php echo htmlspecialchars(json_encode($ing, JSON_INVALID_UTF8_SUBSTITUTE) ?: '{}', ENT_QUOTES, 'UTF-8'); ?>" title="Edit ingredient details">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
-                                                <form method="POST" style="display:inline;" onsubmit="return confirm('Remove ingredient \'<?php echo htmlspecialchars(addslashes($ing['name'])); ?>\' from catalog? This will unlink it from any associated recipes.');">
+                                                <form method="POST" style="display:inline;" data-sw-confirm="1" data-sw-confirm-title="Remove Ingredient?" data-sw-confirm-text="<?php echo htmlspecialchars("Remove ingredient '" . (string)$ing['name'] . "' from catalog? This will unlink it from any associated recipes.", ENT_QUOTES, 'UTF-8'); ?>" data-sw-confirm-confirm-text="Yes, Remove">
                                                     <input type="hidden" name="delete_material" value="1">
                                                     <input type="hidden" name="material_id" value="<?php echo (int)$ing['id']; ?>">
                                                     <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete ingredient">
@@ -1711,7 +1787,7 @@ include 'includes/header.php';
                                         </td>
                                         <td class="text-end">
                                             <?php if (!$is_self && in_array($st, ['in_transit', 'packed', 'finance_approved', 'processing'])): ?>
-                                                <form method="POST" style="margin:0; display:inline-block;" onsubmit="return confirm('Confirm that items for <?php echo htmlspecialchars($pr['order_code']); ?> have been physically received and inspected? This will automatically increment your store inventory stock.');">
+                                                <form method="POST" style="margin:0; display:inline-block;" data-sw-confirm="1" data-sw-confirm-title="Confirm Delivery Receipt?" data-sw-confirm-text="<?php echo htmlspecialchars("Confirm that items for " . (string)$pr['order_code'] . " have been physically received and inspected? This will automatically increment your store inventory stock.", ENT_QUOTES, 'UTF-8'); ?>" data-sw-confirm-confirm-text="Confirm Received" data-sw-confirm-confirm-color="#027a48">
                                                     <input type="hidden" name="confirm_store_receipt" value="1">
                                                     <input type="hidden" name="order_id" value="<?php echo (int)$pr['id']; ?>">
                                                     <button type="submit" class="btn btn-sm btn-success fw-bold" style="border-radius:6px;">
@@ -1863,7 +1939,6 @@ include 'includes/header.php';
                 ?>
             </div>
         <?php endif; ?>
-        </div>
     </div>
 </div>
 
@@ -1871,7 +1946,7 @@ include 'includes/header.php';
 <div class="modal fade" id="editProductModal" tabindex="-1" aria-labelledby="editProductLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header" style="background: linear-gradient(135deg, #b3261e, #981b15);">
+            <div class="modal-header" style="background: #b3261e;">
                 <h5 class="modal-title" id="editProductLabel" style="color:#ffffff; font-weight:800; display:flex; align-items:center; gap:10px;">
                     <i class="fas fa-edit"></i> Edit Menu Item &amp; Photos
                 </h5>
@@ -2284,177 +2359,73 @@ include 'includes/header.php';
     </div>
 </div>
 
-<style>
-.seller-products-page {
-    min-height: 100vh;
-    background: #f5f5f5;
-    padding: 40px 0;
-}
-
-.seller-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 30px;
-    padding-bottom: 20px;
-    border-bottom: 2px solid #ddd;
-}
-
-.header-content h1 {
-    margin: 0;
-    font-size: 28px;
-    color: #333;
-}
-
-.header-content p {
-    margin: 5px 0 0 0;
-    color: #666;
-    font-size: 14px;
-}
-
-.products-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-    gap: 12px;
-    margin-top: 16px;
-}
-
-.product-card {
-    background: white;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.product-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-
-.product-header {
-    padding: 15px;
-    display: flex;
-    justify-content: space-between;
-    align-items: start;
-    gap: 10px;
-}
-
-.product-header h5 {
-    margin: 0;
-    font-size: 16px;
-    flex: 1;
-}
-
-.status-badge {
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
-}
-
-.badge-success {
-    background: #d4edda;
-    color: #155724;
-}
-
-.badge-danger {
-    background: #f8d7da;
-    color: #721c24;
-}
-
-.product-body {
-    padding: 0 15px 15px 15px;
-    border-bottom: 1px solid #eee;
-}
-
-.product-category {
-    margin: 0 0 8px 0;
-    color: #666;
-    font-size: 13px;
-}
-
-.product-price {
-    margin: 0 0 10px 0;
-    font-size: 18px;
-    font-weight: 600;
-    color: #e74c3c;
-}
-
-.product-info {
-    margin: 5px 0;
-    font-size: 13px;
-    color: #666;
-}
-
-.product-info i {
-    margin-right: 5px;
-    color: #999;
-}
-
-.product-footer {
-    padding: 15px;
-    display: flex;
-    gap: 10px;
-}
-
-.btn {
-    padding: 8px 12px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 600;
-}
-
-.btn-success {
-    background: #28a745;
-    color: white;
-}
-
-.btn-danger {
-    background: #dc3545;
-    color: white;
-}
-
-.no-results {
-    grid-column: 1 / -1;
-    text-align: center;
-    padding: 60px 20px;
-}
-
-.filter-form {
-    display: flex;
-    gap: 10px;
-    margin-top: 20px;
-}
-
-.filter-form input,
-.filter-form select {
-    flex: 1;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 14px;
-}
-
-.filter-form button {
-    padding: 10px 20px;
-    background: #007bff;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 600;
-}
-</style>
-
 <script src="js/jquery-3.7.1.min.js"></script>
 <script src="js/bootstrap.bundle.min.js"></script>
 <script>
 let sellerTierGlobalIndex = 200;
-const availableMaterials = <?php echo json_encode($materials_list); ?>;
+const availableMaterials = <?php echo json_encode($materials_list ?: [], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_INVALID_UTF8_SUBSTITUTE) ?: '[]'; ?>;
+
+function openSellerModal(modalId) {
+    const modalEl = typeof modalId === 'string' ? document.getElementById(modalId) : modalId;
+    if (!modalEl) return;
+
+    // Move modal directly under document.body to prevent parent stacking/overflow clipping
+    if (modalEl.parentElement !== document.body) {
+        document.body.appendChild(modalEl);
+    }
+
+    if (window.bootstrap && window.bootstrap.Modal) {
+        try {
+            window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            return;
+        } catch (err) {
+            console.error('Bootstrap Modal show error:', err);
+        }
+    }
+
+    // Standalone fallback if Bootstrap JS is unavailable
+    document.querySelectorAll('.seller-fallback-backdrop').forEach(b => b.remove());
+    const backdrop = document.createElement('div');
+    backdrop.className = 'seller-fallback-backdrop';
+    backdrop.dataset.targetModal = modalEl.id || '';
+    backdrop.addEventListener('click', () => closeSellerModal(modalEl));
+    document.body.appendChild(backdrop);
+
+    modalEl.style.display = 'block';
+    modalEl.classList.add('show');
+    modalEl.removeAttribute('aria-hidden');
+    modalEl.setAttribute('aria-modal', 'true');
+    modalEl.setAttribute('role', 'dialog');
+    modalEl.dataset.fallbackOpen = '1';
+    document.body.classList.add('modal-open');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeSellerModal(modalId) {
+    const modalEl = typeof modalId === 'string' ? document.getElementById(modalId) : modalId;
+    if (!modalEl) return;
+
+    if (modalEl.dataset.fallbackOpen !== '1' && window.bootstrap && window.bootstrap.Modal) {
+        try {
+            const inst = window.bootstrap.Modal.getInstance(modalEl);
+            if (inst) {
+                inst.hide();
+                return;
+            }
+        } catch (err) {
+            console.error('Bootstrap Modal hide error:', err);
+        }
+    }
+
+    modalEl.classList.remove('show');
+    modalEl.style.display = 'none';
+    modalEl.setAttribute('aria-hidden', 'true');
+    modalEl.removeAttribute('aria-modal');
+    delete modalEl.dataset.fallbackOpen;
+    document.querySelectorAll('.seller-fallback-backdrop').forEach(b => b.remove());
+    document.body.classList.remove('modal-open');
+    document.body.style.overflow = '';
+}
 
 function escapeSellerHtml(str) {
     if (!str) return '';
@@ -2543,7 +2514,7 @@ function openEditMaterialModal(data) {
     document.getElementById('edit_mat_unit').value = data.unit || '';
     document.getElementById('edit_mat_reorder').value = Number(data.reorder_level || 10);
     document.getElementById('edit_mat_cost').value = Number(data.cost_per_unit || 0).toFixed(2);
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('editMaterialModal')).show();
+    openSellerModal('editMaterialModal');
 }
 
 // Dynamic Bill of Materials (BOM) Recipe Row Generator
@@ -2558,8 +2529,9 @@ function addIngredientRow(mode, existingData = null) {
 
     let matOptions = '<option value="">-- Select Raw Ingredient --</option>';
     availableMaterials.forEach(m => {
-        const isSel = (existingData && parseInt(existingData.material_id) === parseInt(m.id)) ? 'selected' : '';
-        matOptions += `<option value="${m.id}" data-unit="${m.unit}" ${isSel}>${escapeSellerHtml(m.name)} (${m.unit})</option>`;
+        const isSel = (existingData && parseInt(existingData.material_id, 10) === parseInt(m.id, 10)) ? 'selected' : '';
+        const safeUnit = escapeSellerHtml(m.unit || 'unit');
+        matOptions += `<option value="${m.id}" data-unit="${safeUnit}" ${isSel}>${escapeSellerHtml(m.name)} (${safeUnit})</option>`;
     });
 
     const qtyVal = existingData ? Math.round(existingData.quantity_needed) : '1';
@@ -2613,8 +2585,9 @@ function addRefillItemRow(preselectedId = null) {
 
     let matOptions = '<option value="">-- Select Ingredient to Refill --</option>';
     availableMaterials.forEach(m => {
-        const isSel = (preselectedId && parseInt(preselectedId) === parseInt(m.id)) ? 'selected' : '';
-        matOptions += `<option value="${m.id}" data-unit="${m.unit}" ${isSel}>${escapeSellerHtml(m.name)} (${m.unit})</option>`;
+        const isSel = (preselectedId && parseInt(preselectedId, 10) === parseInt(m.id, 10)) ? 'selected' : '';
+        const safeUnit = escapeSellerHtml(m.unit || 'kg');
+        matOptions += `<option value="${m.id}" data-unit="${safeUnit}" ${isSel}>${escapeSellerHtml(m.name)} (${safeUnit})</option>`;
     });
 
     row.innerHTML = `
@@ -2665,6 +2638,7 @@ function preselectRefillIngredient(materialId) {
         container.innerHTML = '';
         addRefillItemRow(materialId);
     }
+    openSellerModal('requestRefillModal');
 }
 
 // Self-Procurement Modal Item Generator
@@ -2679,8 +2653,10 @@ function addSelfProcureRow(preselectedId = null, preselectedQty = 10, preselecte
 
     let matOptions = '<option value="">-- Select Ingredient --</option>';
     availableMaterials.forEach(m => {
-        const isSel = (preselectedId && parseInt(preselectedId) === parseInt(m.id)) ? 'selected' : '';
-        matOptions += `<option value="${m.id}" data-unit="${m.unit}" data-cost="${m.cost_per_unit}" ${isSel}>${escapeSellerHtml(m.name)} (${m.unit})</option>`;
+        const isSel = (preselectedId && parseInt(preselectedId, 10) === parseInt(m.id, 10)) ? 'selected' : '';
+        const safeUnit = escapeSellerHtml(m.unit || 'kg');
+        const safeCost = escapeSellerHtml(m.cost_per_unit ?? '0.00');
+        matOptions += `<option value="${m.id}" data-unit="${safeUnit}" data-cost="${safeCost}" ${isSel}>${escapeSellerHtml(m.name)} (${safeUnit})</option>`;
     });
 
     row.innerHTML = `
@@ -2749,21 +2725,22 @@ function recalcSelfGrandTotal() {
         grand += (qty * cost);
     });
     const expInput = document.getElementById('total_expenses');
-    if (expInput && grand > 0) {
-        expInput.value = grand.toFixed(2);
+    if (expInput) {
+        expInput.value = grand > 0 ? grand.toFixed(2) : '';
     }
 }
 
 function preselectSelfProcure(materialId) {
+    const expInput = document.getElementById('total_expenses');
+    if (expInput) {
+        expInput.value = '';
+    }
     const container = document.getElementById('self_procure_items_container');
     if (container) {
         container.innerHTML = '';
         addSelfProcureRow(materialId);
     }
-    const modalEl = document.getElementById('logSelfProcureModal');
-    if (modalEl) {
-        bootstrap.Modal.getOrCreateInstance(modalEl).show();
-    }
+    openSellerModal('logSelfProcureModal');
 }
 
 function recalculateEditModalYield() {
@@ -2844,6 +2821,14 @@ function recalculateEditModalYield() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Move all page modals under document.body on load so Bootstrap data-bs-toggle triggers also avoid parent clipping
+    ['editProductModal', 'addMaterialModal', 'editMaterialModal', 'logSelfProcureModal', 'requestRefillModal'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el && el.parentElement !== document.body) {
+            document.body.appendChild(el);
+        }
+    });
+
     // Add default row to refill modal if container exists
     const refillContainer = document.getElementById('refill_items_container');
     if (refillContainer && refillContainer.children.length === 0) {
@@ -2863,16 +2848,81 @@ document.addEventListener('DOMContentLoaded', function() {
         if (ids && selfContainer) {
             selfContainer.innerHTML = '';
             ids.split(',').forEach(id => {
-                if (parseInt(id) > 0) {
-                    addSelfProcureRow(parseInt(id));
+                if (parseInt(id, 10) > 0) {
+                    addSelfProcureRow(parseInt(id, 10));
                 }
             });
         }
-        const selfModalEl = document.getElementById('logSelfProcureModal');
-        if (selfModalEl) {
-            bootstrap.Modal.getOrCreateInstance(selfModalEl).show();
-        }
+        openSellerModal('logSelfProcureModal');
     }
+
+    // Delegated click handlers for all table & toolbar action buttons
+    document.addEventListener('click', function(e) {
+        const marketBuyBtn = e.target.closest('.js-market-buy-btn');
+        if (marketBuyBtn) {
+            e.preventDefault();
+            const matId = parseInt(marketBuyBtn.getAttribute('data-material-id') || '0', 10);
+            preselectSelfProcure(matId || null);
+            return;
+        }
+
+        const refillBtn = e.target.closest('.js-refill-btn');
+        if (refillBtn) {
+            e.preventDefault();
+            const matId = parseInt(refillBtn.getAttribute('data-material-id') || '0', 10);
+            preselectRefillIngredient(matId || null);
+            return;
+        }
+
+        const editMatBtn = e.target.closest('.js-edit-material-btn');
+        if (editMatBtn) {
+            e.preventDefault();
+            const raw = editMatBtn.getAttribute('data-material');
+            if (raw) {
+                try {
+                    openEditMaterialModal(JSON.parse(raw));
+                } catch (err) {
+                    console.error('Failed to parse ingredient payload:', err);
+                }
+            }
+            return;
+        }
+
+        const dismissBtn = e.target.closest('[data-bs-dismiss="modal"]');
+        if (dismissBtn) {
+            const parentModal = dismissBtn.closest('.modal');
+            if (parentModal && (parentModal.dataset.fallbackOpen === '1' || !(window.bootstrap && window.bootstrap.Modal))) {
+                e.preventDefault();
+                closeSellerModal(parentModal);
+            }
+            return;
+        }
+
+        const modalTrigger = e.target.closest('[data-bs-toggle="modal"]');
+        if (modalTrigger) {
+            const targetSelector = modalTrigger.getAttribute('data-bs-target') || modalTrigger.getAttribute('href') || '';
+            if (targetSelector.startsWith('#')) {
+                const targetId = targetSelector.slice(1);
+                if (targetId === 'logSelfProcureModal') {
+                    const sc = document.getElementById('self_procure_items_container');
+                    if (sc && sc.children.length === 0) addSelfProcureRow();
+                } else if (targetId === 'requestRefillModal') {
+                    const rc = document.getElementById('refill_items_container');
+                    if (rc && rc.children.length === 0) addRefillItemRow();
+                }
+                if (!(window.bootstrap && window.bootstrap.Modal)) {
+                    e.preventDefault();
+                    openSellerModal(targetId);
+                }
+            }
+        }
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal[data-fallback-open="1"]').forEach(m => closeSellerModal(m));
+        }
+    });
 
     document.querySelectorAll('.js-edit-product-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
@@ -2976,14 +3026,57 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 recalculateEditModalYield();
 
-                var modalEl = document.getElementById('editProductModal');
-                var editModal = bootstrap.Modal.getOrCreateInstance(modalEl);
-                editModal.show();
+                openSellerModal('editProductModal');
             } catch (e) {
                 console.error(e);
             }
         });
     });
 });
+
+window.openSellerModal = openSellerModal;
+window.closeSellerModal = closeSellerModal;
+window.preselectSelfProcure = preselectSelfProcure;
+window.preselectRefillIngredient = preselectRefillIngredient;
+window.openEditMaterialModal = openEditMaterialModal;
+
+// SweetAlert2 Flash Notifications
+(function() {
+    const flashSuccess = <?php echo json_encode($seller_flash_success ?? '', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_INVALID_UTF8_SUBSTITUTE) ?: '""'; ?>;
+    const flashError = <?php echo json_encode($seller_flash_error ?? '', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_INVALID_UTF8_SUBSTITUTE) ?: '""'; ?>;
+    if (!flashSuccess && !flashError) return;
+
+    function fireFlashSwal(attempt) {
+        if (typeof window.Swal !== 'undefined') {
+            if (flashSuccess) {
+                window.Swal.fire({
+                    icon: 'success',
+                    title: 'Success',
+                    html: flashSuccess,
+                    confirmButtonColor: '#b3261e',
+                    timer: 3200,
+                    timerProgressBar: true
+                });
+            } else if (flashError) {
+                window.Swal.fire({
+                    icon: 'error',
+                    title: 'Action Failed',
+                    html: flashError,
+                    confirmButtonColor: '#b3261e'
+                });
+            }
+            return;
+        }
+        if (attempt < 20) {
+            setTimeout(() => fireFlashSwal(attempt + 1), 100);
+        }
+    }
+
+    if (document.readyState === 'complete') {
+        fireFlashSwal(0);
+    } else {
+        window.addEventListener('load', () => fireFlashSwal(0));
+    }
+})();
 </script>
 <?php include 'includes/footer.php'; ?>
