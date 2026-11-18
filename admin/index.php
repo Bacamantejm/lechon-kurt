@@ -710,9 +710,8 @@ if ($seller_scope_id !== null) {
                     $products_result = mysqli_query($conn, $products_query);
                     $products_stats = mysqli_fetch_assoc($products_result);
 
-                    // Cancellations & Refunds Finance Queue Summary (Tenant-Scoped)
+                    // Cancellations & Refunds Finance Queue Count (Tenant-Scoped)
                     $cxl_refund_open_count = 0;
-                    $recent_cxl_refunds = [];
                     $cxl_tbl_check = mysqli_query($conn, "SHOW TABLES LIKE 'cancellations'");
                     if ($cxl_tbl_check && mysqli_num_rows($cxl_tbl_check) > 0) {
                         $dash_cxl_scope_sql = '';
@@ -728,31 +727,6 @@ if ($seller_scope_id !== null) {
                         $open_cxl_res = mysqli_query($conn, $open_cxl_q);
                         if ($open_cxl_res instanceof mysqli_result) {
                             $cxl_refund_open_count = (int)(mysqli_fetch_assoc($open_cxl_res)['cnt'] ?? 0);
-                        }
-
-                        $recent_cxl_q = "SELECT c.id AS cancellation_id, c.cancellation_date, c.status AS cancellation_status,
-                                                c.reason, c.other_reason_text, c.order_id, c.reservation_id,
-                                                o.order_number, u.full_name,
-                                                r.id AS refund_id, r.refund_amount, r.refund_status
-                                         FROM cancellations c
-                                         LEFT JOIN orders o ON c.order_id = o.id
-                                         LEFT JOIN users u ON c.user_id = u.id
-                                         LEFT JOIN refunds r ON r.cancellation_id = c.id
-                                         WHERE 1=1{$dash_cxl_scope_sql}
-                                         ORDER BY
-                                             CASE
-                                                 WHEN c.status = 'Requested' THEN 1
-                                                 WHEN r.refund_status = 'Refund Pending' THEN 2
-                                                 WHEN r.refund_status = 'Refund Approved' THEN 3
-                                                 ELSE 4
-                                             END,
-                                             c.cancellation_date DESC
-                                         LIMIT 5";
-                        $recent_cxl_res = mysqli_query($conn, $recent_cxl_q);
-                        if ($recent_cxl_res instanceof mysqli_result) {
-                            while ($crow = mysqli_fetch_assoc($recent_cxl_res)) {
-                                $recent_cxl_refunds[] = $crow;
-                            }
                         }
                     }
 
@@ -976,94 +950,6 @@ if ($seller_scope_id !== null) {
                             <a href="../super_admin/franchise_applications.php" class="stat-value">Process</a>
                         </div>
                     <?php endif; ?>
-                </div>
-
-                <!-- Recent Cancellations & Refunds (Finance Queue) -->
-                <div class="card mb-4 fade-in-up" style="border: 1px solid #eaecf0; border-radius: 12px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
-                    <div class="card-header bg-white border-bottom py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
-                        <div>
-                            <h5 class="mb-0 fw-bold d-flex align-items-center gap-2" style="color: #101828;">
-                                <i class="fas fa-scale-balanced" style="color: #b3261e;"></i>
-                                <span>Recent Cancellations &amp; Refunds (Finance Queue)</span>
-                                <?php if ($cxl_refund_open_count > 0): ?>
-                                    <span class="badge bg-danger"><?php echo (int)$cxl_refund_open_count; ?> Open</span>
-                                <?php endif; ?>
-                            </h5>
-                            <small class="text-muted">All customer cancellations and refund requests are automatically routed to the Finance Decision Queue.</small>
-                        </div>
-                        <div class="d-flex gap-2">
-                            <a href="cancellations.php" class="btn btn-sm btn-outline-secondary">
-                                <i class="fas fa-list me-1"></i> View All Requests
-                            </a>
-                            <a href="finance.php#decision-center" class="btn btn-sm btn-danger" style="background-color: #b3261e; border-color: #b3261e;">
-                                <i class="fas fa-scale-balanced me-1"></i> Open Finance Queue
-                            </a>
-                        </div>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-hover mb-0 align-middle">
-                                <thead>
-                                    <tr>
-                                        <th class="ps-4">Date</th>
-                                        <th>Customer</th>
-                                        <th>Reference</th>
-                                        <th>Reason</th>
-                                        <th>Request Status</th>
-                                        <th>Refund</th>
-                                        <th class="text-end pe-4">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if (!empty($recent_cxl_refunds)): ?>
-                                        <?php foreach ($recent_cxl_refunds as $crow): ?>
-                                            <tr>
-                                                <td class="ps-4"><?php echo date('M d, Y h:i A', strtotime($crow['cancellation_date'])); ?></td>
-                                                <td><?php echo htmlspecialchars((string)($crow['full_name'] ?? 'Customer')); ?></td>
-                                                <td>
-                                                    <?php if (!empty($crow['order_number'])): ?>
-                                                        <strong><?php echo htmlspecialchars((string)$crow['order_number']); ?></strong>
-                                                    <?php elseif (!empty($crow['reservation_id'])): ?>
-                                                        <strong>Pre-Order #<?php echo (int)$crow['reservation_id']; ?></strong>
-                                                    <?php else: ?>
-                                                        <strong>Request #<?php echo (int)$crow['cancellation_id']; ?></strong>
-                                                    <?php endif; ?>
-                                                </td>
-                                                <td>
-                                                    <span><?php echo htmlspecialchars((string)($crow['reason'] ?? '-')); ?></span>
-                                                    <?php if (!empty($crow['other_reason_text'])): ?>
-                                                        <div class="small text-muted"><?php echo htmlspecialchars((string)$crow['other_reason_text']); ?></div>
-                                                    <?php endif; ?>
-                                                </td>
-                                                <td>
-                                                    <span class="badge <?php echo ($crow['cancellation_status'] === 'Requested') ? 'bg-warning text-dark' : (($crow['cancellation_status'] === 'Rejected') ? 'bg-danger' : 'bg-secondary'); ?>">
-                                                        <?php echo htmlspecialchars((string)$crow['cancellation_status']); ?>
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <?php if (!empty($crow['refund_id'])): ?>
-                                                        <div class="fw-semibold">₱<?php echo number_format((float)$crow['refund_amount'], 2); ?></div>
-                                                        <small class="text-muted"><?php echo htmlspecialchars((string)$crow['refund_status']); ?></small>
-                                                    <?php else: ?>
-                                                        <span class="text-muted small">Pending queue</span>
-                                                    <?php endif; ?>
-                                                </td>
-                                                <td class="text-end pe-4">
-                                                    <a href="finance.php?decision_search=<?php echo urlencode((string)$crow['cancellation_id']); ?>#decision-center" class="btn btn-sm btn-outline-danger">
-                                                        Review in Finance
-                                                    </a>
-                                                </td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    <?php else: ?>
-                                        <tr>
-                                            <td colspan="7" class="text-center text-muted py-4">No cancellation or refund requests in your queue yet.</td>
-                                        </tr>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
                 </div>
 
                 <!-- Charts Section -->
