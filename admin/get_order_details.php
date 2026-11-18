@@ -231,7 +231,13 @@ if ($order['delivery_option'] === 'delivery') {
                             <button type="button"
                                     class="btn btn-sm fw-semibold text-white px-3 py-2"
                                     style="background: #b3261e; border-color: #b3261e; border-radius: 8px;"
-                                    onclick="processPayMongoOrderRefund(<?php echo (int)$order['id']; ?>, <?php echo json_encode($fifty_pct_refund_amount); ?>, <?php echo json_encode((string)$order['order_number']); ?>)">
+                                    data-order-id="<?php echo (int)$order['id']; ?>"
+                                    data-refund-amount="<?php echo number_format($fifty_pct_refund_amount, 2, '.', ''); ?>"
+                                    data-order-total="<?php echo number_format((float)$order['total_amount'], 2, '.', ''); ?>"
+                                    data-order-number="<?php echo htmlspecialchars((string)$order['order_number'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-customer-name="<?php echo htmlspecialchars((string)($order['customer_name'] ?? 'Customer'), ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-payment-method="<?php echo htmlspecialchars(strtoupper((string)($order['payment_method'] ?? 'COD')), ENT_QUOTES, 'UTF-8'); ?>"
+                                    onclick="processPayMongoOrderRefund(this)">
                                 <i class="fas fa-undo-alt me-1"></i> Return 50% via PayMongo (&#8369;<?php echo number_format($fifty_pct_refund_amount, 2); ?>)
                             </button>
                         <?php endif; ?>
