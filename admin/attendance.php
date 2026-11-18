@@ -522,7 +522,8 @@ if ($emp_res) {
                         $stats_where .= " AND employee_id IN (SELECT e.id FROM employees e WHERE {$employee_scope_sql})";
                     }
                     if ($dept_filter > 0) {
-                        $stats_where .= " AND employee_id IN (SELECT id FROM employees WHERE department_id = {$dept_filter})";
+                        $dept_emp_where = "e_df.department_id = {$dept_filter}" . ($is_partner_scoped_hr ? " AND " . hrEmployeeScopeSql($conn, 'e_df', 'user_id') : "");
+                        $stats_where .= " AND employee_id IN (SELECT e_df.id FROM employees e_df WHERE {$dept_emp_where})";
                     }
                     if ($employee_filter > 0) {
                         $stats_where .= " AND employee_id = {$employee_filter}";

@@ -578,6 +578,7 @@ if (!function_exists('hrPartnerScopeContext')) {
         $cached = [
             'enabled' => false,
             'owner_user_id' => 0,
+            'owner_store_ids' => [],
             'scoped_user_ids' => []
         ];
 
@@ -595,6 +596,24 @@ if (!function_exists('hrPartnerScopeContext')) {
             return $cached;
         }
 
+        $owner_store_ids = [];
+        if (hrTableExists($conn, 'store_locations') && hrColumnExists($conn, 'store_locations', 'owner_user_id')) {
+            $st_stmt = mysqli_prepare($conn, "SELECT store_id FROM store_locations WHERE owner_user_id = ? ORDER BY store_id ASC");
+            if ($st_stmt) {
+                mysqli_stmt_bind_param($st_stmt, "i", $owner_user_id);
+                mysqli_stmt_execute($st_stmt);
+                $st_res = mysqli_stmt_get_result($st_stmt);
+                while ($st_res && ($st_row = mysqli_fetch_assoc($st_res))) {
+                    $sid = intval($st_row['store_id'] ?? 0);
+                    if ($sid > 0) {
+                        $owner_store_ids[$sid] = true;
+                    }
+                }
+                mysqli_stmt_close($st_stmt);
+            }
+        }
+        $owner_store_id_list = array_map('intval', array_keys($owner_store_ids));
+
         $scoped_user_ids = [$owner_user_id => true];
         if (hrTableExists($conn, 'partner_user_links')) {
             $links_stmt = mysqli_prepare($conn, "SELECT managed_user_id FROM partner_user_links WHERE owner_user_id = ?");
@@ -610,50 +629,83 @@ if (!function_exists('hrPartnerScopeContext')) {
                 }
                 mysqli_stmt_close($links_stmt);
             }
-        }
 
-        if (hrTableExists($conn, 'riders')) {
-            $rider_sql = "SELECT DISTINCT r.user_id FROM riders r 
-                          LEFT JOIN store_locations sl ON r.store_id = sl.store_id 
-                          WHERE (r.store_owner_id = ? OR sl.owner_user_id = ?) AND r.user_id IS NOT NULL";
-            $r_stmt = mysqli_prepare($conn, $rider_sql);
-            if ($r_stmt) {
-                mysqli_stmt_bind_param($r_stmt, "ii", $owner_user_id, $owner_user_id);
-                mysqli_stmt_execute($r_stmt);
-                $r_res = mysqli_stmt_get_result($r_stmt);
-                while ($r_res && ($r_row = mysqli_fetch_assoc($r_res))) {
-                    $r_uid = intval($r_row['user_id'] ?? 0);
-                    if ($r_uid > 0) {
-                        $scoped_user_ids[$r_uid] = true;
-                    }
+            // Self-heal any managed employee/rider rows whose store_id was previously defaulted to another store (e.g. store 7 or 1)
+            if (!empty($owner_store_id_list)) {
+                $primary_owner_store_id = (int)$owner_store_id_list[0];
+                $owner_store_csv = implode(',', $owner_store_id_list);
+                if (hrTableExists($conn, 'employees') && hrColumnExists($conn, 'employees', 'store_id')) {
+                    @mysqli_query(
+                        $conn,
+                        "UPDATE employees e
+                         INNER JOIN partner_user_links pul ON pul.managed_user_id = e.user_id AND pul.owner_user_id = {$owner_user_id}
+                         SET e.store_id = {$primary_owner_store_id}
+                         WHERE e.store_id IS NULL OR e.store_id = 0 OR e.store_id NOT IN ({$owner_store_csv})"
+                    );
                 }
-                mysqli_stmt_close($r_stmt);
+                if (hrTableExists($conn, 'riders')) {
+                    $has_r_owner_col = hrColumnExists($conn, 'riders', 'store_owner_id');
+                    $owner_set_sql = $has_r_owner_col ? ", r.store_owner_id = {$owner_user_id}" : "";
+                    @mysqli_query(
+                        $conn,
+                        "UPDATE riders r
+                         INNER JOIN partner_user_links pul ON pul.managed_user_id = r.user_id AND pul.owner_user_id = {$owner_user_id}
+                         SET r.store_id = {$primary_owner_store_id}{$owner_set_sql}
+                         WHERE r.store_id IS NULL OR r.store_id = 0 OR r.store_id NOT IN ({$owner_store_csv})"
+                    );
+                }
             }
         }
 
-        if (hrTableExists($conn, 'employees') && hrTableExists($conn, 'store_locations')) {
-            $emp_store_sql = "SELECT DISTINCT e.user_id FROM employees e 
-                              JOIN store_locations sl ON e.store_id = sl.store_id 
-                              WHERE sl.owner_user_id = ? AND e.user_id IS NOT NULL";
-            $es_stmt = mysqli_prepare($conn, $emp_store_sql);
-            if ($es_stmt) {
-                mysqli_stmt_bind_param($es_stmt, "i", $owner_user_id);
-                mysqli_stmt_execute($es_stmt);
-                $es_res = mysqli_stmt_get_result($es_stmt);
-                while ($es_res && ($es_row = mysqli_fetch_assoc($es_res))) {
-                    $e_uid = intval($es_row['user_id'] ?? 0);
-                    if ($e_uid > 0) {
-                        $scoped_user_ids[$e_uid] = true;
-                    }
+        if (hrTableExists($conn, 'employees') && hrColumnExists($conn, 'employees', 'store_id') && !empty($owner_store_id_list)) {
+            $store_csv_local = implode(',', $owner_store_id_list);
+            $emp_store_res = @mysqli_query(
+                $conn,
+                "SELECT DISTINCT e.user_id FROM employees e WHERE e.store_id IN ({$store_csv_local}) AND e.user_id IS NOT NULL"
+            );
+            while ($emp_store_res && ($es_row = mysqli_fetch_assoc($emp_store_res))) {
+                $e_uid = intval($es_row['user_id'] ?? 0);
+                if ($e_uid > 0) {
+                    $scoped_user_ids[$e_uid] = true;
                 }
-                mysqli_stmt_close($es_stmt);
+            }
+        }
+
+        if (hrTableExists($conn, 'riders')) {
+            $has_r_owner = hrColumnExists($conn, 'riders', 'store_owner_id');
+            if ($has_r_owner && !empty($owner_store_id_list)) {
+                $store_csv_local = implode(',', $owner_store_id_list);
+                $rider_res = @mysqli_query(
+                    $conn,
+                    "SELECT DISTINCT r.user_id FROM riders r WHERE (r.store_owner_id = {$owner_user_id} OR r.store_id IN ({$store_csv_local})) AND r.user_id IS NOT NULL"
+                );
+            } elseif ($has_r_owner) {
+                $rider_res = @mysqli_query(
+                    $conn,
+                    "SELECT DISTINCT r.user_id FROM riders r WHERE r.store_owner_id = {$owner_user_id} AND r.user_id IS NOT NULL"
+                );
+            } elseif (!empty($owner_store_id_list)) {
+                $store_csv_local = implode(',', $owner_store_id_list);
+                $rider_res = @mysqli_query(
+                    $conn,
+                    "SELECT DISTINCT r.user_id FROM riders r WHERE r.store_id IN ({$store_csv_local}) AND r.user_id IS NOT NULL"
+                );
+            } else {
+                $rider_res = false;
+            }
+            while ($rider_res && ($r_row = mysqli_fetch_assoc($rider_res))) {
+                $r_uid = intval($r_row['user_id'] ?? 0);
+                if ($r_uid > 0) {
+                    $scoped_user_ids[$r_uid] = true;
+                }
             }
         }
 
         $cached = [
             'enabled' => true,
             'owner_user_id' => $owner_user_id,
-            'scoped_user_ids' => array_keys($scoped_user_ids)
+            'owner_store_ids' => $owner_store_id_list,
+            'scoped_user_ids' => array_map('intval', array_keys($scoped_user_ids))
         ];
 
         return $cached;
@@ -671,6 +723,13 @@ if (!function_exists('hrScopedUserIds')) {
     function hrScopedUserIds($conn) {
         $ctx = hrPartnerScopeContext($conn);
         return isset($ctx['scoped_user_ids']) && is_array($ctx['scoped_user_ids']) ? $ctx['scoped_user_ids'] : [];
+    }
+}
+
+if (!function_exists('hrScopedStoreIds')) {
+    function hrScopedStoreIds($conn) {
+        $ctx = hrPartnerScopeContext($conn);
+        return isset($ctx['owner_store_ids']) && is_array($ctx['owner_store_ids']) ? $ctx['owner_store_ids'] : [];
     }
 }
 
@@ -702,11 +761,42 @@ if (!function_exists('hrEmployeeScopeSql')) {
         if (!hrIsPartnerScopeEnabled($conn)) {
             return '1=1';
         }
+        $owner_id = hrPartnerScopeOwnerUserId($conn);
         $csv = hrScopeUserIdCsv($conn);
+        $store_ids = hrScopedStoreIds($conn);
+        $has_store_col = hrColumnExists($conn, 'employees', 'store_id');
+        $has_pul_table = hrTableExists($conn, 'partner_user_links');
+
+        // Exclude any user explicitly owned by a DIFFERENT tenant in partner_user_links
+        $not_other_tenant_user = ($has_pul_table && $owner_id > 0)
+            ? " AND ({$employee_alias}.{$user_column} IS NULL OR NOT EXISTS (SELECT 1 FROM partner_user_links pul_other WHERE pul_other.managed_user_id = {$employee_alias}.{$user_column} AND pul_other.owner_user_id <> {$owner_id}))"
+            : "";
+
+        if ($has_store_col) {
+            $parts = [];
+            if (!empty($store_ids)) {
+                $store_csv = implode(',', array_map('intval', $store_ids));
+                // Employees explicitly assigned to one of this tenant's stores (and not owned by another tenant)
+                $parts[] = "({$employee_alias}.store_id IS NOT NULL AND {$employee_alias}.store_id > 0 AND {$employee_alias}.store_id IN ({$store_csv}){$not_other_tenant_user})";
+            }
+            if ($has_pul_table && $owner_id > 0) {
+                // Employees explicitly linked to this tenant owner via partner_user_links
+                $parts[] = "({$employee_alias}.{$user_column} IS NOT NULL AND EXISTS (SELECT 1 FROM partner_user_links pul_own WHERE pul_own.managed_user_id = {$employee_alias}.{$user_column} AND pul_own.owner_user_id = {$owner_id}))";
+            }
+            if ($csv !== '') {
+                // Legacy employees with no store_id assigned yet, matched by this tenant's user IDs only
+                $parts[] = "(({$employee_alias}.store_id IS NULL OR {$employee_alias}.store_id = 0) AND {$employee_alias}.{$user_column} IS NOT NULL AND {$employee_alias}.{$user_column} IN ({$csv}){$not_other_tenant_user})";
+            }
+            if (empty($parts)) {
+                return '1=0';
+            }
+            return '(' . implode(' OR ', $parts) . ')';
+        }
+
         if ($csv === '') {
             return '1=0';
         }
-        return "{$employee_alias}.{$user_column} IS NOT NULL AND {$employee_alias}.{$user_column} IN ({$csv})";
+        return "({$employee_alias}.{$user_column} IS NOT NULL AND {$employee_alias}.{$user_column} IN ({$csv}){$not_other_tenant_user})";
     }
 }
 

@@ -6,6 +6,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once '../includes/config.php';
 require_once 'auth.php';
+require_once 'hr_module_common.php';
 checkAdminAccess();
 require_once '../includes/security.php';
 
@@ -58,9 +59,13 @@ if ($tracking_id <= 0 && $order_id <= 0) {
 }
 
 try {
-    // 1. Resolve Driver Info from Logged-in User
+    $is_partner_scoped = function_exists('isApprovedFranchiseSellerAccount') && isApprovedFranchiseSellerAccount($conn, $current_user_id);
+    $seller_scope_id = $is_partner_scoped && function_exists('getFranchiseSellerScopeOwnerId') ? getFranchiseSellerScopeOwnerId($conn, $current_user_id) : null;
+
+    // 1. Resolve Driver Info from Logged-in User (strictly within tenant scope)
     $employee = null;
-    $emp_stmt = mysqli_prepare($conn, "SELECT id, first_name, last_name, phone, vehicle_details FROM employees WHERE user_id = ? AND status = 'active' LIMIT 1");
+    $emp_scope_sql = function_exists('hrEmployeeScopeSql') ? hrEmployeeScopeSql($conn, 'e', 'user_id') : '1=1';
+    $emp_stmt = mysqli_prepare($conn, "SELECT e.id, e.first_name, e.last_name, e.phone, e.vehicle_details FROM employees e WHERE e.user_id = ? AND e.status = 'active' AND {$emp_scope_sql} LIMIT 1");
     if ($emp_stmt) {
         mysqli_stmt_bind_param($emp_stmt, "i", $current_user_id);
         mysqli_stmt_execute($emp_stmt);
@@ -71,7 +76,10 @@ try {
 
     if (!$employee && isset($_POST['employee_id']) && intval($_POST['employee_id']) > 0) {
         $target_emp_id = intval($_POST['employee_id']);
-        $t_stmt = mysqli_prepare($conn, "SELECT id, first_name, last_name, phone, vehicle_details FROM employees WHERE id = ? LIMIT 1");
+        if (hrIsPartnerScopeEnabled($conn) && !hrEmployeeIdInScope($conn, $target_emp_id)) {
+            sendJsonAndExit(['success' => false, 'message' => 'Access denied. Selected driver does not belong to your store.'], 403);
+        }
+        $t_stmt = mysqli_prepare($conn, "SELECT e.id, e.first_name, e.last_name, e.phone, e.vehicle_details FROM employees e WHERE e.id = ? AND {$emp_scope_sql} LIMIT 1");
         if ($t_stmt) {
             mysqli_stmt_bind_param($t_stmt, "i", $target_emp_id);
             mysqli_stmt_execute($t_stmt);
@@ -81,17 +89,10 @@ try {
         }
     }
 
-    $is_partner_scoped = function_exists('isApprovedFranchiseSellerAccount') && isApprovedFranchiseSellerAccount($conn, $current_user_id);
-    $seller_scope_id = $is_partner_scoped && function_exists('getFranchiseSellerScopeOwnerId') ? getFranchiseSellerScopeOwnerId($conn, $current_user_id) : null;
-
-    if (!$employee && $seller_scope_id !== null && function_exists('getFranchiseSellerScopeUserIds')) {
-        $scoped_user_ids = getFranchiseSellerScopeUserIds($conn, (int)$seller_scope_id);
-        if (!empty($scoped_user_ids)) {
-            $in_users = implode(',', array_map('intval', $scoped_user_ids));
-            $scoped_emp_res = mysqli_query($conn, "SELECT id, first_name, last_name, phone, vehicle_details FROM employees WHERE user_id IN ($in_users) AND status = 'active' ORDER BY id ASC LIMIT 1");
-            if ($scoped_emp_res && mysqli_num_rows($scoped_emp_res) > 0) {
-                $employee = mysqli_fetch_assoc($scoped_emp_res);
-            }
+    if (!$employee && $seller_scope_id !== null) {
+        $scoped_emp_res = mysqli_query($conn, "SELECT e.id, e.first_name, e.last_name, e.phone, e.vehicle_details FROM employees e WHERE e.status = 'active' AND {$emp_scope_sql} ORDER BY e.id ASC LIMIT 1");
+        if ($scoped_emp_res && mysqli_num_rows($scoped_emp_res) > 0) {
+            $employee = mysqli_fetch_assoc($scoped_emp_res);
         }
     }
 
@@ -137,6 +138,40 @@ try {
                 $seed_lng = $geo_row['current_longitude'];
             }
             mysqli_stmt_close($geo_stmt);
+        }
+    }
+
+    // Resolve order_id from tracking_id if only tracking_id was provided, then enforce strict tenant order scope
+    $target_order_id = $order_id;
+    if ($target_order_id <= 0 && $tracking_id > 0) {
+        $ord_lookup = mysqli_prepare($conn, "SELECT order_id FROM logistics_tracking WHERE id = ? LIMIT 1");
+        if ($ord_lookup) {
+            mysqli_stmt_bind_param($ord_lookup, "i", $tracking_id);
+            mysqli_stmt_execute($ord_lookup);
+            $ord_lres = mysqli_stmt_get_result($ord_lookup);
+            if ($ord_lrow = mysqli_fetch_assoc($ord_lres)) {
+                $target_order_id = (int)($ord_lrow['order_id'] ?? 0);
+            }
+            mysqli_stmt_close($ord_lookup);
+        }
+    }
+
+    if ($seller_scope_id !== null) {
+        if ($target_order_id <= 0 || !function_exists('getFranchiseScopedOrderExistsSql')) {
+            sendJsonAndExit(['success' => false, 'message' => 'Access denied. You can only accept orders from the shop that hired you.'], 403);
+        }
+        $order_scope_sql = getFranchiseScopedOrderExistsSql($conn, (int)$seller_scope_id, 'o.id');
+        $ord_scope_stmt = mysqli_prepare($conn, "SELECT o.id FROM orders o WHERE o.id = ? AND {$order_scope_sql} LIMIT 1");
+        $in_shop_scope = false;
+        if ($ord_scope_stmt) {
+            mysqli_stmt_bind_param($ord_scope_stmt, "i", $target_order_id);
+            mysqli_stmt_execute($ord_scope_stmt);
+            $ord_scope_res = mysqli_stmt_get_result($ord_scope_stmt);
+            $in_shop_scope = (bool)($ord_scope_res && mysqli_fetch_assoc($ord_scope_res));
+            mysqli_stmt_close($ord_scope_stmt);
+        }
+        if (!$in_shop_scope) {
+            sendJsonAndExit(['success' => false, 'message' => 'Access denied. You can only accept delivery orders from the shop that hired you.'], 403);
         }
     }
 

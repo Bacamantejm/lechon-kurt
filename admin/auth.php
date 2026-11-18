@@ -397,7 +397,110 @@ function getFranchiseSellerScopeOwnerId($conn, $user_id) {
         }
     }
 
+    // 4. Fallback: resolve partner owner scope from employees.store_id -> store_locations.owner_user_id
+    if (adminAuthTableExists($conn, 'employees')
+        && adminAuthColumnExists($conn, 'employees', 'store_id')
+        && adminAuthTableExists($conn, 'store_locations')
+        && adminAuthColumnExists($conn, 'store_locations', 'owner_user_id')) {
+        $emp_owner_stmt = mysqli_prepare(
+            $conn,
+            "SELECT sl.owner_user_id
+             FROM employees e
+             INNER JOIN store_locations sl ON sl.store_id = e.store_id
+             WHERE e.user_id = ?
+               AND sl.owner_user_id IS NOT NULL
+               AND sl.owner_user_id > 0
+             ORDER BY e.id DESC
+             LIMIT 1"
+        );
+        if ($emp_owner_stmt) {
+            mysqli_stmt_bind_param($emp_owner_stmt, "i", $user_id);
+            mysqli_stmt_execute($emp_owner_stmt);
+            $emp_owner_res = mysqli_stmt_get_result($emp_owner_stmt);
+            $emp_owner_row = $emp_owner_res ? mysqli_fetch_assoc($emp_owner_res) : null;
+            mysqli_stmt_close($emp_owner_stmt);
+
+            if (!empty($emp_owner_row['owner_user_id'])) {
+                $owner_user_id = (int)$emp_owner_row['owner_user_id'];
+                linkPartnerManagedUser($conn, $owner_user_id, $user_id);
+                return $cache[$user_id] = $owner_user_id;
+            }
+        }
+    }
+
+    // 5. Fallback: resolve partner owner scope from riders.store_owner_id / riders.store_id
+    if (adminAuthTableExists($conn, 'riders') && adminAuthTableExists($conn, 'store_locations')) {
+        $has_r_owner_col = adminAuthColumnExists($conn, 'riders', 'store_owner_id');
+        $owner_expr = $has_r_owner_col ? "COALESCE(NULLIF(r.store_owner_id, 0), sl.owner_user_id)" : "sl.owner_user_id";
+        $rider_owner_stmt = mysqli_prepare(
+            $conn,
+            "SELECT {$owner_expr} AS owner_user_id
+             FROM riders r
+             LEFT JOIN store_locations sl ON sl.store_id = r.store_id
+             WHERE r.user_id = ?
+               AND {$owner_expr} IS NOT NULL
+               AND {$owner_expr} > 0
+             ORDER BY r.id DESC
+             LIMIT 1"
+        );
+        if ($rider_owner_stmt) {
+            mysqli_stmt_bind_param($rider_owner_stmt, "i", $user_id);
+            mysqli_stmt_execute($rider_owner_stmt);
+            $rider_owner_res = mysqli_stmt_get_result($rider_owner_stmt);
+            $rider_owner_row = $rider_owner_res ? mysqli_fetch_assoc($rider_owner_res) : null;
+            mysqli_stmt_close($rider_owner_stmt);
+
+            if (!empty($rider_owner_row['owner_user_id'])) {
+                $owner_user_id = (int)$rider_owner_row['owner_user_id'];
+                linkPartnerManagedUser($conn, $owner_user_id, $user_id);
+                return $cache[$user_id] = $owner_user_id;
+            }
+        }
+    }
+
     return $cache[$user_id] = null;
+}
+
+if (!function_exists('getFranchiseSellerScopeStoreIds')) {
+    /**
+     * Resolves all store_id values owned by a partner seller scope owner.
+     *
+     * @param mysqli $conn
+     * @param int $seller_scope_owner_id
+     * @return array<int>
+     */
+    function getFranchiseSellerScopeStoreIds($conn, $seller_scope_owner_id) {
+        $seller_scope_owner_id = intval($seller_scope_owner_id);
+        if ($seller_scope_owner_id <= 0 || !$conn || !adminAuthTableExists($conn, 'store_locations')) {
+            return [];
+        }
+
+        static $cache = [];
+        if (array_key_exists($seller_scope_owner_id, $cache)) {
+            return $cache[$seller_scope_owner_id];
+        }
+
+        $store_ids = [];
+        if (adminAuthColumnExists($conn, 'store_locations', 'owner_user_id')) {
+            $stmt = mysqli_prepare($conn, "SELECT store_id FROM store_locations WHERE owner_user_id = ? ORDER BY store_id ASC");
+            if ($stmt) {
+                mysqli_stmt_bind_param($stmt, "i", $seller_scope_owner_id);
+                mysqli_stmt_execute($stmt);
+                $res = mysqli_stmt_get_result($stmt);
+                while ($res && ($row = mysqli_fetch_assoc($res))) {
+                    $sid = intval($row['store_id'] ?? 0);
+                    if ($sid > 0) {
+                        $store_ids[$sid] = true;
+                    }
+                }
+                mysqli_stmt_close($stmt);
+            }
+        }
+
+        $resolved = array_map('intval', array_keys($store_ids));
+        sort($resolved, SORT_NUMERIC);
+        return $cache[$seller_scope_owner_id] = $resolved;
+    }
 }
 
 if (!function_exists('getFranchiseSellerScopeUserIds')) {

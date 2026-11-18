@@ -15,6 +15,9 @@ try {
     $driver_role_sql = function_exists('hrLogisticsEmployeeSqlCondition')
         ? hrLogisticsEmployeeSqlCondition('e', 'd', $conn)
         : "1=0";
+    $driver_scope_sql = function_exists('hrEmployeeScopeSql')
+        ? hrEmployeeScopeSql($conn, 'e', 'user_id')
+        : '1=1';
 
     $query = "SELECT 
         e.id,
@@ -31,6 +34,7 @@ try {
     LEFT JOIN driver_delivery_stats dds ON e.id = dds.driver_id
     WHERE {$driver_role_sql}
     AND e.status = 'active'
+    AND {$driver_scope_sql}
     ORDER BY COALESCE(dav.is_available, 0) DESC, dds.avg_rating DESC";
     
     $result = mysqli_query($conn, $query);

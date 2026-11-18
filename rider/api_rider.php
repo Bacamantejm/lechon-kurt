@@ -205,20 +205,8 @@ if ($action === 'poll_requests') {
         $snoozed_orders = [];
     }
 
-    // Query pending/preparing delivery orders strictly scoped to the store that hired this rider
-    $hiring_store_id = (int)($rider['store_id'] ?? 0);
-    $hiring_owner_id = (int)($rider['store_owner_id'] ?? 0);
-
-    if ($hiring_store_id > 0) {
-        if ($hiring_owner_id > 0) {
-            $store_filter = "AND (o.pickup_location = $hiring_store_id OR o.store_id = $hiring_store_id OR (o.seller_id IS NOT NULL AND o.seller_id = $hiring_owner_id))";
-        } else {
-            $store_filter = "AND (o.pickup_location = $hiring_store_id OR o.store_id = $hiring_store_id)";
-        }
-    } else {
-        // Unassigned riders must never see any store orders
-        $store_filter = "AND 1 = 0";
-    }
+    // Query pending/preparing delivery orders strictly scoped to the shop that hired this rider
+    $store_filter = riderBuildShopOrderFilterSql($conn, $rider, 'o');
 
     $sql = "
         SELECT o.id AS order_id, o.order_number, o.customer_name, o.customer_phone,
@@ -228,7 +216,10 @@ if ($action === 'poll_requests') {
                sl.latitude AS store_latitude, sl.longitude AS store_longitude,
                lt.id AS tracking_id, lt.driver_id, lt.current_status
         FROM orders o
-        LEFT JOIN store_locations sl ON (o.pickup_location = sl.store_id OR o.store_id = sl.store_id)
+        LEFT JOIN store_locations sl ON (
+            (o.store_id IS NOT NULL AND o.store_id > 0 AND o.store_id = sl.store_id)
+            OR (o.pickup_location REGEXP '^[0-9]+$' AND CAST(o.pickup_location AS UNSIGNED) = sl.store_id)
+        )
         LEFT JOIN logistics_tracking lt ON lt.order_id = o.id
         WHERE o.status IN ('confirmed', 'preparing')
           AND o.delivery_option = 'delivery'
@@ -332,24 +323,8 @@ if ($action === 'accept_delivery') {
     }
 
     // Tenant check: Rider can ONLY accept delivery orders from the shop that hired them
-    $hiring_store_id = (int)($rider['store_id'] ?? 0);
-    $hiring_owner_id = (int)($rider['store_owner_id'] ?? 0);
-    $is_own_shop_order = false;
-
-    if ($hiring_store_id > 0) {
-        $ord_pickup = (int)($ord['pickup_location'] ?? 0);
-        $ord_store = (int)($ord['store_id'] ?? 0);
-        $ord_seller = !empty($ord['seller_id']) ? (int)$ord['seller_id'] : 0;
-
-        if ($ord_pickup === $hiring_store_id || $ord_store === $hiring_store_id) {
-            $is_own_shop_order = true;
-        } elseif ($hiring_owner_id > 0 && $ord_seller === $hiring_owner_id) {
-            $is_own_shop_order = true;
-        }
-    }
-
-    if (!$is_own_shop_order) {
-        jsonRes(['success' => false, 'message' => 'Access denied. You can only accept delivery orders from the store branch that hired you.'], 403);
+    if (!riderIsOrderFromHiringShop($conn, $rider, $order_id)) {
+        jsonRes(['success' => false, 'message' => 'Access denied. You can only accept delivery orders from the shop that hired you.'], 403);
     }
 
     // Check collision in logistics_tracking

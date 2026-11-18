@@ -101,13 +101,17 @@ if (!empty($tracking['delivery_date'])) {
     }
 }
 
-// Get employee details (active delivery employee only).
+// Get employee details (active delivery employee strictly within this shop's tenant scope).
+$driver_scope_sql = function_exists('hrEmployeeScopeSql')
+    ? hrEmployeeScopeSql($conn, 'e', 'user_id')
+    : '1=1';
+
 $emp_query = mysqli_prepare(
     $conn,
     "SELECT e.first_name, e.last_name, e.phone, e.vehicle_details
      FROM employees e
      LEFT JOIN departments d ON d.id = e.department_id
-     WHERE e.id = ? AND e.status = 'active' AND {$driver_role_sql}
+     WHERE e.id = ? AND e.status = 'active' AND {$driver_role_sql} AND {$driver_scope_sql}
      LIMIT 1"
 );
 mysqli_stmt_bind_param($emp_query, "i", $employee_id);
@@ -117,8 +121,8 @@ $employee = mysqli_fetch_assoc($emp_result);
 mysqli_stmt_close($emp_query);
 
 if (!$employee) {
-    http_response_code(404);
-    echo json_encode(['success' => false, 'message' => 'Selected active employee was not found.']);
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'Selected active driver was not found in your store\'s hired employees.']);
     exit;
 }
 

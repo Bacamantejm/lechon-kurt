@@ -567,6 +567,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $department_id = isset($_POST['department_id']) && $_POST['department_id'] !== '' ? intval($_POST['department_id']) : 0;
         $store_id = isset($_POST['store_id']) && $_POST['store_id'] !== '' ? intval($_POST['store_id']) : 0;
+        if ($is_partner_scoped_hr && $store_id > 0) {
+            $allowed_owner_stores = function_exists('hrScopedStoreIds') ? hrScopedStoreIds($conn) : [];
+            if (!in_array($store_id, $allowed_owner_stores, true)) {
+                $store_id = 0; // Never allow assigning an employee to another tenant's store
+            }
+        }
         if ($store_id <= 0) {
             $scope_target_user_id = ($is_partner_scoped_hr && $partner_scope_owner_id > 0) ? (int)$partner_scope_owner_id : (int)($_SESSION['user_id'] ?? 0);
             if ($scope_target_user_id > 0) {
@@ -575,43 +581,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($sl_find && ($sl_row = mysqli_fetch_assoc($sl_find))) {
                     $store_id = (int)$sl_row['store_id'];
                 }
-                // 2. Email match in store_locations
+                // 2. Email match in store_locations (only if unowned or owned by this owner)
                 if ($store_id <= 0) {
-                    $sl_email = mysqli_query($conn, "SELECT sl.store_id FROM store_locations sl INNER JOIN users u ON sl.email = u.email WHERE u.id = {$scope_target_user_id} AND sl.is_active = 1 LIMIT 1");
+                    $sl_email = mysqli_query($conn, "SELECT sl.store_id FROM store_locations sl INNER JOIN users u ON sl.email = u.email WHERE u.id = {$scope_target_user_id} AND (sl.owner_user_id IS NULL OR sl.owner_user_id = 0 OR sl.owner_user_id = {$scope_target_user_id}) AND sl.is_active = 1 LIMIT 1");
                     if ($sl_email && ($sl_row = mysqli_fetch_assoc($sl_email))) {
                         $store_id = (int)$sl_row['store_id'];
                     }
                 }
-                // 3. Business name match in store_locations
+                // 3. Business name match in store_locations (only if unowned or owned by this owner)
                 if ($store_id <= 0) {
-                    $sl_bn = mysqli_query($conn, "SELECT sl.store_id FROM store_locations sl INNER JOIN users u ON LOWER(sl.store_name) = LOWER(u.business_name) WHERE u.id = {$scope_target_user_id} AND sl.is_active = 1 LIMIT 1");
+                    $sl_bn = mysqli_query($conn, "SELECT sl.store_id FROM store_locations sl INNER JOIN users u ON LOWER(sl.store_name) = LOWER(u.business_name) WHERE u.id = {$scope_target_user_id} AND (sl.owner_user_id IS NULL OR sl.owner_user_id = 0 OR sl.owner_user_id = {$scope_target_user_id}) AND sl.is_active = 1 LIMIT 1");
                     if ($sl_bn && ($sl_row = mysqli_fetch_assoc($sl_bn))) {
                         $store_id = (int)$sl_row['store_id'];
                     }
                 }
                 // 4. Auto-create store location for this business owner if missing
-                if ($store_id <= 0) {
-                    $user_q = mysqli_query($conn, "SELECT business_name, email, phone, address FROM users WHERE id = {$scope_target_user_id} LIMIT 1");
+                if ($store_id <= 0 && $is_partner_scoped_hr) {
+                    $user_q = mysqli_query($conn, "SELECT full_name, business_name, email, phone, address FROM users WHERE id = {$scope_target_user_id} LIMIT 1");
                     if ($user_q && ($u_data = mysqli_fetch_assoc($user_q))) {
                         $b_name = trim((string)($u_data['business_name'] ?? ''));
-                        if ($b_name !== '') {
-                            $b_email = trim((string)($u_data['email'] ?? ''));
-                            $b_phone = trim((string)($u_data['phone'] ?? ''));
-                            $b_addr = trim((string)($u_data['address'] ?? 'Cavite'));
-                            $ins_store = mysqli_prepare($conn, "INSERT INTO store_locations (owner_user_id, store_name, address, city, province, phone, email, opening_hours, opening_time, closing_time, operating_days, availability_mode, manual_status, is_active) VALUES (?, ?, ?, 'City of Dasmariñas', 'Cavite', ?, ?, 'Daily | 8:00 AM - 8:00 PM', '08:00:00', '20:00:00', '1,2,3,4,5,6,7', 'schedule', 'open', 1)");
-                            if ($ins_store) {
-                                mysqli_stmt_bind_param($ins_store, "issss", $scope_target_user_id, $b_name, $b_addr, $b_phone, $b_email);
-                                mysqli_stmt_execute($ins_store);
-                                $store_id = (int)mysqli_insert_id($conn);
-                                mysqli_stmt_close($ins_store);
-                            }
+                        if ($b_name === '') {
+                            $b_name = trim((string)($u_data['full_name'] ?? 'Partner Store')) . ' Store';
+                        }
+                        $b_email = trim((string)($u_data['email'] ?? ''));
+                        $b_phone = trim((string)($u_data['phone'] ?? ''));
+                        $b_addr = trim((string)($u_data['address'] ?? 'Cavite'));
+                        $ins_store = mysqli_prepare($conn, "INSERT INTO store_locations (owner_user_id, store_name, address, city, province, phone, email, opening_hours, opening_time, closing_time, operating_days, availability_mode, manual_status, is_active) VALUES (?, ?, ?, 'City of Dasmariñas', 'Cavite', ?, ?, 'Daily | 8:00 AM - 8:00 PM', '08:00:00', '20:00:00', '1,2,3,4,5,6,7', 'schedule', 'open', 1)");
+                        if ($ins_store) {
+                            mysqli_stmt_bind_param($ins_store, "issss", $scope_target_user_id, $b_name, $b_addr, $b_phone, $b_email);
+                            mysqli_stmt_execute($ins_store);
+                            $store_id = (int)mysqli_insert_id($conn);
+                            mysqli_stmt_close($ins_store);
                         }
                     }
                 }
             }
-            // 5. Fallback to any active store in store_locations
-            if ($store_id <= 0) {
-                $sl_any = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE is_active = 1 ORDER BY (store_id = 7) DESC, store_id ASC LIMIT 1");
+            // 5. Platform admin fallback ONLY (never borrow another tenant's store for partner-scoped HR)
+            if ($store_id <= 0 && !$is_partner_scoped_hr) {
+                $sl_any = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE is_active = 1 ORDER BY store_id ASC LIMIT 1");
                 if ($sl_any && ($sl_row = mysqli_fetch_assoc($sl_any))) {
                     $store_id = (int)$sl_row['store_id'];
                 }
@@ -1027,10 +1034,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $department_id = isset($_POST['department_id']) && $_POST['department_id'] !== '' ? intval($_POST['department_id']) : 0;
         $store_id = isset($_POST['store_id']) && $_POST['store_id'] !== '' ? intval($_POST['store_id']) : 0;
+        if ($is_partner_scoped_hr && $store_id > 0) {
+            $allowed_owner_stores = function_exists('hrScopedStoreIds') ? hrScopedStoreIds($conn) : [];
+            if (!in_array($store_id, $allowed_owner_stores, true)) {
+                $store_id = 0; // Never allow moving an employee to another tenant's store
+            }
+        }
         if ($store_id <= 0 && $id > 0) {
             $curr_store_q = mysqli_query($conn, "SELECT store_id FROM employees WHERE id = {$id} LIMIT 1");
             if ($curr_store_q && ($curr_store_r = mysqli_fetch_assoc($curr_store_q)) && !empty($curr_store_r['store_id'])) {
-                $store_id = (int)$curr_store_r['store_id'];
+                $candidate_store = (int)$curr_store_r['store_id'];
+                if (!$is_partner_scoped_hr || in_array($candidate_store, function_exists('hrScopedStoreIds') ? hrScopedStoreIds($conn) : [], true)) {
+                    $store_id = $candidate_store;
+                }
             }
         }
         if ($store_id <= 0) {
@@ -1041,20 +1057,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $store_id = (int)$sl_row['store_id'];
                 }
                 if ($store_id <= 0) {
-                    $sl_email = mysqli_query($conn, "SELECT sl.store_id FROM store_locations sl INNER JOIN users u ON sl.email = u.email WHERE u.id = {$scope_target_user_id} AND sl.is_active = 1 LIMIT 1");
+                    $sl_email = mysqli_query($conn, "SELECT sl.store_id FROM store_locations sl INNER JOIN users u ON sl.email = u.email WHERE u.id = {$scope_target_user_id} AND (sl.owner_user_id IS NULL OR sl.owner_user_id = 0 OR sl.owner_user_id = {$scope_target_user_id}) AND sl.is_active = 1 LIMIT 1");
                     if ($sl_email && ($sl_row = mysqli_fetch_assoc($sl_email))) {
                         $store_id = (int)$sl_row['store_id'];
                     }
                 }
                 if ($store_id <= 0) {
-                    $sl_bn = mysqli_query($conn, "SELECT sl.store_id FROM store_locations sl INNER JOIN users u ON LOWER(sl.store_name) = LOWER(u.business_name) WHERE u.id = {$scope_target_user_id} AND sl.is_active = 1 LIMIT 1");
+                    $sl_bn = mysqli_query($conn, "SELECT sl.store_id FROM store_locations sl INNER JOIN users u ON LOWER(sl.store_name) = LOWER(u.business_name) WHERE u.id = {$scope_target_user_id} AND (sl.owner_user_id IS NULL OR sl.owner_user_id = 0 OR sl.owner_user_id = {$scope_target_user_id}) AND sl.is_active = 1 LIMIT 1");
                     if ($sl_bn && ($sl_row = mysqli_fetch_assoc($sl_bn))) {
                         $store_id = (int)$sl_row['store_id'];
                     }
                 }
             }
-            if ($store_id <= 0) {
-                $sl_any = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE is_active = 1 ORDER BY (store_id = 7) DESC, store_id ASC LIMIT 1");
+            if ($store_id <= 0 && !$is_partner_scoped_hr) {
+                $sl_any = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE is_active = 1 ORDER BY store_id ASC LIMIT 1");
                 if ($sl_any && ($sl_row = mysqli_fetch_assoc($sl_any))) {
                     $store_id = (int)$sl_row['store_id'];
                 }

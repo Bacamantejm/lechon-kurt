@@ -202,69 +202,151 @@ if (!function_exists('isDeliveryDriverUser')) {
             $r_code = 'RDR-' . str_pad((string)$user_id, 4, '0', STR_PAD_LEFT);
             $v_type = !empty($matched_emp['vehicle_details']) ? mysqli_real_escape_string($conn, $matched_emp['vehicle_details']) : 'Motorcycle';
 
-            // Resolve hiring store branch
+            // Resolve hiring store branch strictly from authoritative tenant ownership (NEVER fall back to another shop)
             $store_id_val = 0;
+            $store_owner_id_val = 0;
+            $has_authoritative_store = false;
+
             if ($explicit_store_id !== null && (int)$explicit_store_id > 0) {
                 $store_id_val = (int)$explicit_store_id;
-            } elseif (!empty($matched_emp['store_id']) && (int)$matched_emp['store_id'] > 0) {
-                $store_id_val = (int)$matched_emp['store_id'];
+                $has_authoritative_store = true;
             }
 
-            // Check partner_user_links
+            // Check partner_user_links first for hiring owner
+            $pul_owner_id = 0;
+            $pul_store_id = 0;
+            $pul_q = @mysqli_query($conn, "
+                SELECT pul.owner_user_id, sl.store_id
+                FROM partner_user_links pul
+                LEFT JOIN store_locations sl ON pul.owner_user_id = sl.owner_user_id
+                WHERE pul.managed_user_id = $user_id
+                ORDER BY sl.store_id ASC
+                LIMIT 1
+            ");
+            if ($pul_q && ($pul_row = mysqli_fetch_assoc($pul_q))) {
+                $pul_owner_id = (int)($pul_row['owner_user_id'] ?? 0);
+                $pul_store_id = (int)($pul_row['store_id'] ?? 0);
+            }
+
+            if ($store_id_val <= 0 && !empty($matched_emp['store_id']) && (int)$matched_emp['store_id'] > 0) {
+                $emp_sid = (int)$matched_emp['store_id'];
+                // Ensure matched_emp.store_id does not conflict with explicit partner_user_links owner
+                if ($pul_owner_id > 0) {
+                    $chk_ow = @mysqli_query($conn, "SELECT owner_user_id FROM store_locations WHERE store_id = {$emp_sid} LIMIT 1");
+                    $chk_ow_row = $chk_ow ? mysqli_fetch_assoc($chk_ow) : null;
+                    if ($chk_ow_row && (int)($chk_ow_row['owner_user_id'] ?? 0) === $pul_owner_id) {
+                        $store_id_val = $emp_sid;
+                        $store_owner_id_val = $pul_owner_id;
+                        $has_authoritative_store = true;
+                    } elseif ($pul_store_id > 0) {
+                        $store_id_val = $pul_store_id;
+                        $store_owner_id_val = $pul_owner_id;
+                        $has_authoritative_store = true;
+                    }
+                } else {
+                    $store_id_val = $emp_sid;
+                    $has_authoritative_store = true;
+                }
+            }
+
+            if ($store_id_val <= 0 && $pul_store_id > 0) {
+                $store_id_val = $pul_store_id;
+                $store_owner_id_val = $pul_owner_id;
+                $has_authoritative_store = true;
+            }
+
+            // Check role ownership (roles.owner_user_id)
             if ($store_id_val <= 0) {
-                $pul_q = mysqli_query($conn, "
-                    SELECT sl.store_id 
-                    FROM partner_user_links pul 
-                    JOIN store_locations sl ON pul.owner_user_id = sl.owner_user_id 
-                    WHERE pul.managed_user_id = $user_id 
+                $role_ow_q = @mysqli_query($conn, "
+                    SELECT r.owner_user_id, sl.store_id
+                    FROM users u
+                    INNER JOIN roles r ON r.id = u.role_id
+                    LEFT JOIN store_locations sl ON sl.owner_user_id = r.owner_user_id
+                    WHERE u.id = $user_id AND r.owner_user_id IS NOT NULL AND r.owner_user_id > 0
+                    ORDER BY sl.store_id ASC
                     LIMIT 1
                 ");
-                if ($pul_q && ($pul_row = mysqli_fetch_assoc($pul_q))) {
-                    $store_id_val = (int)$pul_row['store_id'];
+                if ($role_ow_q && ($role_ow_row = mysqli_fetch_assoc($role_ow_q))) {
+                    $store_owner_id_val = (int)($role_ow_row['owner_user_id'] ?? 0);
+                    if (!empty($role_ow_row['store_id'])) {
+                        $store_id_val = (int)$role_ow_row['store_id'];
+                        $has_authoritative_store = true;
+                    }
                 }
             }
 
             // Check department manager
             if ($store_id_val <= 0 && !empty($matched_emp['department_id'])) {
-                $dept_q = mysqli_query($conn, "
-                    SELECT sl.store_id 
-                    FROM departments d 
-                    JOIN store_locations sl ON d.manager_id = sl.owner_user_id 
-                    WHERE d.id = " . (int)$matched_emp['department_id'] . " 
+                $dept_q = @mysqli_query($conn, "
+                    SELECT sl.store_id, sl.owner_user_id
+                    FROM departments d
+                    JOIN store_locations sl ON d.manager_id = sl.owner_user_id
+                    WHERE d.id = " . (int)$matched_emp['department_id'] . "
+                    ORDER BY sl.store_id ASC
                     LIMIT 1
                 ");
                 if ($dept_q && ($dept_row = mysqli_fetch_assoc($dept_q))) {
                     $store_id_val = (int)$dept_row['store_id'];
+                    $store_owner_id_val = (int)($dept_row['owner_user_id'] ?? 0);
+                    $has_authoritative_store = true;
                 }
             }
 
-            // Fallback default: JM Lechon store
-            if ($store_id_val <= 0) {
-                $st_q = mysqli_query($conn, "SELECT store_id FROM store_locations WHERE is_active = 1 ORDER BY CASE WHEN store_name LIKE '%jm lechon%' THEN 0 ELSE 1 END, store_id ASC LIMIT 1");
-                if ($st_q && ($st_r = mysqli_fetch_assoc($st_q))) {
-                    $store_id_val = (int)$st_r['store_id'];
-                } else {
-                    $store_id_val = 7;
+            // Resolve owner_user_id for the resolved store_id
+            if ($store_id_val > 0 && $store_owner_id_val <= 0) {
+                $ow_q = @mysqli_query($conn, "SELECT owner_user_id FROM store_locations WHERE store_id = {$store_id_val} LIMIT 1");
+                if ($ow_q && ($ow_r = mysqli_fetch_assoc($ow_q))) {
+                    $store_owner_id_val = (int)($ow_r['owner_user_id'] ?? 0);
                 }
+            }
+            if ($store_owner_id_val <= 0 && $pul_owner_id > 0) {
+                $store_owner_id_val = $pul_owner_id;
             }
 
             $s_sql_val = $store_id_val > 0 ? $store_id_val : "NULL";
+            $owner_sql_val = $store_owner_id_val > 0 ? $store_owner_id_val : "NULL";
 
-            // Insert or ensure verified and bound to hiring store
-            $rider_sync_sql = "
-                INSERT INTO riders (user_id, employee_id, rider_code, rider_type, store_id, vehicle_type, verification_status, duty_status, rating)
-                VALUES ($user_id, $emp_id_val, '$r_code', 'shop_rider', $s_sql_val, '$v_type', 'verified', 'online', 5.00)
-                ON DUPLICATE KEY UPDATE 
-                    verification_status = 'verified',
-                    rider_type = 'shop_rider',
-                    store_id = COALESCE(riders.store_id, VALUES(store_id)),
-                    employee_id = COALESCE(riders.employee_id, VALUES(employee_id))
-            ";
+            $has_store_owner_col = false;
+            $col_chk = @mysqli_query($conn, "SHOW COLUMNS FROM `riders` LIKE 'store_owner_id'");
+            if ($col_chk && mysqli_num_rows($col_chk) > 0) {
+                $has_store_owner_col = true;
+            }
+
+            $store_update_expr = $has_authoritative_store
+                ? "VALUES(store_id)"
+                : "COALESCE(riders.store_id, VALUES(store_id))";
+
+            if ($has_store_owner_col) {
+                $owner_update_expr = ($store_owner_id_val > 0)
+                    ? "VALUES(store_owner_id)"
+                    : "COALESCE(riders.store_owner_id, VALUES(store_owner_id))";
+                $rider_sync_sql = "
+                    INSERT INTO riders (user_id, employee_id, rider_code, rider_type, store_id, store_owner_id, vehicle_type, verification_status, duty_status, rating)
+                    VALUES ($user_id, $emp_id_val, '$r_code', 'shop_rider', $s_sql_val, $owner_sql_val, '$v_type', 'verified', 'online', 5.00)
+                    ON DUPLICATE KEY UPDATE
+                        verification_status = 'verified',
+                        rider_type = 'shop_rider',
+                        store_id = {$store_update_expr},
+                        store_owner_id = {$owner_update_expr},
+                        employee_id = COALESCE(riders.employee_id, VALUES(employee_id))
+                ";
+            } else {
+                $rider_sync_sql = "
+                    INSERT INTO riders (user_id, employee_id, rider_code, rider_type, store_id, vehicle_type, verification_status, duty_status, rating)
+                    VALUES ($user_id, $emp_id_val, '$r_code', 'shop_rider', $s_sql_val, '$v_type', 'verified', 'online', 5.00)
+                    ON DUPLICATE KEY UPDATE
+                        verification_status = 'verified',
+                        rider_type = 'shop_rider',
+                        store_id = {$store_update_expr},
+                        employee_id = COALESCE(riders.employee_id, VALUES(employee_id))
+                ";
+            }
             mysqli_query($conn, $rider_sync_sql);
 
             // Set session indicators
             $_SESSION['is_driver'] = true;
             $_SESSION['store_id'] = $store_id_val;
+            $_SESSION['store_owner_id'] = $store_owner_id_val;
             $r_fetch = mysqli_query($conn, "SELECT id, rider_code, store_id FROM riders WHERE user_id = $user_id LIMIT 1");
             if ($r_fetch && ($r_data = mysqli_fetch_assoc($r_fetch))) {
                 $_SESSION['rider_id'] = (int)$r_data['id'];

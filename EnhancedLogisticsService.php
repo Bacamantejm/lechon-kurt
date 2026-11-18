@@ -186,11 +186,35 @@ class EnhancedLogisticsService {
             return '1=1';
         }
         $scoped_user_ids = is_array($context['scoped_user_ids'] ?? null) ? $context['scoped_user_ids'] : [];
-        if (empty($scoped_user_ids)) {
+        $owner_id = (int)($context['owner_user_id'] ?? 0);
+        if (empty($scoped_user_ids) && $owner_id <= 0) {
             return '1=0';
         }
-        $scoped_csv = implode(',', array_map('intval', $scoped_user_ids));
-        return "{$employee_alias}.{$user_column} IS NOT NULL AND {$employee_alias}.{$user_column} IN ({$scoped_csv})";
+        $scoped_csv = !empty($scoped_user_ids) ? implode(',', array_map('intval', $scoped_user_ids)) : '';
+        $store_ids = [];
+        if ($owner_id > 0 && function_exists('getFranchiseSellerScopeStoreIds')) {
+            $store_ids = getFranchiseSellerScopeStoreIds($this->conn, $owner_id);
+        } elseif ($owner_id > 0) {
+            $st_q = @mysqli_query($this->conn, "SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id}");
+            while ($st_q && ($st_r = mysqli_fetch_assoc($st_q))) {
+                $sid = (int)($st_r['store_id'] ?? 0);
+                if ($sid > 0) {
+                    $store_ids[] = $sid;
+                }
+            }
+        }
+        $parts = [];
+        if (!empty($store_ids)) {
+            $store_csv = implode(',', array_map('intval', $store_ids));
+            $parts[] = "({$employee_alias}.store_id IS NOT NULL AND {$employee_alias}.store_id > 0 AND {$employee_alias}.store_id IN ({$store_csv}))";
+        }
+        if ($scoped_csv !== '') {
+            $parts[] = "(({$employee_alias}.store_id IS NULL OR {$employee_alias}.store_id = 0) AND {$employee_alias}.{$user_column} IS NOT NULL AND {$employee_alias}.{$user_column} IN ({$scoped_csv}))";
+        }
+        if (empty($parts)) {
+            return '1=0';
+        }
+        return '(' . implode(' OR ', $parts) . ')';
     }
 
     private function isDriverInOrderTenantScope($order_id, $driver_id) {
