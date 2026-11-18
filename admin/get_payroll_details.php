@@ -2,6 +2,7 @@
 session_start();
 include 'auth.php';
 include '../includes/config.php';
+include 'hr_module_common.php';
 
 checkAdminAccess();
 
@@ -10,6 +11,9 @@ if (!isset($_GET['id'])) {
 }
 
 $payroll_id = intval($_GET['id']);
+if (hrIsPartnerScopeEnabled($conn) && !hrRecordIdInEmployeeScope($conn, 'payroll', $payroll_id, 'id', 'employee_id')) {
+    die("Payroll record not found");
+}
 
 $query = "SELECT p.*, e.first_name, e.last_name, e.employee_id
           FROM payroll p

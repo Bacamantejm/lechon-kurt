@@ -65,21 +65,9 @@ if ($rev_query) {
     }
 }
 
-// Available Unassigned Orders Pool (Open Deliveries - strictly scoped to hiring store)
+// Available Unassigned Orders Pool (Open Deliveries - strictly scoped to hiring shop)
 $initial_available_orders = [];
-$hiring_store_id = (int)($rider['store_id'] ?? 0);
-$hiring_owner_id = (int)($rider['store_owner_id'] ?? 0);
-
-if ($hiring_store_id > 0) {
-    if ($hiring_owner_id > 0) {
-        $avail_store_filter = "AND (o.pickup_location = $hiring_store_id OR o.store_id = $hiring_store_id OR (o.seller_id IS NOT NULL AND o.seller_id = $hiring_owner_id))";
-    } else {
-        $avail_store_filter = "AND (o.pickup_location = $hiring_store_id OR o.store_id = $hiring_store_id)";
-    }
-} else {
-    // Rider has no store assigned - must not see orders from any store
-    $avail_store_filter = "AND 1 = 0";
-}
+$avail_store_filter = riderBuildShopOrderFilterSql($conn, $rider, 'o');
 
 $init_avail_sql = "
     SELECT o.id AS order_id, o.order_number, o.customer_name, o.customer_phone,
@@ -88,7 +76,10 @@ $init_avail_sql = "
            sl.store_name, sl.address AS store_address, sl.city AS store_city,
            lt.id AS tracking_id
     FROM orders o
-    LEFT JOIN store_locations sl ON (o.pickup_location = sl.store_id OR o.store_id = sl.store_id)
+    LEFT JOIN store_locations sl ON (
+        (o.store_id IS NOT NULL AND o.store_id > 0 AND o.store_id = sl.store_id)
+        OR (o.pickup_location REGEXP '^[0-9]+$' AND CAST(o.pickup_location AS UNSIGNED) = sl.store_id)
+    )
     LEFT JOIN logistics_tracking lt ON lt.order_id = o.id
     WHERE o.status IN ('confirmed', 'preparing')
       AND o.delivery_option = 'delivery'
