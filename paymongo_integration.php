@@ -249,5 +249,120 @@ class PayMongoIntegration {
         error_log("Failed to retrieve checkout session: " . json_encode($result));
         return ['success' => false, 'error' => 'Failed to retrieve session'];
     }
+
+    public function isConfigured() {
+        return !empty($this->secretKey)
+            && strpos($this->secretKey, 'YOUR_PAYMONGO') === false
+            && $this->secretKey !== 'sk_test_YOUR_PAYMONGO_SECRET_KEY_HERE';
+    }
+
+    public function isTestMode() {
+        return strpos((string)$this->secretKey, 'sk_test_') === 0;
+    }
+
+    /**
+     * Resolve a PayMongo Payment ID (pay_...) from a Checkout Session ID (cs_...).
+     */
+    public function resolvePaymentIdFromCheckoutSession($sessionId) {
+        $sessionId = trim((string)$sessionId);
+        if ($sessionId === '') {
+            return null;
+        }
+        if (strpos($sessionId, 'pay_') === 0) {
+            return $sessionId;
+        }
+        if (!$this->isConfigured()) {
+            return null;
+        }
+
+        $retrieved = $this->retrieveCheckoutSession($sessionId);
+        if (empty($retrieved['success']) || empty($retrieved['session_data'])) {
+            return null;
+        }
+
+        $attrs = $retrieved['session_data']['attributes'] ?? [];
+        if (!empty($attrs['payments'][0]['id'])) {
+            return (string)$attrs['payments'][0]['id'];
+        }
+        if (!empty($attrs['payment_intent']['attributes']['payments'][0]['id'])) {
+            return (string)$attrs['payment_intent']['attributes']['payments'][0]['id'];
+        }
+
+        return null;
+    }
+
+    /**
+     * Issue a PayMongo Refund via POST /v1/refunds.
+     * Accepts either a PayMongo payment_id (pay_...) or checkout_session_id (cs_...).
+     */
+    public function createRefund($paymentOrSessionId, $amount, $reason = 'requested_by_customer', $notes = '') {
+        if (!$this->isConfigured()) {
+            return [
+                'success' => false,
+                'error' => 'PayMongo API keys are not configured.'
+            ];
+        }
+
+        $amountCentavos = intval(round((float)$amount * 100));
+        if ($amountCentavos <= 0) {
+            return [
+                'success' => false,
+                'error' => 'Refund amount must be greater than zero.'
+            ];
+        }
+
+        $paymentId = $this->resolvePaymentIdFromCheckoutSession($paymentOrSessionId);
+        if (empty($paymentId) || strpos($paymentId, 'pay_') !== 0) {
+            return [
+                'success' => false,
+                'code' => 'missing_payment_id',
+                'error' => 'Unable to resolve a capturable PayMongo payment ID for this order.'
+            ];
+        }
+
+        $allowedReasons = ['duplicate', 'fraudulent', 'requested_by_customer', 'others'];
+        $safeReason = in_array($reason, $allowedReasons, true) ? $reason : 'requested_by_customer';
+
+        $payload = [
+            'data' => [
+                'attributes' => [
+                    'amount' => $amountCentavos,
+                    'payment_id' => $paymentId,
+                    'reason' => $safeReason,
+                    'notes' => substr(trim((string)$notes), 0, 255)
+                ]
+            ]
+        ];
+
+        $result = $this->makeRequest('/refunds', $payload, 'POST');
+        if ($result['status'] === 200 && isset($result['data']['data']['id'])) {
+            $refundData = $result['data']['data'];
+            return [
+                'success' => true,
+                'mode' => 'paymongo_api',
+                'refund_id' => (string)$refundData['id'],
+                'payment_id' => $paymentId,
+                'status' => (string)($refundData['attributes']['status'] ?? 'succeeded'),
+                'amount' => round($amountCentavos / 100, 2),
+                'raw' => $refundData
+            ];
+        }
+
+        $errorMsg = 'PayMongo refund request failed (HTTP ' . $result['status'] . ')';
+        if (!empty($result['data']['errors'][0]['detail'])) {
+            $errorMsg = (string)$result['data']['errors'][0]['detail'];
+        } elseif (!empty($result['data']['errors'][0]['code'])) {
+            $errorMsg = (string)$result['data']['errors'][0]['code'];
+        } elseif (!empty($result['error'])) {
+            $errorMsg = (string)$result['error'];
+        }
+
+        error_log("PayMongo Refund Error for {$paymentId}: " . $errorMsg);
+        return [
+            'success' => false,
+            'http_status' => $result['status'],
+            'error' => $errorMsg
+        ];
+    }
 }
 ?>

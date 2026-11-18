@@ -16,6 +16,7 @@ $is_partner_scoped_admin = isApprovedFranchiseSellerAccount($conn, $current_user
 $seller_scope_id = $is_partner_scoped_admin ? getFranchiseSellerScopeOwnerId($conn, $current_user_id) : null;
 
 require_once dirname(__DIR__) . '/includes/CommissionAndWalletService.php';
+require_once dirname(__DIR__) . '/includes/OrderCancellationRefundService.php';
 $walletService = CommissionAndWalletService::getInstance($conn);
 $current_store_id = $walletService->getStoreIdForUser($current_user_id);
 
@@ -86,17 +87,16 @@ while ($items_result && ($item_row = mysqli_fetch_assoc($items_result))) {
     $partner_items_total += (float)($item_row['total'] ?? 0);
 }
 
-// Get payment info (global admins only)
-$payment = null;
-if ($seller_scope_id === null) {
-    $payment_query = "SELECT * FROM payments WHERE order_id = ?";
-    $stmt = mysqli_prepare($conn, $payment_query);
-    mysqli_stmt_bind_param($stmt, "i", $order_id);
-    mysqli_stmt_execute($stmt);
-    $payment_result = mysqli_stmt_get_result($stmt);
-    $payment = mysqli_fetch_assoc($payment_result);
-    mysqli_stmt_close($stmt);
-}
+// Fetch cancellation & 50% PayMongo refund summary
+$refund_summary = OrderCancellationRefundService::getOrderRefundSummary($conn, $order_id);
+$payment = $refund_summary['payment'];
+$is_cancelled_order = (strtolower(trim((string)($order['status'] ?? ''))) === 'cancelled');
+$fifty_pct_refund_amount = (float)($refund_summary['expected_refund_amount'] ?? round((float)$order['total_amount'] * 0.50, 2));
+$refund_record = $refund_summary['refund'];
+$refund_is_completed = !empty($refund_summary['is_completed']);
+$refund_is_pending_checkout = !empty($refund_summary['is_pending_checkout']);
+$refund_reference = (string)($refund_summary['paymongo_reference'] ?? '');
+$cancellation_reason_text = (string)($refund_summary['cancellation_reason'] ?? '');
 
 // Fetch logistics tracking and assigned rider details for delivery orders
 $tracking_info = null;
@@ -157,7 +157,91 @@ if ($order['delivery_option'] === 'delivery') {
         </div>
     </div>
 
-    <?php if ($order['delivery_option'] === 'delivery'): ?>
+    <?php if ($is_cancelled_order): ?>
+        <div class="card mb-3 border-0" style="background: #ffffff; border: 1px solid #eaecf0 !important; border-radius: 12px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04); overflow: hidden;">
+            <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center" style="background: #ffffff; border-bottom: 1px solid #eaecf0;">
+                <span class="fw-bold small" style="color: #101828;">
+                    <i class="fas fa-undo-alt me-1" style="color: #b3261e;"></i> Cancellation &amp; 50% PayMongo Refund
+                </span>
+                <?php if ($refund_is_completed): ?>
+                    <span class="badge" style="background: #ecfdf3; color: #027a48; border: 1px solid #abefc6; font-size: 11px; font-weight: 600;">
+                        <i class="fas fa-check-circle me-1"></i> Refund Completed
+                    </span>
+                <?php elseif ($refund_is_pending_checkout): ?>
+                    <span class="badge" style="background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff; font-size: 11px; font-weight: 600;">
+                        <i class="fas fa-clock me-1"></i> PayMongo Session Initiated
+                    </span>
+                <?php else: ?>
+                    <span class="badge" style="background: #fffaeb; color: #b54708; border: 1px solid #fedf89; font-size: 11px; font-weight: 600;">
+                        <i class="fas fa-exclamation-circle me-1"></i> 50% Refund Pending
+                    </span>
+                <?php endif; ?>
+            </div>
+            <div class="card-body p-3">
+                <?php if ($cancellation_reason_text !== ''): ?>
+                    <div class="mb-2 small" style="color: #475467;">
+                        <strong style="color: #101828;">Cancellation Reason:</strong>
+                        <?php echo htmlspecialchars($cancellation_reason_text); ?>
+                    </div>
+                <?php endif; ?>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-sm-4">
+                        <div class="p-2 rounded" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                            <div style="font-size: 11px; color: #667085; text-transform: uppercase; font-weight: 600;">Original Order Total</div>
+                            <div class="fw-bold" style="font-size: 1rem; color: #101828;">&#8369;<?php echo number_format((float)$order['total_amount'], 2); ?></div>
+                        </div>
+                    </div>
+                    <div class="col-sm-4">
+                        <div class="p-2 rounded" style="background: #fff1f0; border: 1px solid #fee4e2;">
+                            <div style="font-size: 11px; color: #b3261e; text-transform: uppercase; font-weight: 600;">50% Customer Return</div>
+                            <div class="fw-bold" style="font-size: 1rem; color: #b3261e;">&#8369;<?php echo number_format($fifty_pct_refund_amount, 2); ?></div>
+                        </div>
+                    </div>
+                    <div class="col-sm-4">
+                        <div class="p-2 rounded" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                            <div style="font-size: 11px; color: #667085; text-transform: uppercase; font-weight: 600;">Refund Channel</div>
+                            <div class="fw-bold" style="font-size: 0.95rem; color: #101828;"><i class="fas fa-credit-card me-1" style="color: #175cd3;"></i> PayMongo</div>
+                        </div>
+                    </div>
+                </div>
+
+                <?php if ($refund_is_completed): ?>
+                    <div class="p-2 rounded small d-flex flex-wrap justify-content-between align-items-center gap-2" style="background: #ecfdf3; color: #027a48; border: 1px solid #abefc6;">
+                        <div>
+                            <i class="fas fa-check-circle me-1"></i>
+                            <strong>&#8369;<?php echo number_format((float)($refund_record['refund_amount'] ?? $fifty_pct_refund_amount), 2); ?></strong>
+                            (50% of order total) has been returned to the customer via PayMongo.
+                            <?php if ($refund_reference !== ''): ?>
+                                <div class="mt-1" style="font-size: 11.5px; color: #05603a;">
+                                    <strong>PayMongo Ref:</strong> <code><?php echo htmlspecialchars($refund_reference); ?></code>
+                                    <?php if (!empty($refund_record['payout_sent_at'])): ?>
+                                        &bull; <?php echo date('M d, Y h:i A', strtotime($refund_record['payout_sent_at'])); ?>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 p-2 rounded" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                        <div class="small" style="color: #475467;">
+                            Return <strong>50% (&#8369;<?php echo number_format($fifty_pct_refund_amount, 2); ?>)</strong> of this cancelled order to the customer through PayMongo.
+                        </div>
+                        <?php if (function_exists('hasPermission') ? hasPermission('orders.edit') : true): ?>
+                            <button type="button"
+                                    class="btn btn-sm fw-semibold text-white px-3 py-2"
+                                    style="background: #b3261e; border-color: #b3261e; border-radius: 8px;"
+                                    onclick="processPayMongoOrderRefund(<?php echo (int)$order['id']; ?>, <?php echo json_encode($fifty_pct_refund_amount); ?>, <?php echo json_encode((string)$order['order_number']); ?>)">
+                                <i class="fas fa-undo-alt me-1"></i> Return 50% via PayMongo (&#8369;<?php echo number_format($fifty_pct_refund_amount, 2); ?>)
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($order['delivery_option'] === 'delivery' && !$is_cancelled_order): ?>
         <div class="card mb-3 border-0 shadow-sm" style="border: 1px solid #eaecf0 !important; border-radius: 12px; overflow: hidden;">
             <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center" style="background: #ffffff; border-bottom: 1px solid #eaecf0;">
                 <span class="fw-bold small" style="color: #101828;">

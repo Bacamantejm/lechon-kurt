@@ -243,40 +243,31 @@ if (isset($_POST['cancel_order']) && isset($_POST['order_id'])) {
             mysqli_stmt_close($cxl_stmt);
         }
 
-        $payment_status_normalized = strtolower((string)($row['payment_status'] ?? ''));
-        $downpayment_amount = (float)($row['downpayment_amount'] ?? 0);
-        $refund_amount = 0.0;
+        require_once __DIR__ . '/includes/OrderCancellationRefundService.php';
+        $refund_result = OrderCancellationRefundService::processFiftyPercentPayMongoRefund(
+            $conn,
+            (int)$order_id,
+            null,
+            $reason,
+            false
+        );
+        $refund_amount = (float)($refund_result['refund_amount'] ?? round((float)($row['total_amount'] ?? 0) * 0.50, 2));
         $refund_note = '';
-        if ($cancellation_id > 0 && in_array($payment_status_normalized, ['paid', 'partial', 'partially_paid'], true)) {
-            $refund_amount = (float)($row['total_amount'] ?? 0);
-            if (!$downpayment_refundable && $downpayment_amount > 0) {
-                if (in_array($payment_status_normalized, ['partial', 'partially_paid'], true)) {
-                    $refund_amount = 0.0;
-                    $refund_note = 'Downpayment is non-refundable under this store\'s terms.';
-                } else {
-                    $refund_amount = max(0.0, $refund_amount - $downpayment_amount);
-                    $refund_note = 'Refund excludes the non-refundable downpayment amount.';
-                }
-            }
-
-            if ($refund_amount > 0) {
-                $ref_query = "INSERT INTO refunds (cancellation_id, refund_amount, refund_status) VALUES (?, ?, 'Refund Pending')";
-                $ref_stmt = mysqli_prepare($conn, $ref_query);
-                if ($ref_stmt) {
-                    mysqli_stmt_bind_param($ref_stmt, "id", $cancellation_id, $refund_amount);
-                    mysqli_stmt_execute($ref_stmt);
-                    mysqli_stmt_close($ref_stmt);
-                }
+        if (!empty($refund_result['success'])) {
+            if (($refund_result['mode'] ?? '') === 'paymongo_api') {
+                $refund_note = '50% refund (PHP ' . number_format($refund_amount, 2) . ') has been returned via PayMongo (Ref: ' . ($refund_result['payout_reference'] ?? '') . ').';
+            } elseif ($refund_amount > 0) {
+                $refund_note = '50% refund (PHP ' . number_format($refund_amount, 2) . ') has been queued for PayMongo processing.';
             }
         }
 
         $admin_ids = getAdminUserIds($conn);
         $notif_title = "Order Cancelled by User";
         $notif_message = "User #" . $user_id . " cancelled Order #$order_id.";
-        if ($refund_amount > 0) {
-            $notif_message .= " A refund may be required.";
-        } elseif ($refund_note !== '') {
+        if ($refund_note !== '') {
             $notif_message .= " " . $refund_note;
+        } elseif ($refund_amount > 0) {
+            $notif_message .= " 50% PayMongo refund (PHP " . number_format($refund_amount, 2) . ") may be required.";
         }
         foreach ($admin_ids as $admin_id) {
             createNotification($conn, $admin_id, 'order_cancelled', $notif_title, $notif_message, $order_id, 'order');
