@@ -1524,7 +1524,13 @@ $orders_result = mysqli_query($conn, $orders_query);
                                             <button type="button"
                                                     class="btn-card-action"
                                                     style="background: #b3261e; color: #ffffff; border-color: #b3261e;"
-                                                    onclick="processPayMongoOrderRefund(<?php echo (int)$order['id']; ?>, <?php echo json_encode($card_refund_btn_amt); ?>, <?php echo json_encode((string)$order['order_number']); ?>)"
+                                                    data-order-id="<?php echo (int)$order['id']; ?>"
+                                                    data-refund-amount="<?php echo number_format($card_refund_btn_amt, 2, '.', ''); ?>"
+                                                    data-order-total="<?php echo number_format((float)$order['total_amount'], 2, '.', ''); ?>"
+                                                    data-order-number="<?php echo htmlspecialchars((string)$order['order_number'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                    data-customer-name="<?php echo htmlspecialchars((string)($order['customer_name'] ?? 'Customer'), ENT_QUOTES, 'UTF-8'); ?>"
+                                                    data-payment-method="<?php echo htmlspecialchars(strtoupper((string)($order['payment_method'] ?? 'COD')), ENT_QUOTES, 'UTF-8'); ?>"
+                                                    onclick="processPayMongoOrderRefund(this)"
                                                     title="Return 50% of order total via PayMongo">
                                                 <i class="fas fa-undo-alt"></i> 50% Refund
                                             </button>
@@ -2014,8 +2020,47 @@ $orders_result = mysqli_query($conn, $orders_query);
             });
         }
 
-        function processPayMongoOrderRefund(orderId, refundAmount, orderNumber) {
+        function escapeRefundHtml(str) {
+            return String(str || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function processPayMongoOrderRefund(triggerOrOrderId, refundAmountArg, orderNumberArg) {
+            let orderId = 0;
+            let refundAmount = 0;
+            let orderTotal = 0;
+            let orderNumber = '';
+            let customerName = 'Customer';
+            let origPaymentMethod = '';
+
+            if (triggerOrOrderId && typeof triggerOrOrderId === 'object' && triggerOrOrderId.dataset) {
+                orderId = parseInt(triggerOrOrderId.dataset.orderId || '0', 10);
+                refundAmount = parseFloat(triggerOrOrderId.dataset.refundAmount || '0');
+                orderTotal = parseFloat(triggerOrOrderId.dataset.orderTotal || '0');
+                orderNumber = triggerOrOrderId.dataset.orderNumber || '';
+                customerName = triggerOrOrderId.dataset.customerName || 'Customer';
+                origPaymentMethod = triggerOrOrderId.dataset.paymentMethod || '';
+            } else {
+                orderId = parseInt(triggerOrOrderId || '0', 10);
+                refundAmount = parseFloat(refundAmountArg || '0');
+                orderTotal = refundAmount * 2;
+                orderNumber = String(orderNumberArg || orderId);
+            }
+
+            if (!orderId) {
+                Swal.fire({ icon: 'error', title: 'Invalid Order', text: 'Could not identify the order to refund.', confirmButtonColor: '#b3261e' });
+                return;
+            }
+
             const formattedAmt = Number(refundAmount || 0).toLocaleString('en-PH', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+            const formattedTotal = Number(orderTotal || (refundAmount * 2)).toLocaleString('en-PH', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
             });
@@ -2025,10 +2070,31 @@ $orders_result = mysqli_query($conn, $orders_query);
                 icon: 'warning',
                 html: `
                     <div style="text-align:left; font-size:0.9rem; color:#475467;">
-                        <p style="margin-bottom:10px;">Confirm returning <strong>50%</strong> of cancelled order <strong>#${String(orderNumber || orderId)}</strong> to the customer through <strong>PayMongo</strong>.</p>
-                        <div style="background:#fff1f0; border:1px solid #fee4e2; border-radius:10px; padding:12px; text-align:center;">
-                            <div style="font-size:11px; font-weight:700; color:#b3261e; text-transform:uppercase; letter-spacing:0.4px;">50% PayMongo Refund Amount</div>
+                        <div style="background:#f8f9fa; border:1px solid #eaecf0; border-radius:10px; padding:10px 12px; margin-bottom:12px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                                <span>Customer:</span>
+                                <strong style="color:#101828;">${escapeRefundHtml(customerName)}</strong>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                                <span>Order #:</span>
+                                <strong style="color:#101828;">#${escapeRefundHtml(orderNumber || String(orderId))}</strong>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                                <span>Original Total (${escapeRefundHtml(origPaymentMethod || 'ORDER')}):</span>
+                                <strong style="color:#101828;">&#8369;${formattedTotal}</strong>
+                            </div>
+                        </div>
+                        <div style="background:#fff1f0; border:1px solid #fee4e2; border-radius:10px; padding:12px; text-align:center; margin-bottom:12px;">
+                            <div style="font-size:11px; font-weight:700; color:#b3261e; text-transform:uppercase; letter-spacing:0.4px;">50% PayMongo Return Amount</div>
                             <div style="font-size:1.45rem; font-weight:800; color:#b3261e;">&#8369;${formattedAmt}</div>
+                        </div>
+                        <div style="text-align:left;">
+                            <label for="paymongoRefundMethodSelect" style="display:block; font-size:0.8rem; font-weight:600; color:#344054; margin-bottom:6px;">Customer PayMongo Channel</label>
+                            <select id="paymongoRefundMethodSelect" class="swal2-select" style="display:block; width:100%; margin:0; padding:9px 12px; border:1px solid #d0d5dd; border-radius:8px; font-size:0.88rem; color:#101828; background:#ffffff;">
+                                <option value="all">PayMongo (GCash / Maya)</option>
+                                <option value="gcash">GCash via PayMongo</option>
+                                <option value="paymaya">Maya via PayMongo</option>
+                            </select>
                         </div>
                     </div>
                 `,
@@ -2036,9 +2102,14 @@ $orders_result = mysqli_query($conn, $orders_query);
                 confirmButtonColor: '#b3261e',
                 cancelButtonColor: '#667085',
                 confirmButtonText: 'Process via PayMongo',
-                cancelButtonText: 'Cancel'
+                cancelButtonText: 'Cancel',
+                preConfirm: () => {
+                    const sel = document.getElementById('paymongoRefundMethodSelect');
+                    return sel ? sel.value : 'all';
+                }
             }).then((res) => {
                 if (!res.isConfirmed) return;
+                const chosenMethod = res.value || 'all';
 
                 Swal.fire({
                     title: 'Connecting to PayMongo...',
@@ -2049,13 +2120,20 @@ $orders_result = mysqli_query($conn, $orders_query);
 
                 const formData = new FormData();
                 formData.append('order_id', orderId);
+                formData.append('payment_method', chosenMethod);
                 formData.append('csrf_token', '<?php echo $csrf_token; ?>');
 
                 fetch('ajax_process_order_refund.php', {
                     method: 'POST',
                     body: formData
                 })
-                .then(r => r.json())
+                .then(r => r.text().then(text => {
+                    try {
+                        return JSON.parse(text);
+                    } catch (e) {
+                        throw new Error(text ? text.substring(0, 200) : 'Invalid server response');
+                    }
+                }))
                 .then(data => {
                     if (data.success && data.mode === 'paymongo_checkout' && data.checkout_url) {
                         Swal.fire({
@@ -2083,11 +2161,11 @@ $orders_result = mysqli_query($conn, $orders_query);
                         });
                     }
                 })
-                .catch(() => {
+                .catch(err => {
                     Swal.fire({
                         icon: 'error',
-                        title: 'Network Error',
-                        text: 'Could not reach the refund server. Please try again.',
+                        title: 'Refund Request Error',
+                        text: (err && err.message) ? err.message : 'Could not reach the refund server. Please try again.',
                         confirmButtonColor: '#b3261e'
                     });
                 });

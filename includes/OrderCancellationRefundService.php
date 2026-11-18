@@ -49,7 +49,7 @@ class OrderCancellationRefundService
             'cancellation_reason' => ''
         ];
 
-        $ordStmt = mysqli_prepare($conn, "SELECT id, order_number, total_amount, status, payment_method, payment_status, cancellation_reason FROM orders WHERE id = ? LIMIT 1");
+        $ordStmt = mysqli_prepare($conn, "SELECT * FROM orders WHERE id = ? LIMIT 1");
         if (!$ordStmt) {
             return $summary;
         }
@@ -344,7 +344,8 @@ class OrderCancellationRefundService
         int $orderId,
         ?int $adminUserId = null,
         string $reasonText = '',
-        bool $allowCheckoutSessionFallback = false
+        bool $allowCheckoutSessionFallback = false,
+        string $preferredPayMongoMethod = 'all'
     ): array {
         $ordStmt = mysqli_prepare($conn, "SELECT * FROM orders WHERE id = ? LIMIT 1");
         if (!$ordStmt) {
@@ -487,14 +488,56 @@ class OrderCancellationRefundService
                 ? appBaseUrl("admin/orders.php?refund_cancelled={$orderId}")
                 : ("admin/orders.php?refund_cancelled={$orderId}");
 
+            // Resolve customer details from orders + users table for PayMongo billing validation
+            $custName = trim((string)($order['customer_name'] ?? ''));
+            $custEmail = trim((string)($order['customer_email'] ?? ''));
+            $custPhone = trim((string)($order['customer_phone'] ?? ''));
+            $orderUserId = (int)($order['user_id'] ?? 0);
+            if ($orderUserId > 0) {
+                $uStmt = mysqli_prepare($conn, "SELECT full_name, email, phone FROM users WHERE id = ? LIMIT 1");
+                if ($uStmt) {
+                    mysqli_stmt_bind_param($uStmt, "i", $orderUserId);
+                    mysqli_stmt_execute($uStmt);
+                    $uRes = mysqli_stmt_get_result($uStmt);
+                    $uRow = $uRes ? mysqli_fetch_assoc($uRes) : null;
+                    mysqli_stmt_close($uStmt);
+                    if ($uRow) {
+                        if ($custName === '' && !empty($uRow['full_name'])) {
+                            $custName = trim((string)$uRow['full_name']);
+                        }
+                        if ($custEmail === '' && !empty($uRow['email'])) {
+                            $custEmail = trim((string)$uRow['email']);
+                        }
+                        if (($custPhone === '' || strtoupper($custPhone) === 'N/A') && !empty($uRow['phone'])) {
+                            $custPhone = trim((string)$uRow['phone']);
+                        }
+                    }
+                }
+            }
+
+            if ($custName === '') {
+                $custName = 'Customer';
+            }
+            if (!filter_var($custEmail, FILTER_VALIDATE_EMAIL)) {
+                $custEmail = 'customer' . ($orderUserId > 0 ? $orderUserId : $orderId) . '@lechondelights.com';
+            }
+            $cleanPhone = preg_replace('/[^0-9+]/', '', $custPhone);
+            if (strlen($cleanPhone) < 7) {
+                $cleanPhone = '09170000000';
+            }
+
+            $safeMethod = in_array(strtolower(trim($preferredPayMongoMethod)), ['gcash', 'paymaya', 'all'], true)
+                ? strtolower(trim($preferredPayMongoMethod))
+                : 'all';
+
             $checkoutResult = $paymongo->createCheckoutSession([
                 'amount' => $refundAmount,
-                'description' => "50% Order Cancellation Refund - {$orderNumber}",
+                'description' => "50% Order Cancellation Refund - {$orderNumber} ({$custName})",
                 'order_id' => "REF-{$orderId}-{$refundRowId}",
-                'customer_name' => (string)($order['customer_name'] ?? 'Customer'),
-                'customer_email' => (string)($order['customer_email'] ?? 'customer@lechondelights.local'),
-                'customer_phone' => (string)($order['customer_phone'] ?? '09000000000'),
-                'payment_method' => 'all',
+                'customer_name' => $custName,
+                'customer_email' => $custEmail,
+                'customer_phone' => $cleanPhone,
+                'payment_method' => $safeMethod,
                 'success_url' => $successUrl,
                 'cancel_url' => $cancelUrl
             ]);
