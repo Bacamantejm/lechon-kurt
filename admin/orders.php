@@ -114,55 +114,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
             } elseif (!in_array($new_status, $allowed_next, true)) {
                 $_SESSION['error'] = 'Invalid status transition from ' . str_replace('_', ' ', $current_status) . ' to ' . str_replace('_', ' ', $new_status) . '.';
             } else {
+                $cancel_refund_result = null;
                 mysqli_begin_transaction($conn);
                 try {
-                    // If admin is cancelling, create/update cancellation + refund records without duplicates.
-                    if ($new_status === 'cancelled') {
-                        $reason = 'Admin Action';
-                        $cancellation_id = 0;
-
-                        $existing_c_stmt = mysqli_prepare($conn, "SELECT id, status FROM cancellations WHERE order_id = ? AND status IN ('Requested','Cancelled') ORDER BY id DESC LIMIT 1");
-                        mysqli_stmt_bind_param($existing_c_stmt, "i", $order_id);
-                        mysqli_stmt_execute($existing_c_stmt);
-                        $existing_c_result = mysqli_stmt_get_result($existing_c_stmt);
-                        $existing_cancellation = mysqli_fetch_assoc($existing_c_result);
-                        mysqli_stmt_close($existing_c_stmt);
-
-                        if ($existing_cancellation) {
-                            $cancellation_id = intval($existing_cancellation['id']);
-                            if (($existing_cancellation['status'] ?? '') !== 'Cancelled') {
-                                $update_c_stmt = mysqli_prepare($conn, "UPDATE cancellations SET status = 'Cancelled', reason = ?, cancellation_date = NOW(), updated_at = NOW() WHERE id = ?");
-                                mysqli_stmt_bind_param($update_c_stmt, "si", $reason, $cancellation_id);
-                                mysqli_stmt_execute($update_c_stmt);
-                                mysqli_stmt_close($update_c_stmt);
-                            }
-                        } else {
-                            $cancellation_status = 'Cancelled';
-                            $c_stmt = mysqli_prepare($conn, "INSERT INTO cancellations (user_id, order_id, reason, status, cancellation_date) VALUES (?, ?, ?, ?, NOW())");
-                            mysqli_stmt_bind_param($c_stmt, "iiss", $order['user_id'], $order_id, $reason, $cancellation_status);
-                            mysqli_stmt_execute($c_stmt);
-                            $cancellation_id = mysqli_insert_id($conn);
-                            mysqli_stmt_close($c_stmt);
-                        }
-
-                        // Create refund request only when needed and only once per cancellation.
-                        if (($order['payment_status'] === 'paid' || $order['payment_status'] === 'partial') && $cancellation_id > 0) {
-                            $refund_check_stmt = mysqli_prepare($conn, "SELECT id FROM refunds WHERE cancellation_id = ? LIMIT 1");
-                            mysqli_stmt_bind_param($refund_check_stmt, "i", $cancellation_id);
-                            mysqli_stmt_execute($refund_check_stmt);
-                            $refund_check_result = mysqli_stmt_get_result($refund_check_stmt);
-                            $existing_refund = mysqli_fetch_assoc($refund_check_result);
-                            mysqli_stmt_close($refund_check_stmt);
-
-                            if (!$existing_refund) {
-                                $r_stmt = mysqli_prepare($conn, "INSERT INTO refunds (cancellation_id, refund_amount, refund_status) VALUES (?, ?, 'Refund Pending')");
-                                mysqli_stmt_bind_param($r_stmt, "id", $cancellation_id, $order['total_amount']);
-                                mysqli_stmt_execute($r_stmt);
-                                mysqli_stmt_close($r_stmt);
-                            }
-                        }
-                    }
-
                     // Update order status
                     $update_query = "UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?";
                     $stmt = mysqli_prepare($conn, $update_query);
@@ -191,6 +145,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
                 } catch (Throwable $e) {
                     mysqli_rollback($conn);
                     $_SESSION['error'] = "Error during status update: " . $e->getMessage();
+                }
+
+                // Process 50% PayMongo cancellation refund outside the DB transaction so external API calls don't hold locks
+                if (!empty($status_updated) && $new_status === 'cancelled') {
+                    require_once dirname(__DIR__) . '/includes/OrderCancellationRefundService.php';
+                    $cancel_refund_result = OrderCancellationRefundService::processFiftyPercentPayMongoRefund(
+                        $conn,
+                        (int)$order_id,
+                        (int)$current_user_id,
+                        'Cancelled by store admin',
+                        false
+                    );
+                    if (!empty($cancel_refund_result['message'])) {
+                        $_SESSION['success'] = $cancel_refund_result['message'];
+                    }
                 }
             }
         }
@@ -361,12 +330,24 @@ $tracking_id_expr = $has_lt ? "lt.id" : "NULL";
 $tracking_status_expr = $has_lt ? "lt.current_status" : "''";
 $rider_code_expr = ($has_lt && $has_riders) ? "r.rider_code" : "''";
 
+$has_cxl_refund_tables = adminAuthTableExists($conn, 'cancellations') && adminAuthTableExists($conn, 'refunds');
+$has_refund_ref_col = $has_cxl_refund_tables && adminAuthColumnExists($conn, 'refunds', 'payout_reference');
+$refund_select_sql = $has_cxl_refund_tables
+    ? ",
+    (SELECT r_ref.refund_status FROM refunds r_ref INNER JOIN cancellations c_ref ON c_ref.id = r_ref.cancellation_id WHERE c_ref.order_id = o.id ORDER BY r_ref.id DESC LIMIT 1) AS latest_refund_status,
+    (SELECT r_ref.refund_amount FROM refunds r_ref INNER JOIN cancellations c_ref ON c_ref.id = r_ref.cancellation_id WHERE c_ref.order_id = o.id ORDER BY r_ref.id DESC LIMIT 1) AS latest_refund_amount" .
+    ($has_refund_ref_col
+        ? ",
+    (SELECT r_ref.payout_reference FROM refunds r_ref INNER JOIN cancellations c_ref ON c_ref.id = r_ref.cancellation_id WHERE c_ref.order_id = o.id ORDER BY r_ref.id DESC LIMIT 1) AS latest_payout_reference"
+        : ", '' AS latest_payout_reference")
+    : ", '' AS latest_refund_status, 0 AS latest_refund_amount, '' AS latest_payout_reference";
+
 $orders_query = "SELECT o.*{$partner_order_amount_sql},
     {$tracking_id_expr} AS tracking_id,
     {$tracking_status_expr} AS tracking_status,
     {$proof_photo_expr} AS proof_photo,
     {$driver_name_expr} AS driver_name,
-    {$rider_code_expr} AS rider_code
+    {$rider_code_expr} AS rider_code{$refund_select_sql}
 FROM orders o
 {$join_sql}
 WHERE $where_clause
@@ -1509,6 +1490,24 @@ $orders_result = mysqli_query($conn, $orders_query);
                                     </div>
                                 </div>
 
+                                <?php if (strtolower((string)$order['status']) === 'cancelled'):
+                                    $card_refund_amt = round((float)$order['total_amount'] * 0.50, 2);
+                                    $card_refund_status = (string)($order['latest_refund_status'] ?? '');
+                                    $card_refund_done = ($card_refund_status === 'Refund Completed');
+                                ?>
+                                    <div class="d-flex align-items-center justify-content-between gap-2 px-3 py-2 mb-2 rounded"
+                                         style="font-size: 12px; <?php echo $card_refund_done ? 'background:#ecfdf3; color:#027a48; border:1px solid #abefc6;' : 'background:#fffaeb; color:#b54708; border:1px solid #fedf89;'; ?>">
+                                        <span>
+                                            <i class="fas <?php echo $card_refund_done ? 'fa-check-circle' : 'fa-undo-alt'; ?> me-1"></i>
+                                            <?php if ($card_refund_done): ?>
+                                                50% Returned via PayMongo (<strong>&#8369;<?php echo number_format((float)($order['latest_refund_amount'] ?: $card_refund_amt), 2); ?></strong>)
+                                            <?php else: ?>
+                                                50% PayMongo Return: <strong>&#8369;<?php echo number_format($card_refund_amt, 2); ?></strong> Pending
+                                            <?php endif; ?>
+                                        </span>
+                                    </div>
+                                <?php endif; ?>
+
                                 <!-- Card Actions -->
                                 <div class="order-card-actions">
                                     <div class="order-action-buttons">
@@ -1520,6 +1519,16 @@ $orders_result = mysqli_query($conn, $orders_query);
                                         <button type="button" class="btn-card-action" onclick="window.open('print_order_receipt.php?id=<?php echo $order['id']; ?>&print=1', '_blank')" title="Print Receipt">
                                             <i class="fas fa-print"></i> Print
                                         </button>
+                                        <?php if (strtolower((string)$order['status']) === 'cancelled' && (($order['latest_refund_status'] ?? '') !== 'Refund Completed')): ?>
+                                            <?php $card_refund_btn_amt = round((float)$order['total_amount'] * 0.50, 2); ?>
+                                            <button type="button"
+                                                    class="btn-card-action"
+                                                    style="background: #b3261e; color: #ffffff; border-color: #b3261e;"
+                                                    onclick="processPayMongoOrderRefund(<?php echo (int)$order['id']; ?>, <?php echo json_encode($card_refund_btn_amt); ?>, <?php echo json_encode((string)$order['order_number']); ?>)"
+                                                    title="Return 50% of order total via PayMongo">
+                                                <i class="fas fa-undo-alt"></i> 50% Refund
+                                            </button>
+                                        <?php endif; ?>
                                     </div>
 
                                     <?php if (!empty($next_statuses)): ?>
@@ -1984,22 +1993,105 @@ $orders_result = mysqli_query($conn, $orders_query);
 
         function confirmStatusChange(selectElement, orderId) {
             if (!selectElement.value) return;
-            
+            const isCancelling = selectElement.value === 'cancelled';
+
             Swal.fire({
-                title: 'Update Order Status?',
-                text: "Change status to " + selectElement.value + "? Customer will be notified.",
+                title: isCancelling ? 'Cancel Order & Process 50% PayMongo Refund?' : 'Update Order Status?',
+                text: isCancelling
+                    ? 'Cancelling this order will return 50% of the total order amount to the customer via PayMongo. Continue?'
+                    : 'Change status to ' + selectElement.value + '? Customer will be notified.',
                 icon: 'warning',
                 showCancelButton: true,
-                confirmButtonColor: '#3085d6',
-                cancelButtonColor: '#d33',
-                confirmButtonText: 'Yes, update it!'
+                confirmButtonColor: isCancelling ? '#b3261e' : '#3085d6',
+                cancelButtonColor: '#667085',
+                confirmButtonText: isCancelling ? 'Yes, cancel & initiate 50% refund' : 'Yes, update it!'
             }).then((result) => {
                 if (result.isConfirmed) {
                     if (selectElement.form) { selectElement.form.submit(); } else if (document.getElementById('statusForm' + orderId)) { document.getElementById('statusForm' + orderId).submit(); }
                 } else {
                     selectElement.value = ''; // Reset selection
                 }
-            })
+            });
+        }
+
+        function processPayMongoOrderRefund(orderId, refundAmount, orderNumber) {
+            const formattedAmt = Number(refundAmount || 0).toLocaleString('en-PH', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+
+            Swal.fire({
+                title: 'Return 50% via PayMongo?',
+                icon: 'warning',
+                html: `
+                    <div style="text-align:left; font-size:0.9rem; color:#475467;">
+                        <p style="margin-bottom:10px;">Confirm returning <strong>50%</strong> of cancelled order <strong>#${String(orderNumber || orderId)}</strong> to the customer through <strong>PayMongo</strong>.</p>
+                        <div style="background:#fff1f0; border:1px solid #fee4e2; border-radius:10px; padding:12px; text-align:center;">
+                            <div style="font-size:11px; font-weight:700; color:#b3261e; text-transform:uppercase; letter-spacing:0.4px;">50% PayMongo Refund Amount</div>
+                            <div style="font-size:1.45rem; font-weight:800; color:#b3261e;">&#8369;${formattedAmt}</div>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonColor: '#b3261e',
+                cancelButtonColor: '#667085',
+                confirmButtonText: 'Process via PayMongo',
+                cancelButtonText: 'Cancel'
+            }).then((res) => {
+                if (!res.isConfirmed) return;
+
+                Swal.fire({
+                    title: 'Connecting to PayMongo...',
+                    text: 'Processing 50% cancellation refund',
+                    allowOutsideClick: false,
+                    didOpen: () => Swal.showLoading()
+                });
+
+                const formData = new FormData();
+                formData.append('order_id', orderId);
+                formData.append('csrf_token', '<?php echo $csrf_token; ?>');
+
+                fetch('ajax_process_order_refund.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.mode === 'paymongo_checkout' && data.checkout_url) {
+                        Swal.fire({
+                            icon: 'info',
+                            title: 'Redirecting to PayMongo',
+                            text: data.message || 'Opening PayMongo to complete the 50% customer refund.',
+                            confirmButtonColor: '#b3261e',
+                            confirmButtonText: 'Continue to PayMongo'
+                        }).then(() => {
+                            window.location.href = data.checkout_url;
+                        });
+                    } else if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '50% Refund Processed',
+                            text: data.message || '50% refund returned via PayMongo.',
+                            confirmButtonColor: '#027a48'
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'PayMongo Refund Failed',
+                            text: data.message || 'Unable to process the 50% PayMongo refund.',
+                            confirmButtonColor: '#b3261e'
+                        });
+                    }
+                })
+                .catch(() => {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Network Error',
+                        text: 'Could not reach the refund server. Please try again.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                });
+            });
         }
 
         function approveRiderHandover(orderId) {
