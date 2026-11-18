@@ -2770,10 +2770,26 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                                 else if (notif.related_type === 'user') window.location.href = `../super_admin/user_business_management.php`;
                                 else window.location.href = `../super_admin/notifications.php?id=${encodeURIComponent(notif.id)}`;
                             } else {
-                                if (notif.related_type === 'order') window.location.href = `orders.php?search=${notif.related_id}`;
-                                else if (notif.related_type === 'pre_order') window.location.href = `preorders.php?search=${notif.related_id}`;
-                                else if (notif.related_type === 'franchise_application') window.location.href = `notifications.php?id=${encodeURIComponent(notif.id)}`;
-                                else window.location.href = `notifications.php?id=${encodeURIComponent(notif.id)}`;
+                                const notifType = String(notif.type || '').toLowerCase();
+                                const isFinanceQueueNotif = [
+                                    'order_cancelled',
+                                    'preorder_cancelled',
+                                    'refund_request',
+                                    'refund_update',
+                                    'cancellation_update'
+                                ].includes(notifType) || notifType.includes('refund') || notifType.includes('cancel');
+
+                                if (isFinanceQueueNotif) {
+                                    window.location.href = `finance.php${notif.related_id ? '?decision_search=' + encodeURIComponent(notif.related_id) : ''}#decision-center`;
+                                } else if (notif.related_type === 'order') {
+                                    window.location.href = `orders.php?search=${notif.related_id}`;
+                                } else if (notif.related_type === 'pre_order') {
+                                    window.location.href = `preorders.php?search=${notif.related_id}`;
+                                } else if (notif.related_type === 'franchise_application') {
+                                    window.location.href = `notifications.php?id=${encodeURIComponent(notif.id)}`;
+                                } else {
+                                    window.location.href = `notifications.php?id=${encodeURIComponent(notif.id)}`;
+                                }
                             }
                         });
                         

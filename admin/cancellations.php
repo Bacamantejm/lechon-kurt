@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../includes/config.php';
+require_once '../includes/security.php';
 require_once '../admin/auth.php';
 checkAdminAccess();
 require_once '../includes/partner_order_policy_helper.php';
@@ -11,19 +12,203 @@ $admin_info = getAdminInfo($conn);
 $current_user_id = (int)($_SESSION['user_id'] ?? 0);
 $is_partner_scoped_admin = isApprovedFranchiseSellerAccount($conn, $current_user_id);
 $seller_scope_id = $is_partner_scoped_admin ? getFranchiseSellerScopeOwnerId($conn, $current_user_id) : null;
+$can_manage_cxl_actions = $is_partner_scoped_admin
+    || (function_exists('hasPermission') && (hasPermission($conn, $current_user_id, 'finance.manage') || hasPermission($conn, $current_user_id, 'orders.manage')));
+$csrf_token = function_exists('generateCSRFToken') ? generateCSRFToken() : '';
+
 $partner_cancellation_scope_sql = '';
 if ($seller_scope_id !== null) {
-    $partner_cancellation_scope_sql = "c.order_id IS NOT NULL AND EXISTS (
-        SELECT 1
-        FROM order_items oi_scope
-        INNER JOIN products p_scope
-            ON (oi_scope.product_id COLLATE utf8mb4_general_ci = p_scope.product_id COLLATE utf8mb4_general_ci OR oi_scope.product_id COLLATE utf8mb4_general_ci = CAST(p_scope.id AS CHAR) COLLATE utf8mb4_general_ci)
-        WHERE oi_scope.order_id = c.order_id
-          AND p_scope.seller_id = " . (int)$seller_scope_id . "
-    )";
+    $scoped_order_sql = getFranchiseScopedOrderExistsSql($conn, (int)$seller_scope_id, 'c.order_id');
+    $scoped_preorder_sql = getFranchiseScopedPreOrderExistsSql($conn, (int)$seller_scope_id, 'c.reservation_id');
+    $partner_cancellation_scope_sql = "((c.order_id IS NOT NULL AND {$scoped_order_sql}) OR (c.reservation_id IS NOT NULL AND {$scoped_preorder_sql}))";
 }
-// This page is monitoring-focused.
-// Final finance decisions (approve/reject/complete) are handled in admin/finance.php.
+
+// Handle direct Approve / Reject / Queue Refund actions (all synced with Finance Decision Queue)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cxl_action'])) {
+    $posted_csrf = (string)($_POST['csrf_token'] ?? '');
+    if (function_exists('validateCSRFToken') && !validateCSRFToken($posted_csrf)) {
+        $_SESSION['error'] = 'Security token validation failed. Please refresh and try again.';
+        header('Location: cancellations.php');
+        exit;
+    }
+    if (!$can_manage_cxl_actions) {
+        $_SESSION['error'] = 'You do not have permission to approve or reject cancellation/refund requests.';
+        header('Location: cancellations.php');
+        exit;
+    }
+
+    $action = trim((string)($_POST['cxl_action'] ?? ''));
+    $cancellation_id = (int)($_POST['cancellation_id'] ?? 0);
+    $refund_id = (int)($_POST['refund_id'] ?? 0);
+    $decision_notes = trim((string)($_POST['decision_notes'] ?? ''));
+
+    if (in_array($action, ['approve_cancellation', 'reject_cancellation', 'queue_refund'], true) && $cancellation_id > 0) {
+        $detail_sql = "SELECT c.id, c.user_id, c.order_id, c.reservation_id, c.status AS cancellation_status,
+                              o.order_number, o.status AS order_status, o.total_amount AS order_total, o.payment_status,
+                              po.total_amount AS preorder_total
+                       FROM cancellations c
+                       LEFT JOIN orders o ON c.order_id = o.id
+                       LEFT JOIN pre_orders po ON c.reservation_id = po.id
+                       WHERE c.id = ?" . ($seller_scope_id !== null ? " AND {$partner_cancellation_scope_sql}" : "") . "
+                       LIMIT 1";
+        $d_stmt = mysqli_prepare($conn, $detail_sql);
+        mysqli_stmt_bind_param($d_stmt, "i", $cancellation_id);
+        mysqli_stmt_execute($d_stmt);
+        $d_row = mysqli_fetch_assoc(mysqli_stmt_get_result($d_stmt));
+        mysqli_stmt_close($d_stmt);
+
+        if (!$d_row) {
+            $_SESSION['error'] = 'Cancellation record not found or outside your store scope.';
+        } elseif ($action === 'approve_cancellation') {
+            mysqli_begin_transaction($conn);
+            try {
+                $u1 = mysqli_prepare($conn, "UPDATE cancellations SET status = 'Cancelled', rejection_reason = NULL WHERE id = ?");
+                mysqli_stmt_bind_param($u1, "i", $cancellation_id);
+                mysqli_stmt_execute($u1);
+                mysqli_stmt_close($u1);
+
+                if (!empty($d_row['order_id'])) {
+                    $u2 = mysqli_prepare($conn, "UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = ?");
+                    mysqli_stmt_bind_param($u2, "i", $d_row['order_id']);
+                    mysqli_stmt_execute($u2);
+                    mysqli_stmt_close($u2);
+                } elseif (!empty($d_row['reservation_id'])) {
+                    $u2 = mysqli_prepare($conn, "UPDATE pre_orders SET reservation_status = 'cancelled', cancelled_at = COALESCE(cancelled_at, NOW()), updated_at = NOW() WHERE id = ?");
+                    mysqli_stmt_bind_param($u2, "i", $d_row['reservation_id']);
+                    mysqli_stmt_execute($u2);
+                    mysqli_stmt_close($u2);
+                }
+
+                $chk = mysqli_prepare($conn, "SELECT id FROM refunds WHERE cancellation_id = ? LIMIT 1");
+                mysqli_stmt_bind_param($chk, "i", $cancellation_id);
+                mysqli_stmt_execute($chk);
+                $has_ref = mysqli_fetch_assoc(mysqli_stmt_get_result($chk));
+                mysqli_stmt_close($chk);
+
+                $base_total = (float)($d_row['order_total'] ?? 0);
+                if ($base_total <= 0) $base_total = (float)($d_row['preorder_total'] ?? 0);
+                if (!$has_ref && $base_total > 0) {
+                    $fifty_pct = round($base_total * 0.50, 2);
+                    $ins = mysqli_prepare($conn, "INSERT INTO refunds (cancellation_id, refund_amount, refund_status, computed_rule, percentage, payout_channel) VALUES (?, ?, 'Refund Pending', 'PARTIAL', 50.00, 'paymongo')");
+                    if (!$ins) {
+                        $ins = mysqli_prepare($conn, "INSERT INTO refunds (cancellation_id, refund_amount, refund_status) VALUES (?, ?, 'Refund Pending')");
+                    }
+                    if ($ins) {
+                        mysqli_stmt_bind_param($ins, "id", $cancellation_id, $fifty_pct);
+                        mysqli_stmt_execute($ins);
+                        mysqli_stmt_close($ins);
+                    }
+                }
+
+                mysqli_commit($conn);
+                if (!empty($d_row['user_id']) && function_exists('createNotification')) {
+                    $ref_lbl = !empty($d_row['order_number']) ? ("Order #" . $d_row['order_number']) : ("Request #" . $cancellation_id);
+                    createNotification($conn, (int)$d_row['user_id'], 'cancellation_update', 'Cancellation Approved', "Your cancellation request for {$ref_lbl} has been approved and queued in Finance.", (int)($d_row['order_id'] ?: $d_row['reservation_id']), !empty($d_row['order_id']) ? 'order' : 'pre_order');
+                }
+                $_SESSION['success'] = 'Cancellation approved and routed to the Finance Decision Queue.';
+            } catch (Exception $e) {
+                mysqli_rollback($conn);
+                $_SESSION['error'] = 'Failed to approve cancellation: ' . $e->getMessage();
+            }
+        } elseif ($action === 'reject_cancellation') {
+            $reason_text = $decision_notes !== '' ? $decision_notes : 'Rejected by store/finance administrator.';
+            mysqli_begin_transaction($conn);
+            try {
+                $u1 = mysqli_prepare($conn, "UPDATE cancellations SET status = 'Rejected', rejection_reason = ? WHERE id = ?");
+                mysqli_stmt_bind_param($u1, "si", $reason_text, $cancellation_id);
+                mysqli_stmt_execute($u1);
+                mysqli_stmt_close($u1);
+
+                if (!empty($d_row['order_id'])) {
+                    $u2 = mysqli_prepare($conn, "UPDATE orders SET status = 'confirmed', updated_at = NOW() WHERE id = ? AND status = 'cancellation_requested'");
+                    mysqli_stmt_bind_param($u2, "i", $d_row['order_id']);
+                    mysqli_stmt_execute($u2);
+                    mysqli_stmt_close($u2);
+                }
+
+                mysqli_commit($conn);
+                if (!empty($d_row['user_id']) && function_exists('createNotification')) {
+                    $ref_lbl = !empty($d_row['order_number']) ? ("Order #" . $d_row['order_number']) : ("Request #" . $cancellation_id);
+                    createNotification($conn, (int)$d_row['user_id'], 'cancellation_update', 'Cancellation Rejected', "Your cancellation request for {$ref_lbl} was rejected. Reason: {$reason_text}", (int)($d_row['order_id'] ?: $d_row['reservation_id']), !empty($d_row['order_id']) ? 'order' : 'pre_order');
+                }
+                $_SESSION['success'] = 'Cancellation request rejected.';
+            } catch (Exception $e) {
+                mysqli_rollback($conn);
+                $_SESSION['error'] = 'Failed to reject cancellation: ' . $e->getMessage();
+            }
+        } elseif ($action === 'queue_refund') {
+            $chk = mysqli_prepare($conn, "SELECT id FROM refunds WHERE cancellation_id = ? LIMIT 1");
+            mysqli_stmt_bind_param($chk, "i", $cancellation_id);
+            mysqli_stmt_execute($chk);
+            $has_ref = mysqli_fetch_assoc(mysqli_stmt_get_result($chk));
+            mysqli_stmt_close($chk);
+
+            if ($has_ref) {
+                $_SESSION['success'] = 'A refund entry already exists in the Finance Queue.';
+            } else {
+                $base_total = (float)($d_row['order_total'] ?? 0);
+                if ($base_total <= 0) $base_total = (float)($d_row['preorder_total'] ?? 0);
+                $fifty_pct = round($base_total * 0.50, 2);
+                $ins = mysqli_prepare($conn, "INSERT INTO refunds (cancellation_id, refund_amount, refund_status, computed_rule, percentage, payout_channel) VALUES (?, ?, 'Refund Pending', 'PARTIAL', 50.00, 'paymongo')");
+                if (!$ins) {
+                    $ins = mysqli_prepare($conn, "INSERT INTO refunds (cancellation_id, refund_amount, refund_status) VALUES (?, ?, 'Refund Pending')");
+                }
+                if ($ins) {
+                    mysqli_stmt_bind_param($ins, "id", $cancellation_id, $fifty_pct);
+                    mysqli_stmt_execute($ins);
+                    mysqli_stmt_close($ins);
+                    $_SESSION['success'] = '50% refund (PHP ' . number_format($fifty_pct, 2) . ') queued in Finance.';
+                } else {
+                    $_SESSION['error'] = 'Failed to queue refund record.';
+                }
+            }
+        }
+    } elseif (in_array($action, ['approve_refund', 'reject_refund'], true) && $refund_id > 0) {
+        $ref_sql = "SELECT r.id, r.refund_amount, r.refund_status, c.id AS cancellation_id, c.user_id, c.order_id, c.reservation_id, o.order_number
+                    FROM refunds r
+                    INNER JOIN cancellations c ON c.id = r.cancellation_id
+                    LEFT JOIN orders o ON o.id = c.order_id
+                    WHERE r.id = ?" . ($seller_scope_id !== null ? " AND {$partner_cancellation_scope_sql}" : "") . "
+                    LIMIT 1";
+        $r_stmt = mysqli_prepare($conn, $ref_sql);
+        mysqli_stmt_bind_param($r_stmt, "i", $refund_id);
+        mysqli_stmt_execute($r_stmt);
+        $r_row = mysqli_fetch_assoc(mysqli_stmt_get_result($r_stmt));
+        mysqli_stmt_close($r_stmt);
+
+        if (!$r_row) {
+            $_SESSION['error'] = 'Refund record not found or outside your store scope.';
+        } else {
+            $new_status = $action === 'approve_refund' ? 'Refund Approved' : 'Refund Rejected';
+            if ($action === 'reject_refund' && $decision_notes === '') {
+                $decision_notes = 'Rejected by store/finance administrator.';
+            }
+            $u_ref = mysqli_prepare($conn, "UPDATE refunds SET refund_status = ?, processed_by = ?, processed_date = NOW(), remarks = ? WHERE id = ?");
+            if ($u_ref) {
+                mysqli_stmt_bind_param($u_ref, "sisi", $new_status, $current_user_id, $decision_notes, $refund_id);
+                mysqli_stmt_execute($u_ref);
+                mysqli_stmt_close($u_ref);
+
+                if (!empty($r_row['user_id']) && function_exists('createNotification')) {
+                    $ref_lbl = !empty($r_row['order_number']) ? ("Order #" . $r_row['order_number']) : ("Request #" . $r_row['cancellation_id']);
+                    $title = $new_status === 'Refund Approved' ? 'Refund Approved' : 'Refund Rejected';
+                    $msg = $new_status === 'Refund Approved'
+                        ? "Your refund of PHP " . number_format((float)$r_row['refund_amount'], 2) . " for {$ref_lbl} has been approved and is awaiting payout in Finance."
+                        : "Your refund request for {$ref_lbl} was rejected. Reason: {$decision_notes}";
+                    createNotification($conn, (int)$r_row['user_id'], 'refund_update', $title, $msg, (int)($r_row['order_id'] ?: $r_row['reservation_id']), !empty($r_row['order_id']) ? 'order' : 'pre_order');
+                }
+                $_SESSION['success'] = $new_status === 'Refund Approved'
+                    ? 'Refund approved! You can complete payout in Finance Decision Queue.'
+                    : 'Refund request rejected.';
+            } else {
+                $_SESSION['error'] = 'Failed to update refund status.';
+            }
+        }
+    }
+
+    header('Location: cancellations.php');
+    exit;
+}
 
 // Get statistics for cards
 $current_month = date('m');
@@ -41,9 +226,9 @@ $pending_refunds_count = ($pending_refunds_result instanceof mysqli_result) ? (m
 $refunded_month_query = "SELECT SUM(r.refund_amount) as total
                          FROM refunds r
                          INNER JOIN cancellations c ON c.id = r.cancellation_id
-                         WHERE r.refund_status = 'Refund Approved'
-                           AND MONTH(r.processed_date) = $current_month
-                           AND YEAR(r.processed_date) = $current_year" . ($seller_scope_id !== null ? " AND {$partner_cancellation_scope_sql}" : "");
+                         WHERE r.refund_status IN ('Refund Approved', 'Refund Completed')
+                           AND MONTH(COALESCE(r.processed_date, c.cancellation_date)) = $current_month
+                           AND YEAR(COALESCE(r.processed_date, c.cancellation_date)) = $current_year" . ($seller_scope_id !== null ? " AND {$partner_cancellation_scope_sql}" : "");
 $refunded_month_result = mysqli_query($conn, $refunded_month_query);
 $refunded_this_month = ($refunded_month_result instanceof mysqli_result) ? (mysqli_fetch_assoc($refunded_month_result)['total'] ?? 0) : 0;
 
@@ -55,11 +240,11 @@ $cancellations_month_query = "SELECT COUNT(*) as count
 $cancellations_month_result = mysqli_query($conn, $cancellations_month_query);
 $cancellations_this_month = ($cancellations_month_result instanceof mysqli_result) ? (mysqli_fetch_assoc($cancellations_month_result)['count'] ?? 0) : 0;
 
-// 4. Total Refunded (All Time) - Approved refunds only
+// 4. Total Refunded (All Time) - Approved & Completed refunds
 $total_refunded_query = "SELECT SUM(r.refund_amount) as total
                          FROM refunds r
                          INNER JOIN cancellations c ON c.id = r.cancellation_id
-                         WHERE r.refund_status = 'Refund Approved'" . ($seller_scope_id !== null ? " AND {$partner_cancellation_scope_sql}" : "");
+                         WHERE r.refund_status IN ('Refund Approved', 'Refund Completed')" . ($seller_scope_id !== null ? " AND {$partner_cancellation_scope_sql}" : "");
 $total_refunded_result = mysqli_query($conn, $total_refunded_query);
 $total_refunded = ($total_refunded_result instanceof mysqli_result) ? (mysqli_fetch_assoc($total_refunded_result)['total'] ?? 0) : 0;
 
@@ -224,14 +409,11 @@ $result = mysqli_query($conn, $query);
                 </div>
                 <div class="alert alert-info d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <div>
-                        <strong>Workflow Update:</strong> This page is for monitoring requests.
-                        All approve/reject/complete decisions are now handled in Finance Decision Center.
+                        <strong>Finance Queue Sync:</strong> All customer cancellations and refund requests appear here and in the Finance Decision Queue. Approve or reject directly below, or process payouts in Finance.
                     </div>
-                    <?php if ($seller_scope_id === null): ?>
-                        <a href="finance.php#decision-center" class="btn btn-sm btn-primary">Open Finance Decision Center</a>
-                    <?php else: ?>
-                        <span class="badge bg-secondary">Finance Team Handles Final Decisions</span>
-                    <?php endif; ?>
+                    <a href="finance.php#decision-center" class="btn btn-sm btn-primary">
+                        <i class="fas fa-scale-balanced me-1"></i> Open Finance Queue
+                    </a>
                 </div>
 
                 <div class="section-header">
@@ -338,20 +520,49 @@ $result = mysqli_query($conn, $query);
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?php if (
-                                            $row['cancellation_status'] === 'Requested' ||
-                                            ($row['refund_id'] && in_array($row['refund_status'], ['Refund Pending', 'Refund Approved'], true))
-                                        ): ?>
-                                            <?php if ($seller_scope_id === null): ?>
-                                                <a href="finance.php?decision_search=<?= urlencode((string)$row['cancellation_id']) ?>#decision-center" class="btn btn-sm btn-outline-primary">
-                                                    Send to Finance
+                                        <?php if (!$can_manage_cxl_actions): ?>
+                                            <a href="finance.php?decision_search=<?= urlencode((string)$row['cancellation_id']) ?>#decision-center" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-external-link-alt"></i> Finance Queue
+                                            </a>
+                                        <?php elseif ($row['cancellation_status'] === 'Requested'): ?>
+                                            <div class="d-flex flex-wrap gap-1">
+                                                <button type="button" class="btn btn-sm btn-success" onclick="handleCxlAction('approve_cancellation', <?= (int)$row['cancellation_id'] ?>, 0, 'Approve cancellation request?', false)">
+                                                    <i class="fas fa-check"></i> Approve
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="handleCxlAction('reject_cancellation', <?= (int)$row['cancellation_id'] ?>, 0, 'Reject cancellation request?', true)">
+                                                    <i class="fas fa-times"></i> Reject
+                                                </button>
+                                                <a href="finance.php?decision_search=<?= urlencode((string)$row['cancellation_id']) ?>#decision-center" class="btn btn-sm btn-outline-secondary" title="Open in Finance Queue">
+                                                    <i class="fas fa-scale-balanced"></i>
                                                 </a>
-                                                <small class="d-block text-muted mt-1">Final approval/rejection is handled by Finance.</small>
-                                            <?php else: ?>
-                                                <span class="text-muted">Submitted to Finance queue</span>
-                                            <?php endif; ?>
+                                            </div>
+                                        <?php elseif (!empty($row['refund_id']) && in_array($row['refund_status'], ['Refund Pending', 'Refund Approved'], true)): ?>
+                                            <div class="d-flex flex-wrap gap-1">
+                                                <?php if ($row['refund_status'] === 'Refund Pending'): ?>
+                                                    <button type="button" class="btn btn-sm btn-success" onclick="handleCxlAction('approve_refund', <?= (int)$row['cancellation_id'] ?>, <?= (int)$row['refund_id'] ?>, 'Approve refund request?', false)">
+                                                        <i class="fas fa-check"></i> Approve
+                                                    </button>
+                                                <?php endif; ?>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="handleCxlAction('reject_refund', <?= (int)$row['cancellation_id'] ?>, <?= (int)$row['refund_id'] ?>, 'Reject refund request?', true)">
+                                                    <i class="fas fa-times"></i> Reject
+                                                </button>
+                                                <a href="finance.php?decision_search=<?= urlencode((string)$row['cancellation_id']) ?>#decision-center" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-scale-balanced"></i> Finance Queue
+                                                </a>
+                                            </div>
+                                        <?php elseif (empty($row['refund_id']) && $row['cancellation_status'] === 'Cancelled' && (!empty($row['order_id']) || !empty($row['reservation_id']))): ?>
+                                            <div class="d-flex flex-wrap gap-1">
+                                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="handleCxlAction('queue_refund', <?= (int)$row['cancellation_id'] ?>, 0, 'Queue 50% refund in Finance?', false)">
+                                                    <i class="fas fa-rotate-left"></i> Queue 50% Refund
+                                                </button>
+                                                <a href="finance.php?decision_search=<?= urlencode((string)$row['cancellation_id']) ?>#decision-center" class="btn btn-sm btn-outline-secondary" title="Open in Finance Queue">
+                                                    <i class="fas fa-scale-balanced"></i>
+                                                </a>
+                                            </div>
                                         <?php else: ?>
-                                            <span class="text-muted">-</span>
+                                            <a href="finance.php?decision_search=<?= urlencode((string)$row['cancellation_id']) ?>#decision-center" class="btn btn-sm btn-outline-secondary">
+                                                <i class="fas fa-scale-balanced"></i> View in Finance
+                                            </a>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
@@ -414,7 +625,47 @@ $result = mysqli_query($conn, $query);
             Swal.fire({ icon: 'error', title: 'Error', text: <?php echo json_encode($_SESSION['error']); ?> });
         <?php unset($_SESSION['error']); endif; ?>
 
-        // Finance decisions are now handled in admin/finance.php (Decision Center).
+        const CXL_CSRF_TOKEN = <?php echo json_encode($csrf_token); ?>;
+        function handleCxlAction(action, cancellationId, refundId, titleText, requireReason) {
+            Swal.fire({
+                title: titleText,
+                input: 'textarea',
+                inputLabel: requireReason ? 'Reason (required)' : 'Notes (optional)',
+                inputPlaceholder: requireReason ? 'Enter reason for rejection...' : 'Optional remarks...',
+                showCancelButton: true,
+                confirmButtonText: action.includes('reject') ? 'Reject' : 'Confirm',
+                confirmButtonColor: action.includes('reject') ? '#b3261e' : '#027a48',
+                preConfirm: (val) => {
+                    const trimmed = (val || '').trim();
+                    if (requireReason && !trimmed) {
+                        Swal.showValidationMessage('Please enter a reason.');
+                        return false;
+                    }
+                    return trimmed;
+                }
+            }).then((res) => {
+                if (!res.isConfirmed) return;
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = 'cancellations.php';
+                const fields = {
+                    csrf_token: CXL_CSRF_TOKEN,
+                    cxl_action: action,
+                    cancellation_id: cancellationId,
+                    refund_id: refundId,
+                    decision_notes: res.value || ''
+                };
+                Object.keys(fields).forEach((k) => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = k;
+                    input.value = fields[k];
+                    form.appendChild(input);
+                });
+                document.body.appendChild(form);
+                form.submit();
+            });
+        }
     </script>
 </body>
 </html>
