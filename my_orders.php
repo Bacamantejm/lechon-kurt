@@ -121,34 +121,65 @@ if (isset($_POST['request_refund']) && isset($_POST['order_id'])) {
                 }
             }
 
-            // Create cancellation record (as refund request)
+            // Create cancellation record (as refund request) using valid ENUM reason so INSERT never fails in strict SQL mode
+            $refund_reason_lower = strtolower($refund_reason);
+            $cxl_enum_reason = (strpos($refund_reason_lower, 'wrong') !== false || strpos($refund_reason_lower, 'missing') !== false)
+                ? 'Wrong order'
+                : 'Other';
+            $combined_other_text = trim($refund_reason . ($refund_details !== '' ? (' - ' . $refund_details) : ''));
             $cxl_query = "INSERT INTO cancellations (user_id, order_id, reason, other_reason_text, status) VALUES (?, ?, ?, ?, 'Requested')";
             $cxl_stmt = mysqli_prepare($conn, $cxl_query);
-            mysqli_stmt_bind_param($cxl_stmt, "iiss", $user_id, $order_id, $refund_reason, $refund_details);
-            mysqli_stmt_execute($cxl_stmt);
-            $cancellation_id = mysqli_insert_id($conn);
-            mysqli_stmt_close($cxl_stmt);
+            $cancellation_id = 0;
+            if ($cxl_stmt) {
+                mysqli_stmt_bind_param($cxl_stmt, "iiss", $user_id, $order_id, $cxl_enum_reason, $combined_other_text);
+                mysqli_stmt_execute($cxl_stmt);
+                $cancellation_id = (int)mysqli_insert_id($conn);
+                mysqli_stmt_close($cxl_stmt);
+            }
+
+            if ($cancellation_id <= 0) {
+                mysqli_stmt_close($stmt);
+                myOrdersRespond(false, "Unable to record refund request right now. Please try again.");
+                $_SESSION['error_msg'] = "Unable to record refund request right now.";
+                header('Location: my_orders.php');
+                exit;
+            }
             
-            // Create refund record
+            // Create refund record routed to Finance Queue
             $ref_query = "INSERT INTO refunds (cancellation_id, refund_amount, refund_status, refund_reason, customer_evidence_path) VALUES (?, ?, 'Refund Pending', ?, ?)";
             $ref_stmt = mysqli_prepare($conn, $ref_query);
-            mysqli_stmt_bind_param($ref_stmt, "idss", $cancellation_id, $row['total_amount'], $refund_reason, $evidence_path);
-            mysqli_stmt_execute($ref_stmt);
-            mysqli_stmt_close($ref_stmt);
+            if ($ref_stmt) {
+                mysqli_stmt_bind_param($ref_stmt, "idss", $cancellation_id, $row['total_amount'], $refund_reason, $evidence_path);
+                mysqli_stmt_execute($ref_stmt);
+                mysqli_stmt_close($ref_stmt);
+            }
             
-            // Notify admins about refund request
-            $admin_ids = getAdminUserIds($conn);
-            $notif_title = "Refund Request";
-            $notif_message = "User #" . $user_id . " requested a refund for Order #" . $order_id . ". Reason: " . $refund_reason;
+            // Notify global admins AND the shop owner (business dashboard + finance queue)
+            $recipient_ids = [];
+            foreach (getAdminUserIds($conn) as $aid) {
+                if ((int)$aid > 0) $recipient_ids[(int)$aid] = true;
+            }
+            $partner_owner_id = function_exists('popResolveOrderPartnerUserId') ? (int)popResolveOrderPartnerUserId($conn, $order_id) : 0;
+            if ($partner_owner_id > 0) {
+                $recipient_ids[$partner_owner_id] = true;
+            }
+            $ord_owner_q = @mysqli_query($conn, "SELECT o.seller_id, sl.owner_user_id FROM orders o LEFT JOIN store_locations sl ON sl.store_id = COALESCE(NULLIF(o.store_id, 0), IF(o.pickup_location REGEXP '^[0-9]+$', CAST(o.pickup_location AS UNSIGNED), 0)) WHERE o.id = {$order_id} LIMIT 1");
+            if ($ord_owner_q && ($ow_row = mysqli_fetch_assoc($ord_owner_q))) {
+                if (!empty($ow_row['seller_id'])) $recipient_ids[(int)$ow_row['seller_id']] = true;
+                if (!empty($ow_row['owner_user_id'])) $recipient_ids[(int)$ow_row['owner_user_id']] = true;
+            }
+
+            $notif_title = "Refund Request (Finance Queue)";
+            $notif_message = "Customer requested a refund for Order #" . $order_id . " (Reason: " . $refund_reason . "). Routed to Finance Decision Queue.";
             if ($refund_details !== '') {
-                $notif_message .= ". Details: " . $refund_details;
+                $notif_message .= " Details: " . $refund_details;
             }
             if ($evidence_path !== '') {
-                $notif_message .= ". Evidence attached.";
+                $notif_message .= " Evidence attached.";
             }
             
-            foreach ($admin_ids as $admin_id) {
-                createNotification($conn, $admin_id, 'refund_request', $notif_title, $notif_message, $order_id, 'order');
+            foreach (array_keys($recipient_ids) as $admin_id) {
+                createNotification($conn, (int)$admin_id, 'refund_request', $notif_title, $notif_message, $order_id, 'order');
             }
 
             myOrdersRespond(true, "Refund request submitted for Order #$order_id.", [
@@ -261,16 +292,29 @@ if (isset($_POST['cancel_order']) && isset($_POST['order_id'])) {
             }
         }
 
-        $admin_ids = getAdminUserIds($conn);
-        $notif_title = "Order Cancelled by User";
-        $notif_message = "User #" . $user_id . " cancelled Order #$order_id.";
+        $recipient_ids = [];
+        foreach (getAdminUserIds($conn) as $aid) {
+            if ((int)$aid > 0) $recipient_ids[(int)$aid] = true;
+        }
+        $partner_owner_id = function_exists('popResolveOrderPartnerUserId') ? (int)popResolveOrderPartnerUserId($conn, $order_id) : 0;
+        if ($partner_owner_id > 0) {
+            $recipient_ids[$partner_owner_id] = true;
+        }
+        $ord_owner_q = @mysqli_query($conn, "SELECT o.seller_id, sl.owner_user_id FROM orders o LEFT JOIN store_locations sl ON sl.store_id = COALESCE(NULLIF(o.store_id, 0), IF(o.pickup_location REGEXP '^[0-9]+$', CAST(o.pickup_location AS UNSIGNED), 0)) WHERE o.id = {$order_id} LIMIT 1");
+        if ($ord_owner_q && ($ow_row = mysqli_fetch_assoc($ord_owner_q))) {
+            if (!empty($ow_row['seller_id'])) $recipient_ids[(int)$ow_row['seller_id']] = true;
+            if (!empty($ow_row['owner_user_id'])) $recipient_ids[(int)$ow_row['owner_user_id']] = true;
+        }
+
+        $notif_title = "Order Cancelled (Finance Queue)";
+        $notif_message = "Customer cancelled Order #$order_id and it has been routed to the Finance Queue.";
         if ($refund_note !== '') {
             $notif_message .= " " . $refund_note;
         } elseif ($refund_amount > 0) {
-            $notif_message .= " 50% PayMongo refund (PHP " . number_format($refund_amount, 2) . ") may be required.";
+            $notif_message .= " 50% PayMongo refund (PHP " . number_format($refund_amount, 2) . ") queued for Finance review.";
         }
-        foreach ($admin_ids as $admin_id) {
-            createNotification($conn, $admin_id, 'order_cancelled', $notif_title, $notif_message, $order_id, 'order');
+        foreach (array_keys($recipient_ids) as $admin_id) {
+            createNotification($conn, (int)$admin_id, 'order_cancelled', $notif_title, $notif_message, $order_id, 'order');
         }
 
         $success_message = "Order #$order_id has been cancelled.";

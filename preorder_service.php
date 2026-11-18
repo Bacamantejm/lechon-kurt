@@ -445,16 +445,29 @@ class PreOrderService {
                 if (!function_exists('getAdminUserIds')) {
                     require_once 'includes/config.php';
                 }
-                $admin_ids = getAdminUserIds($this->conn);
-                $notif_title = "Pre-Order Cancelled by User";
-                $notif_message = "User #" . $po['user_id'] . " cancelled Pre-Order transaction #{$pre_order_id} (" . count($linked_ids) . " item(s)).";
+                $recipient_ids = [];
+                foreach (getAdminUserIds($this->conn) as $aid) {
+                    if ((int)$aid > 0) $recipient_ids[(int)$aid] = true;
+                }
+                if (function_exists('popResolvePreOrderPartnerUserId')) {
+                    $po_partner_id = (int)popResolvePreOrderPartnerUserId($this->conn, (int)$pre_order_id);
+                    if ($po_partner_id > 0) $recipient_ids[$po_partner_id] = true;
+                }
+                $po_owner_q = @mysqli_query($this->conn, "SELECT p.seller_id, sl.owner_user_id FROM pre_orders po LEFT JOIN products p ON (po.product_id = p.product_id OR po.product_id = CAST(p.id AS CHAR)) LEFT JOIN store_locations sl ON sl.store_id = COALESCE(NULLIF(po.store_id, 0), 0) WHERE po.id = " . (int)$pre_order_id . " LIMIT 1");
+                if ($po_owner_q && ($pow_row = mysqli_fetch_assoc($po_owner_q))) {
+                    if (!empty($pow_row['seller_id'])) $recipient_ids[(int)$pow_row['seller_id']] = true;
+                    if (!empty($pow_row['owner_user_id'])) $recipient_ids[(int)$pow_row['owner_user_id']] = true;
+                }
+
+                $notif_title = "Pre-Order Cancelled (Finance Queue)";
+                $notif_message = "Customer cancelled Pre-Order #{$pre_order_id} (" . count($linked_ids) . " item(s)). Routed to Finance Decision Queue.";
                 if ($refund_amount > 0) {
-                    $notif_message .= " A refund of PHP " . number_format($refund_amount, 2) . " is pending.";
+                    $notif_message .= " A refund of PHP " . number_format($refund_amount, 2) . " is pending in Finance.";
                 } elseif (!$downpayment_refundable && strtolower((string)($po['payment_type'] ?? '')) === 'downpayment') {
                     $notif_message .= " Downpayment is non-refundable under the current store policy.";
                 }
-                foreach ($admin_ids as $admin_id) {
-                    createNotification($this->conn, $admin_id, 'preorder_cancelled', $notif_title, $notif_message, $pre_order_id, 'pre_order');
+                foreach (array_keys($recipient_ids) as $admin_id) {
+                    createNotification($this->conn, (int)$admin_id, 'preorder_cancelled', $notif_title, $notif_message, $pre_order_id, 'pre_order');
                 }
             }
 
